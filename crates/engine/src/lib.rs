@@ -6,12 +6,15 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 pub mod cmd;
+mod edits;
 pub mod file_access;
 pub mod find;
 mod language;
 mod sync;
+pub use edits::FileEdit;
 pub use language::{Completion, Fix, Lint, TextEdit};
 pub use sync::PageRect;
+pub use texcraft_buffer::{Change, Origin, Transaction};
 pub mod guard;
 
 use std::path::PathBuf;
@@ -79,6 +82,8 @@ pub struct Session {
     sync: Option<sync::Sync>,
     /// Where templates are kept; none without a data folder.
     templates: Option<texcraft_templates::Store>,
+    /// The latest edits of the files, for the editor and the review anchors.
+    edits: edits::Log,
 }
 
 impl Session {
@@ -111,6 +116,7 @@ impl Session {
             language: language::Language::new(None),
             sync: None,
             templates: None,
+            edits: edits::Log::default(),
         }
     }
 
@@ -255,11 +261,32 @@ impl Session {
         self.built_revision != Some(self.revision)
     }
 
-    /// Replaces the text of `path` (the editor calls this on every edit, through `file.write`).
-    fn write_text(&mut self, path: &ProjectPath, text: String) -> Result<()> {
-        self.project.set(path, texcraft_project::Contents::Text(text)).map_err(|e| e.to_string())?;
+    /// Replaces the text of `path` as the smallest edit that makes it (`file.write`).
+    fn write_text(&mut self, path: &ProjectPath, text: String, origin: Origin) -> Result<()> {
+        let old = self.project.text(path).map_err(|e| e.to_string())?;
+        let tx = Transaction::diff(old, &text);
+        self.apply_edit(path, &tx, origin)
+    }
+
+    /// Makes `tx` (character offsets in the text as it is) in the text file `path`, and records it
+    /// for [`Session::edits_since`]. Every change of a file's text goes through here.
+    pub(crate) fn apply_edit(&mut self, path: &ProjectPath, tx: &Transaction, origin: Origin) -> Result<()> {
+        let old = self.project.text(path).map_err(|e| e.to_string())?;
+        let new = edits::apply(old, tx).ok_or_else(|| format!("the edits do not fit in `{path}` ({} characters)", old.chars().count()))?;
+        if tx.is_empty() {
+            return Ok(());
+        }
+        self.project.set(path, texcraft_project::Contents::Text(new)).map_err(|e| e.to_string())?;
         self.touch();
+        self.edits.push(FileEdit { revision: self.revision, path: path.clone(), changes: tx.clone(), origin });
         Ok(())
+    }
+
+    /// The edits made to `path` after `revision`, oldest first; `None` when some of them are no
+    /// longer kept (then compare the texts). Changes that are not edits (a file replaced by
+    /// `file.import`, a project opened) are not in it.
+    pub fn edits_since(&self, path: &ProjectPath, revision: u64) -> Option<Vec<&FileEdit>> {
+        self.edits.since(path, revision)
     }
 
     fn touch(&mut self) {

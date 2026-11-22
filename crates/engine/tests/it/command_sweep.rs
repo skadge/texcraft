@@ -15,6 +15,8 @@ fn junk() -> Vec<Value> {
         json!({"path": "a\u{0}b", "text": null}),
         json!({"path": "x".repeat(5000)}),
         json!({"from": "main.tex", "to": "main.tex"}),
+        json!({"path": "main.tex", "edits": [{"start": u64::MAX, "end": 1, "text": 7}, null], "start": u64::MAX, "end": 2, "text": "x", "id": "zz", "message": 3}),
+        json!({"path": "main.tex", "edits": {"start": 0}, "start": 5, "end": 1, "text": "", "state": "maybe", "origin": "nowhere"}),
     ]
 }
 

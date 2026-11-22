@@ -110,7 +110,7 @@ Done items are marked **done** with the commit subject that brought them. The re
 The interim editor is egui's multi-line text field with a highlighting layouter. It cannot show line numbers, folds, gutter markers, multiple carets or a proper accessibility node, and it copies the whole text on every keystroke. Phase 2 replaces it.
 
 1. **Buffer crate** (`texcraft-buffer`, L0).
-   - **Status:** the crate is **done** (rope, transactions, grouped undo, marks, UTF-16 positions). The editor still sends whole texts with `file.write`; `file.edit` with several edits is to do.
+   - **Status:** the crate is **done** (rope, transactions, grouped undo, marks, UTF-16 positions, edit origins, and others' edits that undo skips). The editor sends its edits with `file.edit` (docs/collaboration-roadmap.md, F1).
    - A rope (`ropey`, MIT).
    - Edits as transactions, undo and redo grouped by pause and word, marks that follow edits (diagnostics, bookmarks, the build's line map), and line and column conversion in UTF-8 and UTF-16.
    - The session's `file.write` gets an `edit` sibling (`file.edit {path, edits:[{start,end,text}]}`) so agents and collaboration send changes, not whole files.

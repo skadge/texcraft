@@ -4870,6 +4870,7 @@ dependencies = [
  "retex-synctex",
  "serde",
  "serde_json",
+ "texcraft-buffer",
  "texcraft-compile",
  "texcraft-latex",
  "texcraft-project",

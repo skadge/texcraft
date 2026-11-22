@@ -2,8 +2,9 @@
 //! source with a gutter of line numbers and error markers and a band on the caret's line.
 //!
 //! The text is TeXCraft's own editor widget ([`crate::source`]). Each open file keeps its text,
-//! caret and undo history while another is shown; edits go to the session with `file.write`, and
-//! a change the session makes (an agent's edit, a reload) comes back as one undoable edit.
+//! caret and undo history while another is shown. Edits go to the session as edits (`file.edit`,
+//! with their origin), and the session's edits come back from its edit log: an agent's as an
+//! undoable edit, a peer's or one made outside TeXCraft without entering the undo history.
 
 use std::collections::HashMap;
 
@@ -25,10 +26,10 @@ pub(crate) struct Editor {
     /// The session revision the shown text matches.
     revision: u64,
     pub source: SourceEditor,
-    /// The buffer version last sent to the session (or taken from it).
-    sent: u64,
-    /// The other open files' text, caret and undo history.
-    parked: HashMap<ProjectPath, Doc>,
+    /// The session revisions of the edits this editor sent since it last caught up.
+    mine: Vec<u64>,
+    /// The other open files' text, caret and undo history, with the revision each matches.
+    parked: HashMap<ProjectPath, (Doc, u64)>,
     /// The find and replace bar, when open.
     pub find: Option<crate::find_bar::FindBar>,
     /// Give the editor the keyboard next frame.
@@ -45,38 +46,80 @@ fn session_text(project: &texcraft_engine::project::Project, path: Option<&Proje
 }
 
 impl Editor {
-    /// Shows another file's text, or takes a change the session made to the shown one.
-    fn sync(&mut self, path: Option<&ProjectPath>, revision: u64, project: &texcraft_engine::project::Project) {
-        if self.path.as_ref() != path {
-            if let Some(old) = self.path.take() {
-                let doc = std::mem::take(&mut self.source.doc);
-                self.parked.insert(old, doc);
+    /// Shows another file's text, or takes the changes the session made to the shown one. The
+    /// shown file's own edits must have gone to the session first ([`send_edits`]).
+    fn sync(&mut self, path: Option<&ProjectPath>, session: &texcraft_engine::Session) {
+        let project = session.project();
+        if self.revision != session.revision() {
+            if let Some(shown) = self.path.as_ref().filter(|p| project.get(p).is_some()) {
+                catch_up(&mut self.source.doc, shown, self.revision, &self.mine, session);
             }
-            self.parked.retain(|p, _| project.get(p).is_some());
-            let fresh = session_text(project, path).unwrap_or_default();
-            let mut doc = path.and_then(|p| self.parked.remove(p)).unwrap_or_else(|| Doc::new(&fresh));
-            if doc.buffer.text() != fresh {
-                let _ = doc.buffer.replace_all(&fresh, &doc.selection);
-                doc.selection = doc.selection.clone().clamp(doc.buffer.len_chars());
-            }
-            self.source.set_doc(doc);
-            self.sent = self.source.doc.buffer.version();
-            self.path = path.cloned();
-            self.revision = revision;
+            self.mine.clear();
+            self.revision = session.revision();
+        }
+        if self.path.as_ref() == path {
             return;
         }
-        if self.revision == revision {
-            return;
+        if let Some(old) = self.path.take() {
+            let doc = std::mem::take(&mut self.source.doc);
+            self.parked.insert(old, (doc, self.revision));
         }
-        self.revision = revision;
-        let fresh = session_text(project, path).unwrap_or_default();
-        let doc = &mut self.source.doc;
-        if doc.buffer.text() != fresh {
-            let _ = doc.buffer.replace_all(&fresh, &doc.selection);
-            doc.selection = doc.selection.clone().clamp(doc.buffer.len_chars());
-        }
-        self.sent = doc.buffer.version();
+        self.parked.retain(|p, _| project.get(p).is_some());
+        let mut doc = match path.and_then(|p| self.parked.remove(p)) {
+            Some((mut doc, since)) => {
+                if let Some(path) = path {
+                    catch_up(&mut doc, path, since, &[], session);
+                }
+                doc
+            }
+            None => Doc::new(&session_text(project, path).unwrap_or_default()),
+        };
+        doc.buffer.take_edits();
+        self.source.set_doc(doc);
+        self.path = path.cloned();
     }
+}
+
+/// Makes the session's edits of `path` after `since` in `doc` (except the editor's own), then
+/// anything else that changed the file (a reload) as one edit.
+fn catch_up(doc: &mut Doc, path: &ProjectPath, since: u64, mine: &[u64], session: &texcraft_engine::Session) {
+    for e in session.edits_since(path, since).unwrap_or_default().into_iter().filter(|e| !mine.contains(&e.revision)) {
+        let after = doc.selection.map(&e.changes);
+        let made = if e.origin.is_foreign() {
+            doc.buffer.receive(e.changes.clone(), e.origin)
+        } else {
+            doc.buffer.edit(e.changes.clone(), &doc.selection, &after, EditKind::Other)
+        };
+        if made.is_err() {
+            break;
+        }
+        doc.selection = after;
+    }
+    let fresh = session_text(session.project(), Some(path)).unwrap_or_default();
+    if doc.buffer.text() != fresh {
+        let tx = Transaction::diff(&doc.buffer.text(), &fresh);
+        let after = doc.selection.map(&tx);
+        let _ = doc.buffer.edit(tx, &doc.selection, &after, EditKind::Other);
+        doc.selection = after.clamp(doc.buffer.len_chars());
+    }
+    // What came from the session does not go back to it.
+    doc.buffer.take_edits();
+}
+
+/// Sends the shown file's new edits to the session (`file.edit`); true when there were some.
+fn send_edits(app: &mut App) -> bool {
+    let Some(path) = app.editor.path.clone() else { return false };
+    let edits = app.editor.source.doc.buffer.take_edits();
+    let mut sent = false;
+    for (tx, origin) in edits.into_iter().filter(|(_, o)| !o.is_foreign()) {
+        let list: Vec<serde_json::Value> = tx.changes().iter().map(|c| json!({"start": c.start, "end": c.end, "text": c.text})).collect();
+        let params = json!({"path": path.as_str(), "edits": list, "origin": origin.name()});
+        if let Some(r) = app.run("file.edit", params).and_then(|r| r.get("revision").and_then(serde_json::Value::as_u64)) {
+            app.editor.mine.push(r);
+        }
+        sent = true;
+    }
+    sent
 }
 
 /// How long Vim's messages stay on its line, in seconds.
@@ -138,7 +181,10 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         tabs(app, ui);
         widgets::hairline(ui, &t);
         let current = app.session.current().cloned();
-        app.editor.sync(current.as_ref(), app.session.revision(), app.session.project());
+        if send_edits(app) {
+            app.view.last_edit = Some(ui.ctx().input(|i| i.time));
+        }
+        app.editor.sync(current.as_ref(), &app.session);
         let is_text = current.as_ref().is_some_and(|p| matches!(app.session.project().get(p), Some(Contents::Text(_))));
         let as_image = current.as_ref().is_some_and(|p| crate::figure_view::is_svg(p) && !app.figure.as_text.contains(p));
         if is_text && !as_image {
@@ -661,13 +707,7 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     let out = app.editor.source.show(ui, &t, id, &markers, &name, "  ");
     app.view.cursor = Some((out.caret.0 as u32 + 1, out.caret.1 as u32 + 1));
     // Typing, and edits made outside the widget (the toolbar, the Insert menu).
-    let version = app.editor.source.doc.buffer.version();
-    if out.changed || version != app.editor.sent {
-        app.editor.sent = version;
-        let text = app.editor.source.doc.buffer.text();
-        if let Some(r) = app.run("file.write", json!({"path": path.as_str(), "text": text})) {
-            app.editor.revision = r.get("revision").and_then(serde_json::Value::as_u64).unwrap_or(app.editor.revision);
-        }
+    if send_edits(app) {
         app.view.last_edit = Some(ui.ctx().input(|i| i.time));
     }
     // After the text went to the session, so the language server sees what was typed.
