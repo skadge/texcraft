@@ -45,6 +45,7 @@ pub(crate) enum Dialog {
     /// The project has unsaved changes and `Next` would lose them.
     Unsaved(Next),
     Shortcuts,
+    Settings,
     About,
 }
 
@@ -52,6 +53,10 @@ pub(crate) enum Dialog {
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     if matches!(app.view.dialog, Some(Dialog::Shortcuts)) {
         shortcuts(app, ctx);
+        return;
+    }
+    if matches!(app.view.dialog, Some(Dialog::Settings)) {
+        crate::settings::show(app, ctx);
         return;
     }
     let project = app.project_name();
@@ -66,7 +71,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             Dialog::Prompt(p) => outcome = prompt(ui, &t, p),
             Dialog::Confirm(c) => outcome = confirm(ui, &t, c),
             Dialog::Unsaved(_) => outcome = unsaved(ui, &t, &project),
-            Dialog::Shortcuts => {}
+            Dialog::Shortcuts | Dialog::Settings => {}
             Dialog::About => outcome = about(ui, &t, &engine),
         }
     });

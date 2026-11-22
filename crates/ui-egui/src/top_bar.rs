@@ -65,6 +65,7 @@ fn icon_for(id: &str) -> Option<&'static str> {
         "file.import" => "upload",
         "file.new" => "file-code",
         "file.close" => "x",
+        "app.settings" => "settings",
         "project.save_as" => "folder-plus",
         "build.save_pdf" => "file-text",
         "build.compile" => "play",

@@ -42,6 +42,20 @@ pub fn keymap_text() -> craft_keymap::ui::I18nText<'static> {
     craft_keymap::ui::I18nText { i18n: &I18N, lang: CURRENT.get() }
 }
 
+/// The languages this build can show: (code, name in that language), English first.
+pub fn languages() -> Vec<(String, String)> {
+    I18N.languages().into_iter().map(|l| (I18N.code(l).to_owned(), I18N.name(l).to_owned())).collect()
+}
+
+/// Shows the interface in `code` ("auto" follows the system); unknown codes keep the current one.
+pub fn set_language(code: &str) {
+    if code == "auto" {
+        use_system_language();
+    } else if let Some(lang) = I18N.from_code(code) {
+        CURRENT.set(lang);
+    }
+}
+
 /// Follows the system language.
 pub fn use_system_language() {
     CURRENT.set(I18N.system_lang());

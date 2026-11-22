@@ -22,6 +22,10 @@ pub enum ThemePref {
 #[serde(default)]
 pub struct Prefs {
     pub theme: ThemePref,
+    /// An interface language code, or `auto` for the system's.
+    pub language: String,
+    /// The source text's size, in points.
+    pub editor_font_size: f32,
     pub auto_compile: bool,
     pub auto_compile_delay_ms: u64,
     /// `split`, `editor` or `preview`.
@@ -39,6 +43,8 @@ impl Default for Prefs {
     fn default() -> Self {
         Self {
             theme: ThemePref::System,
+            language: "auto".to_owned(),
+            editor_font_size: 13.5,
             auto_compile: true,
             auto_compile_delay_ms: 800,
             layout: "split".to_owned(),

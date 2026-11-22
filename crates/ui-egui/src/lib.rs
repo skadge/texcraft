@@ -22,6 +22,7 @@ pub use picks::{Pick, PickKind, PickRequest};
 mod picks;
 mod preview;
 mod rail;
+mod settings;
 mod side;
 mod status;
 mod top_bar;
@@ -55,6 +56,8 @@ pub(crate) struct View {
     pub layout: Layout,
     pub logs: bool,
     pub dialog: Option<dialogs::Dialog>,
+    /// The Settings dialog's open tab.
+    pub settings_tab: usize,
     /// Which messages the build log lists.
     pub log_filter: preview::Filter,
     /// Folders folded in the file tree.
@@ -106,6 +109,7 @@ impl App {
         session.settings.auto_compile_delay_ms = prefs.auto_compile_delay_ms.clamp(200, 10_000);
         let (layout, side) = (prefs.layout(), prefs.side());
         let keys = keys::Keys::new(prefs.shortcuts.clone());
+        i18n::set_language(&prefs.language);
         let mut app = Self {
             session,
             tokens: Tokens::dark(),
@@ -117,6 +121,7 @@ impl App {
                 dialog: None,
                 cursor: None,
                 log_filter: preview::Filter::All,
+                settings_tab: 0,
                 collapsed: std::collections::HashSet::new(),
                 status: None,
                 last_edit: Some(0.0),
@@ -240,6 +245,14 @@ impl App {
             prefs::ThemePref::Light => Tokens::light(),
             prefs::ThemePref::Dark => Tokens::dark(),
         };
+        self.apply_editor_font();
+    }
+
+    /// The source text's size from the preferences.
+    pub(crate) fn apply_editor_font(&mut self) {
+        let size = self.prefs.editor_font_size.clamp(10.0, 22.0);
+        self.tokens.code_size = size;
+        self.tokens.code_line_height = (size * 1.55).round();
     }
 
     pub fn session(&self) -> &Session {

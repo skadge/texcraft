@@ -2,11 +2,8 @@
 //! bottom. Clicking the active section hides the side panel.
 
 use egui::{Align, Layout};
-use serde_json::json;
 
 use crate::dialogs::Dialog;
-use crate::prefs::ThemePref;
-use crate::theme::Tokens;
 use crate::{App, Side, widgets};
 
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
@@ -26,28 +23,10 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 if widgets::rail_button(ui, &t, "circle-question-mark", tl!("Keyboard Shortcuts"), false).clicked() {
                     app.view.dialog = Some(Dialog::Shortcuts);
                 }
-                let settings = widgets::rail_button(ui, &t, "settings", tl!("Settings"), false);
-                egui::Popup::menu(&settings).align(egui::RectAlign::RIGHT_END).show(|ui| settings_menu(app, ui));
+                if widgets::rail_button(ui, &t, "settings", tl!("Settings"), false).clicked() {
+                    app.view.dialog = Some(Dialog::Settings);
+                }
             });
         });
     });
-}
-
-/// Quick settings; the full Settings dialog comes in phase 1 (docs/plan.md).
-fn settings_menu(app: &mut App, ui: &mut egui::Ui) {
-    let t: Tokens = app.tokens;
-    ui.set_min_width(240.0);
-    widgets::section_title(ui, &t, tl!("Appearance"));
-    let themes = [ThemePref::System, ThemePref::Light, ThemePref::Dark];
-    let selected = themes.iter().position(|th| *th == app.prefs.theme).unwrap_or(0);
-    if let Some(i) = widgets::segmented(ui, &t, "theme", &[(tl!("System"), None), (tl!("Light"), None), (tl!("Dark"), None)], selected) {
-        let ctx = ui.ctx().clone();
-        app.set_theme(&ctx, themes.get(i).copied().unwrap_or_default());
-    }
-    ui.add_space(t.unit * 2.0);
-    widgets::section_title(ui, &t, tl!("Compiling"));
-    let mut auto = app.session.settings.auto_compile;
-    if ui.checkbox(&mut auto, tl!("Compile automatically after typing")).changed() {
-        app.run("build.auto", json!({"on": auto}));
-    }
 }

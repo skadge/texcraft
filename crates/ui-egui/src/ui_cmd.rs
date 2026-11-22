@@ -52,6 +52,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.zoom_out", "Zoom Out", "View", "pdf", Some("Cmd+-")),
     ui("view.fit_width", "Fit Width", "View", "pdf", None),
     ui("view.theme", "Switch Light and Dark", "View", "theme", None),
+    ui("app.settings", "Settings…", "View", "settings", Some("Cmd+,")),
     ui("help.shortcuts", "Keyboard Shortcuts", "Help", "help", None),
     ui("help.about", "About TeXCraft", "Help", "about", None),
 ];
@@ -94,6 +95,7 @@ pub fn run(app: &mut App, id: &str) {
         }
         "help.shortcuts" => app.view.dialog = Some(Dialog::Shortcuts),
         "help.about" => app.view.dialog = Some(Dialog::About),
+        "app.settings" => app.view.dialog = Some(Dialog::Settings),
         "project.open" => app.guard(Next::PickProject),
         "project.new" => app.guard(Next::NewProject),
         "project.save_as" if app.native_pickers => app.request_pick(Pick::SaveProjectAs),
