@@ -551,6 +551,7 @@ fn problems(app: &mut App, path: &ProjectPath) -> Vec<crate::source::Problem> {
             severity: h.severity,
             message: h.message.clone(),
             help: Vec::new(),
+            fixes: Vec::new(),
         })
         .collect();
     let b = &app.editor.source.doc.buffer;
@@ -558,14 +559,41 @@ fn problems(app: &mut App, path: &ProjectPath) -> Vec<crate::source::Problem> {
         for d in outcome.diagnostics.iter().filter(|d| d.file.as_deref() == Some(path.as_str()) && d.severity >= Severity::Warning) {
             let Some(line) = d.line.map(|l| (l.saturating_sub(1) as usize).min(last)) else { continue };
             let text: Vec<char> = b.line(line).chars().collect();
-            let (start, end) = match d.column.map(|c| (c.saturating_sub(1) as usize).min(text.len())) {
-                Some(c) => {
+            let span = d
+                .column
+                .zip(d.end_column)
+                .map(|(c, e)| ((c.saturating_sub(1) as usize).min(text.len()), (e.saturating_sub(1) as usize).min(text.len())));
+            let (start, end) = match (span, d.column.map(|c| (c.saturating_sub(1) as usize).min(text.len()))) {
+                (Some((c, e)), _) if e > c => (c, e),
+                (_, Some(c)) => {
                     let end = (c + 1..=text.len()).find(|i| *i == text.len() || text[*i].is_whitespace()).unwrap_or(text.len());
                     (c, end.max(c + 1).min(text.len().max(c)))
                 }
-                None => (text.iter().take_while(|c| c.is_whitespace()).count(), text.len()),
+                _ => (text.iter().take_while(|c| c.is_whitespace()).count(), text.len()),
             };
             let base = b.line_to_char(line);
+            // The build's fixes: columns from 1 on the message's line.
+            let fixes = d
+                .fixes
+                .iter()
+                .enumerate()
+                .map(|(i, f)| texcraft_engine::Fix {
+                    title: if f.replacement.is_empty() {
+                        tl!("Remove it").to_owned()
+                    } else {
+                        tl!("Change to “{text}”").replace("{text}", &f.replacement)
+                    },
+                    edits: vec![texcraft_engine::TextEdit {
+                        line,
+                        column: f.column.saturating_sub(1) as usize,
+                        end_line: line,
+                        end_column: f.end_column.saturating_sub(1) as usize,
+                        text: f.replacement.clone(),
+                    }],
+                    preferred: i == 0,
+                    problem: Some(d.message.clone()),
+                })
+                .collect();
             out.push(crate::source::Problem {
                 start: base + start,
                 end: base + end,
@@ -573,6 +601,7 @@ fn problems(app: &mut App, path: &ProjectPath) -> Vec<crate::source::Problem> {
                 severity: d.severity,
                 message: d.message.clone(),
                 help: d.help.clone(),
+                fixes,
             });
         }
     }

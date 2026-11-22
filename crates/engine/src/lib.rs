@@ -174,6 +174,26 @@ impl Session {
         }
     }
 
+    /// Whether the engine can stop a running build.
+    pub fn can_cancel(&self) -> bool {
+        match &self.builder {
+            #[cfg(not(target_arch = "wasm32"))]
+            Builder::Thread(w) => w.can_cancel(),
+            #[cfg(target_arch = "wasm32")]
+            Builder::Inline(..) => false,
+        }
+    }
+
+    /// Stops the running build; false when none runs or the engine cannot stop one.
+    pub(crate) fn stop_build(&mut self) -> bool {
+        match &mut self.builder {
+            #[cfg(not(target_arch = "wasm32"))]
+            Builder::Thread(w) => w.cancel(),
+            #[cfg(target_arch = "wasm32")]
+            Builder::Inline(..) => false,
+        }
+    }
+
     /// The running build's progress and how long it has run, in seconds.
     pub fn progress(&mut self) -> Option<(Progress, f64)> {
         match &mut self.builder {
@@ -297,8 +317,10 @@ impl Session {
 
     fn accept(&mut self, outcome: Outcome) -> &Outcome {
         let main = self.project.main().cloned();
-        // retex makes the `symbols` record for embedders from 2.1.0 on.
-        self.language().build_finished(main.as_ref(), None);
+        // The language server learns the document's commands, environments, labels and
+        // citations from the build.
+        let symbols = outcome.symbols.clone();
+        self.language().build_finished(main.as_ref(), symbols);
         if let Some(pdf) = &outcome.pdf {
             self.pdf = Some(pdf.clone());
         }

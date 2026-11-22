@@ -3,25 +3,28 @@
 //!
 //! The project is written to `<cache>/src/` and built there with the build files kept in
 //! `<cache>/out/`, so the auxiliary files of one build (`.aux`, `.toc`, `.bbl`) are read by the
-//! next and a rebuild usually needs one pass. Known limits, tracked in docs/plan.md under "retex
-//! changes": the embedding API serialises builds process-wide, cannot be cancelled, and returns
-//! neither the SyncTeX data nor the quick fixes of its diagnostics.
+//! next and a rebuild usually needs one pass.
+//!
+//! From retex 2.1.0 a build reports its progress, can be cancelled, and returns the language
+//! server's `symbols` record, the SyncTeX data, and its diagnostics' spans and fixes.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::{Backend, Diagnostic, Job, Outcome, Severity, Status};
+use crate::{Backend, Canceller, Diagnostic, DiagnosticFix, Event, Job, Outcome, Severity, Status};
 
 pub struct Retex {
     dir: PathBuf,
+    /// The running build's cancel token.
+    running: Arc<Mutex<Option<retex::CancelToken>>>,
 }
 
 impl Retex {
     /// Builds in `cache_dir`, or in a folder of the system's temporary directory.
     pub fn new(cache_dir: Option<PathBuf>) -> Self {
         let dir = cache_dir.unwrap_or_else(|| std::env::temp_dir().join(format!("texcraft-build-{}", std::process::id())));
-        Self { dir }
+        Self { dir, running: Arc::new(Mutex::new(None)) }
     }
 
     fn write_sources(&self, job: &Job) -> Result<PathBuf, String> {
@@ -46,6 +49,25 @@ impl Backend for Retex {
     }
 
     fn compile(&mut self, job: &Job) -> Outcome {
+        self.compile_reporting(job, &mut |_| {})
+    }
+
+    fn can_cancel(&self) -> bool {
+        true
+    }
+
+    fn canceller(&self) -> Option<Canceller> {
+        let running = self.running.clone();
+        Some(Arc::new(move || {
+            if let Ok(slot) = running.lock()
+                && let Some(token) = slot.as_ref()
+            {
+                token.cancel();
+            }
+        }))
+    }
+
+    fn compile_reporting(&mut self, job: &Job, report: &mut dyn FnMut(Event)) -> Outcome {
         let started = Instant::now();
         let main = match self.write_sources(job) {
             Ok(m) => m,
@@ -54,28 +76,55 @@ impl Backend for Retex {
         let main_dir = job.main.as_str().rsplit_once('/').map(|(d, _)| d.to_owned());
         let src = std::fs::canonicalize(self.dir.join("src")).unwrap_or_else(|_| self.dir.join("src"));
         let place = |d: &retex::Diagnostic| convert(d, &src, main_dir.as_deref());
-        let result = retex::Retex::new().keep_files(self.dir.join("out")).compile_file(&main);
+        let token = retex::CancelToken::new();
+        if let Ok(mut slot) = self.running.lock() {
+            *slot = Some(token.clone());
+        }
+        // retex calls back on its build thread; the events go to `report` here, on ours.
+        let (tx, rx) = std::sync::mpsc::channel();
+        let retex = retex::Retex::new().keep_files(self.dir.join("out")).symbols(true).synctex(true).cancel_token(token).on_progress(move |p| {
+            let _ = tx.send(p);
+        });
+        let handle = std::thread::scope(|scope| {
+            let build = scope.spawn(|| retex.compile_file_outcome(&main));
+            while !build.is_finished() {
+                while let Ok(p) = rx.try_recv() {
+                    if let Some(e) = event(p) {
+                        report(e);
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(30));
+            }
+            build.join()
+        });
+        if let Ok(mut slot) = self.running.lock() {
+            *slot = None;
+        }
         let seconds = started.elapsed().as_secs_f64();
-        match result {
+        let Ok(outcome) = handle else {
+            return Outcome { seconds, ..Outcome::unavailable(job.id, "The typesetting engine stopped unexpectedly; the build was abandoned.") };
+        };
+        let symbols = outcome.outputs.symbols().cloned();
+        let synctex = outcome.outputs.synctex().map(|s| Arc::new(s.to_vec()));
+        let base = Outcome { symbols, synctex, seconds, ..Outcome::unavailable(job.id, "") };
+        if outcome.cancelled {
+            return Outcome { status: Status::Cancelled, log: "The build was stopped.".to_owned(), ..base };
+        }
+        match outcome.result {
             Ok(doc) => Outcome {
-                job: job.id,
                 status: Status::Built,
                 pdf: Some(Arc::new(doc.pdf().to_vec())),
                 diagnostics: doc.diagnostics().iter().map(place).collect(),
                 log: doc.log().to_owned(),
-                seconds,
                 pages: doc.pages(),
+                ..base
             },
-            Err(retex::Error::Failed { diagnostics, log }) => Outcome {
-                job: job.id,
-                status: Status::Failed,
-                pdf: None,
-                diagnostics: diagnostics.iter().map(place).collect(),
-                log,
-                seconds,
-                pages: 0,
-            },
-            Err(other) => Outcome { job: job.id, status: Status::Failed, log: other.to_string(), seconds, ..failure(job.id, &other.to_string()) },
+            Err(retex::Error::Failed { diagnostics, log }) => {
+                Outcome { status: Status::Failed, diagnostics: diagnostics.iter().map(place).collect(), log, ..base }
+            }
+            Err(other) => {
+                Outcome { log: other.to_string(), symbols: base.symbols, synctex: base.synctex, seconds, ..failure(job.id, &other.to_string()) }
+            }
         }
     }
 }
@@ -88,9 +137,11 @@ fn failure(job: u64, message: &str) -> Outcome {
         file: None,
         line: None,
         column: None,
+        end_column: None,
         help: Vec::new(),
+        fixes: Vec::new(),
     };
-    Outcome { job, status: Status::Failed, pdf: None, diagnostics: vec![diagnostic], log: String::new(), seconds: 0.0, pages: 0 }
+    Outcome { status: Status::Failed, diagnostics: vec![diagnostic], ..Outcome::unavailable(job, "") }
 }
 
 /// The project path of a file retex names: relative to the main document's folder, or absolute
@@ -125,6 +176,18 @@ fn convert(d: &retex::Diagnostic, src: &Path, main_dir: Option<&str>) -> Diagnos
         file,
         line: d.line,
         column: d.column,
+        end_column: d.end_column,
         help: d.help.clone(),
+        fixes: d.fixes.iter().map(|f| DiagnosticFix { column: f.column, end_column: f.end_column, replacement: f.replacement.clone() }).collect(),
     }
+}
+
+fn event(p: retex::Progress) -> Option<Event> {
+    Some(match p {
+        retex::Progress::Pass { n, reason } => Event::Pass { n, reason },
+        retex::Progress::Pages { shipped, expected } => Event::Pages { shipped, expected },
+        retex::Progress::File { name } => Event::File { name },
+        retex::Progress::Step { what } => Event::Step { what },
+        _ => return None,
+    })
 }

@@ -19,6 +19,7 @@ pub struct Worker {
     waiting: Option<Job>,
     name: String,
     can_cancel: bool,
+    canceller: Option<crate::Canceller>,
 }
 
 impl Worker {
@@ -28,6 +29,7 @@ impl Worker {
         let (event_tx, events) = channel();
         let name = backend.name();
         let can_cancel = backend.can_cancel();
+        let canceller = backend.canceller();
         let spawned = std::thread::Builder::new().name("texcraft-compile".to_owned()).spawn(move || {
             for job in job_rx {
                 let id = job.id;
@@ -45,7 +47,7 @@ impl Worker {
         if let Err(e) = spawned {
             log::error!("cannot start the compile thread: {e}");
         }
-        Worker { jobs, outcomes, events, progress: Progress::default(), started: None, running: None, waiting: None, name, can_cancel }
+        Worker { jobs, outcomes, events, progress: Progress::default(), started: None, running: None, waiting: None, name, can_cancel, canceller }
     }
 
     pub fn backend_name(&self) -> &str {
@@ -74,6 +76,18 @@ impl Worker {
                 self.started = Some(Instant::now());
             }
             Err(_) => log::error!("the compile thread is gone; job {id} was not started"),
+        }
+    }
+
+    /// Stops the running build (it ends with a cancelled outcome) and drops a waiting one.
+    pub fn cancel(&mut self) -> bool {
+        self.waiting = None;
+        match (&self.canceller, self.running) {
+            (Some(cancel), Some(_)) => {
+                cancel();
+                true
+            }
+            _ => false,
         }
     }
 

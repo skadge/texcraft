@@ -8,4 +8,6 @@ Third-party material:
 - Lucide icons (https://lucide.dev), release 1.77.0, ISC AND MIT: assets/icons/, licence text in assets/icons/LICENSE.
 - option-ext 0.2 (MPL-2.0), used unmodified through the `dirs` crate by the desktop app; its source is at https://github.com/soc/option-ext and on crates.io. Under MPL-2.0 that source stays available to users.
 - Noto Emoji (SIL Open Font License 1.1) and emoji-icon-font (MIT), embedded through egui's default fonts.
+- jpeg-encoder (MIT OR Apache-2.0, AND IJG), used through retex's PDF writer: this software is based in part on the work of the Independent JPEG Group.
+- webpki-roots (CDLA-Permissive-2.0), used through retex's TeX Live downloads: Mozilla's list of trusted certificate authorities, under the Community Data License Agreement – Permissive, Version 2.0 (https://cdla.dev/permissive-2-0/).
 - Crates from crates.io under the licences their packages state.

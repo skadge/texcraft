@@ -13,7 +13,6 @@ repository = "https://gitlab.com/severin-lemaignan/texcraft"
 [workspace.dependencies]
 # Shared Craft libraries, all at one craft-libs `main` rev (AGENTS.md rule 10).
 craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f", default-features = false, features = ["raster"] }
-craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f", features = ["jxl"] }
 craft-i18n = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 craft-fonts-build = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
@@ -26,13 +25,19 @@ craft-mcp-server = { git = "https://github.com/storytold/craft-libs", rev = "f8c
 
 # The typesetting engine and language server (CC0-1.0), from crates.io. What later releases add for
 # TeXCraft is in retex's docs/design/embedding.md (and docs/retex-changes.md here).
-retex = "2"
-retex-lsp = "2"
+retex = "2.1"
+retex-lsp = "2.1"
 # Only LF ends a line, as for TeX; CR stays in the line.
 regex = { version = "1", default-features = false, features = ["std", "unicode", "perf"] }
 ropey = { version = "1.6", default-features = false, features = ["simd"] }
-retex-texlive = "2"
-retex-kpath = "2"
+retex-texlive = "2.1"
+retex-kpath = "2.1"
+# Figures for the editor pane: retex's own decoders (already built for retex), and the JPEG
+# decoder the PDF renderer uses.
+retex-image = { version = "2.1", features = ["jxl"] }
+zune-jpeg = "0.5"
+zune-core = "0.5"
+png = "0.18"
 
 # internal
 texcraft-project = { path = "crates/project" }

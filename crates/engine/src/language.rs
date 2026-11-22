@@ -7,8 +7,8 @@
 //! that has none (the web, a new project).
 //!
 //! What the server knows of commands, environments and bibliography entries comes from a build's
-//! `symbols` record ([`Language::build_finished`]); retex makes it for embedders from 2.1.0. Until
-//! a build has given one, completion offers the labels written in the open files.
+//! `symbols` record ([`Language::build_finished`]), which retex makes with each build. Until a build
+//! has given one, completion offers the labels written in the open files.
 
 use std::collections::{HashMap, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
@@ -285,8 +285,16 @@ impl Language {
     /// A build finished: the builds the server asked for take its `symbols` record (when the
     /// engine made one) for `main`.
     pub fn build_finished(&mut self, main: Option<&ProjectPath>, symbols: Option<Value>) {
-        let requested = std::mem::take(&mut self.requested);
         let main_uri = main.map(|m| self.uri(m));
+        // The server takes a build's records only for a build it asked for: a build of our own
+        // (the automatic one, the Compile button) is announced as the main file being saved.
+        if self.requested.is_empty()
+            && symbols.is_some()
+            && let Some(uri) = &main_uri
+        {
+            self.send(json!({"jsonrpc": "2.0", "method": "textDocument/didSave", "params": {"textDocument": {"uri": uri}}}));
+        }
+        let requested = std::mem::take(&mut self.requested);
         for id in requested {
             if let (Some(main), Some(symbols)) = (&main_uri, &symbols) {
                 self.server.handle(Input::Started { id, main: main.clone(), dir: Some(self.root.clone()) });

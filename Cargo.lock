@@ -145,27 +145,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc7bb162ec39d46ab1ca8c77bf72e890535becd1751bb45f64c597edb4c8c6b3"
 
 [[package]]
-name = "alloc-no-stdlib"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2fb6cfd47bf496ff64095c20eaba0c201404ee38714d4142fcfa1dc334fcc7a"
-
-[[package]]
 name = "alloc-stdlib"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e76a019e91224d279006ff972f1e984179a6e9feb050adba6ce8274aef23195"
 dependencies = [
- "alloc-no-stdlib 2.0.4",
-]
-
-[[package]]
-name = "alloc-stdlib"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b5c1865780388bfa186411ab5f247819487fc4864c6e9c3106611fa347586e1"
-dependencies = [
- "alloc-no-stdlib 3.0.0",
+ "alloc-no-stdlib",
 ]
 
 [[package]]
@@ -274,7 +259,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
  "wl-clipboard-rs",
  "x11rb",
 ]
@@ -514,12 +499,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b71798fca2c1fe1086445a7258a4bc81e6e49dcd24c8d0dd9a1e57395b603f51"
 
 [[package]]
-name = "bit_field"
-version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb2907cc03d08cdb1c6724ad0670ce67c4a71e1c45a6d7635224011714cfc4b1"
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -586,9 +565,9 @@ version = "8.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5cc91aac060a7a1e25823bdccbfb6af1875b88f17c6daac97894eed8207166b3"
 dependencies = [
- "alloc-no-stdlib 2.0.4",
- "alloc-stdlib 0.2.4",
- "brotli-decompressor 5.0.3",
+ "alloc-no-stdlib",
+ "alloc-stdlib",
+ "brotli-decompressor",
 ]
 
 [[package]]
@@ -597,18 +576,8 @@ version = "5.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a32acac15fe1967bc3986b2a6347dffc965602354ea6f450ad07e8bfd253583"
 dependencies = [
- "alloc-no-stdlib 2.0.4",
- "alloc-stdlib 0.2.4",
-]
-
-[[package]]
-name = "brotli-decompressor"
-version = "6.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc031cd87c6529082b0b65c604e86af0ed7744841b17ccfe60b1e31fa606179e"
-dependencies = [
- "alloc-no-stdlib 3.0.0",
- "alloc-stdlib 0.3.0",
+ "alloc-no-stdlib",
+ "alloc-stdlib",
 ]
 
 [[package]]
@@ -881,14 +850,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "craft-dds"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=f8c3cef36fbf8f735b373b66c4f81911993aba1f#f8c3cef36fbf8f735b373b66c4f81911993aba1f"
-dependencies = [
- "rayon",
-]
-
-[[package]]
 name = "craft-dialogs"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=f8c3cef36fbf8f735b373b66c4f81911993aba1f#f8c3cef36fbf8f735b373b66c4f81911993aba1f"
@@ -930,52 +891,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "craft-image-codecs"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=f8c3cef36fbf8f735b373b66c4f81911993aba1f#f8c3cef36fbf8f735b373b66c4f81911993aba1f"
-dependencies = [
- "craft-dds",
- "craft-jpeg",
- "craft-jxl",
- "craft-metadata",
- "craft-tiff",
- "crc32fast",
- "exr",
- "flate2",
- "half",
- "hayro-jpeg2000",
- "image",
- "image-webp",
- "jpeg-encoder 0.6.1",
- "png 0.18.1",
- "rayon",
- "serde_json",
- "thiserror 2.0.21",
- "tiff",
- "zune-core",
- "zune-jpeg",
- "zune-jpegxl",
-]
-
-[[package]]
-name = "craft-jpeg"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=f8c3cef36fbf8f735b373b66c4f81911993aba1f#f8c3cef36fbf8f735b373b66c4f81911993aba1f"
-dependencies = [
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "craft-jxl"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=f8c3cef36fbf8f735b373b66c4f81911993aba1f#f8c3cef36fbf8f735b373b66c4f81911993aba1f"
-dependencies = [
- "brotli-decompressor 5.0.3",
- "jxl-oxide",
- "thiserror 2.0.21",
-]
-
-[[package]]
 name = "craft-keymap"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=f8c3cef36fbf8f735b373b66c4f81911993aba1f#f8c3cef36fbf8f735b373b66c4f81911993aba1f"
@@ -993,18 +908,6 @@ version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=f8c3cef36fbf8f735b373b66c4f81911993aba1f#f8c3cef36fbf8f735b373b66c4f81911993aba1f"
 dependencies = [
  "serde_json",
-]
-
-[[package]]
-name = "craft-metadata"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=f8c3cef36fbf8f735b373b66c4f81911993aba1f#f8c3cef36fbf8f735b373b66c4f81911993aba1f"
-dependencies = [
- "brotli-decompressor 6.3.2",
- "chrono",
- "craft-tiff",
- "quick-xml",
- "serde",
 ]
 
 [[package]]
@@ -1042,15 +945,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "craft-tiff"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=f8c3cef36fbf8f735b373b66c4f81911993aba1f#f8c3cef36fbf8f735b373b66c4f81911993aba1f"
-dependencies = [
- "serde",
- "thiserror 2.0.21",
-]
-
-[[package]]
 name = "craft-ui"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=f8c3cef36fbf8f735b373b66c4f81911993aba1f#f8c3cef36fbf8f735b373b66c4f81911993aba1f"
@@ -1079,25 +973,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b929dd2a135771f40afabd1073f85eed59c800b7c61901e5c254270497dad64"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "crossbeam-deque"
-version = "0.8.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "622f3fc73690be383c7214310406f28a90e6edeadc3cea882f9d71e495b9711a"
-dependencies = [
- "crossbeam-epoch",
- "crossbeam-utils",
-]
-
-[[package]]
-name = "crossbeam-epoch"
-version = "0.9.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc74980687109a3b14c72fd458107bf0baa1da1a1a805e178d15501ba9b86d9d"
-dependencies = [
- "crossbeam-utils",
 ]
 
 [[package]]
@@ -1524,7 +1399,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1560,22 +1435,6 @@ checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
  "event-listener",
  "pin-project-lite",
-]
-
-[[package]]
-name = "exr"
-version = "1.74.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb29d0be702adf92c645d9b2f93472906ba83d400e59f98adb3770ce5c18c2f6"
-dependencies = [
- "bit_field",
- "half",
- "lebe",
- "miniz_oxide 0.8.9",
- "multiversion",
- "rayon-core",
- "smallvec",
- "zune-inflate",
 ]
 
 [[package]]
@@ -2407,15 +2266,10 @@ checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
 dependencies = [
  "bytemuck",
  "byteorder-lite",
- "color_quant",
- "gif",
  "moxcms",
  "num-traits",
  "png 0.18.1",
- "qoi",
  "tiff",
- "zune-core",
- "zune-jpeg",
 ]
 
 [[package]]
@@ -2576,12 +2430,6 @@ dependencies = [
 
 [[package]]
 name = "jpeg-encoder"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b454d911ac55068f53495488d8ccd0646eaa540c033a28ee15b07838afafb01f"
-
-[[package]]
-name = "jpeg-encoder"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0370574b86f7eca156b9f298392b5e69a23f8c86f3f865add60bbc2e79467a6"
@@ -2675,7 +2523,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e35d032bcec660647828527ff42c6f5776d2fd44b8357f9f6d9ac6dc07218e46"
 dependencies = [
- "brotli-decompressor 5.0.3",
+ "brotli-decompressor",
  "jxl-bitstream",
  "jxl-frame",
  "jxl-grid",
@@ -2707,7 +2555,7 @@ version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d36c662923f47586880211f3bc7c0d83fb3a9b410d278c7bde93450748abeef3"
 dependencies = [
- "brotli-decompressor 5.0.3",
+ "brotli-decompressor",
  "jxl-bitstream",
  "jxl-color",
  "jxl-frame",
@@ -2824,10 +2672,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "lebe"
-version = "0.5.3"
+name = "landlock"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a79a3332a6609480d7d0c9eab957bca6b455b91bb84e66d19f5ff66294b85b8"
+checksum = "03795bb5dba9d001e861618f7301289e3ad0bb146d0a8192ff5fd8b06d069087"
+dependencies = [
+ "enumflags2",
+ "libc",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "libc"
@@ -3030,28 +2883,6 @@ checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
 dependencies = [
  "num-traits",
  "pxfm",
-]
-
-[[package]]
-name = "multiversion"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb8a68be21d0755f83bfe47e79b896cc732687cf1903f0e50585e8d6ecc53076"
-dependencies = [
- "multiversion-macros",
- "target-features",
-]
-
-[[package]]
-name = "multiversion-macros"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a05e0c3c3e4edaa21d87c645852ed0b0c3663752bcc6ec43353bd6189dce35e1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
- "target-features",
 ]
 
 [[package]]
@@ -3544,7 +3375,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3896,15 +3727,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
-name = "qoi"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f6d64c71eb498fe9eae14ce4ec935c555749aef511cca85b5568910d6e48001"
-dependencies = [
- "bytemuck",
-]
-
-[[package]]
 name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3962,26 +3784,6 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
  "objc2-quartz-core 0.3.2",
-]
-
-[[package]]
-name = "rayon"
-version = "1.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb39b166781f92d482534ef4b4b1b2568f42613b53e5b6c160e24cfbfa30926d"
-dependencies = [
- "either",
- "rayon-core",
-]
-
-[[package]]
-name = "rayon-core"
-version = "1.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
-dependencies = [
- "crossbeam-deque",
- "crossbeam-utils",
 ]
 
 [[package]]
@@ -4135,10 +3937,11 @@ dependencies = [
 
 [[package]]
 name = "retex"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fea5d7d334026bd44e783eda75aeb8539cbe634750a75cc512715d5cdbb180ce"
+checksum = "c32f5cabfee3ce6ec2370dd34498216cc2e458414c095b04dc25f5b1a0c90e78"
 dependencies = [
+ "landlock",
  "libc",
  "libmimalloc-sys",
  "png 0.18.1",
@@ -4156,6 +3959,7 @@ dependencies = [
  "retex-pdf",
  "retex-pdfx",
  "retex-svg",
+ "retex-synctex",
  "retex-texlive",
  "serde_json",
  "windows-sys 0.61.2",
@@ -4163,15 +3967,15 @@ dependencies = [
 
 [[package]]
 name = "retex-arith"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60fe18a924a79e3490d69488cde9e37e5f7220ab4c119dc5f74c38ca6a35b5c9"
+checksum = "17ed51c067073c00ef85e0fe3dfabe49e6582f2b23b48d42ed5b1d9aee5849e2"
 
 [[package]]
 name = "retex-bib"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fbe0e3b674600dcab06634155a4101727c35bc1f74ceef0876c5b719c51439d"
+checksum = "cb9dfced1da64ae2db7108d914931ca71eae4290839bc81c63ef1785f4806c9a"
 dependencies = [
  "roxmltree 0.21.2",
  "thiserror 2.0.21",
@@ -4179,15 +3983,15 @@ dependencies = [
 
 [[package]]
 name = "retex-diag"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fafda5e73a1abbcdc4dd4ecf122d9489290e0db3599d576f210c95487aa444c8"
+checksum = "d0b78aa34c02650ef621e5be100605f83e790a672e21d6cc36527f926ffeebb4"
 
 [[package]]
 name = "retex-engine"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cbb49c40a4975dcf7d094c9089d35e86b7061a65f0356bb208088b3befa0be6"
+checksum = "e7b0184bcadaa04e60c8f93fd3e4e06fdfcfa6f55780b4d9a891485a260759b9"
 dependencies = [
  "flate2",
  "retex-arith",
@@ -4202,9 +4006,9 @@ dependencies = [
 
 [[package]]
 name = "retex-font"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad5c756a3c8b7eba1f046db7d7f309da7938b68b75b49d56389fc2faea509b91"
+checksum = "d6ab9a7c401fb48c36a1dcdbe55691413ade8e7ca1ef358254e10d9befeeaa9a"
 dependencies = [
  "flate2",
  "harfrust 0.14.0",
@@ -4215,27 +4019,27 @@ dependencies = [
 
 [[package]]
 name = "retex-highlight"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c80042cc8a0cf948a88acc2067190a43685778734cc1400ac59657bff70a2b3"
+checksum = "8bc91d4b3be078caeb71cffc4872cc2f78aaa54e0d1834685f4e934ea7e8eea0"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "retex-hyph"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a38aeba2f7ab253e4370cb0b8489d8a9727fc0dc3a571a2c64d2bbd290eae48"
+checksum = "534558c0bcd72068735c09f4db50e76fd31e178a9a873b7e6545d8fb7c616ea2"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "retex-image"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42f0bcf8d396e24d48f3edb0654faa76493a1d2f7a44d8676024cb29feabc657"
+checksum = "0f9aa18060bc9d494b9189dc4fcc4c3c6d633030df1a333b773c2578288a54ed"
 dependencies = [
  "flate2",
  "gif",
@@ -4250,36 +4054,36 @@ dependencies = [
 
 [[package]]
 name = "retex-index"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4705a3bfa9f144fe157cd20e5406178b097d31778e4b8a04730691c4cf898844"
+checksum = "94b90cab6f7d215faa2b20d0d1d7c4302cc4f7b6a6dca6ed87cc3345b6a880d1"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "retex-kpath"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df504b7d72cdf64251382b081cc876aa09e84b014ef61a1f88f9eb22583629b5"
+checksum = "cce43ab26a015aab711e2eceba3e686d7848f441b2e8476908dd8b0e09af9ae4"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "retex-lpeg"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8dc0fa34df2dce8a8b6efda523e6dd57a92b1ed56e024712fbbd91151af9b30"
+checksum = "a4b0f66e822a2c82aa4118a8336430a225edef2ed7ac1ec427e286396f523a38"
 dependencies = [
  "mlua",
 ]
 
 [[package]]
 name = "retex-lsp"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0966556cdfee9428912b197c63c50fc92b7976ed2bf9fc838a6f9a107d51929"
+checksum = "08f0e0900508a1e64f939704678fb8020b0db7066c94423b992b3d644d154aa7"
 dependencies = [
  "retex-diag",
  "serde_json",
@@ -4287,9 +4091,9 @@ dependencies = [
 
 [[package]]
 name = "retex-lua"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d43e069aca46c27b3945231c9da2b0f31cfe4d59a32a2ee673612611f5cd965d"
+checksum = "e39b882ce1215d799a3033d76905943d3b92e5ff08a9d4a02caada16b229ad96"
 dependencies = [
  "flate2",
  "mlua",
@@ -4304,15 +4108,15 @@ dependencies = [
 
 [[package]]
 name = "retex-mp"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9d73e9341dea2a828050a6a58ea5fc58df90f5e9b1d2586e8a9fe718fd2abb5"
+checksum = "4c3407ad4b8339c9364cea295dc578a1feb37ee764adb7e65dc5c21d63853d8f"
 
 [[package]]
 name = "retex-odf"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5603f6b7487152974ce1feb9603d41ffa1538561beeebf03a8aee03ab4d83f2"
+checksum = "fbcf423d4ca5adb9e0f15c9eb62d6eec0a394e9b35d0cafe5878c3fece273bb0"
 dependencies = [
  "flate2",
  "resvg 0.48.1",
@@ -4324,24 +4128,24 @@ dependencies = [
 
 [[package]]
 name = "retex-pdf"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58953e5182b152c737ca1207c7eac7c6714a832decbe2761c369f11230fe8358"
+checksum = "ede083a5ba54e8e021176412eb608caa26c3e9ab625b6da292828b1f34a78422"
 dependencies = [
  "flate2",
- "jpeg-encoder 0.7.1",
+ "jpeg-encoder",
  "retex-image",
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "retex-pdfx"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9839bfc5ce20bca1dc4494280e911d77c10aecb187531f60dccc92938bef5b8"
+checksum = "26c4616378afbca13032a2a61ddce5747bb5da5f763df08e475760b800cdce59"
 dependencies = [
  "flate2",
- "jpeg-encoder 0.7.1",
+ "jpeg-encoder",
  "moxcms",
  "resvg 0.48.1",
  "retex-font",
@@ -4354,9 +4158,9 @@ dependencies = [
 
 [[package]]
 name = "retex-svg"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ba82cec69772dfaeadc6e1c6911c3977850e9bb8a5f7fb60b36ff6ecfb708e9"
+checksum = "f3ebdaa9d75308e616872964097673f17cb578dab076ae7230e73006770ac485"
 dependencies = [
  "flate2",
  "png 0.18.1",
@@ -4366,10 +4170,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "retex-texlive"
-version = "2.0.0"
+name = "retex-synctex"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edf3f0cdf3d1a0ea19c4036bdeb910f60746d35e8245ac6144a266f06d6766b7"
+checksum = "0bf79a69e9d8be0b85361aaeb8ad93ab684320961ddfbcc41744c4ff476bd723"
+dependencies = [
+ "flate2",
+]
+
+[[package]]
+name = "retex-texlive"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a66b1c8135c94d2b4ea8346b356c6838f3eddb1e5180644fdb6a1add96d57f2"
 dependencies = [
  "lzma-rust2",
  "retex-kpath",
@@ -4495,7 +4308,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4930,12 +4743,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "target-features"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1bbb9f3c5c463a01705937a24fdabc5047929ac764b2d5b9cf681c1f5041ed5"
-
-[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4945,7 +4752,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5004,6 +4811,7 @@ dependencies = [
  "log",
  "retex",
  "serde",
+ "serde_json",
  "texcraft-project",
 ]
 
@@ -5043,9 +4851,12 @@ dependencies = [
 name = "texcraft-preview"
 version = "0.1.0"
 dependencies = [
- "craft-image-codecs",
  "craft-pdf",
+ "png 0.18.1",
+ "retex-image",
  "thiserror 2.0.21",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -6080,7 +5891,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6711,28 +6522,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d56377fd46368984a170bc5aac5567e52ca5da874caa60bea39fcbca78fb658b"
 
 [[package]]
-name = "zune-inflate"
-version = "0.2.54"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73ab332fe2f6680068f3582b16a24f90ad7096d5d39b974d1c0aff0125116f02"
-dependencies = [
- "simd-adler32",
-]
-
-[[package]]
 name = "zune-jpeg"
 version = "0.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
-dependencies = [
- "zune-core",
-]
-
-[[package]]
-name = "zune-jpegxl"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cba11ecd07cc23351500e840ae03841b7e4997923ec8e4832ee3ae199ea0b6b4"
 dependencies = [
  "zune-core",
 ]

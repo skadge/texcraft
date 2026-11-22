@@ -50,6 +50,7 @@ fn state(app: &App) -> (Option<&'static str>, egui::Color32, String) {
     };
     match &o.status {
         Status::Unavailable(reason) => (Some("circle-exclamation-point"), t.error, reason.clone()),
+        Status::Cancelled => (Some("info"), t.text_muted, tl!("Compiling stopped").to_owned()),
         Status::Failed => (Some("circle-exclamation-point"), t.error, trn(o.errors(), "Failed with {n} error", "Failed with {n} errors")),
         Status::Built if o.errors() > 0 => {
             (Some("circle-exclamation-point"), t.error, trn(o.errors(), "Compiled with {n} error", "Compiled with {n} errors"))

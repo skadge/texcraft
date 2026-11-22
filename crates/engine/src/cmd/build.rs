@@ -104,7 +104,7 @@ fn can_stop(s: &Session) -> Result<()> {
     if !s.is_building() {
         return Err("Nothing is being compiled.".to_owned());
     }
-    Err("The typesetting engine cannot stop a build yet; it finishes on its own.".to_owned())
+    if s.can_cancel() { Ok(()) } else { Err("This typesetting engine cannot stop a build; it finishes on its own.".to_owned()) }
 }
 
 fn compile(s: &mut Session, p: &Value) -> Result<Value> {
@@ -116,8 +116,8 @@ fn compile(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"job": id}))
 }
 
-fn stop(_: &mut Session, _: &Value) -> Result<Value> {
-    Err("The typesetting engine cannot stop a build yet.".to_owned())
+fn stop(s: &mut Session, _: &Value) -> Result<Value> {
+    if s.stop_build() { Ok(json!({"stopping": true})) } else { Err("No build is running, or the engine cannot stop it.".to_owned()) }
 }
 
 fn auto(s: &mut Session, p: &Value) -> Result<Value> {

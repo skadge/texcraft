@@ -63,7 +63,20 @@ pub struct Diagnostic {
     pub line: Option<u32>,
     /// From 1.
     pub column: Option<u32>,
+    /// The column after the marked span, from 1.
+    pub end_column: Option<u32>,
     pub help: Vec<String>,
+    /// Edits that fix it, on its line.
+    pub fixes: Vec<DiagnosticFix>,
+}
+
+/// An edit that fixes a diagnostic, on its line: the characters from `column` to before
+/// `end_column` (from 1) become `replacement`.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct DiagnosticFix {
+    pub column: u32,
+    pub end_column: u32,
+    pub replacement: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -75,6 +88,8 @@ pub enum Status {
     Failed,
     /// No engine could run the job; the reason is for the user.
     Unavailable(String),
+    /// The build was stopped before its end.
+    Cancelled,
 }
 
 #[derive(Debug, Clone)]
@@ -86,11 +101,26 @@ pub struct Outcome {
     pub log: String,
     pub seconds: f64,
     pub pages: u32,
+    /// The language server's `symbols` record (labels, citations, commands), when the engine
+    /// makes one; a failed build has one too.
+    pub symbols: Option<serde_json::Value>,
+    /// The SyncTeX data, for going between the source and the PDF.
+    pub synctex: Option<Arc<Vec<u8>>>,
 }
 
 impl Outcome {
     pub fn unavailable(job: u64, reason: impl Into<String>) -> Outcome {
-        Outcome { job, status: Status::Unavailable(reason.into()), pdf: None, diagnostics: Vec::new(), log: String::new(), seconds: 0.0, pages: 0 }
+        Outcome {
+            job,
+            status: Status::Unavailable(reason.into()),
+            pdf: None,
+            diagnostics: Vec::new(),
+            log: String::new(),
+            seconds: 0.0,
+            pages: 0,
+            symbols: None,
+            synctex: None,
+        }
     }
 
     pub fn errors(&self) -> usize {
@@ -149,6 +179,9 @@ impl Progress {
     }
 }
 
+/// Stops a backend's running build.
+pub type Canceller = Arc<dyn Fn() + Send + Sync>;
+
 /// Something that can build a job.
 pub trait Backend: Send {
     /// For the log and the settings, such as `retex 2.0.0`.
@@ -161,9 +194,13 @@ pub trait Backend: Send {
         let _ = report;
         self.compile(job)
     }
-    /// Whether a running build can be stopped. retex cannot yet (docs/plan.md, retex changes).
+    /// Whether a running build can be stopped.
     fn can_cancel(&self) -> bool {
         false
+    }
+    /// Stops the running build when called (from any thread), for a backend that can.
+    fn canceller(&self) -> Option<Canceller> {
+        None
     }
 }
 

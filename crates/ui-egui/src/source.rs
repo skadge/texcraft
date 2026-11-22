@@ -98,6 +98,8 @@ pub(crate) struct Problem {
     pub severity: Severity,
     pub message: String,
     pub help: Vec<String>,
+    /// The build's own fixes of it (a hint's come from the language server when asked).
+    pub fixes: Vec<texcraft_engine::Fix>,
 }
 
 /// The popup of a problem: its message, help and fixes.
@@ -502,7 +504,8 @@ impl SourceEditor {
             && let Some(problem) = self.problems.iter().find(|pr| pr.start <= p && p <= pr.end).cloned()
             && let Some(pointer) = ctx.pointer_hover_pos()
         {
-            self.popup = Some(ProblemPopup { problem, at: pointer + vec2(0.0, 14.0), fixes: None, pinned: false, selected: 0 });
+            let fixes = (!problem.fixes.is_empty()).then(|| problem.fixes.clone());
+            self.popup = Some(ProblemPopup { problem, at: pointer + vec2(0.0, 14.0), fixes, pinned: false, selected: 0 });
         }
         if let Some(popup) = &self.popup
             && popup.fixes.is_none()
@@ -1078,7 +1081,8 @@ impl SourceEditor {
             self.problems.iter().find(|p| p.start <= caret && caret <= p.end).or_else(|| self.problems.iter().find(|p| p.line == line)).cloned();
         let Some(problem) = found else { return false };
         let at = self.caret_screen.map_or(Pos2::ZERO, |c| c.left_bottom() + vec2(0.0, 4.0));
-        self.popup = Some(ProblemPopup { problem, at, fixes: None, pinned: true, selected: 0 });
+        let fixes = (!problem.fixes.is_empty()).then(|| problem.fixes.clone());
+        self.popup = Some(ProblemPopup { problem, at, fixes, pinned: true, selected: 0 });
         true
     }
 

@@ -88,4 +88,9 @@ Every asset and fixture in this repository, with its source and licence (standar
 
 Publishers' templates are not part of TeXCraft. `templates/catalog.toml` is our own data (MIT OR Apache-2.0): it names each template, its TeX Live package and that package's licence. TeXCraft downloads a template's files from TeX Live when the user asks for it, keeps them in the user's data folder with a `TEMPLATE-LICENSE` note, and copies that note into projects made from it.
 
-Dependencies come from crates.io, from storytold/craft-libs at the rev pinned in `Cargo.toml`, and from retex (CC0-1.0) at the rev pinned there. Their licences are in their own packages.
+Dependencies come from crates.io, including retex (CC0-1.0) at the version in `Cargo.toml`, and from storytold/craft-libs at the rev pinned there. Their licences are in their own packages. Two need their notice repeated (`NOTICE`):
+
+| Crate | Licence | Used through | Notice |
+|---|---|---|---|
+| jpeg-encoder | (MIT OR Apache-2.0) AND IJG | retex's PDF writer (retex-pdf) | This software is based in part on the work of the Independent JPEG Group. |
+| webpki-roots | CDLA-Permissive-2.0 | retex-texlive's downloads (ureq) | Mozilla's list of trusted certificate authorities, under the Community Data License Agreement – Permissive 2.0. |

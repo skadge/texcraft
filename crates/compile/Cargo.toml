@@ -17,6 +17,7 @@ default = ["retex"]
 retex = ["dep:retex"]
 
 [dependencies]
+serde_json = { workspace = true }
 texcraft-project = { workspace = true }
 serde = { workspace = true }
 log = { workspace = true }
