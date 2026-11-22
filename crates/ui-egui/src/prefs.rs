@@ -43,6 +43,8 @@ pub struct Prefs {
     pub auto_close: bool,
     /// The desktop window has the system's title bar, not the window controls in the top bar.
     pub system_title_bar: bool,
+    /// The engine, stopping at the first error, draft images.
+    pub build: texcraft_engine::BuildOptions,
 }
 
 impl Default for Prefs {
@@ -60,6 +62,7 @@ impl Default for Prefs {
             vim: false,
             auto_close: true,
             system_title_bar: false,
+            build: texcraft_engine::BuildOptions::default(),
         }
     }
 }

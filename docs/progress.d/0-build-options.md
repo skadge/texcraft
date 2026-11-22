@@ -1,0 +1,1 @@
+- 2026-11-22: Build options. Settings › Building chooses the engine (from the document, LuaLaTeX or pdfLaTeX) and turns on stopping at the first error and draft images, also in the Compile button's menu; a change rebuilds. Delete Build Files clears the build folder and the worker's snapshots. Agents get `build.options` and `build.clean`.

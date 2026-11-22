@@ -151,6 +151,7 @@ impl App {
     pub fn with_prefs(mut session: Session, prefs: prefs::Prefs) -> Self {
         session.settings.auto_compile = prefs.auto_compile;
         session.settings.auto_compile_delay_ms = prefs.auto_compile_delay_ms.clamp(200, 10_000);
+        session.settings.build = prefs.build;
         let (layout, side) = (prefs.layout(), prefs.side());
         let keys = keys::Keys::new(prefs.shortcuts.clone());
         i18n::set_language(&prefs.language);
@@ -213,6 +214,7 @@ impl App {
         let mut current = self.prefs.clone();
         current.set_view(self.view.layout, self.view.side);
         current.auto_compile = self.session.settings.auto_compile;
+        current.build = self.session.settings.build;
         if current != self.prefs {
             self.prefs = current;
             self.prefs_changed = true;

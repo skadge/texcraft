@@ -1,5 +1,6 @@
 //! Integration tests for texcraft-engine.
 
+mod build_options;
 mod command_sweep;
 mod file_access;
 mod files;

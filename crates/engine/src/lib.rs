@@ -21,7 +21,7 @@ use serde_json::Value;
 use texcraft_compile::{Job, Outcome};
 use texcraft_project::{Project, ProjectPath};
 
-pub use texcraft_compile::{Diagnostic, Progress, Severity, Status};
+pub use texcraft_compile::{Diagnostic, Engine, Options as BuildOptions, Progress, Severity, Status};
 pub use texcraft_project as project;
 
 /// What a command returns: a JSON value for automation, or a message for the user.
@@ -34,11 +34,13 @@ pub struct Settings {
     pub auto_compile: bool,
     /// How long typing must pause before an automatic build, in milliseconds.
     pub auto_compile_delay_ms: u64,
+    /// The engine, stopping at the first error, draft images (`build.options`).
+    pub build: texcraft_compile::Options,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { auto_compile: true, auto_compile_delay_ms: 800 }
+        Self { auto_compile: true, auto_compile_delay_ms: 800, build: texcraft_compile::Options::default() }
     }
 }
 
@@ -218,6 +220,36 @@ impl Session {
         }
     }
 
+    /// Sets the build options; a change makes the PDF stale, so the automatic build runs again.
+    pub fn set_build_options(&mut self, options: texcraft_compile::Options) {
+        if options != self.settings.build {
+            self.settings.build = options;
+            self.built_revision = None;
+        }
+    }
+
+    /// Whether the engine keeps build files that `build.clean` can delete.
+    pub fn can_clean(&self) -> bool {
+        match &self.builder {
+            #[cfg(not(target_arch = "wasm32"))]
+            Builder::Thread(w) => w.can_clean(),
+            #[cfg(target_arch = "wasm32")]
+            Builder::Inline(b, _) => b.cleaner().is_some(),
+        }
+    }
+
+    /// Deletes the build files (not the PDF shown); the next build starts from scratch.
+    pub(crate) fn clean_build(&mut self) -> Result<()> {
+        match &mut self.builder {
+            #[cfg(not(target_arch = "wasm32"))]
+            Builder::Thread(w) => w.clean()?,
+            #[cfg(target_arch = "wasm32")]
+            Builder::Inline(b, _) => b.cleaner().ok_or("This typesetting engine keeps no build files.")?()?,
+        }
+        self.built_revision = None;
+        Ok(())
+    }
+
     /// Whether the sources changed since the last build started.
     pub fn is_stale(&self) -> bool {
         self.built_revision != Some(self.revision)
@@ -258,7 +290,8 @@ impl Session {
         }
         let id = self.next_job;
         self.next_job += 1;
-        let job = Job::from_project(&self.project, id).ok_or("The project has no main document to build.")?;
+        let mut job = Job::from_project(&self.project, id).ok_or("The project has no main document to build.")?;
+        job.options = self.settings.build;
         self.built_revision = Some(self.revision);
         match &mut self.builder {
             #[cfg(not(target_arch = "wasm32"))]

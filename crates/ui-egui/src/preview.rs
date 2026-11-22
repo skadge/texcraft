@@ -120,12 +120,21 @@ fn compile_menu(app: &mut App, ui: &mut egui::Ui) {
         app.run("build.auto", json!({"on": auto}));
     }
     ui.separator();
-    // These wait for build options in retex's embedding API (docs/retex-changes.md, R12).
-    let later = Err(tl!("Needs build options in the engine's embedding API (docs/retex-changes.md, R12).").to_owned());
-    let _ = top_bar::item(ui, &t, None, tl!("Draft: images as boxes"), None, later.clone());
-    let _ = top_bar::item(ui, &t, None, tl!("Stop at the first error"), None, later.clone());
+    let options = app.session.settings.build;
+    let mut draft = options.draft_images;
+    if ui.checkbox(&mut draft, tl!("Draft images (framed boxes)")).changed() {
+        app.run("build.options", json!({"draft_images": draft}));
+    }
+    let mut halt = options.halt_on_error;
+    if ui.checkbox(&mut halt, tl!("Stop at the first error")).changed() {
+        app.run("build.options", json!({"halt_on_error": halt}));
+    }
     ui.separator();
-    let _ = top_bar::item(ui, &t, Some("eraser"), tl!("Delete build files"), None, later);
+    if top_bar::item(ui, &t, Some("eraser"), tl!("Delete Build Files"), None, cmd_enabled(app, "build.clean"))
+        && app.run("build.clean", json!({})).is_some()
+    {
+        app.view.status = Some((tl!("Build files deleted: the next build starts from scratch.").to_owned(), false));
+    }
     let stop = cmd_enabled(app, "build.stop");
     if top_bar::item(ui, &t, Some("x"), tl!("Stop Compiling"), None, stop) {
         app.run("build.stop", json!({}));

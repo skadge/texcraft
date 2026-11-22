@@ -85,7 +85,7 @@ Done items are marked **done** with the commit subject that brought them. The re
    - a distraction-free mode that hides the menus and the rail;
    - `craft-menu` for the macOS menu bar.
 4. **Keyboard** (**done**: `craft-keymap` for every shortcut, user overrides kept in the preferences, the shared Keyboard Shortcuts dialog, F6 and Shift+F6 between regions). Still to do: Alt or F10 to reach the menu bar.
-5. **Settings** (**done**: a Settings dialog with Appearance, Editor, Building and Keyboard tabs, kept through `craft-settings`). Options waiting for retex 2.1 are shown disabled with the reason. Editor options (completion, closing brackets, spelling language, key bindings) arrive with phase 2's editor.
+5. **Settings** (**done**: a Settings dialog with Appearance, Editor, Building and Keyboard tabs, kept through `craft-settings`). The Building tab has the engine, stopping at the first error and draft images (retex 2.1). Editor options (completion, closing brackets, spelling language, key bindings) arrive with phase 2's editor.
 6. **Control channel** (**done** for `engine.commands`, `engine.execute`, `document.inspect`, `document.revision`, `ui.inspect`; see [docs/control-protocol.md](control-protocol.md)). Still to do:
    - `ui.screenshot` (**done**) and synthetic input;
    - `texcraft-cli mcp --connect` to drive the open window;

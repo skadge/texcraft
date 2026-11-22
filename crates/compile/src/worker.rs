@@ -20,6 +20,7 @@ pub struct Worker {
     name: String,
     can_cancel: bool,
     canceller: Option<crate::Canceller>,
+    cleaner: Option<crate::Cleaner>,
 }
 
 impl Worker {
@@ -30,6 +31,7 @@ impl Worker {
         let name = backend.name();
         let can_cancel = backend.can_cancel();
         let canceller = backend.canceller();
+        let cleaner = backend.cleaner();
         let spawned = std::thread::Builder::new().name("texcraft-compile".to_owned()).spawn(move || {
             for job in job_rx {
                 let id = job.id;
@@ -47,7 +49,19 @@ impl Worker {
         if let Err(e) = spawned {
             log::error!("cannot start the compile thread: {e}");
         }
-        Worker { jobs, outcomes, events, progress: Progress::default(), started: None, running: None, waiting: None, name, can_cancel, canceller }
+        Worker {
+            jobs,
+            outcomes,
+            events,
+            progress: Progress::default(),
+            started: None,
+            running: None,
+            waiting: None,
+            name,
+            can_cancel,
+            canceller,
+            cleaner,
+        }
     }
 
     pub fn backend_name(&self) -> &str {
@@ -89,6 +103,22 @@ impl Worker {
             }
             _ => false,
         }
+    }
+
+    /// Deletes the backend's build files; refused while a build runs or waits.
+    pub fn clean(&mut self) -> Result<(), String> {
+        if self.running.is_some() || self.waiting.is_some() {
+            return Err("A build is running: stop it or wait for it first.".to_owned());
+        }
+        match &self.cleaner {
+            Some(clean) => clean(),
+            None => Err("This typesetting engine keeps no build files.".to_owned()),
+        }
+    }
+
+    /// Whether the backend keeps build files that can be deleted.
+    pub fn can_clean(&self) -> bool {
+        self.cleaner.is_some()
     }
 
     /// The job running, if any.

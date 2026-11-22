@@ -28,6 +28,7 @@ pub use worker::Worker;
 pub struct Job {
     pub files: Vec<(ProjectPath, Arc<[u8]>)>,
     pub main: ProjectPath,
+    pub options: Options,
     /// Increases with every job a session starts, so an outcome can be matched to its job.
     pub id: u64,
 }
@@ -37,8 +38,31 @@ impl Job {
     pub fn from_project(project: &Project, id: u64) -> Option<Job> {
         let main = project.main()?.clone();
         let files = project.files().map(|(p, c)| (p.clone(), Arc::<[u8]>::from(c.as_bytes()))).collect();
-        Some(Job { files, main, id })
+        Some(Job { files, main, id, options: Options::default() })
     }
+}
+
+/// The engine a build is like.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Engine {
+    /// Chosen from the document: pdfLaTeX's mode for a document written for it, LuaLaTeX's
+    /// otherwise.
+    #[default]
+    Auto,
+    LuaLatex,
+    PdfLatex,
+}
+
+/// How a build runs (Settings › Building, the Compile button's menu).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct Options {
+    pub engine: Engine,
+    /// Stop at the first error instead of going on and reporting every error.
+    pub halt_on_error: bool,
+    /// Draw images as framed boxes with their names, for faster builds.
+    pub draft_images: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
@@ -185,6 +209,10 @@ impl Progress {
 /// Stops a backend's running build.
 pub type Canceller = Arc<dyn Fn() + Send + Sync>;
 
+/// Deletes a backend's build files (call it with no build running); the next build starts from
+/// scratch.
+pub type Cleaner = Arc<dyn Fn() -> Result<(), String> + Send + Sync>;
+
 /// Something that can build a job.
 pub trait Backend: Send {
     /// For the log and the settings, such as `retex 2.0.0`.
@@ -203,6 +231,10 @@ pub trait Backend: Send {
     }
     /// Stops the running build when called (from any thread), for a backend that can.
     fn canceller(&self) -> Option<Canceller> {
+        None
+    }
+    /// Deletes the build files, for a backend that keeps some.
+    fn cleaner(&self) -> Option<Cleaner> {
         None
     }
 }

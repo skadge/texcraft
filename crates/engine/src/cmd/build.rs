@@ -38,6 +38,26 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "build.options",
+            label: "Build Options",
+            menu: &[],
+            shortcut: None,
+            params: options_schema,
+            enabled: always,
+            run: options,
+            changes: true,
+        },
+        CommandSpec {
+            id: "build.clean",
+            label: "Delete Build Files",
+            menu: &["Build"],
+            shortcut: None,
+            params: no_params,
+            enabled: can_clean,
+            run: clean,
+            changes: true,
+        },
+        CommandSpec {
             id: "build.save_pdf",
             label: "Save PDF As…",
             menu: &["File"],
@@ -71,6 +91,43 @@ fn on_schema() -> Value {
         "on": {"type": "boolean"},
         "delay_ms": {"type": "integer", "minimum": 200, "maximum": 10000, "description": "How long typing must pause before a build."}
     }, "required": ["on"], "additionalProperties": false})
+}
+
+fn options_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "engine": {"enum": ["auto", "lualatex", "pdflatex"], "description": "The engine the build is like: chosen from the document (auto), LuaLaTeX or pdfLaTeX."},
+        "halt_on_error": {"type": "boolean", "description": "Stop at the first error instead of reporting every error."},
+        "draft_images": {"type": "boolean", "description": "Draw images as framed boxes with their names, for faster builds."}
+    }, "additionalProperties": false})
+}
+
+/// Changes the options given and returns them all; with no parameters, only returns them.
+fn options(s: &mut Session, p: &Value) -> Result<Value> {
+    let mut o = s.settings.build;
+    if let Some(e) = p.get("engine") {
+        o.engine = serde_json::from_value(e.clone()).map_err(|_| "`engine` must be auto, lualatex or pdflatex")?;
+    }
+    if let Some(v) = p.get("halt_on_error") {
+        o.halt_on_error = v.as_bool().ok_or("`halt_on_error` must be a boolean")?;
+    }
+    if let Some(v) = p.get("draft_images") {
+        o.draft_images = v.as_bool().ok_or("`draft_images` must be a boolean")?;
+    }
+    s.set_build_options(o);
+    serde_json::to_value(o).map_err(|e| e.to_string())
+}
+
+fn can_clean(s: &Session) -> Result<()> {
+    if !s.can_clean() {
+        return Err("This typesetting engine keeps no build files.".to_owned());
+    }
+    if s.is_building() { Err("A build is running: stop it or wait for it first.".to_owned()) } else { Ok(()) }
+}
+
+fn clean(s: &mut Session, _: &Value) -> Result<Value> {
+    can_clean(s)?;
+    s.clean_build()?;
+    Ok(json!({"deleted": true}))
 }
 
 fn path_schema() -> Value {

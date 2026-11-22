@@ -40,7 +40,7 @@ impl Backend for Reporting {
 fn the_worker_passes_a_running_builds_progress_on() {
     let (go, wait) = channel();
     let mut worker = Worker::new(Box::new(Reporting(Arc::new(Mutex::new(wait)))));
-    let job = Job { files: Vec::new(), main: ProjectPath::new("main.tex").unwrap(), id: 7 };
+    let job = Job { files: Vec::new(), main: ProjectPath::new("main.tex").unwrap(), id: 7, options: Default::default() };
     worker.submit(job);
     let mut seen = None;
     for _ in 0..200 {
@@ -81,7 +81,7 @@ impl Backend for Stoppable {
 #[test]
 fn cancelling_stops_the_running_build() {
     let mut worker = Worker::new(Box::new(Stoppable(Arc::default())));
-    worker.submit(Job { files: Vec::new(), main: ProjectPath::new("main.tex").unwrap(), id: 1 });
+    worker.submit(Job { files: Vec::new(), main: ProjectPath::new("main.tex").unwrap(), id: 1, options: Default::default() });
     assert!(worker.cancel(), "the running build could not be stopped");
     let outcome = worker.wait().unwrap();
     assert_eq!(outcome.status, texcraft_compile::Status::Cancelled);

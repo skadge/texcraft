@@ -1,6 +1,6 @@
 # retex for TeXCraft
 
-> **Last updated:** 2026-11-22 · **Change:** retex 2.2.0 in use: builds the host starts, fix titles, `decode_rgba8`; `Retex::spawn` waits on point 2
+> **Last updated:** 2026-11-22 · **Change:** build options in use (`identity`, `halt_on_error`, `draft_images`); Delete Build Files
 
 TeXCraft asked retex for twelve changes, R1 to R12, and a thirteenth since (R13). retex answered with a design note, `docs/design/embedding.md` in the retex repository. That note is the reference: it lists each change's interface, phase and status. This page records what TeXCraft does with each retex release, and the points still open on TeXCraft's side.
 
@@ -9,7 +9,7 @@ TeXCraft asked retex for twelve changes, R1 to R12, and a thirteenth since (R13)
 | retex release | What it brings (R) | What TeXCraft does with it |
 |---|---|---|
 | 2.0.0 (done) | crates.io (R10) | `retex = "2"` and `retex-lsp = "2"` from crates.io. |
-| 2.1.0 (done, in use) | `Retex::synctex`, `symbols`, `on_progress`, `cancel_token`; `compile_file_outcome`, whose `Outcome` keeps a failed build's `Outputs`; `Diagnostic::end_column` and `fixes`; `retex::Worker` and its preamble snapshot; `retex-synctex` (R1 to R3, R6, R7, R9, R12) | **In use:** see "The build backend" below. **Not used yet:** `identity`, `halt_on_error`, `draft_images`, `retex::clean`, the worker's `Sandbox` (R4, R5), fragments (R11). |
+| 2.1.0 (done, in use) | `Retex::synctex`, `symbols`, `on_progress`, `cancel_token`; `compile_file_outcome`, whose `Outcome` keeps a failed build's `Outputs`; `Diagnostic::end_column` and `fixes`; `retex::Worker` and its preamble snapshot; `retex-synctex` (R1 to R3, R6, R7, R9, R12) | **In use:** see "The build backend" below. **Not used yet:** `retex::clean` (below), the worker's `Sandbox` (R4, R5), fragments (R11). |
 | 2.2.0 (done, in use) | `Server::start_build`; a `title` for each fix; `retex_image::decode_rgba8`, `retex::render_pdf`; `Retex::spawn` and `spawn_file`; hints for `.bib` files | **In use:** `start_build`, fix titles, `decode_rgba8`, the `.bib` hints (below). **Not used:** `render_pdf`, as TeXCraft draws PDF figures with its own page renderer (craft-pdf, as the preview does); `Retex::spawn`, until point 2 below. |
 | 2.3.0 | Typed language-server queries (R8) | Completion, hover and definitions through them. Until then, `Server::handle` with JSON values. |
 
@@ -25,6 +25,8 @@ TeXCraft asked retex for twelve changes, R1 to R12, and a thirteenth since (R13)
 - **`synctex(true)`.** The engine reads it with `retex-synctex`: a double-click or Ctrl+click in the PDF opens the source line, and View › Show in PDF (Cmd+Alt+J; Ctrl+click in the editor where nothing is defined) marks the caret's line in the PDF. Agents get `pdf.source` and `pdf.locate`.
 - **`on_progress`.** Passes, pages shipped against the last pass's, files read and steps between passes reach the status bar and the PDF pane ("Compiling page 14 of 40 · pass 2 (cross-references)"). retex calls back on its build thread; the backend forwards the events through a channel to the build worker's thread, which passes them to the session.
 - **`cancel_token`.** Build › Stop Compiling cancels the running build; it ends with TeXCraft's `Status::Cancelled`.
+- **Build options** (2.1.0): the engine (`identity`: chosen from the document, LuaLaTeX, pdfLaTeX) in Settings › Building, stopping at the first error (`halt_on_error`) and draft images (`draft_images`) there and in the Compile button's menu; agents get `build.options`. A changed option makes the PDF stale, so the automatic build runs again.
+- **Delete Build Files** (`build.clean`) deletes TeXCraft's build folder (`<cache>/src/` and `<cache>/out/`) and ends the worker, whose snapshots are build files too; the next build starts from scratch. `retex::clean` is not used: it removes the command line's `.retex/<job>-<hash>/`, while TeXCraft's builds keep theirs in its own cache, and the worker's in `.retex/worker-<job>/`.
 - **Diagnostics.** `end_column` gives each problem its exact span in the editor; `fixes` become the quick fixes of build messages (the problem popup, Edit › Quick Fix), applied as one undoable edit, under retex's title for them (2.2.0; "Change to “…”" or "Remove it" for a fix without one).
 
 After each build, the `symbols` record goes to the language server as a build TeXCraft started (`Server::start_build`, 2.2.0), and also answers any build the server asked for. The language server's 2.2.0 hints for `.bib` files (months, dates, DOIs as links, names, duplicate keys) show in the editor like any other hint, since TeXCraft syncs every text file of the project.
@@ -35,12 +37,11 @@ The editor pane's image preview decodes with `retex_image::decode_rgba8` (PNG, J
 
 ## Next on TeXCraft's side
 
-1. **The rest of 2.1.0's options.** The Build menu's draft images (`draft_images`) and stop at the first error (`halt_on_error`), the engine identity in Settings (`identity`), and Delete Build Files (`retex::clean` with the main document).
-2. **The rest of the `Worker` backend** (in use, above):
+1. **The rest of the `Worker` backend** (in use, above):
    - **In place.** Building a project in its folder with unsaved files as `overlay` (names with subfolders and files only in the overlay are fine, the note confirms) would save the copy, at the price of build files in the user's folder; for now the copy stays.
    - **Agent sessions** spawn their worker with a `Sandbox` (`Sandbox::new` with the session's write root as a project, its read root in `read`). Building is refused to agents until then. Linux only: elsewhere agents still cannot build.
    - **The draft PDF** of a first build's first pass, in the preview, when retex sends it (planned for a later release).
-3. **Fragments** for the formatted mode (plan phase 3), through the worker.
+2. **Fragments** for the formatted mode (plan phase 3), through the worker.
 
 ## Open points for retex
 

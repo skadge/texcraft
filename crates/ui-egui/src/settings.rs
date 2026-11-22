@@ -3,6 +3,7 @@
 
 use egui::{Align, Layout, RichText};
 use serde_json::json;
+use texcraft_engine::Engine;
 
 use crate::dialogs::Dialog;
 use crate::prefs::ThemePref;
@@ -188,23 +189,44 @@ fn building(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         }
         Some(r)
     });
-    let later = tl!("Needs build options in the engine's embedding API (retex 2.1, R12).");
+    let options = app.session.settings.build;
     setting(ui, t, tl!("Engine"), tl!("How the document is typeset: as LuaLaTeX, as pdfLaTeX, or chosen from the document."), |ui| {
-        ui.add_enabled_ui(false, |ui| {
-            let combo = craft_ui::ComboBox::from_id_salt("settings-engine").width(180.0).selected_text(tl!("Chosen by retex")).show_ui(ui, |_| {});
-            let _ = combo.response.accessible_name(tl!("Engine"));
-        })
-        .response
-        .on_disabled_hover_text(later);
+        let engines = [(Engine::Auto, tl!("Chosen from the document")), (Engine::LuaLatex, "LuaLaTeX"), (Engine::PdfLatex, "pdfLaTeX")];
+        let current = engines.iter().find(|(e, _)| *e == options.engine).map_or("", |(_, n)| *n);
+        let mut chosen = None;
+        let combo = craft_ui::ComboBox::from_id_salt("settings-engine").width(200.0).selected_text(current).show_ui(ui, |ui| {
+            for (engine, name) in engines {
+                if ui.selectable_label(options.engine == engine, name).clicked() {
+                    chosen = Some(engine);
+                }
+            }
+        });
+        let _ = combo.response.accessible_name(tl!("Engine"));
+        if let Some(engine) = chosen {
+            let id = match engine {
+                Engine::Auto => "auto",
+                Engine::LuaLatex => "lualatex",
+                Engine::PdfLatex => "pdflatex",
+            };
+            app.run("build.options", json!({"engine": id}));
+        }
         None
     });
     setting(ui, t, tl!("Stop at the first error"), tl!("Otherwise the build goes on and reports every error."), |ui| {
-        let mut off = false;
-        Some(ui.add_enabled(false, egui::Checkbox::without_text(&mut off)).on_disabled_hover_text(later))
+        let mut on = options.halt_on_error;
+        let r = ui.add(egui::Checkbox::without_text(&mut on));
+        if r.changed() {
+            app.run("build.options", json!({"halt_on_error": on}));
+        }
+        Some(r)
     });
-    setting(ui, t, tl!("Draft images"), tl!("Draw images as frames, for faster builds."), |ui| {
-        let mut off = false;
-        Some(ui.add_enabled(false, egui::Checkbox::without_text(&mut off)).on_disabled_hover_text(later))
+    setting(ui, t, tl!("Draft images"), tl!("Draw images as framed boxes with their names, for faster builds."), |ui| {
+        let mut on = options.draft_images;
+        let r = ui.add(egui::Checkbox::without_text(&mut on));
+        if r.changed() {
+            app.run("build.options", json!({"draft_images": on}));
+        }
+        Some(r)
     });
 }
 

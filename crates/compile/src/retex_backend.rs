@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::{Backend, Canceller, Diagnostic, DiagnosticFix, Event, Job, Outcome, Severity, Status};
+use crate::{Backend, Canceller, Cleaner, Diagnostic, DiagnosticFix, Engine, Event, Job, Options, Outcome, Severity, Status};
 
 pub struct Retex {
     dir: PathBuf,
@@ -77,14 +77,14 @@ impl Retex {
     }
 
     /// Builds in process, reporting its progress from retex's build thread.
-    fn in_process(&self, main: &Path, report: &mut dyn FnMut(Event)) -> Option<retex::Outcome> {
+    fn in_process(&self, main: &Path, options: Options, report: &mut dyn FnMut(Event)) -> Option<retex::Outcome> {
         let token = retex::CancelToken::new();
         if let Ok(mut slot) = self.running.lock() {
             *slot = Some(token.clone());
         }
         // retex calls back on its build thread; the events go to `report` here, on ours.
         let (tx, rx) = std::sync::mpsc::channel();
-        let retex = retex::Retex::new().keep_files(self.dir.join("out")).symbols(true).synctex(true).cancel_token(token).on_progress(move |p| {
+        let retex = engine_options(options).keep_files(self.dir.join("out")).cancel_token(token).on_progress(move |p| {
             let _ = tx.send(p);
         });
         let handle = std::thread::scope(|scope| {
@@ -107,7 +107,7 @@ impl Retex {
 
     /// Builds through the worker; `None` when it cannot start or build (the caller builds in
     /// process instead).
-    fn through_worker(slot: &WorkerSlot, main: &Path, report: &mut dyn FnMut(Event)) -> Option<(retex::Outcome, bool)> {
+    fn through_worker(slot: &WorkerSlot, main: &Path, options: Options, report: &mut dyn FnMut(Event)) -> Option<(retex::Outcome, bool)> {
         // From the main document's folder, as the in-process build runs.
         let dir = main.parent()?.to_path_buf();
         let name = main.file_name()?.to_string_lossy().into_owned();
@@ -126,7 +126,7 @@ impl Retex {
             }
             slot.stopped.store(false, std::sync::atomic::Ordering::SeqCst);
             let mut request = retex::BuildRequest::new(dir, name);
-            request.options = retex::Retex::new().symbols(true).synctex(true);
+            request.options = engine_options(options);
             match process.as_ref()?.build(request) {
                 Ok(handle) => handle,
                 Err(e) => {
@@ -178,6 +178,21 @@ impl Backend for Retex {
         }))
     }
 
+    fn cleaner(&self) -> Option<Cleaner> {
+        let dir = self.dir.clone();
+        let worker = self.worker.as_ref().map(|w| w.process.clone());
+        Some(Arc::new(move || {
+            // The worker's snapshots are build files too: the next build starts a new worker.
+            if let Some(w) = worker.as_ref().and_then(|p| p.lock().ok().and_then(|mut p| p.take())) {
+                drop(w);
+            }
+            match std::fs::remove_dir_all(&dir) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("deleting {}: {e}", dir.display())),
+                _ => Ok(()),
+            }
+        }))
+    }
+
     fn compile_reporting(&mut self, job: &Job, report: &mut dyn FnMut(Event)) -> Outcome {
         let started = Instant::now();
         let main = match self.write_sources(job) {
@@ -187,10 +202,10 @@ impl Backend for Retex {
         let main_dir = job.main.as_str().rsplit_once('/').map(|(d, _)| d.to_owned());
         let src = std::fs::canonicalize(self.dir.join("src")).unwrap_or_else(|_| self.dir.join("src"));
         let place = |d: &retex::Diagnostic| convert(d, &src, main_dir.as_deref());
-        let via_worker = self.worker.as_ref().and_then(|slot| Self::through_worker(slot, &main, report));
+        let via_worker = self.worker.as_ref().and_then(|slot| Self::through_worker(slot, &main, job.options, report));
         let (outcome, stopped) = match via_worker {
             Some(found) => found,
-            None => match self.in_process(&main, report) {
+            None => match self.in_process(&main, job.options, report) {
                 Some(o) => (o, false),
                 None => {
                     let seconds = started.elapsed().as_secs_f64();
@@ -292,4 +307,14 @@ fn event(p: retex::Progress) -> Option<Event> {
         retex::Progress::Step { what } => Event::Step { what },
         _ => return None,
     })
+}
+
+/// retex's options for a build: always the language server's symbols and SyncTeX data.
+fn engine_options(options: Options) -> retex::Retex {
+    let identity = match options.engine {
+        Engine::Auto => retex::Identity::Auto,
+        Engine::LuaLatex => retex::Identity::LuaLatex,
+        Engine::PdfLatex => retex::Identity::PdfLatex,
+    };
+    retex::Retex::new().symbols(true).synctex(true).identity(identity).halt_on_error(options.halt_on_error).draft_images(options.draft_images)
 }
