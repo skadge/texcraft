@@ -1,0 +1,15 @@
+[package]
+name = "texcraft-project"
+description = "A TeXCraft project: its files, its main document, and the rules for the paths in it"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
