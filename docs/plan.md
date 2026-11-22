@@ -119,6 +119,18 @@ The interim editor is egui's multi-line text field with a highlighting layouter.
    - Soft wrap, current-line highlight, selection of words and lines.
    - IME through `craft_ui::ime::Composer`.
    - AccessKit: an editable multi-line text node with value, caret and selection (RFC-0014; not a read-only document).
+3b. **Vim mode** (essential, part of the widget from the start, not an add-on). A setting (Settings › Editor › Key bindings: Standard or Vim), kept per user, with the mode shown in the status bar (`NORMAL`, `INSERT`, `VISUAL`, `V-LINE`, `REPLACE`, and the pending command).
+   - **Normal mode.** Counts, motions (`h j k l w W b B e E 0 ^ $ gg G f F t T ; , % { }`, `H M L`), text objects (`iw aw iW aW is as ip ap i( a( i{ a{ i[ a[ i" a"`, and LaTeX's own: `ie ae` for an environment, `i$ a$` for inline math, `ic ac` for a command's argument). Operators (`d c y > < = gu gU g~`) with motions and objects. `x X s S r J p P u Ctrl-R .` and `~`.
+   - **Insert mode** and its keys (`Ctrl-W Ctrl-U Ctrl-O`), and completion (phase 2's) that cooperates with it.
+   - **Visual modes:** character, line and block, with the operators.
+   - **Search:** `/ ? n N * #`, sharing the find bar's matches.
+   - **Command line:** `:w` (save), `:q` (close the file), `:wq`, `:e FILE`, `:s` and `:%s` with flags, `:{line}`, `:noh`, `:set` for a few options.
+   - **Registers** (unnamed, named, `"+` the system clipboard, `"0`), **marks** (`m` and `` ` `` and `'`), the **jump list** (`Ctrl-O Ctrl-I`), and macros (`q` and `@`).
+   - Undo groups follow Vim's: one per change, an insert session is one change.
+   - Shortcuts: in Normal mode, command chords of the keymap (Ctrl+S, Ctrl+Enter, F6) still run; plain keys belong to Vim. In Insert mode, the editor's text-editing chords apply as usual.
+   - **Accessibility:** the mode is announced on change, and the caret's shape (block, bar, underline) is never the only signal of the mode.
+   - Tests: a table of keystroke sequences and the text and caret they must give, written from Vim's documentation (`:help`), as the clean-room standard allows. Vim's code is not read, and its documentation is not copied.
+
 4. **Find and replace.** Match case, regular expression (`regex`, MIT/Apache-2.0), whole word, within selection, replace all. Then project-wide search with results grouped by file.
 5. **Language features from retex-lsp, in process** (`retex_lsp::Server::handle`, no JSON-RPC transport):
    - Completion of commands, environments, `\ref` labels and `\cite` keys.
@@ -275,7 +287,7 @@ retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua i
 
 - More of TeXCraft's own templates (CC0, generated in the repository), beside the publishers' ones of phase 1.
 - Word count (`craft-latex`'s reader).
-- Vim and Emacs key bindings.
+- Emacs key bindings.
 
 ## 4. retex
 
