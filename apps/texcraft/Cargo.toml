@@ -23,5 +23,6 @@ serde_json = { workspace = true }
 getrandom = { workspace = true }
 dirs = { workspace = true }
 chrono = { workspace = true }
+env_logger = { workspace = true }
 serde = { workspace = true }
 egui = { workspace = true }

@@ -161,6 +161,8 @@ fn main() -> eframe::Result {
             std::process::exit(2);
         }
     };
+    // Warnings and errors by default; RUST_LOG=info (or debug) for more.
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
     texcraft_ui_egui::i18n::use_system_language();
     let (settings, report) = SettingsStore::<Stored>::open(Location::Auto);
     log::info!("preferences: {report:?}");
