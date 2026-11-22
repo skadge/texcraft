@@ -102,12 +102,65 @@ impl Outcome {
     }
 }
 
+/// What a build reports while it runs (retex's progress, from 2.1.0).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub enum Event {
+    /// A pass starts: its number (from 1) and why it runs (`cross-references`), none for the first.
+    Pass { n: u32, reason: Option<String> },
+    /// Pages shipped so far in this pass, and how many the last pass had.
+    Pages { shipped: u32, expected: Option<u32> },
+    /// A file is read, before the pass's first page.
+    File { name: String },
+    /// A step between passes, such as `running biber`.
+    Step { what: String },
+}
+
+/// A running build's progress so far.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+pub struct Progress {
+    /// The pass (from 1; 0 before the engine says) and why it runs.
+    pub pass: u32,
+    pub reason: Option<String>,
+    /// Pages shipped in this pass, and how many the last pass had.
+    pub pages: u32,
+    pub expected: Option<u32>,
+    /// The file being read before the first page, or the step between passes.
+    pub reading: Option<String>,
+    pub step: Option<String>,
+}
+
+impl Progress {
+    pub fn apply(&mut self, event: Event) {
+        match event {
+            Event::Pass { n, reason } => {
+                // The pass before tells how many pages to expect.
+                let expected = Some(self.pages).filter(|p| *p > 0).or(self.expected);
+                *self = Progress { pass: n, reason, expected, ..Progress::default() };
+            }
+            Event::Pages { shipped, expected } => {
+                self.pages = shipped;
+                self.expected = expected.or(self.expected);
+                self.reading = None;
+                self.step = None;
+            }
+            Event::File { name } => self.reading = Some(name),
+            Event::Step { what } => self.step = Some(what),
+        }
+    }
+}
+
 /// Something that can build a job.
 pub trait Backend: Send {
     /// For the log and the settings, such as `retex 2.0.0`.
     fn name(&self) -> String;
     /// Builds `job`. Never panics; an engine failure is an outcome.
     fn compile(&mut self, job: &Job) -> Outcome;
+    /// Builds `job`, reporting its progress as it runs (from the build's thread; `report` must
+    /// not block). A backend that cannot report builds as [`Backend::compile`] does.
+    fn compile_reporting(&mut self, job: &Job, report: &mut dyn FnMut(Event)) -> Outcome {
+        let _ = report;
+        self.compile(job)
+    }
     /// Whether a running build can be stopped. retex cannot yet (docs/plan.md, retex changes).
     fn can_cancel(&self) -> bool {
         false

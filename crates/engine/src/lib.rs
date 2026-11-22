@@ -19,7 +19,7 @@ use serde_json::Value;
 use texcraft_compile::{Job, Outcome};
 use texcraft_project::{Project, ProjectPath};
 
-pub use texcraft_compile::{Diagnostic, Severity, Status};
+pub use texcraft_compile::{Diagnostic, Progress, Severity, Status};
 pub use texcraft_project as project;
 
 /// What a command returns: a JSON value for automation, or a message for the user.
@@ -171,6 +171,16 @@ impl Session {
             Builder::Thread(w) => w.running().is_some(),
             #[cfg(target_arch = "wasm32")]
             Builder::Inline(..) => false,
+        }
+    }
+
+    /// The running build's progress and how long it has run, in seconds.
+    pub fn progress(&mut self) -> Option<(Progress, f64)> {
+        match &mut self.builder {
+            #[cfg(not(target_arch = "wasm32"))]
+            Builder::Thread(w) => w.progress(),
+            #[cfg(target_arch = "wasm32")]
+            Builder::Inline(..) => None,
         }
     }
 

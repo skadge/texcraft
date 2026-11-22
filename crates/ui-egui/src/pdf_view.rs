@@ -120,9 +120,30 @@ impl PdfView {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, t: &Tokens) {
+    /// `building`: the running build's progress in words, and how far through its pass it is
+    /// when that is known.
+    pub fn show(&mut self, ui: &mut egui::Ui, t: &Tokens, building: Option<(&str, Option<f32>)>) {
         let rect = ui.available_rect_before_wrap();
         ui.painter().rect_filled(rect, 0.0, t.canvas);
+        // The first build: no PDF to show yet, so its progress takes the place.
+        if let (None, Some((text, ratio))) = (&self.doc, building) {
+            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                ui.add_space(rect.height() * 0.36);
+                let (spin, _) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::hover());
+                crate::widgets::spinner(ui, spin.center(), 11.0, t.accent);
+                ui.add_space(t.unit * 3.0);
+                ui.label(egui::RichText::new(tl!("Building the PDF")).font(t.strong()));
+                ui.add_space(t.unit);
+                ui.label(egui::RichText::new(text).color(t.text_muted));
+                if let Some(r) = ratio {
+                    ui.add_space(t.unit * 3.0);
+                    let (bar, _) = ui.allocate_exact_size(egui::vec2(220.0, 4.0), egui::Sense::hover());
+                    ui.painter().rect_filled(bar, 2.0, t.separator);
+                    ui.painter().rect_filled(egui::Rect::from_min_size(bar.min, egui::vec2(bar.width() * r, bar.height())), 2.0, t.accent);
+                }
+            });
+            return;
+        }
         if let Some(e) = &self.error {
             ui.colored_label(t.error, e.as_str());
             return;

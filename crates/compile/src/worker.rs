@@ -4,11 +4,17 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 
-use crate::{Backend, Job, Outcome};
+use std::time::Instant;
+
+use crate::{Backend, Event, Job, Outcome, Progress};
 
 pub struct Worker {
     jobs: Sender<Job>,
     outcomes: Receiver<Outcome>,
+    events: Receiver<(u64, Event)>,
+    /// The running job's progress, and when it started.
+    progress: Progress,
+    started: Option<Instant>,
     running: Option<u64>,
     waiting: Option<Job>,
     name: String,
@@ -19,12 +25,17 @@ impl Worker {
     pub fn new(mut backend: Box<dyn Backend>) -> Worker {
         let (jobs, job_rx) = channel::<Job>();
         let (out_tx, outcomes) = channel();
+        let (event_tx, events) = channel();
         let name = backend.name();
         let can_cancel = backend.can_cancel();
         let spawned = std::thread::Builder::new().name("texcraft-compile".to_owned()).spawn(move || {
             for job in job_rx {
                 let id = job.id;
-                let outcome = catch_unwind(AssertUnwindSafe(|| backend.compile(&job)))
+                let events = event_tx.clone();
+                let mut report = move |e: Event| {
+                    let _ = events.send((id, e));
+                };
+                let outcome = catch_unwind(AssertUnwindSafe(|| backend.compile_reporting(&job, &mut report)))
                     .unwrap_or_else(|_| Outcome::unavailable(id, "The typesetting engine stopped unexpectedly; the build was abandoned."));
                 if out_tx.send(outcome).is_err() {
                     break;
@@ -34,7 +45,7 @@ impl Worker {
         if let Err(e) = spawned {
             log::error!("cannot start the compile thread: {e}");
         }
-        Worker { jobs, outcomes, running: None, waiting: None, name, can_cancel }
+        Worker { jobs, outcomes, events, progress: Progress::default(), started: None, running: None, waiting: None, name, can_cancel }
     }
 
     pub fn backend_name(&self) -> &str {
@@ -57,7 +68,11 @@ impl Worker {
     fn start(&mut self, job: Job) {
         let id = job.id;
         match self.jobs.send(job) {
-            Ok(()) => self.running = Some(id),
+            Ok(()) => {
+                self.running = Some(id);
+                self.progress = Progress::default();
+                self.started = Some(Instant::now());
+            }
             Err(_) => log::error!("the compile thread is gone; job {id} was not started"),
         }
     }
@@ -65,6 +80,17 @@ impl Worker {
     /// The job running, if any.
     pub fn running(&self) -> Option<u64> {
         self.running
+    }
+
+    /// The running job's progress and how long it has run, in seconds.
+    pub fn progress(&mut self) -> Option<(Progress, f64)> {
+        let running = self.running?;
+        while let Ok((id, event)) = self.events.try_recv() {
+            if id == running {
+                self.progress.apply(event);
+            }
+        }
+        Some((self.progress.clone(), self.started.map_or(0.0, |s| s.elapsed().as_secs_f64())))
     }
 
     /// A finished outcome, without blocking.

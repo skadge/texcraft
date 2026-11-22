@@ -15,11 +15,31 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     toolbar(app, ui);
     widgets::hairline(ui, &t);
+    let building = app.session.is_building().then(|| {
+        let text = app.view.progress.as_ref().map_or_else(|| tl!("Compiling…").to_owned(), |(p, s)| crate::status::progress_text(p, *s));
+        let ratio = app.view.progress.as_ref().and_then(|(p, _)| crate::status::progress_ratio(p));
+        (text, ratio)
+    });
+    // A build over a PDF already shown: a thin bar along the pane's top, full as far as the pass
+    // is (or a moving segment when that is not known).
+    if let Some((_, ratio)) = &building {
+        let top = ui.available_rect_before_wrap();
+        let line = egui::Rect::from_min_size(top.min, vec2(top.width(), 2.0));
+        let fill = match ratio {
+            Some(r) => egui::Rect::from_min_size(line.min, vec2(line.width() * r, 2.0)),
+            None => {
+                let phase = (ui.input(|i| i.time) * 0.6).fract() as f32;
+                let w = line.width() * 0.25;
+                egui::Rect::from_min_size(egui::pos2(line.left() + (line.width() + w) * phase - w, line.top()), vec2(w, 2.0)).intersect(line)
+            }
+        };
+        ui.painter().rect_filled(fill, 0.0, t.accent);
+    }
     if app.view.logs {
         logs(app, ui);
     } else {
         app.pdf.sync(app.session.pdf());
-        app.pdf.show(ui, &t);
+        app.pdf.show(ui, &t, building.as_ref().map(|(text, ratio)| (text.as_str(), *ratio)));
     }
 }
 

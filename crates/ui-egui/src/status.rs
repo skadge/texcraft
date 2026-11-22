@@ -38,7 +38,8 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
 fn state(app: &App) -> (Option<&'static str>, egui::Color32, String) {
     let t = &app.tokens;
     if app.session.is_building() {
-        return (None, t.text_muted, tl!("Compiling…").to_owned());
+        let text = app.view.progress.as_ref().map_or_else(|| tl!("Compiling…").to_owned(), |(p, s)| progress_text(p, *s));
+        return (None, t.text_muted, text);
     }
     // A message from the last command (an error, or where the focus went) until the next build.
     if let Some((message, error)) = &app.view.status {
@@ -60,6 +61,40 @@ fn state(app: &App) -> (Option<&'static str>, egui::Color32, String) {
         ),
         Status::Built => (Some("circle-check"), t.success, tl!("Compiled").to_owned() + &seconds(o.seconds)),
     }
+}
+
+/// A running build's progress in words: the page being built (of how many the last pass had), the
+/// pass and why it runs, or the step between passes, and the time so far.
+pub(crate) fn progress_text(p: &texcraft_engine::Progress, seconds: f64) -> String {
+    let n = |v: u32| v.to_string();
+    let mut text = if let Some(step) = &p.step {
+        tl!("Compiling: {step}").replace("{step}", step)
+    } else if p.pages > 0 {
+        match p.expected {
+            Some(e) if e >= p.pages => tl!("Compiling page {n} of {total}").replace("{n}", &n(p.pages)).replace("{total}", &n(e)),
+            _ => tl!("Compiling page {n}").replace("{n}", &n(p.pages)),
+        }
+    } else if let Some(file) = &p.reading {
+        tl!("Compiling: reading {file}").replace("{file}", file.rsplit('/').next().unwrap_or(file))
+    } else {
+        tl!("Compiling…").to_owned()
+    };
+    if p.pass > 1 {
+        let pass = match &p.reason {
+            Some(why) => tl!(" · pass {n} ({why})").replace("{n}", &n(p.pass)).replace("{why}", why),
+            None => tl!(" · pass {n}").replace("{n}", &n(p.pass)),
+        };
+        text.push_str(&pass);
+    }
+    if seconds >= 1.0 {
+        text.push_str(&format!(" · {seconds:.0} s"));
+    }
+    text
+}
+
+/// How far the build is through its pass, when the last pass's page count says.
+pub(crate) fn progress_ratio(p: &texcraft_engine::Progress) -> Option<f32> {
+    p.expected.filter(|e| *e > 0).map(|e| (p.pages as f32 / e as f32).clamp(0.0, 1.0))
 }
 
 fn seconds(s: f64) -> String {

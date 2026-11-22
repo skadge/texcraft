@@ -101,6 +101,8 @@ pub(crate) struct View {
     pub last_edit: Option<f64>,
     /// Move the editor's cursor to this line (from 1) of this file next frame.
     pub goto: Option<(ProjectPath, u32)>,
+    /// The running build's progress and how long it has run, this frame.
+    pub progress: Option<(texcraft_engine::Progress, f64)>,
 }
 
 pub struct App {
@@ -162,6 +164,7 @@ impl App {
                 status: None,
                 last_edit: Some(0.0),
                 goto: None,
+                progress: None,
             },
             editor: editor::Editor::default(),
             pdf: pdf_view::PdfView::default(),
@@ -389,6 +392,7 @@ impl App {
             // The build's result replaces any earlier message in the status bar.
             self.view.status = None;
         }
+        self.view.progress = self.session.progress();
         self.auto_compile(ctx);
         // Vim's own Ctrl keys go to the editor before the window's shortcuts see them.
         editor::claim_keys(self, ctx);
