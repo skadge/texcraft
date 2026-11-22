@@ -22,16 +22,15 @@ fn searching_the_gallery_narrows_the_templates_to_those_that_match() {
 }
 
 #[test]
-fn the_offer_to_download_every_template_is_answered_once() {
+fn the_start_page_offers_each_template_without_downloading_any() {
+    let dir = std::env::temp_dir().join(format!("texcraft-start-templates-{}", std::process::id()));
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
-    s.set_template_store(std::env::temp_dir().join(format!("texcraft-offer-{}", std::process::id())));
+    s.set_template_store(dir.clone());
     let mut app = App::new(s);
     app.show_start_page();
-    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 820.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 1400.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
     harness.run();
-    harness.get_by_label("Not Now").click();
-    harness.run();
-    assert!(harness.query_by_label("Download Templates").is_none(), "the offer stays after the answer");
-    let prefs = harness.state_mut().take_changed_prefs();
-    assert!(prefs.is_some_and(|p| p.templates_offered), "the answer is not kept for the next start");
+    assert!(harness.query_by_label("Nature article").is_some(), "a template's card is missing");
+    assert!(harness.query_by_label("Blank project").is_some());
+    assert!(!dir.exists(), "showing the cards downloaded something");
 }

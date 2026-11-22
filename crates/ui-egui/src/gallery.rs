@@ -84,6 +84,33 @@ impl App {
         }
     }
 
+    /// Starts a project from template `id`: asks for a new or empty folder, then downloads the
+    /// template if it is not kept yet (that one only) and opens the project made from it.
+    pub(crate) fn create_from_template(&mut self, id: String) {
+        if self.gallery.job.is_some() {
+            return;
+        }
+        self.gallery.error = None;
+        if self.native_pickers {
+            self.gallery.pending = Some(id);
+            self.request_pick(Pick::TemplateFolder);
+        } else {
+            // Without pickers the folder is typed, and the template is copied (and downloaded
+            // where downloads exist) by the command itself.
+            let prompt = crate::dialogs::Prompt {
+                title: tl!("New Project from Template"),
+                label: tl!("A new or empty folder for the project"),
+                value: String::new(),
+                action: tl!("Create"),
+                command: "project.from_template",
+                params: Box::new(move |v| json!({"template": id, "folder": v})),
+                focus: true,
+            };
+            self.gallery.open = false;
+            self.view.dialog = Some(crate::dialogs::Dialog::Prompt(prompt));
+        }
+    }
+
     /// The folder for `template`'s project was chosen.
     pub(crate) fn template_folder_chosen(&mut self, folder: String) {
         let Some(id) = self.gallery.pending.take() else { return };
@@ -134,7 +161,6 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let mut close = false;
     let mut create: Option<String> = None;
     let mut blank = false;
-    let mut download_all = false;
     let modal = egui::Modal::new(egui::Id::unique("texcraft-gallery")).show(ctx, |ui| {
         ui.set_width(920.0);
         ui.horizontal(|ui| {
@@ -175,13 +201,6 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                     if widgets::row(ui, &t, &row).clicked() {
                         app.gallery.category = i;
                     }
-                }
-                ui.add_space(t.unit * 4.0);
-                let all_kept = templates.iter().all(kept);
-                let busy = app.gallery.job.is_some();
-                let label = if all_kept { tl!("All templates downloaded") } else { tl!("Download all for offline use") };
-                if ui.add_enabled(!all_kept && !busy && store.is_some(), egui::Button::new(label)).clicked() {
-                    download_all = true;
                 }
             });
             ui.add_space(t.unit * 3.0);
@@ -227,30 +246,8 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         app.gallery.open = false;
         app.guard(Next::NewProject);
     }
-    if download_all {
-        let ids = templates.iter().filter(|t| !kept(t)).map(|t| t.id.clone()).collect();
-        app.start_download(ids, None, tl!("Downloading every template from TeX Live…").to_owned());
-    }
     if let Some(id) = create {
-        app.gallery.error = None;
-        if app.native_pickers {
-            app.gallery.pending = Some(id);
-            app.request_pick(Pick::TemplateFolder);
-        } else {
-            // Without pickers the folder is typed, and the template is copied (and downloaded
-            // where downloads exist) by the command itself.
-            let prompt = crate::dialogs::Prompt {
-                title: tl!("New Project from Template"),
-                label: tl!("A new or empty folder for the project"),
-                value: String::new(),
-                action: tl!("Create"),
-                command: "project.from_template",
-                params: Box::new(move |v| json!({"template": id, "folder": v})),
-                focus: true,
-            };
-            app.gallery.open = false;
-            app.view.dialog = Some(crate::dialogs::Dialog::Prompt(prompt));
-        }
+        app.create_from_template(id);
     }
 }
 
@@ -302,7 +299,7 @@ fn details(app: &mut App, ui: &mut egui::Ui, t: &Tokens, templates: &[Template],
 const CARD: egui::Vec2 = egui::vec2(160.0, 168.0);
 
 /// A template's card; returns whether it was clicked.
-fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected: bool, kept: bool) -> bool {
+pub(crate) fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected: bool, kept: bool) -> bool {
     let (rect, r) = ui.allocate_exact_size(CARD, Sense::click());
     r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, selected, &template.title));
     let base = if selected { blend(t.surface, t.accent_soft) } else { t.surface };
@@ -327,12 +324,15 @@ fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected: bool, kept
     }
     ui.painter().text(egui::pos2(rect.left() + 12.0, rect.bottom() - 12.0), egui::Align2::LEFT_BOTTOM, &template.licence, t.small(), t.text_muted);
     widgets::focus_ring(ui, t, &r, rect, t.corner_large());
-    let r = if kept { r.on_hover_text(tl!("Downloaded: available offline")) } else { r };
-    r.clicked()
+    let state = if kept { tl!("Downloaded: available offline.") } else { tl!("Downloaded from TeX Live when you create the project.") };
+    let tip = tl!("{source} · licence {licence}").replace("{source}", &template.source_text()).replace("{licence}", &template.licence);
+    let clicked = r.clicked();
+    let _ = r.on_hover_text(format!("{}\n{tip}\n{state}", template.title));
+    clicked
 }
 
 /// The blank project's card; returns whether it was clicked.
-fn blank_card(ui: &mut egui::Ui, t: &Tokens) -> bool {
+pub(crate) fn blank_card(ui: &mut egui::Ui, t: &Tokens) -> bool {
     let (rect, r) = ui.allocate_exact_size(CARD, Sense::click());
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Blank project")));
     let fill = if r.hovered() { blend(t.surface, t.hover) } else { t.surface };
@@ -342,53 +342,4 @@ fn blank_card(ui: &mut egui::Ui, t: &Tokens) -> bool {
     ui.painter().text(rect.center() + vec2(0.0, 20.0), egui::Align2::CENTER_CENTER, tl!("Blank project"), t.strong(), t.text);
     widgets::focus_ring(ui, t, &r, rect, t.corner_large());
     r.clicked()
-}
-
-/// Every template's id that is not kept yet.
-pub(crate) fn missing(app: &App) -> Vec<String> {
-    let Some(store) = app.session.template_store() else { return Vec::new() };
-    Catalog::builtin().map(|c| c.templates().iter().filter(|t| store.kept(t).is_none()).map(|t| t.id.clone()).collect()).unwrap_or_default()
-}
-
-/// The start page's one-time offer to download every template for offline use, and the
-/// download's progress.
-pub(crate) fn offer(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
-    let busy = app.gallery.job.as_ref().map(|j| j.label.clone());
-    if busy.is_none() && (app.prefs.templates_offered || missing(app).is_empty()) {
-        return;
-    }
-    let frame = egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner_large()).inner_margin(egui::Margin::same(14));
-    frame.show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            icons::paint(ui, egui::Rect::from_min_size(ui.cursor().min, vec2(22.0, 22.0)), "book-open", 20.0, t.accent);
-            ui.add_space(30.0);
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if let Some(label) = &busy {
-                    let (rect, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
-                    widgets::spinner(ui, rect.center(), 6.0, t.accent);
-                    ui.label(RichText::new(label).color(t.text_muted));
-                } else {
-                    if ui.button(tl!("Not Now")).clicked() {
-                        app.prefs.templates_offered = true;
-                        app.prefs_changed = true;
-                    }
-                    if ui.button(tl!("Download Templates")).clicked() {
-                        app.prefs.templates_offered = true;
-                        app.prefs_changed = true;
-                        let ids = missing(app);
-                        app.start_download(ids, None, tl!("Downloading every template from TeX Live…").to_owned());
-                    }
-                }
-                ui.add_space(t.unit * 4.0);
-                // The text takes the width the buttons leave, and wraps.
-                ui.with_layout(Layout::top_down(Align::Min), |ui| {
-                    ui.label(RichText::new(tl!("Publishers' templates")).font(t.strong()));
-                    let text = tl!("Templates from Elsevier, IEEE, ACM, Nature and others are downloaded from TeX Live when you first use one. Download them all now to have them offline.");
-                    ui.label(RichText::new(text).color(t.text_muted));
-                });
-            });
-        });
-    });
-    ui.add_space(24.0);
 }

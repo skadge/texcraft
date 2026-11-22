@@ -73,8 +73,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.add_space(48.0);
                 header(app, ui, &t);
                 ui.add_space(36.0);
-                crate::gallery::offer(app, ui, &t);
                 recent(app, ui, &t, width);
+                ui.add_space(24.0);
+                templates(app, ui, &t);
                 ui.add_space(48.0);
             });
         });
@@ -109,6 +110,51 @@ fn header(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             }
         });
     });
+}
+
+/// A card per publisher's template, and the blank project. Choosing one asks for a folder and
+/// downloads that template only, if it is not kept yet.
+fn templates(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    let Ok(catalog) = texcraft_templates::Catalog::builtin() else { return };
+    let store = app.session.template_store().cloned();
+    ui.horizontal(|ui| widgets::section_title(ui, t, tl!("Start from a template")));
+    ui.add_space(t.unit * 3.0);
+    if let Some(job) = &app.gallery.job {
+        ui.horizontal(|ui| {
+            let (rect, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
+            widgets::spinner(ui, rect.center(), 6.0, t.accent);
+            ui.label(RichText::new(&job.label).color(t.text_muted));
+        });
+        ui.add_space(t.unit * 2.0);
+    } else if let Some(error) = &app.gallery.error {
+        ui.horizontal(|ui| ui.colored_label(t.error, error.as_str()));
+        ui.add_space(t.unit * 2.0);
+    }
+    let mut chosen = None;
+    let mut blank = false;
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = vec2(12.0, 12.0);
+        if crate::gallery::blank_card(ui, t) {
+            blank = true;
+        }
+        for template in catalog.templates() {
+            let kept = store.as_ref().is_some_and(|s| s.kept(template).is_some());
+            if crate::gallery::card(ui, t, template, false, kept) {
+                chosen = Some(template.id.clone());
+            }
+        }
+    });
+    if blank {
+        app.guard(Next::NewProject);
+        app.start = false;
+    }
+    if let Some(id) = chosen {
+        if store.is_some() {
+            app.create_from_template(id);
+        } else {
+            app.gallery.error = Some(tl!("This build of TeXCraft has no folder to keep templates in.").to_owned());
+        }
+    }
 }
 
 fn recent(app: &mut App, ui: &mut egui::Ui, t: &Tokens, width: f32) {
