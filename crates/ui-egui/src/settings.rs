@@ -134,14 +134,7 @@ fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         }
         Some(r)
     });
-    setting(ui, t, tl!("Key bindings"), tl!("Standard editing keys, or Vim's modes and commands."), |ui| {
-        let options = [(tl!("Standard"), None), (tl!("Vim"), None)];
-        if let Some(i) = widgets::segmented(ui, t, "settings-keys", &options, usize::from(app.prefs.vim)) {
-            app.prefs.vim = i == 1;
-            app.prefs_changed = true;
-        }
-        None
-    });
+    key_bindings(app, ui, t, "settings-keys-editor");
     let preview =
         egui::text::LayoutJob::simple_singleline("\\section{Introduction} % E = mc^2".to_owned(), app.tokens.code_font(), app.tokens.syntax_command);
     egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner()).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
@@ -189,7 +182,21 @@ fn building(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     });
 }
 
+/// Standard or Vim key bindings in the editor; shown in the Editor and the Keyboard tabs, where
+/// people look for it.
+fn key_bindings(app: &mut App, ui: &mut egui::Ui, t: &Tokens, salt: &str) {
+    setting(ui, t, tl!("Editor key bindings"), tl!("Standard editing keys, or Vim's modes and commands."), |ui| {
+        let options = [(tl!("Standard"), None), (tl!("Vim"), None)];
+        if let Some(i) = widgets::segmented(ui, t, salt, &options, usize::from(app.prefs.vim)) {
+            app.prefs.vim = i == 1;
+            app.prefs_changed = true;
+        }
+        None
+    });
+}
+
 fn keyboard(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    key_bindings(app, ui, t, "settings-keys-keyboard");
     setting(ui, t, tl!("Keyboard shortcuts"), tl!("See and change the shortcut of every command."), |ui| {
         if ui.button(tl!("Change Shortcuts…")).clicked() {
             app.view.dialog = Some(Dialog::Shortcuts);
