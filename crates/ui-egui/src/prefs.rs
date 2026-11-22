@@ -37,6 +37,8 @@ pub struct Prefs {
     /// The user's shortcut changes, as craft-keymap stores them.
     #[serde(with = "craft_keymap::keymap::overrides_list")]
     pub shortcuts: craft_keymap::Overrides,
+    /// The start page has offered to download every template, and the user answered.
+    pub templates_offered: bool,
 }
 
 impl Default for Prefs {
@@ -51,6 +53,7 @@ impl Default for Prefs {
             side: "files".to_owned(),
             recent: Vec::new(),
             shortcuts: craft_keymap::Overrides::default(),
+            templates_offered: false,
         }
     }
 }

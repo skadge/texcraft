@@ -59,7 +59,7 @@ impl App {
     }
 
     /// Starts downloading `ids` on a thread; `then` creates a project from the first when done.
-    fn start_download(&mut self, ids: Vec<String>, then: Option<(String, String)>, label: String) {
+    pub(crate) fn start_download(&mut self, ids: Vec<String>, then: Option<(String, String)>, label: String) {
         let Some(store) = self.session.template_store().cloned() else {
             self.gallery.error = Some(tl!("This build of TeXCraft has no folder to keep templates in.").to_owned());
             return;
@@ -101,7 +101,11 @@ impl App {
         };
         let then = self.gallery.job.take().and_then(|j| j.then);
         match (result, then) {
-            (Err(e), _) => self.gallery.error = Some(e),
+            (Err(e), _) => {
+                // Shown in the gallery, and in the status bar when the gallery is closed.
+                self.view.status = Some((e.clone(), true));
+                self.gallery.error = Some(e);
+            }
             (Ok(_), Some((template, folder))) => {
                 if self.run("project.from_template", json!({"template": template, "folder": folder})).is_some() {
                     self.gallery.open = false;
@@ -338,4 +342,53 @@ fn blank_card(ui: &mut egui::Ui, t: &Tokens) -> bool {
     ui.painter().text(rect.center() + vec2(0.0, 20.0), egui::Align2::CENTER_CENTER, tl!("Blank project"), t.strong(), t.text);
     widgets::focus_ring(ui, t, &r, rect, t.corner_large());
     r.clicked()
+}
+
+/// Every template's id that is not kept yet.
+pub(crate) fn missing(app: &App) -> Vec<String> {
+    let Some(store) = app.session.template_store() else { return Vec::new() };
+    Catalog::builtin().map(|c| c.templates().iter().filter(|t| store.kept(t).is_none()).map(|t| t.id.clone()).collect()).unwrap_or_default()
+}
+
+/// The start page's one-time offer to download every template for offline use, and the
+/// download's progress.
+pub(crate) fn offer(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    let busy = app.gallery.job.as_ref().map(|j| j.label.clone());
+    if busy.is_none() && (app.prefs.templates_offered || missing(app).is_empty()) {
+        return;
+    }
+    let frame = egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner_large()).inner_margin(egui::Margin::same(14));
+    frame.show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal(|ui| {
+            icons::paint(ui, egui::Rect::from_min_size(ui.cursor().min, vec2(22.0, 22.0)), "book-open", 20.0, t.accent);
+            ui.add_space(30.0);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if let Some(label) = &busy {
+                    let (rect, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
+                    widgets::spinner(ui, rect.center(), 6.0, t.accent);
+                    ui.label(RichText::new(label).color(t.text_muted));
+                } else {
+                    if ui.button(tl!("Not Now")).clicked() {
+                        app.prefs.templates_offered = true;
+                        app.prefs_changed = true;
+                    }
+                    if ui.button(tl!("Download Templates")).clicked() {
+                        app.prefs.templates_offered = true;
+                        app.prefs_changed = true;
+                        let ids = missing(app);
+                        app.start_download(ids, None, tl!("Downloading every template from TeX Live…").to_owned());
+                    }
+                }
+                ui.add_space(t.unit * 4.0);
+                // The text takes the width the buttons leave, and wraps.
+                ui.with_layout(Layout::top_down(Align::Min), |ui| {
+                    ui.label(RichText::new(tl!("Publishers' templates")).font(t.strong()));
+                    let text = tl!("Templates from Elsevier, IEEE, ACM, Nature and others are downloaded from TeX Live when you first use one. Download them all now to have them offline.");
+                    ui.label(RichText::new(text).color(t.text_muted));
+                });
+            });
+        });
+    });
+    ui.add_space(24.0);
 }

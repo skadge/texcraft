@@ -73,6 +73,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.add_space(48.0);
                 header(app, ui, &t);
                 ui.add_space(36.0);
+                crate::gallery::offer(app, ui, &t);
                 recent(app, ui, &t, width);
                 ui.add_space(48.0);
             });
