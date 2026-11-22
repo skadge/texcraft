@@ -80,6 +80,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "file.import",
+            label: "Add Files…",
+            menu: &["File"],
+            shortcut: None,
+            params: import_schema,
+            enabled: on_disk,
+            run: import,
+            changes: true,
+        },
+        CommandSpec {
             id: "file.delete",
             label: "Delete",
             menu: &[],
@@ -137,6 +147,45 @@ fn edit_schema() -> Value {
         "end": {"type": "integer", "minimum": 0, "description": "Byte offset where it ends (excluded)."},
         "text": {"type": "string", "description": "The replacement."}
     }, "required": ["path", "start", "end", "text"], "additionalProperties": false})
+}
+
+fn import_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "source": {"type": "string", "description": "A file on disk to copy into the project."},
+        "path": {"type": "string", "description": "Its path in the project (default: its file name)."}
+    }, "required": ["source"], "additionalProperties": false})
+}
+
+fn on_disk(_: &Session) -> Result<()> {
+    if cfg!(target_arch = "wasm32") { Err("Adding files from disk is not available in the browser yet.".to_owned()) } else { Ok(()) }
+}
+
+/// Copies a file from disk into the project, replacing a file of the same path.
+fn import(s: &mut Session, p: &Value) -> Result<Value> {
+    on_disk(s)?;
+    let source = std::path::PathBuf::from(string(p, "source")?);
+    let source = match &s.roots {
+        Some(roots) => roots.check(&source, crate::file_access::Access::Read)?,
+        None => source,
+    };
+    let name = match p.get("path").and_then(Value::as_str) {
+        Some(path) => path.to_owned(),
+        None => source.file_name().and_then(|n| n.to_str()).ok_or_else(|| format!("{} has no file name", source.display()))?.to_owned(),
+    };
+    let path = ProjectPath::new(&name).map_err(|e| e.to_string())?;
+    let len = std::fs::metadata(&source).map_err(|e| format!("{}: {e}", source.display()))?.len();
+    if len > texcraft_project::MAX_FILE_BYTES as u64 {
+        return Err(format!("{} is larger than a project file may be", source.display()));
+    }
+    let bytes = std::fs::read(&source).map_err(|e| format!("{}: {e}", source.display()))?;
+    let contents = Contents::from_bytes(bytes);
+    if s.project.get(&path).is_some() {
+        s.project.set(&path, contents).map_err(|e| e.to_string())?;
+    } else {
+        s.project.add(path.clone(), contents).map_err(|e| e.to_string())?;
+    }
+    s.touch();
+    Ok(json!({"path": path.as_str()}))
 }
 
 fn rename_schema() -> Value {
