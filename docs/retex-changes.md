@@ -1,6 +1,6 @@
 # retex for TeXCraft
 
-> **Last updated:** 2026-11-22 · **Change:** build options in use (`identity`, `halt_on_error`, `draft_images`); Delete Build Files
+> **Last updated:** 2026-11-22 · **Change:** retex's `main` answers the last two open points (SyncTeX, a cancel handle); build options in use
 
 TeXCraft asked retex for twelve changes, R1 to R12, and a thirteenth since (R13). retex answered with a design note, `docs/design/embedding.md` in the retex repository. That note is the reference: it lists each change's interface, phase and status. This page records what TeXCraft does with each retex release, and the points still open on TeXCraft's side.
 
@@ -47,7 +47,11 @@ The editor pane's image preview decodes with `retex_image::decode_rgba8` (PNG, J
 
 ### From the 2.1.0 integration
 
-Points 1 to 4 are answered by 2.2.0 (retex's `docs/design/embedding.md`, "For hosts: API changes in 2.2.0"); 1 to 3 are in use. Still open:
+Points 1 to 4 are answered by 2.2.0 (retex's `docs/design/embedding.md`, "For hosts: API changes in 2.2.0"); 1 to 3 are in use. The two below are answered in retex's `main` after 2.2.0 ("For hosts: changes after 2.2.0"), for its next release:
+- **SyncTeX** needs nothing from TeXCraft: inverse search will take the file of a line's glue and kerns, and a preamble line will give no place.
+- **Cancelling:** `BuildHandle::canceller() -> BuildCanceller` (`Clone + Send + Sync`). With it, Stop keeps the worker and its preamble snapshot instead of ending the worker, and the in-process backend moves to `Retex::spawn`, so both backends are one `BuildHandle`. TeXCraft does this when the release is on crates.io.
+
+As they were raised:
 
 1. **SyncTeX: the last paragraph of an included file.** `Synctex::inverse` takes the file of the line box under the point, and a paragraph's line boxes carry the line where it ended. The last paragraph of a file read with `\input` usually ends in the including file (at its next blank line, `\section` or `\end{document}`), so a click in it goes to that line of the including file, not to the paragraph's own file. Seen with TeXCraft's `examples/article` (the last paragraph of `sections/intro.tex` goes to `main.tex` line 18) and in `crates/engine/tests/fixtures/subfolder.synctex`. Could inverse search prefer the file of the glyphs, glue and kerns nearest the point when it differs from the box's? Forward search from a preamble line also finds the first output up to 40 lines below (`\documentclass` marks equation (1) of the article); for a line before `\begin{document}`, no place might be better.
 
