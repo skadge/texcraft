@@ -593,6 +593,27 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         app.editor.source.offer(items);
         ui.ctx().request_repaint();
     }
+    if let Some((line, column)) = out.hover_at {
+        let text = app.session.hover(path, line, column).unwrap_or_default();
+        if let Some((_, slot)) = app.editor.source.hover.as_mut() {
+            *slot = text;
+        }
+    }
+    if let Some((line, column)) = out.definition_at {
+        match app.session.definition(path, line, column) {
+            Some((file, l, c)) if &file == path => {
+                let b = &app.editor.source.doc.buffer;
+                let at = b.line_to_char(l) + c;
+                app.editor.source.select(at, at);
+                app.editor.source.doc.buffer.seal();
+            }
+            Some((file, l, _)) => {
+                let _ = app.run("file.open", json!({"path": file.as_str()}));
+                app.view.goto = Some((file, l as u32 + 1));
+            }
+            None => app.view.status = Some((tl!("No definition found here.").to_owned(), false)),
+        }
+    }
     for effect in out.effects {
         match effect {
             Effect::Save | Effect::SaveAll => crate::ui_cmd::run(app, "project.save"),

@@ -51,3 +51,17 @@ fn escape_closes_the_list_before_it_leaves_vims_insert_mode() {
     assert!(harness.query_by_label("a").is_none(), "Escape left the list open");
     assert!(harness.query_by_label_contains("INSERT").is_some(), "Escape also left Insert mode");
 }
+
+#[test]
+fn f12_goes_from_a_reference_to_its_label() {
+    let mut harness = editor("Intro.\n\\section{A}\\label{sec:a}\nSee \\ref{sec:a}.", false).unwrap();
+    harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::End);
+    for _ in 0..4 {
+        harness.key_press(egui::Key::ArrowLeft);
+    }
+    harness.run();
+    assert!(harness.query_by_label_contains("Ln 3,").is_some());
+    harness.key_press(egui::Key::F12);
+    harness.run();
+    assert!(harness.query_by_label_contains("Ln 2,").is_some(), "F12 did not go to the label");
+}

@@ -25,3 +25,10 @@ fn the_lint_sees_the_text_as_it_changes() {
     let hints = s.execute("language.lint", &json!({"path": "main.tex"})).unwrap();
     assert!(hints["hints"].as_array().is_some_and(|h| !h.is_empty()), "display math with $$ gave no hint: {hints}");
 }
+
+#[test]
+fn a_reference_leads_to_its_label() {
+    let mut s = session("Intro.\n\\section{A}\\label{sec:a}\nSee \\ref{sec:a}.").unwrap();
+    let r = s.execute("language.definition", &json!({"path": "main.tex", "line": 3, "column": 11})).unwrap();
+    assert_eq!((r["line"].as_u64(), r["path"].as_str()), (Some(2), Some("main.tex")), "{r}");
+}

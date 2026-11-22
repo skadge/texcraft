@@ -79,6 +79,10 @@ pub(crate) struct Output {
     pub effects: Vec<Effect>,
     /// Ask the language server for completions at this line and column (characters, from 0).
     pub complete_at: Option<(usize, usize)>,
+    /// Go to the definition of what is at this line and column (Ctrl+click, F12).
+    pub definition_at: Option<(usize, usize)>,
+    /// Ask what the thing the pointer rests on is (its line and column).
+    pub hover_at: Option<(usize, usize)>,
 }
 
 /// Completions offered at the caret.
@@ -123,6 +127,11 @@ pub(crate) struct SourceEditor {
     wants_completion: bool,
     /// The caret's rectangle on screen, for the completion list.
     caret_screen: Option<Rect>,
+    /// Where the pointer rests and since when; then what the language server said about it.
+    resting: Option<(usize, f64)>,
+    pub hover: Option<(usize, String)>,
+    /// Go to the definition at this position at the end of the frame.
+    wants_definition: Option<usize>,
 }
 
 impl Default for SourceEditor {
@@ -145,6 +154,9 @@ impl Default for SourceEditor {
             completion: None,
             wants_completion: false,
             caret_screen: None,
+            resting: None,
+            hover: None,
+            wants_definition: None,
             auto_close: true,
         }
     }
@@ -254,6 +266,7 @@ impl SourceEditor {
         self.doc.selection = Selection::single(start.min(len), end.min(len));
         self.doc.buffer.seal();
         self.reveal = true;
+        self.vim_sync();
     }
 
     fn lay_out(&mut self, ui: &egui::Ui, t: &Tokens, width: f32) {
@@ -420,12 +433,40 @@ impl SourceEditor {
             self.completion = None;
         }
         self.paint_completion(&ctx, t, id);
+        if let Some((_, text)) = self.hover.as_ref().filter(|(_, text)| !text.is_empty())
+            && let Some(p) = ctx.pointer_hover_pos()
+        {
+            let text = text.replace('`', "");
+            egui::Area::new(id.with("hover")).order(egui::Order::Tooltip).fixed_pos(p + vec2(12.0, 18.0)).interactable(false).show(&ctx, |ui| {
+                egui::Frame::popup(ui.style()).fill(t.raised).stroke(t.hairline()).show(ui, |ui| {
+                    ui.set_max_width(420.0);
+                    ui.label(egui::RichText::new(text).font(t.small()).color(t.text));
+                });
+            });
+        }
         let caret = self.caret();
         let b = &self.doc.buffer;
         let line = b.char_to_line(caret);
         out.caret = (line, caret - b.line_to_char(line));
         if std::mem::take(&mut self.wants_completion) {
             out.complete_at = Some(out.caret);
+        }
+        let line_col = |b: &Buffer, p: usize| {
+            let l = b.char_to_line(p);
+            (l, p - b.line_to_char(l))
+        };
+        if let Some(p) = self.wants_definition.take() {
+            out.definition_at = Some(line_col(&self.doc.buffer, p));
+        }
+        let now = ctx.input(|i| i.time);
+        if let Some((p, since)) = self.resting
+            && now - since >= 0.6
+            && self.hover.is_none()
+            && self.completion.is_none()
+        {
+            out.hover_at = Some(line_col(&self.doc.buffer, p));
+            // Asked once per resting place: an empty answer is kept.
+            self.hover = Some((p, String::new()));
         }
         out
     }
@@ -502,6 +543,10 @@ impl SourceEditor {
             return;
         }
         let inserting = self.vim.as_ref().is_none_or(|v| v.mode().is_inserting());
+        if key == egui::Key::F12 {
+            self.wants_definition = Some(self.caret());
+            return;
+        }
         if key == egui::Key::Space && modifiers.command && inserting {
             self.wants_completion = true;
             return;
@@ -972,6 +1017,27 @@ impl SourceEditor {
         }
     }
 
+    /// Notes where the pointer rests on the text, for the language server's description.
+    fn rest(&mut self, response: &egui::Response, origin: Pos2, ctx: &egui::Context) {
+        let Some(p) = response.hover_pos().filter(|_| !response.dragged()) else {
+            self.resting = None;
+            self.hover = None;
+            return;
+        };
+        let pos = self.pos_at(p - origin);
+        let now = ctx.input(|i| i.time);
+        match self.resting {
+            Some((at, _)) if at == pos => {}
+            _ => {
+                self.resting = Some((pos, now));
+                if self.hover.as_ref().is_some_and(|(at, _)| *at != pos) {
+                    self.hover = None;
+                }
+                ctx.request_repaint_after(std::time::Duration::from_millis(600));
+            }
+        }
+    }
+
     /// Vim takes a selection the mouse made at once, so its caret shows where the click was.
     fn vim_sync(&mut self) {
         let Some(vim) = &mut self.vim else { return };
@@ -989,6 +1055,15 @@ impl SourceEditor {
     }
 
     fn mouse(&mut self, response: &egui::Response, origin: Pos2, ctx: &egui::Context) {
+        // Ctrl+click (Cmd+click) goes to the definition of what is clicked.
+        if response.clicked()
+            && ctx.input(|i| i.modifiers.command)
+            && let Some(p) = response.interact_pointer_pos()
+        {
+            self.wants_definition = Some(self.pos_at(p - origin));
+            return;
+        }
+        self.rest(response, origin, ctx);
         let before = self.doc.selection.clone();
         self.mouse_select(response, origin, ctx);
         if self.doc.selection != before {
