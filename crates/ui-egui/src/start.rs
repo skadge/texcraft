@@ -82,6 +82,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
 
 fn header(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     ui.allocate_ui_with_layout(vec2(ui.available_width(), 64.0), Layout::left_to_right(Align::Center), |ui| {
+        let (icon, _) = ui.allocate_exact_size(vec2(56.0, 56.0), Sense::hover());
+        crate::app_icon::paint(ui, icon);
+        ui.add_space(t.unit * 3.0);
         ui.vertical(|ui| {
             ui.label(RichText::new("TeXCraft").font(egui::FontId::new(28.0, crate::fonts::semibold())));
             ui.label(RichText::new(tl!("Write LaTeX, see the PDF as you type.")).color(t.text_muted));

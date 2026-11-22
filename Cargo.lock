@@ -4782,6 +4782,7 @@ dependencies = [
  "egui_extras",
  "egui_kittest",
  "log",
+ "png 0.18.1",
  "serde",
  "serde_json",
  "sha2 0.10.9",

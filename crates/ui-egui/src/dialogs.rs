@@ -210,6 +210,9 @@ fn shortcuts(app: &mut App, ctx: &egui::Context) {
 }
 
 fn about(ui: &mut egui::Ui, t: &Tokens, engine: &str) -> Outcome {
+    let (icon, _) = ui.allocate_exact_size(egui::vec2(64.0, 64.0), egui::Sense::hover());
+    crate::app_icon::paint(ui, icon);
+    ui.add_space(t.unit * 2.0);
     title(ui, t, "TeXCraft");
     ui.label(format!("{} {}", tl!("Version"), env!("CARGO_PKG_VERSION")));
     ui.label(RichText::new(format!("{} {engine}", tl!("Typesetting engine:"))).color(t.text_muted));

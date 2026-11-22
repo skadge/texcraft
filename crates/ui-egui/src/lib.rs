@@ -11,6 +11,7 @@
 pub mod i18n;
 pub mod theme;
 
+mod app_icon;
 pub mod control;
 mod dialogs;
 mod editor;

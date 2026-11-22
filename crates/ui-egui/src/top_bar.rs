@@ -1,7 +1,7 @@
 //! The top bar (docs/design.md, Regions): the app mark and the menus on the left, the project's
 //! name with its menu in the centre, and the layout switch on the right.
 
-use egui::{Align, Align2, Layout as EguiLayout, RichText, Sense, vec2};
+use egui::{Align, Layout as EguiLayout, RichText, Sense, vec2};
 use texcraft_engine::cmd;
 
 use crate::theme::Tokens;
@@ -33,11 +33,11 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     });
 }
 
-/// The app mark: a rounded square in the accent colour.
-fn mark(ui: &mut egui::Ui, t: &Tokens) {
-    let (rect, _) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::hover());
-    ui.painter().rect_filled(rect, 6, t.accent);
-    ui.painter().text(rect.center() + vec2(0.0, 0.5), Align2::CENTER_CENTER, "T", egui::FontId::new(15.0, crate::fonts::semibold()), t.on_accent);
+/// The app mark: the app icon, small.
+fn mark(ui: &mut egui::Ui, _t: &Tokens) {
+    let (rect, response) = ui.allocate_exact_size(vec2(26.0, 26.0), Sense::hover());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, "TeXCraft"));
+    crate::app_icon::paint(ui, rect);
 }
 
 /// One menu item with an optional icon and shortcut; disabled items say why on hover.

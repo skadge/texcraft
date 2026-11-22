@@ -113,6 +113,12 @@ impl eframe::App for Shell {
     }
 }
 
+/// The window and taskbar icon: on Apple's grid on macOS, the full tile elsewhere (assets/app-icon).
+#[cfg(target_os = "macos")]
+const WINDOW_ICON: &[u8] = include_bytes!("../../../assets/app-icon/texcraft-macos-512.png");
+#[cfg(not(target_os = "macos"))]
+const WINDOW_ICON: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.texcraft.png");
+
 const USAGE: &str = "usage: texcraft [--control [PORT]] [FOLDER]
 
   FOLDER            open the project in this folder
@@ -182,10 +188,13 @@ fn main() -> eframe::Result {
         Some(folder) => app.open_project(folder),
         None => app.show_start_page(),
     }
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_title("TeXCraft").with_app_id("ai.storyteller.texcraft").with_inner_size([1400.0, 900.0]),
-        ..Default::default()
-    };
+    let mut viewport =
+        egui::ViewportBuilder::default().with_title("TeXCraft").with_app_id("ai.storyteller.texcraft").with_inner_size([1400.0, 900.0]);
+    match eframe::icon_data::from_png_bytes(WINDOW_ICON) {
+        Ok(icon) => viewport = viewport.with_icon(Arc::new(icon)),
+        Err(e) => log::warn!("the window icon: {e}"),
+    }
+    let options = eframe::NativeOptions { viewport, ..Default::default() };
     eframe::run_native(
         "TeXCraft",
         options,
