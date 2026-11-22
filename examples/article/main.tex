@@ -1,0 +1,30 @@
+\documentclass{article}
+\usepackage{amsmath}
+\title{A TeXCraft example}
+\author{The TeXCraft contributors}
+\begin{document}
+\maketitle
+
+\section{Introduction}
+\input{sections/intro}
+
+\section{Results}
+The energy of a body at rest is
+\begin{equation}
+  E = mc^2 .
+  \label{eq:energy}
+\end{equation}
+Equation~\ref{eq:energy} is referred to above.
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{lr}
+    Item & Value \\
+    \hline
+    One & 1 \\
+    Two & 2 \\
+  \end{tabular}
+  \caption{A small table.}
+\end{table}
+
+\end{document}
