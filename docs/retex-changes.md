@@ -1,17 +1,19 @@
 # retex for TeXCraft
 
-> **Last updated:** 2026-11-22 · **Change:** follows retex's agreed design (`docs/design/embedding.md` in retex) instead of TeXCraft's first proposal
+> **Last updated:** 2026-11-22 · **Change:** retex's API changes for hosts in 2.1.0; the worker, SyncTeX and fragments now also target 2.1.0
 
 TeXCraft asked retex for twelve changes, R1 to R12. retex answered with a design note, `docs/design/embedding.md` in the retex repository. That note is the reference: it lists each change's interface, phase and status. This page records only what TeXCraft does with each retex release, and the points still open on TeXCraft's side.
 
 ## What arrives when
 
+retex's design note opens with "For hosts: API changes in 2.1.0", the list to work from. As of this writing 2.1.0 is not released (crates.io has 2.0.0); TeXCraft moves to it when it is.
+
 | retex release | What it brings (R) | What TeXCraft does with it |
 |---|---|---|
 | 2.0.0 (done) | crates.io (R10) | `retex = "2"` and `retex-lsp = "2"` from crates.io. |
-| 2.1.0 | SyncTeX, symbols, fixes, written files (R1); progress (R3); identity, halt on error, draft images, `clean` (R12); wasm32 gates (R9) | Build menu options become real: draft images, stop at the first error, engine identity in Settings, Delete build files. Progress line while building. Quick fixes in the log and the gutter. The language server gets the symbols record. The SyncTeX bytes are kept for 2.3. |
-| 2.2.0 | `retex::Worker` (a `retex worker` child per project); cancelling (R2); preamble snapshots (R6); confinement through `roots` and the OS sandbox (R4); a worker per project (R5); draft PDF as a record | A `Worker` backend in `texcraft-compile` replaces the in-process one for the desktop app. Stop works. Rebuilds while typing start from the snapshot. Unsaved buffers go as the `files` overlay. Agent sessions build in a confined worker, and the refusal to build while confined goes. |
-| 2.3.0 | `retex-synctex` (R7); fragments on the worker (R11); typed language-server queries (R8) | Source and PDF navigation (plan phase 4). Typeset formulas for the formatted mode and the equation preview (plan phase 3). Completion, hover and definitions through the typed queries (plan phase 2). |
+| 2.1.0, in process (done in retex's `main`) | `Retex::synctex`, `symbols`, `identity`, `halt_on_error`, `draft_images`, `on_progress`; `compile_outcome` and `compile_file_outcome`, whose `Outcome` keeps a failed build's `Outputs` (SyncTeX, symbols, written files); `Diagnostic::end_column` and `fixes`; `retex::clean(main, job)`; the browser crates on wasm32 (R1, R3, R9, R12) | The backend calls `compile_file_outcome`, so a failed build still feeds the language server and navigation. The Build menu's draft images and stop-at-the-first-error, the engine identity in Settings and Delete build files become real. Progress goes to the status bar. Quick fixes appear in the log and the gutter. |
+| 2.1.0, planned | `retex::Worker` (R2, R4, R5, R6), the SyncTeX reader `retex-synctex` (R7), fragments on the worker (R11) | The `Worker` backend for the desktop app (below). Stop works. Rebuilds start from the preamble snapshot. Agent sessions build in a confined worker. Source and PDF navigation (plan phase 4). Typeset formulas for the formatted mode (plan phase 3). |
+| 2.2.0 | Typed language-server queries (R8) | Completion, hover and definitions through them (plan phase 2). Until then, `Server::handle` with JSON values. |
 
 ## How TeXCraft's build backend changes
 
@@ -19,13 +21,13 @@ TeXCraft asked retex for twelve changes, R1 to R12. retex answered with a design
 - Diagnostics name files by their absolute path in that copy, and the backend turns them back into project paths.
 - Builds are serialised process-wide and cannot be stopped. The Stop command says so.
 
-**With 2.1.** The same backend, with the new options and outputs. `Outcome` gains:
-- `synctex: Option<Arc<[u8]>>` and `symbols: Option<Value>`;
-- `fixes` on each `Diagnostic`.
+**With 2.1's in-process API.** The same backend, building with `compile_file_outcome` and the new options. TeXCraft's `Outcome` gains:
+- `synctex: Option<Arc<[u8]>>` and `symbols: Option<Value>`, also for failed builds;
+- `fixes` and `end_column` on each `Diagnostic`.
 
-The `Backend` trait does not change.
+Delete build files calls `retex::clean` with the main document. The `Backend` trait does not change.
 
-**With 2.2.** A second backend, `WorkerBackend`, holds one `retex::Worker` per open project:
+**With 2.1's worker.** A second backend, `WorkerBackend`, holds one `retex::Worker` per open project:
 - **Project folder.** A project that has one is built in place (`BuildRequest::dir`), with unsaved files sent as `overlay`, so nothing is copied.
 - **No folder yet.** A new, unsaved project is written to a session folder under the cache first. The worker needs a directory.
 - **Progress** feeds the status bar and the preview's progress line. The draft PDF record shows the first pass of a first build in the preview.
