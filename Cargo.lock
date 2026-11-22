@@ -200,7 +200,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
  "wl-clipboard-rs",
  "x11rb",
 ]
@@ -1201,7 +1201,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3056,7 +3056,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3568,7 +3568,8 @@ dependencies = [
 [[package]]
 name = "retex"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fea5d7d334026bd44e783eda75aeb8539cbe634750a75cc512715d5cdbb180ce"
 dependencies = [
  "libc",
  "libmimalloc-sys",
@@ -3595,12 +3596,14 @@ dependencies = [
 [[package]]
 name = "retex-arith"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60fe18a924a79e3490d69488cde9e37e5f7220ab4c119dc5f74c38ca6a35b5c9"
 
 [[package]]
 name = "retex-bib"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fbe0e3b674600dcab06634155a4101727c35bc1f74ceef0876c5b719c51439d"
 dependencies = [
  "roxmltree 0.21.2",
  "thiserror 2.0.21",
@@ -3609,12 +3612,14 @@ dependencies = [
 [[package]]
 name = "retex-diag"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fafda5e73a1abbcdc4dd4ecf122d9489290e0db3599d576f210c95487aa444c8"
 
 [[package]]
 name = "retex-engine"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cbb49c40a4975dcf7d094c9089d35e86b7061a65f0356bb208088b3befa0be6"
 dependencies = [
  "flate2",
  "retex-arith",
@@ -3630,7 +3635,8 @@ dependencies = [
 [[package]]
 name = "retex-font"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad5c756a3c8b7eba1f046db7d7f309da7938b68b75b49d56389fc2faea509b91"
 dependencies = [
  "flate2",
  "harfrust 0.14.0",
@@ -3642,7 +3648,8 @@ dependencies = [
 [[package]]
 name = "retex-highlight"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c80042cc8a0cf948a88acc2067190a43685778734cc1400ac59657bff70a2b3"
 dependencies = [
  "thiserror 2.0.21",
 ]
@@ -3650,7 +3657,8 @@ dependencies = [
 [[package]]
 name = "retex-hyph"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a38aeba2f7ab253e4370cb0b8489d8a9727fc0dc3a571a2c64d2bbd290eae48"
 dependencies = [
  "thiserror 2.0.21",
 ]
@@ -3658,7 +3666,8 @@ dependencies = [
 [[package]]
 name = "retex-image"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42f0bcf8d396e24d48f3edb0654faa76493a1d2f7a44d8676024cb29feabc657"
 dependencies = [
  "flate2",
  "gif",
@@ -3674,7 +3683,8 @@ dependencies = [
 [[package]]
 name = "retex-index"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4705a3bfa9f144fe157cd20e5406178b097d31778e4b8a04730691c4cf898844"
 dependencies = [
  "thiserror 2.0.21",
 ]
@@ -3682,7 +3692,8 @@ dependencies = [
 [[package]]
 name = "retex-kpath"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df504b7d72cdf64251382b081cc876aa09e84b014ef61a1f88f9eb22583629b5"
 dependencies = [
  "thiserror 2.0.21",
 ]
@@ -3690,7 +3701,8 @@ dependencies = [
 [[package]]
 name = "retex-lpeg"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8dc0fa34df2dce8a8b6efda523e6dd57a92b1ed56e024712fbbd91151af9b30"
 dependencies = [
  "mlua",
 ]
@@ -3698,7 +3710,8 @@ dependencies = [
 [[package]]
 name = "retex-lsp"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0966556cdfee9428912b197c63c50fc92b7976ed2bf9fc838a6f9a107d51929"
 dependencies = [
  "retex-diag",
  "serde_json",
@@ -3707,7 +3720,8 @@ dependencies = [
 [[package]]
 name = "retex-lua"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d43e069aca46c27b3945231c9da2b0f31cfe4d59a32a2ee673612611f5cd965d"
 dependencies = [
  "flate2",
  "mlua",
@@ -3723,12 +3737,14 @@ dependencies = [
 [[package]]
 name = "retex-mp"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9d73e9341dea2a828050a6a58ea5fc58df90f5e9b1d2586e8a9fe718fd2abb5"
 
 [[package]]
 name = "retex-odf"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5603f6b7487152974ce1feb9603d41ffa1538561beeebf03a8aee03ab4d83f2"
 dependencies = [
  "flate2",
  "resvg 0.48.1",
@@ -3741,7 +3757,8 @@ dependencies = [
 [[package]]
 name = "retex-pdf"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58953e5182b152c737ca1207c7eac7c6714a832decbe2761c369f11230fe8358"
 dependencies = [
  "flate2",
  "jpeg-encoder",
@@ -3752,7 +3769,8 @@ dependencies = [
 [[package]]
 name = "retex-pdfx"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9839bfc5ce20bca1dc4494280e911d77c10aecb187531f60dccc92938bef5b8"
 dependencies = [
  "flate2",
  "jpeg-encoder",
@@ -3769,7 +3787,8 @@ dependencies = [
 [[package]]
 name = "retex-svg"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ba82cec69772dfaeadc6e1c6911c3977850e9bb8a5f7fb60b36ff6ecfb708e9"
 dependencies = [
  "flate2",
  "png 0.18.1",
@@ -3781,7 +3800,8 @@ dependencies = [
 [[package]]
 name = "retex-texlive"
 version = "2.0.0"
-source = "git+https://gitlab.com/severin-lemaignan/retex.git?rev=93509ead36384d0cf3b4cd7ecf55ab0ccba15686#93509ead36384d0cf3b4cd7ecf55ab0ccba15686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edf3f0cdf3d1a0ea19c4036bdeb910f60746d35e8245ac6144a266f06d6766b7"
 dependencies = [
  "lzma-rust2",
  "retex-kpath",
@@ -3873,7 +3893,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4308,10 +4328,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5357,7 +5377,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

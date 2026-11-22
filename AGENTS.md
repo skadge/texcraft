@@ -63,7 +63,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as in RFC 2119
 ## This repository
 <!-- craft-agents:end -->
 
-TeXCraft is a Rust-native LaTeX editor for desktop (Linux, macOS, Windows) and the web (WASM). Its typesetting engine and language server come from [retex](https://gitlab.com/severin-lemaignan/retex).
+TeXCraft is a Rust-native LaTeX editor for desktop (Linux, macOS, Windows) and the web (WASM). Its typesetting engine and language server come from [retex](https://gitlab.com/severin-lemaignan/retex) (crates.io).
 
 ### Layout
 - `crates/*`: `project` (files of a project), `latex` (lexer and outline), `compile` (build backends over retex), `preview` (PDF pages to pixels through craft-pdf), `engine` (session, commands, file access), `ui-egui` (the egui frontend), `mcp` (agent tools); `apps/{texcraft, texcraft-cli, texcraft-web}`; `xtask`. `cargo xtask layers` enforces the layering: nothing below `ui-egui` depends on egui, eframe, winit or rfd.
@@ -81,5 +81,5 @@ For the crates you changed: `cargo fmt`, `cargo clippy -p <crate> --all-targets`
 - Translations: craft-i18n through the optional `CRAFT_I18N_DIR` (`crates/ui-egui/build.rs`); English only without it.
 - Crash handling: `texcraft_engine::guard` wraps every entry point.
 - Agent entry point: `texcraft-cli mcp --automation-read-root DIR --automation-write-root DIR`; it refuses to start without both.
-- retex is a git dependency from gitlab.com/severin-lemaignan/retex, a departure from rule 10 agreed with the operator (it is the operator's own engine); for local work on both, use a `[patch]` to `../retex` in `.cargo/config.toml` and don't commit it.
+- retex comes from crates.io (`retex = "2"`). For local work on both, patch it to `../retex` in a `[patch.crates-io]` section of your own `.cargo/config.toml` and don't commit that.
 - `plan/` is an optional gitignored notebook.
