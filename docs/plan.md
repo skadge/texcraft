@@ -1,6 +1,6 @@
 # TeXCraft plan
 
-> **Last updated:** 2026-11-22 · **Change:** first plan, with the scaffold
+> **Last updated:** 2026-11-22 · **Change:** formatted editing mode as its own phase; retex changes moved to docs/retex-changes.md
 
 TeXCraft is a LaTeX editor for the desktop and the browser, written in Rust on egui and the Craft shared libraries, with [retex](https://gitlab.com/severin-lemaignan/retex) as its typesetting engine and language server. Its scope is that of the established online LaTeX editors: a project of files, a source editor, a PDF preview kept up to date while typing, a build log tied to the source, navigation between the source and the PDF, and later sharing, history and collaboration. Layout and conventions follow those editors where users expect them (clean-room standard, "Assets" rule 7). Code, wording, icons and artwork are our own.
 
@@ -94,7 +94,63 @@ The interim editor is egui's multi-line text field with a highlighting layouter.
    - Image and PDF previews for binary files.
    - Preview tabs (a single click shows a file without pinning a tab).
 
-### Phase 3: building, preview and navigation
+### Phase 3: formatted editing mode
+
+A second way to show the same file: sections as headings, emphasis as bold and italic, lists as lists, formulas typeset, figures as cards with their images, tables as editable grids, and the preamble folded away. It is a view of the source, not a separate document model:
+
+- The `.tex` file stays the only truth.
+- Switching modes never rewrites it.
+- Every edit made in formatted mode is a minimal edit of the source, so diffs, git and collaboration see ordinary text changes.
+
+A toggle at the top of the editor switches between **Source** and **Formatted**, per file, remembered with the project.
+
+1. **A tolerant LaTeX structure parser** (`texcraft-latex`).
+   - It produces a concrete syntax tree with byte spans: commands with their optional and required arguments, groups, environments, math (inline and display), comments, verbatim, paragraphs.
+   - It never fails. Unbalanced or half-typed input yields error nodes that cover the text exactly.
+   - It is incremental by block, reusing the per-line lexer state from phase 2.
+   - Hostile-input mutation sweep and a round-trip property: the spans tile the text.
+2. **The view model.** It maps the tree to blocks and inline atoms, each holding the source span it stands for:
+
+   | Source | Shown as |
+   |---|---|
+   | Preamble (up to `\begin{document}`) | One folded bar; expanding it shows the source |
+   | `\maketitle` with `\title`, `\author`, `\date` | Title block |
+   | `\part` … `\subparagraph`, starred or not | Headings at their level, with the number the last build gave them (from the `.aux`) |
+   | `\textbf`, `\textit`, `\emph`, `\underline`, `\texttt` and their nesting | Styled text, commands hidden |
+   | `itemize`, `enumerate`, `description` | Lists with markers and numbers |
+   | `$…$`, `\(…\)` | Inline formula image on the baseline |
+   | Display math and the math environments | Centred formula image, with the equation number from the last build |
+   | `\label`, `\ref`, `\eqref`, `\cref`, `\cite` and kin | Chips: an icon and the key; hovering shows the target (the label's heading or formula, the reference's title and authors) |
+   | `figure` with `\includegraphics`, `\caption` | A card with the image (PNG and JPEG through craft-image-codecs, PDF pages through craft-pdf), the caption and an edit button |
+   | `table` with `tabular` | A card with a grid editor (item 5) |
+   | `\footnote`, `\url`, `\href` | Marker with a popover; link text |
+   | Anything else | The source itself, inline, in the code font. Nothing is hidden that cannot be shown faithfully |
+
+3. **Typeset formulas.**
+   - Formulas are typeset by retex with the document's own preamble, in batches, through a fragment API (docs/retex-changes.md, R11).
+   - The images are cached by the formula text and the preamble's hash, and drawn by craft-pdf at the screen's density.
+   - While a formula is being typed, its source is shown with a live typeset preview above it, the same preview that source mode shows inside display math.
+   - A formula that fails to typeset shows its source with the error underlined.
+4. **Editing in the formatted view.**
+   - The caret moves through text runs as through text. Atoms (chips, formulas, figures) are single caret stops: Backspace next to one selects it first and a second press deletes its whole source span.
+   - Enter ends a paragraph (a blank line). Inside a list it starts a new item.
+   - Typing at a style boundary continues the style the caret is in.
+   - Bold, italic, heading levels and lists from the toolbar wrap or rewrite exactly the selected source span.
+   - Pressing Enter or double-clicking on a formula or a fallback span opens its source in place, edited with the same widget and completion as source mode, and closes back to the rendered form.
+   - Undo history is shared with source mode, since both edit the same buffer.
+5. **Table grid editor.**
+   - `tabular` (and `tabularx`, `longtable` later) is parsed into rows and cells, with `\multicolumn` spans, `\hline`, booktabs rules and the column specification.
+   - Cells are edited in place.
+   - A floating toolbar offers: insert and delete rows and columns, merge and split cells, alignment per column, borders (none, all, booktabs), and the caption position.
+   - Every operation writes only the cells and separators it changes and keeps the author's spacing elsewhere.
+   - Tables that use features the grid cannot represent faithfully stay as source, with a message saying which feature.
+6. **Figures.**
+   - The edit button opens a dialog: image from the project or from a file, width, placement, caption, label.
+   - Dropping an image file on the view adds it to the project and inserts a figure.
+7. **Accessibility.** The formatted view publishes a real structure: headings with levels, lists, tables with cells, formula images named by their source (later by a spoken form from `craft-math`'s MathML). It remains an editable text node with caret and selection.
+8. **Typography.** The formatted view uses a text face chosen for reading (from craft-fonts) at a comfortable measure (about 70 characters), centred in the pane, with spacing from tokens. It does not imitate the PDF. The preview pane is for that.
+
+### Phase 4: building, preview and navigation
 
 1. **Build menu.**
    - Automatic build on or off.
@@ -120,7 +176,7 @@ The interim editor is egui's multi-line text field with a highlighting layouter.
    - Text selection later (craft-pdf text extraction).
 6. **Exports retex already offers.** Accessible PDF (PDF/UA-2), SVG, ODT, ODP, HTML and Markdown, each a command with a file dialog.
 
-### Phase 4: the browser
+### Phase 5: the browser
 
 retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua it embeds through mlua rules out wasm32-unknown-unknown, and the engine needs `panic=unwind` with wasm exceptions. retex's own web page runs it through a JavaScript WASI host. TeXCraft can't use handwritten JavaScript, so:
 
@@ -137,7 +193,7 @@ retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua i
 4. **Projects in the browser** live in IndexedDB, through web-sys. Opening and saving to cloud storage goes through `craft-cloud` (RFC-0024), and embedding in a host page through `craft-web-host`.
 5. **Licences.** The LaTeX kernel and most packages are LPPL, which is not on the Craft licence allowlist. Hosting a TeX tree for the web build needs an RFC first (see §6). The desktop app reads an installed TeX Live or retex's own downloaded tree and bundles none.
 
-### Phase 5: sharing, history and working together
+### Phase 6: sharing, history and working together
 
 1. **History.** Snapshots on save and on each successful build, a list of versions with dates (`chrono`), a diff view, and restoring a file or the project.
 2. **Git.**
@@ -147,29 +203,20 @@ retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua i
 4. **Working together in real time** waits for the suite's concurrent-text contract (RFC-0020's `Texts` API behind a mature CRDT). The editor's transactions (phase 2) and stable marks are designed so that this layer can be added. Presence uses `craft_ui::presence`, and chat belongs to the host.
 5. **Review.** Comments anchored to text ranges and suggested edits shown in the margin, accepted or rejected one by one. They are designed on the same marks.
 
-### Phase 6: comfort
+### Phase 7: comfort
 
-- A formatted editing mode: sections, emphasis, lists, figures and citations shown formatted while the source stays the file, built on `craft-latex` and `craft-flow`.
 - A start page with recent projects and templates (our own, CC0, generated in the repository).
 - Word count (`craft-latex`'s reader).
 - Vim and Emacs key bindings.
 
 ## 4. Changes to retex
 
-The scaffold uses retex 2.0.0 through its embedding API (`retex::Retex`). These changes make the embedding complete. Each is a retex merge request of its own.
-
-| # | Change | Why TeXCraft needs it |
-|---|---|---|
-| R1 | The embedding API returns the SyncTeX data, the `symbols` records, the diagnostics' `fixes` and `end_column`, and the files written (`.aux`, `.bbl`), all in memory. Today `embed.rs` drops them. | Source ↔ PDF navigation, language features, quick fixes. |
-| R2 | Cancellation: `Engine::check_interrupt` (an empty stub in `error.rs`, already called from the input layer) polls a flag set by `Retex::cancel_token()`, and the pass loop and bib/index runs check it. | A Stop button, and a build replaced by a newer one while the user types. |
-| R3 | A progress callback (a closure, not `fn`) with pass, page and file. | A progress line during long builds. |
-| R4 | A file-access hook: the host decides which files a build may read and write. The engine, kpathsea, fonts and Lua's `io`/`lfs` go through a trait, following the existing `retex-bib`/`retex-index` `FileAccess` and `retex-mp` `Host` patterns. | RFC-0015: a confined agent session must check every path a document names. Until then, building is refused while confined. Also the base for an in-memory web build. |
-| R5 | No process-global state in embedded builds: `set_current_dir`, the `BUILD` mutex, the JSON capture static, `JOB_SETTINGS` and the configuration read from the environment move into a `Session` value. | Parallel builds of several projects; predictable behaviour in a long-running app. |
-| R6 | Preamble snapshots for embedded builds (retex roadmap P9), through a child process or a memory image. | Rebuilds while typing at the speed of the command line. |
-| R7 | A public SyncTeX reader with forward and inverse queries, generalised from `preflight::Synctex` and the heuristics of `web/editor.js`. Possibly a separate crate. | Navigation (phase 3). |
-| R8 | A typed facade over `retex_lsp::Server` (requests and results as Rust types, not `serde_json::Value`). | Simpler, checked use from the editor. |
-| R9 | `cfg(target_family = "wasm")` where the code means "no threads or processes" (`retex-pdf` `writer.rs` and `import.rs`, `retex-kpath` `process_id`, `retex-lua` `os.clock`), and an injected clock instead of `Instant::now`. | Pure-Rust pieces (lsp, svg, image) used from wasm32-unknown-unknown without panics. |
-| R10 | Publishing or mirroring retex where Craft rule 10 allows git dependencies (storytold), or crates.io. | The current gitlab.com git dependency is an agreed departure from rule 10. |
+TeXCraft needs twelve changes in retex, R1 to R12. Each is described in [docs/retex-changes.md](retex-changes.md) with its problem, a proposed interface and how to tell it is done. The ones that block planned features (P1):
+- **R1:** build outputs in memory (SyncTeX, symbols, fixes).
+- **R2:** cancellation.
+- **R4:** host-controlled file access.
+- **R7:** a public SyncTeX reader.
+- **R11:** typesetting fragments for the formatted mode.
 
 ## 5. Quality gates
 

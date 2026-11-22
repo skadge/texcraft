@@ -8,4 +8,4 @@ User-visible names are checked under standards/naming.md before they ship. Other
 | Compile, Compile Automatically | Building the PDF | Plain descriptive words |
 | Build Log | The list of messages of a build | Plain descriptive words |
 | Outline | The section list | Plain descriptive words |
-| Formatted editing mode (planned) | Editing with sections and math shown formatted | Plain descriptive words; we do not use other editors' names for this mode |
+| Source, Formatted (planned) | The two ways the editor shows a file: as source, or with sections, emphasis, lists, formulas, figures and tables shown formatted | Plain descriptive words; other editors' names for this mode are not used |
