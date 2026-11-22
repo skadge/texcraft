@@ -12,4 +12,8 @@ workspace = true
 
 [dependencies]
 craft-pdf = { workspace = true }
+craft-image-codecs = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+craft-image-codecs = { workspace = true }

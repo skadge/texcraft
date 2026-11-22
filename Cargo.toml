@@ -13,6 +13,7 @@ repository = "https://gitlab.com/severin-lemaignan/texcraft"
 [workspace.dependencies]
 # Shared Craft libraries, all at one craft-libs `main` rev (AGENTS.md rule 10).
 craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f", default-features = false, features = ["raster"] }
+craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f", features = ["jxl"] }
 craft-i18n = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 craft-fonts-build = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }

@@ -140,13 +140,16 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         let current = app.session.current().cloned();
         app.editor.sync(current.as_ref(), app.session.revision(), app.session.project());
         let is_text = current.as_ref().is_some_and(|p| matches!(app.session.project().get(p), Some(Contents::Text(_))));
-        if is_text {
+        let as_image = current.as_ref().is_some_and(|p| crate::figure_view::is_svg(p) && !app.figure.as_text.contains(p));
+        if is_text && !as_image {
             toolbar(app, ui);
             widgets::hairline(ui, &t);
             crate::find_bar::show(app, ui);
         }
         match current {
             None => empty(ui, &t, "file-text", tl!("No file is open"), tl!("Choose a file in the project files to edit it.")),
+            Some(path) if crate::figure_view::is_svg(&path) && !app.figure.as_text.contains(&path) => crate::figure_view::show(app, ui, &path),
+            Some(path) if !is_text && crate::figure_view::is_figure(&path) => crate::figure_view::show(app, ui, &path),
             Some(path) if !is_text => {
                 let bytes = app.session.project().get(&path).map_or(0, Contents::len);
                 let detail = tl!("{name} is not a text file ({size} bytes); it cannot be edited here.")
@@ -154,7 +157,12 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                     .replace("{size}", &bytes.to_string());
                 empty(ui, &t, "image", tl!("Binary file"), &detail);
             }
-            Some(path) => source(app, ui, &path),
+            Some(path) => {
+                if crate::figure_view::is_svg(&path) {
+                    crate::figure_view::svg_bar(app, ui, &path);
+                }
+                source(app, ui, &path)
+            }
         }
     });
 }

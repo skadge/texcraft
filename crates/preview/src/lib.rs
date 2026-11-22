@@ -16,7 +16,11 @@ pub enum Error {
     NoSuchPage(usize),
     #[error("the page could not be drawn: {0}")]
     Render(String),
+    #[error("the image could not be read: {0}")]
+    Image(String),
 }
+
+pub mod figure;
 
 /// A page drawn at some scale.
 #[derive(Debug, Clone)]

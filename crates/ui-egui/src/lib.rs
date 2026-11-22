@@ -15,6 +15,7 @@ mod app_icon;
 pub mod control;
 mod dialogs;
 mod editor;
+mod figure_view;
 mod find_bar;
 pub mod fonts;
 mod gallery;
@@ -110,6 +111,7 @@ pub struct App {
     tokens: Tokens,
     view: View,
     editor: editor::Editor,
+    figure: figure_view::FigureView,
     pdf: pdf_view::PdfView,
     applied: Option<Scheme>,
     fonts_ready: bool,
@@ -167,6 +169,7 @@ impl App {
                 progress: None,
             },
             editor: editor::Editor::default(),
+            figure: figure_view::FigureView::default(),
             pdf: pdf_view::PdfView::default(),
             applied: None,
             fonts_ready: false,
