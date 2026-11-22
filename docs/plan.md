@@ -46,7 +46,7 @@ Done items are marked **done** with the commit subject that brought them. The re
    - Asking before unsaved changes are lost, through `craft-quit` for the window (**done**).
    - **Recent projects** (**done**): File › Open Recent and the project menu list them by folder name with their location, mark the open one, show missing folders disabled with the reason, and can be cleared. Up to twelve, kept in the preferences.
    - Still to do:
-     - A start page when no project is open: recent projects with their first page as a thumbnail, new project, open folder, templates.
+     - A start page when no project is open (**done**: new project, open folder, recent projects as cards with the first page of their last PDF, missing folders marked, removing an entry). Templates join it in phase 7.
      - Recent files of the open project in the Go to File palette (with phase 2's palette).
      - Recent projects in the operating system's own lists (the dock menu on macOS, jump lists on Windows, recently-used on Linux).
      - Pinning a project to the top of the list, and removing one entry.

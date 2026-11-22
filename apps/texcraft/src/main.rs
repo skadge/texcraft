@@ -6,6 +6,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod control;
+mod thumbnails;
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -93,6 +94,9 @@ impl eframe::App for Shell {
             log::error!("frame: {e}");
         }
         self.pickers(frame);
+        for thumbnail in self.app.take_thumbnails() {
+            thumbnails::store(&thumbnail);
+        }
         if let Some(prefs) = self.app.take_changed_prefs() {
             self.settings.set(Stored(prefs));
         }
@@ -169,8 +173,14 @@ fn main() -> eframe::Result {
     let prefs = settings.get().0.clone();
     let mut app = texcraft_ui_egui::App::with_prefs(texcraft_engine::Session::new(), prefs);
     app.set_native_pickers(true);
-    if let Some(folder) = &args.folder {
-        app.open_project(folder);
+    for project in &settings.get().0.recent {
+        if let Some(thumbnail) = thumbnails::load(project) {
+            app.set_thumbnail(thumbnail);
+        }
+    }
+    match &args.folder {
+        Some(folder) => app.open_project(folder),
+        None => app.show_start_page(),
     }
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_title("TeXCraft").with_app_id("ai.storyteller.texcraft").with_inner_size([1400.0, 900.0]),

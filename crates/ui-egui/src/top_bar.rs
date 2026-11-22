@@ -22,6 +22,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 }
             });
         });
+        if app.start {
+            return;
+        }
         project_title(app, ui, bar);
         let rect = egui::Rect::from_min_max(egui::pos2(bar.center().x, bar.top()), bar.max);
         ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(EguiLayout::right_to_left(Align::Center)), |ui| {
@@ -66,6 +69,7 @@ fn icon_for(id: &str) -> Option<&'static str> {
         "file.new" => "file-code",
         "file.close" => "x",
         "app.settings" => "settings",
+        "app.start" => "columns-2",
         "project.save_as" => "folder-plus",
         "build.save_pdf" => "file-text",
         "build.compile" => "play",

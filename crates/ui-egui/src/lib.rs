@@ -20,11 +20,13 @@ mod keys;
 mod pdf_view;
 pub mod prefs;
 pub use picks::{Pick, PickKind, PickRequest};
+pub use start::{THUMBNAIL_WIDTH, Thumbnail};
 mod picks;
 mod preview;
 mod rail;
 mod settings;
 mod side;
+mod start;
 mod status;
 mod top_bar;
 pub mod ui_cmd;
@@ -83,6 +85,9 @@ pub struct App {
     fonts_ready: bool,
     prefs: prefs::Prefs,
     keys: keys::Keys,
+    /// The start page is shown in place of the project.
+    start: bool,
+    thumbs: start::Thumbnails,
     /// Picks for the shell to show.
     picks: Vec<picks::PickRequest>,
     /// Whether the shell shows native pickers; without them paths are typed.
@@ -134,6 +139,8 @@ impl App {
             fonts_ready: false,
             prefs,
             keys,
+            start: false,
+            thumbs: start::Thumbnails::default(),
             picks: Vec::new(),
             after_save: None,
             quit: false,
@@ -179,6 +186,7 @@ impl App {
                 self.quit = true;
             }
             dialogs::Next::NewProject => {
+                self.start = false;
                 if self.run("project.new", json!({})).is_some() {
                     self.pdf = pdf_view::PdfView::default();
                 }
@@ -217,9 +225,15 @@ impl App {
         std::mem::take(&mut self.quit)
     }
 
+    /// Shows the start page (the desktop app does when it starts without a project).
+    pub fn show_start_page(&mut self) {
+        self.start = true;
+    }
+
     /// Opens the project in `folder` and remembers it among the recent projects.
     pub fn open_project(&mut self, folder: &str) {
         if self.run("project.open", json!({"path": folder})).is_some() {
+            self.start = false;
             self.remember_project();
             self.pdf = pdf_view::PdfView::default();
             self.view.last_edit = Some(0.0);
@@ -290,7 +304,9 @@ impl App {
             self.tokens.apply(ctx);
             self.applied = Some(self.tokens.scheme);
         }
+        let mut thumbnail = false;
         if let Some(outcome) = self.session.poll() {
+            thumbnail = outcome.pdf.is_some();
             let message = if let texcraft_engine::Status::Unavailable(reason) = &outcome.status {
                 (reason.clone(), true)
             } else {
@@ -307,8 +323,16 @@ impl App {
         for id in self.keys.dispatch(ctx) {
             ui_cmd::run(self, &id);
         }
+        if thumbnail {
+            self.update_thumbnail();
+        }
         top_bar::show(self, ui);
         status::show(self, ui);
+        if self.start {
+            start::show(self, ui);
+            dialogs::show(self, ctx);
+            return;
+        }
         rail::show(self, ui);
         if self.view.side.is_some() {
             side::show(self, ui);
@@ -338,6 +362,9 @@ impl App {
 
     fn auto_compile(&mut self, ctx: &egui::Context) {
         let Some(edited) = self.view.last_edit else { return };
+        if self.start {
+            return;
+        }
         if !self.session.settings.auto_compile || self.session.is_building() || !self.session.is_stale() {
             return;
         }
