@@ -367,6 +367,7 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     let t = app.tokens;
     let markers = markers(app, path);
     let id = editor_id(path);
+    app.region(crate::Region::Editor, id);
     if let Some((goto_path, line)) = app.view.goto.take() {
         if &goto_path == path {
             let target = line.saturating_sub(1) as usize;

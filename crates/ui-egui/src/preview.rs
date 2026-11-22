@@ -32,6 +32,7 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         let building = app.session.is_building();
         let label = if building { tl!("Compiling…") } else { tl!("Compile") };
         let (main, menu) = widgets::primary_split(ui, &t, "play", label, building);
+        app.region(crate::Region::Preview, main.id);
         if main.clicked() {
             app.run("build.compile", json!({}));
         }

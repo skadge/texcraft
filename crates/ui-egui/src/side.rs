@@ -79,6 +79,7 @@ fn files(app: &mut App, ui: &mut egui::Ui) {
     header(ui, &t, tl!("Files"), |ui| {
         let import = texcraft_engine::cmd::find("file.import").map_or(Ok(()), |c| (c.enabled)(&app.session));
         let add = widgets::icon_button(ui, &t, "upload", tl!("Add Files…"), import.is_ok());
+        app.region(crate::Region::Side, add.id);
         if let Err(reason) = &import {
             let _ = add.on_disabled_hover_text(reason.as_str());
         } else if add.clicked() {

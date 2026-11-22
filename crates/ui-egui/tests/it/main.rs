@@ -5,5 +5,6 @@ mod control;
 mod frame;
 mod insert;
 mod recent;
+mod regions;
 mod shortcuts;
 mod unsaved;

@@ -133,6 +133,7 @@ fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
     let width = galley.size().x + 3.0 * t.unit + t.icon_size + 6.0 * t.unit;
     let rect = egui::Rect::from_center_size(bar.center(), vec2(width, t.toolbar_height - 8.0));
     let response = ui.interact(rect, ui.scope_id().with("project-title"), Sense::click());
+    app.region(crate::Region::TopBar, response.id);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{name} {}", tl!("project menu"))));
     if response.hovered() || response.has_focus() {
         ui.painter().rect_filled(rect, t.corner(), crate::theme::blend(t.frame, t.hover));

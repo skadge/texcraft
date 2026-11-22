@@ -39,6 +39,28 @@ use texcraft_engine::project::ProjectPath;
 
 use theme::{Scheme, Tokens};
 
+/// A region of the window, for F6 and Shift+F6.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Region {
+    TopBar,
+    Rail,
+    Side,
+    Editor,
+    Preview,
+}
+
+impl Region {
+    fn name(self) -> &'static str {
+        match self {
+            Region::TopBar => tl!("Menu bar and project"),
+            Region::Rail => tl!("Sections"),
+            Region::Side => tl!("Project files and outline"),
+            Region::Editor => tl!("Editor"),
+            Region::Preview => tl!("PDF and build log"),
+        }
+    }
+}
+
 /// What the side panel shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Side {
@@ -60,6 +82,8 @@ pub(crate) struct View {
     pub layout: Layout,
     pub logs: bool,
     pub dialog: Option<dialogs::Dialog>,
+    /// Each region's first focusable control this frame, in the order F6 visits them.
+    pub regions: Vec<(Region, egui::Id)>,
     /// The Settings dialog's open tab.
     pub settings_tab: usize,
     /// Which messages the build log lists.
@@ -129,6 +153,7 @@ impl App {
                 cursor: None,
                 log_filter: preview::Filter::All,
                 settings_tab: 0,
+                regions: Vec::new(),
                 collapsed: std::collections::HashSet::new(),
                 status: None,
                 last_edit: Some(0.0),
@@ -264,6 +289,36 @@ impl App {
         self.apply_editor_font();
     }
 
+    /// Records `id` as `region`'s first focusable control, once a frame.
+    pub(crate) fn region(&mut self, region: Region, id: egui::Id) {
+        if !self.view.regions.iter().any(|(r, _)| *r == region) {
+            self.view.regions.push((region, id));
+        }
+    }
+
+    /// Moves the keyboard focus to the next region (or the previous one), and says which.
+    pub(crate) fn cycle_region(&mut self, forward: bool) {
+        let mut regions = self.view.regions.clone();
+        let order = [Region::TopBar, Region::Rail, Region::Side, Region::Editor, Region::Preview];
+        regions.sort_by_key(|(r, _)| order.iter().position(|o| o == r));
+        if regions.is_empty() {
+            return;
+        }
+        let focused = self.ctx.memory(|m| m.focused());
+        let at = focused.and_then(|f| regions.iter().position(|(_, id)| *id == f));
+        let len = regions.len();
+        let next = match (at, forward) {
+            (Some(i), true) => (i + 1) % len,
+            (Some(i), false) => (i + len - 1) % len,
+            (None, true) => 0,
+            (None, false) => len - 1,
+        };
+        if let Some((region, id)) = regions.get(next).copied() {
+            self.ctx.memory_mut(|m| m.request_focus(id));
+            self.view.status = Some((region.name().to_owned(), false));
+        }
+    }
+
     /// The source text's size from the preferences.
     pub(crate) fn apply_editor_font(&mut self) {
         let size = self.prefs.editor_font_size.clamp(10.0, 22.0);
@@ -308,17 +363,8 @@ impl App {
         let mut thumbnail = false;
         if let Some(outcome) = self.session.poll() {
             thumbnail = outcome.pdf.is_some();
-            let message = if let texcraft_engine::Status::Unavailable(reason) = &outcome.status {
-                (reason.clone(), true)
-            } else {
-                let (e, w) = (outcome.errors(), outcome.warnings());
-                let text = tl!("Compiled in {seconds} s: {errors} errors, {warnings} warnings")
-                    .replace("{seconds}", &format!("{:.1}", outcome.seconds))
-                    .replace("{errors}", &e.to_string())
-                    .replace("{warnings}", &w.to_string());
-                (text, e > 0)
-            };
-            self.view.status = Some(message);
+            // The build's result replaces any earlier message in the status bar.
+            self.view.status = None;
         }
         self.auto_compile(ctx);
         for id in self.keys.dispatch(ctx) {
@@ -327,6 +373,7 @@ impl App {
         if thumbnail {
             self.update_thumbnail();
         }
+        self.view.regions.clear();
         top_bar::show(self, ui);
         status::show(self, ui);
         if self.start {

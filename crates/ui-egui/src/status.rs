@@ -40,6 +40,10 @@ fn state(app: &App) -> (Option<&'static str>, egui::Color32, String) {
     if app.session.is_building() {
         return (None, t.text_muted, tl!("Compiling…").to_owned());
     }
+    // A message from the last command (an error, or where the focus went) until the next build.
+    if let Some((message, error)) = &app.view.status {
+        return if *error { (Some("circle-exclamation-point"), t.error, message.clone()) } else { (Some("info"), t.text_muted, message.clone()) };
+    }
     let Some(o) = app.session.last_outcome() else {
         return (Some("circle-check"), t.text_muted, tl!("Not compiled yet").to_owned());
     };
