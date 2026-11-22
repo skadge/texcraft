@@ -1,0 +1,15 @@
+[package]
+name = "texcraft-preview"
+description = "PDF pages to pixels for the preview pane, through craft-pdf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+craft-pdf = { workspace = true }
+thiserror = { workspace = true }
