@@ -16,13 +16,18 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     toolbar(app, ui);
     widgets::hairline(ui, &t);
     let building = app.session.is_building().then(|| {
-        let text = app.view.progress.as_ref().map_or_else(|| tl!("Compiling…").to_owned(), |(p, s)| crate::status::progress_text(p, *s));
-        let ratio = app.view.progress.as_ref().and_then(|(p, _)| crate::status::progress_ratio(p));
-        (text, ratio)
+        let progress = app.view.progress.as_ref();
+        crate::pdf_view::Building {
+            now: progress.map_or_else(|| tl!("Compiling…").to_owned(), |(p, _)| crate::status::progress_now(p)),
+            detail: progress.map(|(p, s)| crate::status::progress_detail(p, *s)).unwrap_or_default(),
+            ratio: progress.and_then(|(p, _)| crate::status::progress_ratio(p)),
+            // The project's first build of the session: say why it takes longer.
+            first: app.session.last_outcome().is_none(),
+        }
     });
     // A build over a PDF already shown: a thin bar along the pane's top, full as far as the pass
     // is (or a moving segment when that is not known).
-    if let Some((_, ratio)) = &building {
+    if let Some(crate::pdf_view::Building { ratio, .. }) = &building {
         let top = ui.available_rect_before_wrap();
         let line = egui::Rect::from_min_size(top.min, vec2(top.width(), 2.0));
         let fill = match ratio {
@@ -39,7 +44,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         logs(app, ui);
     } else {
         app.pdf.sync(app.session.pdf());
-        app.pdf.show(ui, &t, building.as_ref().map(|(text, ratio)| (text.as_str(), *ratio)));
+        app.pdf.show(ui, &t, building.as_ref());
     }
 }
 

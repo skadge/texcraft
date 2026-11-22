@@ -64,11 +64,11 @@ fn state(app: &App) -> (Option<&'static str>, egui::Color32, String) {
     }
 }
 
-/// A running build's progress in words: the page being built (of how many the last pass had), the
-/// pass and why it runs, or the step between passes, and the time so far.
-pub(crate) fn progress_text(p: &texcraft_engine::Progress, seconds: f64) -> String {
+/// What a running build is doing now: the page being built (of how many the last pass had), the
+/// file being read, or the step between passes.
+pub(crate) fn progress_now(p: &texcraft_engine::Progress) -> String {
     let n = |v: u32| v.to_string();
-    let mut text = if let Some(step) = &p.step {
+    if let Some(step) = &p.step {
         tl!("Compiling: {step}").replace("{step}", step)
     } else if p.pages > 0 {
         match p.expected {
@@ -79,13 +79,41 @@ pub(crate) fn progress_text(p: &texcraft_engine::Progress, seconds: f64) -> Stri
         tl!("Compiling: reading {file}").replace("{file}", file.rsplit('/').next().unwrap_or(file))
     } else {
         tl!("Compiling…").to_owned()
-    };
+    }
+}
+
+/// Why the pass runs, shortened: retex lists the files that changed, which can be many.
+fn reason(why: &str) -> String {
+    let parts: Vec<&str> = why.split(", ").filter(|s| !s.is_empty()).collect();
+    match parts.as_slice() {
+        [] => String::new(),
+        [a] => (*a).to_owned(),
+        [a, b] => format!("{a}, {b}"),
+        [a, b, rest @ ..] => tl!("{a}, {b} and {n} more").replace("{a}", a).replace("{b}", b).replace("{n}", &rest.len().to_string()),
+    }
+}
+
+/// The pass and why it runs, and the time so far: the detail under what the build is doing.
+pub(crate) fn progress_detail(p: &texcraft_engine::Progress, seconds: f64) -> String {
+    let mut parts = Vec::new();
     if p.pass > 1 {
-        let pass = match &p.reason {
-            Some(why) => tl!(" · pass {n} ({why})").replace("{n}", &n(p.pass)).replace("{why}", why),
-            None => tl!(" · pass {n}").replace("{n}", &n(p.pass)),
-        };
-        text.push_str(&pass);
+        let pass = tl!("pass {n}").replace("{n}", &p.pass.to_string());
+        parts.push(match p.reason.as_deref().map(reason).filter(|r| !r.is_empty()) {
+            Some(why) => format!("{pass} · {why}"),
+            None => pass,
+        });
+    }
+    if seconds >= 1.0 {
+        parts.push(format!("{seconds:.0} s"));
+    }
+    parts.join(" · ")
+}
+
+/// A running build's progress on one line, for the status bar.
+pub(crate) fn progress_text(p: &texcraft_engine::Progress, seconds: f64) -> String {
+    let mut text = progress_now(p);
+    if p.pass > 1 {
+        text.push_str(&tl!(" · pass {n}").replace("{n}", &p.pass.to_string()));
     }
     if seconds >= 1.0 {
         text.push_str(&format!(" · {seconds:.0} s"));

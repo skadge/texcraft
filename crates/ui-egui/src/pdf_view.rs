@@ -14,6 +14,18 @@ const MIN_ZOOM: f32 = 0.25;
 const MAX_ZOOM: f32 = 4.0;
 const PAGE_GAP: f32 = 16.0;
 
+/// A running build, as the PDF pane shows it.
+pub(crate) struct Building {
+    /// What it does now ("Compiling page 2 of 26").
+    pub now: String,
+    /// The pass and why, and the time so far, dimmed under it.
+    pub detail: String,
+    /// How far through its pass, when the last pass's page count says.
+    pub ratio: Option<f32>,
+    /// The session's first build of the project: it says why it takes longer.
+    pub first: bool,
+}
+
 /// How the zoom is chosen.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum Fit {
@@ -120,26 +132,37 @@ impl PdfView {
         }
     }
 
-    /// `building`: the running build's progress in words, and how far through its pass it is
-    /// when that is known.
-    pub fn show(&mut self, ui: &mut egui::Ui, t: &Tokens, building: Option<(&str, Option<f32>)>) {
+    /// `building`: the running build's progress, when one runs.
+    pub fn show(&mut self, ui: &mut egui::Ui, t: &Tokens, building: Option<&Building>) {
         let rect = ui.available_rect_before_wrap();
         ui.painter().rect_filled(rect, 0.0, t.canvas);
         // The first build: no PDF to show yet, so its progress takes the place.
-        if let (None, Some((text, ratio))) = (&self.doc, building) {
+        if let (None, Some(b)) = (&self.doc, building) {
             ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                ui.add_space(rect.height() * 0.36);
+                ui.set_max_width((rect.width() - 48.0).clamp(200.0, 460.0));
+                ui.add_space(rect.height() * 0.34);
                 let (spin, _) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::hover());
                 crate::widgets::spinner(ui, spin.center(), 11.0, t.accent);
                 ui.add_space(t.unit * 3.0);
                 ui.label(egui::RichText::new(tl!("Building the PDF")).font(t.strong()));
                 ui.add_space(t.unit);
-                ui.label(egui::RichText::new(text).color(t.text_muted));
-                if let Some(r) = ratio {
+                // What it does now; under it, dimmed, the pass and why, and the time.
+                ui.add(egui::Label::new(egui::RichText::new(&b.now).color(t.text)).truncate());
+                if !b.detail.is_empty() {
+                    ui.add(egui::Label::new(egui::RichText::new(&b.detail).font(t.small()).color(t.text_muted)).truncate());
+                }
+                if let Some(r) = b.ratio {
                     ui.add_space(t.unit * 3.0);
                     let (bar, _) = ui.allocate_exact_size(egui::vec2(220.0, 4.0), egui::Sense::hover());
                     ui.painter().rect_filled(bar, 2.0, t.separator);
                     ui.painter().rect_filled(egui::Rect::from_min_size(bar.min, egui::vec2(bar.width() * r, bar.height())), 2.0, t.accent);
+                }
+                if b.first {
+                    ui.add_space(t.unit * 4.0);
+                    let note = tl!(
+                        "The first build reads the packages and fonts the document uses, so it takes longer. The next ones only redo what changed."
+                    );
+                    ui.add(egui::Label::new(egui::RichText::new(note).font(t.small()).color(t.text_muted)).wrap().halign(egui::Align::Center));
                 }
             });
             return;
