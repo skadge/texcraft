@@ -18,7 +18,7 @@ craft-i18n = { workspace = true }
 craft-ui = { workspace = true }
 craft-keymap = { workspace = true }
 egui_extras = { workspace = true, features = ["svg"] }
-egui = { workspace = true }
+egui = { workspace = true, features = ["monochrome_emoji_fonts"] }
 serde_json = { workspace = true }
 serde = { workspace = true }
 log = { workspace = true }

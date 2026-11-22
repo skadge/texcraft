@@ -79,5 +79,7 @@ Every asset and fixture in this repository, with its source and licence (standar
 | `assets/app-icon/hicolor/scalable/apps/ai.storyteller.texcraft.svg` | TeXCraft app icon | The TeXCraft contributors, with the owner's drawing | Rendered from `assets/app-icon/texcraft.svg` by `cargo xtask icons` | MIT OR Apache-2.0 | Generated |
 | `assets/app-icon/README.md` | Icon notes and licence | The TeXCraft contributors | This repository | MIT OR Apache-2.0 | Written by hand |
 | `assets/app-icon/LICENSE.txt` | Icon notes and licence | The TeXCraft contributors | This repository | MIT OR Apache-2.0 | Written by hand |
+| `epaint_default_fonts/fonts/NotoEmoji-Regular.ttf` (egui dependency) | Noto Emoji | Google | https://github.com/storytold/egui/tree/6d518fc799681571963842f95b55a6b68431b15a/crates/epaint_default_fonts/fonts (original https://github.com/googlefonts/noto-emoji) | OFL-1.1 | Unchanged; embedded by egui's `monochrome_emoji_fonts`, for emoji in source text and the interface |
+| `epaint_default_fonts/fonts/emoji-icon-font.ttf` (egui dependency) | emoji-icon-font | John Slegers | https://github.com/storytold/egui/tree/6d518fc799681571963842f95b55a6b68431b15a/crates/epaint_default_fonts/fonts (original https://github.com/jslegers/emoji-icon-font) | MIT | Unchanged; embedded by egui's `monochrome_emoji_fonts` |
 
 Dependencies come from crates.io, from storytold/craft-libs at the rev pinned in `Cargo.toml`, and from retex (CC0-1.0) at the rev pinned there. Their licences are in their own packages.

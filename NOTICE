@@ -7,4 +7,5 @@ Third-party material:
 - storytold/craft-libs, MIT OR Apache-2.0: shared Craft libraries, including its vendored copies of hayro and vello (MIT OR Apache-2.0).
 - Lucide icons (https://lucide.dev), release 1.77.0, ISC AND MIT: assets/icons/, licence text in assets/icons/LICENSE.
 - option-ext 0.2 (MPL-2.0), used unmodified through the `dirs` crate by the desktop app; its source is at https://github.com/soc/option-ext and on crates.io. Under MPL-2.0 that source stays available to users.
+- Noto Emoji (SIL Open Font License 1.1) and emoji-icon-font (MIT), embedded through egui's default fonts.
 - Crates from crates.io under the licences their packages state.
