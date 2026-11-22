@@ -8,6 +8,8 @@
 pub mod cmd;
 pub mod file_access;
 pub mod find;
+mod language;
+pub use language::{Completion, Lint};
 pub mod guard;
 
 use std::path::PathBuf;
@@ -67,6 +69,8 @@ pub struct Session {
     pdf: Option<Arc<Vec<u8>>>,
     pub settings: Settings,
     roots: Option<file_access::AutomationRoots>,
+    /// The language server, over the project's text files.
+    language: language::Language,
     /// Where templates are kept; none without a data folder.
     templates: Option<texcraft_templates::Store>,
 }
@@ -98,6 +102,7 @@ impl Session {
             pdf: None,
             settings: Settings::default(),
             roots: None,
+            language: language::Language::new(None),
             templates: None,
         }
     }
@@ -199,6 +204,7 @@ impl Session {
         self.current = project.main().cloned();
         self.open = self.current.iter().cloned().collect();
         self.project = project;
+        self.language = language::Language::new(dir.as_deref());
         self.dir = dir;
         self.dirty = false;
         self.touch();
@@ -249,7 +255,35 @@ impl Session {
         Some(self.accept(outcome))
     }
 
+    fn language(&mut self) -> &mut language::Language {
+        self.language.sync(&self.project, self.revision);
+        &mut self.language
+    }
+
+    /// Completions at a line and column (characters, from 0) of a text file.
+    pub fn complete(&mut self, path: &ProjectPath, line: usize, column: usize) -> Vec<Completion> {
+        self.language().complete(path, line, column)
+    }
+
+    /// What the language server says about the thing at a line and column, as Markdown.
+    pub fn hover(&mut self, path: &ProjectPath, line: usize, column: usize) -> Option<String> {
+        self.language().hover(path, line, column)
+    }
+
+    /// Where the thing at a line and column is defined.
+    pub fn definition(&mut self, path: &ProjectPath, line: usize, column: usize) -> Option<(ProjectPath, usize, usize)> {
+        self.language().definition(path, line, column)
+    }
+
+    /// The problems the language server's lint finds in a text file, as typed.
+    pub fn lint(&mut self, path: &ProjectPath) -> Vec<Lint> {
+        self.language().lint(path).to_vec()
+    }
+
     fn accept(&mut self, outcome: Outcome) -> &Outcome {
+        let main = self.project.main().cloned();
+        // retex makes the `symbols` record for embedders from 2.1.0 on.
+        self.language().build_finished(main.as_ref(), None);
         if let Some(pdf) = &outcome.pdf {
             self.pdf = Some(pdf.clone());
         }
