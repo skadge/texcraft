@@ -2,7 +2,7 @@
 
 **Creature:** a blackbird, TeXCraft's mascot, in profile, looking right.
 
-**Style:** the Crafting Apps' engraving portrait: a tight head-and-shoulders crop on a full-bleed field, no frame or roundel, the body running off the tile's left and bottom edges.
+**Style:** the Crafting Apps' engraving portrait: a tight head-and-shoulders crop on a full-bleed field, the body running off the tile's left edge. A thin rim in the field's colour runs along the tile's edge, over the drawing.
 
 **Palette:**
 
@@ -10,7 +10,7 @@
 |---|---|---|
 | Ink | `#0b0b0c` | the bird (it is a black bird) |
 | Paper | `#efe9dc` | the engraving's light lines: wing feathers, beak, eye |
-| TeXCraft blue (app colour, the interface accent) | `#2557d6` | the full-bleed field |
+| TeXCraft gold (app colour) | `#d6bc25` | the full-bleed field and the rim |
 
 **Tile:** `viewBox="0 0 512 512"`, a rounded square with `rx=112` that clips everything. Windows and Linux use the tile edge to edge. macOS icons put it on Apple's grid (the tile is 824/1024 of a transparent canvas).
 

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!--
   TeXCraft app icon: the master. Everything else in this folder is rendered from it by
   `cargo xtask icons`. Edit freely, then rerun that command.
@@ -10,25 +10,113 @@
   - The "engrave" filter maps the drawing's black and white to the suite's ink (#0b0b0c) and
     paper (#efe9dc); the position of the first paper value in its tables sets the threshold.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <clipPath id="tile">
-      <rect width="512" height="512" rx="112"/>
+
+<svg
+   viewBox="0 0 512 512"
+   width="512"
+   height="512"
+   version="1.1"
+   id="svg1"
+   sodipodi:docname="texcraft.svg"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.78710938"
+     inkscape:cx="283.95037"
+     inkscape:cy="268.06948"
+     inkscape:window-width="2560"
+     inkscape:window-height="1011"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg1" />
+  <defs
+     id="defs1">
+    <clipPath
+       id="tile">
+      <rect
+         width="512"
+         height="512"
+         rx="112"
+         id="rect1" />
     </clipPath>
-    <filter id="engrave" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB">
+    <filter
+       id="engrave"
+       x="0"
+       y="0"
+       width="1"
+       height="1"
+       color-interpolation-filters="sRGB">
       <!-- Grey first, so the three channels switch together. -->
-      <feColorMatrix type="saturate" values="0"/>
+      <feColorMatrix
+         type="saturate"
+         values="0"
+         id="feColorMatrix1" />
       <!-- Seven equal steps: below 3/7 of the way to white is ink, above is paper. -->
-      <feComponentTransfer>
-        <feFuncR type="discrete" tableValues="0.0431 0.0431 0.0431 0.9373 0.9373 0.9373 0.9373"/>
-        <feFuncG type="discrete" tableValues="0.0431 0.0431 0.0431 0.9137 0.9137 0.9137 0.9137"/>
-        <feFuncB type="discrete" tableValues="0.0471 0.0471 0.0471 0.8627 0.8627 0.8627 0.8627"/>
+      <feComponentTransfer
+         id="feComponentTransfer1">
+        <feFuncR
+           type="discrete"
+           tableValues="0.0431 0.0431 0.0431 0.9373 0.9373 0.9373 0.9373"
+           id="feFuncR1" />
+        <feFuncG
+           type="discrete"
+           tableValues="0.0431 0.0431 0.0431 0.9137 0.9137 0.9137 0.9137"
+           id="feFuncG1" />
+        <feFuncB
+           type="discrete"
+           tableValues="0.0471 0.0471 0.0471 0.8627 0.8627 0.8627 0.8627"
+           id="feFuncB1" />
       </feComponentTransfer>
     </filter>
   </defs>
-  <g clip-path="url(#tile)">
-    <rect id="field" width="512" height="512" fill="#2557d6"/>
-    <image id="blackbird" xlink:href="source/blackbird.png" href="source/blackbird.png"
-           x="-407.3" y="34.9" width="893.1" height="595.8" filter="url(#engrave)"/>
+  <rect
+     id="field"
+     width="512"
+     height="512"
+     fill="#2557d6"
+     style="fill:#d6bc25;fill-opacity:1;stroke:none;stroke-width:10;stroke-dasharray:none;stroke-opacity:1"
+     clip-path="none"
+     rx="109.26054"
+     ry="109.26054"
+     x="0"
+     y="0" />
+  <g
+     id="g1"
+     clip-path="url(#tile)">
+    <image
+       id="blackbird"
+       xlink:href="source/blackbird.png"
+       href="source/blackbird.png"
+       x="-369.18585"
+       y="5.6791577"
+       width="893.09998"
+       height="595.79999"
+       filter="url(#engrave)"
+       transform="matrix(0.93240207,0,0,0.93240207,20.780775,50.822513)"
+       style="stroke-width:1.0725" />
   </g>
+  <rect
+     id="rect2"
+     width="504.37717"
+     height="504.37717"
+     fill="#2557d6"
+     style="fill:none;fill-opacity:1;stroke:#d6bc25;stroke-width:9.99997;stroke-dasharray:none;stroke-opacity:1"
+     clip-path="none"
+     rx="109.26054"
+     ry="109.26054"
+     x="3.8114145"
+     y="3.8114145" />
 </svg>
