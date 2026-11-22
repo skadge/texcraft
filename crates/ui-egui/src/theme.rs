@@ -265,7 +265,8 @@ impl Tokens {
         w.noninteractive.weak_bg_fill = self.frame;
         w.noninteractive.bg_stroke = self.hairline();
         w.noninteractive.fg_stroke = Stroke::new(1.0, self.text);
-        w.inactive.bg_fill = self.surface;
+        // The fill of slider tracks and check boxes: a step off the surfaces they sit on.
+        w.inactive.bg_fill = blend(self.surface, self.pressed);
         w.inactive.weak_bg_fill = self.surface;
         w.inactive.bg_stroke = Stroke::new(1.0, self.control_border);
         w.inactive.fg_stroke = Stroke::new(1.0, self.text);
@@ -303,6 +304,7 @@ impl Tokens {
             s.window_margin = Margin::same(16);
             s.icon_width = 14.0;
             s.icon_spacing = 2.0 * unit;
+            s.slider_width = 45.0 * unit;
             style.animation_time = 0.08;
             style.interaction.selectable_labels = false;
         });
