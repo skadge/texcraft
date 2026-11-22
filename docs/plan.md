@@ -1,6 +1,6 @@
 # TeXCraft plan
 
-> **Last updated:** 2026-11-22 · **Change:** formatted editing mode as its own phase; retex changes moved to docs/retex-changes.md
+> **Last updated:** 2026-11-22 · **Change:** retex's agreed embedding design; retex from crates.io
 
 TeXCraft is a LaTeX editor for the desktop and the browser, written in Rust on egui and the Craft shared libraries, with [retex](https://gitlab.com/severin-lemaignan/retex) as its typesetting engine and language server. Its scope is that of the established online LaTeX editors: a project of files, a source editor, a PDF preview kept up to date while typing, a build log tied to the source, navigation between the source and the PDF, and later sharing, history and collaboration. Layout and conventions follow those editors where users expect them (clean-room standard, "Assets" rule 7). Code, wording, icons and artwork are our own.
 
@@ -209,14 +209,14 @@ retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua i
 - Word count (`craft-latex`'s reader).
 - Vim and Emacs key bindings.
 
-## 4. Changes to retex
+## 4. retex
 
-TeXCraft needs twelve changes in retex, R1 to R12. Each is described in [docs/retex-changes.md](retex-changes.md) with its problem, a proposed interface and how to tell it is done. The ones that block planned features (P1):
-- **R1:** build outputs in memory (SyncTeX, symbols, fixes).
-- **R2:** cancellation.
-- **R4:** host-controlled file access.
-- **R7:** a public SyncTeX reader.
-- **R11:** typesetting fragments for the formatted mode.
+retex's design note `docs/design/embedding.md` (in the retex repository) answers TeXCraft's requests R1 to R12. [docs/retex-changes.md](retex-changes.md) says what TeXCraft does with each release and lists the points still open. In short:
+- **2.1.0:** build options, progress, SyncTeX bytes, symbols and fixes in process.
+- **2.2.0:** a `retex worker` process per project, with cancelling, preamble snapshots, unsaved buffers as an overlay, and OS-level confinement for agent sessions.
+- **2.3.0:** the SyncTeX reader, fragments for the formatted mode, and typed language-server queries.
+
+Phases 2 to 4 of this plan follow those releases. Where a phase needs a later release, its work starts on the TeXCraft side (interfaces, UI, tests against the in-process backend) and is finished when the release lands.
 
 ## 5. Quality gates
 
@@ -232,4 +232,3 @@ TeXCraft needs twelve changes in retex, R1 to R12. Each is described in [docs/re
 2. **Licence.** The scaffold uses the suite's `MIT OR Apache-2.0`. retex is CC0, so either works.
 3. **Home of the repository.** Craft rules expect GitHub under storytold (craft-common-actions workflows, the one-rev craft-libs rule, the add-an-app RFC with its 7-day comment period). The project is on gitlab.com today. Joining the suite means an RFC in craft-contrib.
 4. **TeX tree on the web.** Hosting LPPL files needs `LPPL-1.3c` on the licence allowlist (an RFC), or a design where the browser fetches the tree from a host the user chooses.
-5. **retex as a dependency** (R10).
