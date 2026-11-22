@@ -1,0 +1,25 @@
+[package]
+name = "texcraft-ui-egui"
+description = "The TeXCraft interface in egui: file panel, editor, PDF preview and build log"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+texcraft-engine = { workspace = true, default-features = false }
+texcraft-latex = { workspace = true }
+texcraft-preview = { workspace = true }
+craft-i18n = { workspace = true }
+egui = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+egui_kittest = { workspace = true }
+texcraft-compile = { workspace = true, default-features = false }
+egui = { workspace = true, features = ["default_fonts"] }
