@@ -1,6 +1,6 @@
 # TeXCraft plan
 
-> **Last updated:** 2026-11-22 · **Change:** a phase for retex's output formats, PDF/X and preflight checks
+> **Last updated:** 2026-11-22 · **Change:** templates from publishers, downloaded and cached rather than bundled
 
 TeXCraft is a LaTeX editor for the desktop and the browser, written in Rust on egui and the Craft shared libraries, with [retex](https://gitlab.com/severin-lemaignan/retex) as its typesetting engine and language server. Its scope is that of the established online LaTeX editors: a project of files, a source editor, a PDF preview kept up to date while typing, a build log tied to the source, navigation between the source and the PDF, and later sharing, history and collaboration. Layout and conventions follow those editors where users expect them (clean-room standard, "Assets" rule 7). Code, wording, icons and artwork are our own.
 
@@ -51,6 +51,33 @@ Done items are marked **done** with the commit subject that brought them. The re
      - Recent projects in the operating system's own lists (the dock menu on macOS, jump lists on Windows, recently-used on Linux).
      - Pinning a project to the top of the list, and removing one entry.
      - Renaming a project folder from the project menu.
+2b. **Templates from publishers.** A new project can start from a journal's, a conference's, a thesis or a CV template. The templates are not bundled: their licences rarely allow it (many are LPPL, which the Craft licence list lacks, and some publishers' terms forbid redistribution). TeXCraft downloads them from their original source, the way retex downloads TeX Live packages, and keeps them for offline use.
+   - **The catalogue** is TeXCraft's own data (`templates/catalog.toml`, MIT OR Apache-2.0), one entry per template:
+     - its title, publisher and category (journal, conference, thesis, report, CV, letter, slides, poster, book);
+     - where it comes from;
+     - its licence as its source states it;
+     - its main file.
+
+     Sources, in order of preference:
+     - **TeX Live packages.** Most publishers' classes are on CTAN with a template in their documentation: `elsarticle`, `IEEEtran`, `acmart`, `llncs`, `revtex`, `amsart`, `aastex`, `mnras`, `beamer`, `moderncv`, `tufte-latex` and more. The template comes from the package's documentation container, fetched from a TeX Live mirror and checked against TeX Live's signed package database, through `retex-texlive`. The class itself is in TeX Live already.
+     - **A publisher's own download.** For templates not on CTAN: a pinned URL with its SHA-256. A changed file is refused until the catalogue is updated.
+     - **TeXCraft's own templates.** Generated in the repository, CC0. Only these, and those whose licence allows it, may ever be bundled.
+
+     The catalogue is never built from another editor's template gallery.
+   - **Downloading.**
+     - At first start, TeXCraft asks once whether to download the catalogue's templates for offline use, giving their total size. The answer is a setting.
+     - Otherwise a template is downloaded the first time it is chosen, with progress, and kept.
+     - Downloads go to the data folder (`TeXCraft/templates/<id>/<version>/`), with the source's licence text beside them. Updates follow the catalogue's versions.
+     - Without a connection, the kept templates are offered and the others say they need one.
+     - Confined agent sessions download nothing (RFC-0015); they use kept templates only.
+   - **Choosing.** The start page's New Project becomes a gallery:
+     - categories and search by title, publisher or class;
+     - a thumbnail per template, its first page, built once locally after download and kept;
+     - the source and the licence shown before creating.
+
+     Creating copies the template's files into a new folder, opens it, and keeps the licence notice in the project (`TEMPLATE-LICENSE`). Users can also save a project as their own template.
+   - **Commands** for agents: `template.list` (with categories, source, licence, whether kept) and `project.from_template {template, folder}`.
+   - **The web build** offers only TeXCraft's own templates and those whose licence allows hosting, served by the site itself, because CTAN mirrors send no CORS headers. Hosting LPPL files waits for the RFC of §6.
 3. **Menus** (**done** for File, Insert, Format, Build, View, Help, all built from the command registry). Still to do:
    - An Edit menu with undo, redo, find and go to line (with phase 2's editor);
    - the PDF in a separate window (an egui viewport);
@@ -246,7 +273,7 @@ retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua i
 
 ### Phase 8: comfort
 
-- Templates for new projects (our own, CC0, generated in the repository), offered on the start page (phase 1).
+- More of TeXCraft's own templates (CC0, generated in the repository), beside the publishers' ones of phase 1.
 - Word count (`craft-latex`'s reader).
 - Vim and Emacs key bindings.
 
