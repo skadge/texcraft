@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=TeXCraft
+GenericName=LaTeX Editor
+Comment=Write LaTeX and see the PDF as you type
+Exec=texcraft %f
+Icon=ai.storyteller.texcraft
+Terminal=false
+Categories=Office;Publishing;TextEditor;
+MimeType=text/x-tex;text/x-latex;
+Keywords=LaTeX;TeX;PDF;editor;paper;thesis;
+StartupWMClass=ai.storyteller.texcraft

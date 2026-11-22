@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>ai.storyteller.texcraft</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <name>TeXCraft</name>
+  <developer id="org.gitlab.severin-lemaignan.texcraft">
+    <name>The TeXCraft contributors</name>
+  </developer>
+  <summary>Write LaTeX and see the PDF as you type</summary>
+  <description>
+    <p>
+      TeXCraft is a LaTeX editor: a project of files, a source editor and the PDF side by side,
+      rebuilt when typing pauses by retex, a TeX engine written in Rust.
+    </p>
+    <ul>
+      <li>Project files and the outline, tabs, highlighting, line numbers and error markers</li>
+      <li>A build log whose messages explain the problem, suggest a fix and open the line</li>
+      <li>References, bibliographies and indexes settled in one build</li>
+      <li>SVG, JPEG XL and WebP images without conversion</li>
+      <li>Recent projects, keyboard shortcuts you can change, light and dark themes</li>
+      <li>A control channel and an MCP server for agents</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">ai.storyteller.texcraft.desktop</launchable>
+  <url type="homepage">https://gitlab.com/severin-lemaignan/texcraft</url>
+  <url type="bugtracker">https://gitlab.com/severin-lemaignan/texcraft/-/issues</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>retex's magazine sample in TeXCraft</caption>
+      <image>https://gitlab.com/severin-lemaignan/texcraft/-/raw/main/docs/images/editor-magazine.jpg</image>
+    </screenshot>
+    <screenshot>
+      <caption>The build log in the dark theme</caption>
+      <image>https://gitlab.com/severin-lemaignan/texcraft/-/raw/main/docs/images/log-dark.png</image>
+    </screenshot>
+  </screenshots>
+  <provides>
+    <mediatype>text/x-tex</mediatype>
+    <binary>texcraft</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-22">
+      <description><p>First development version.</p></description>
+    </release>
+  </releases>
+</component>
