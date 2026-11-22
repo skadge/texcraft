@@ -15,6 +15,6 @@ fn compiling_without_an_engine_says_why_instead_of_showing_success() {
     for _ in 0..5 {
         harness.run();
     }
-    assert!(harness.query_by_label_contains("No engine in this test.").is_some());
+    assert!(harness.query_all_by_label_contains("No engine in this test.").next().is_some());
     assert!(harness.query_by_label_contains("Compiled in").is_none());
 }

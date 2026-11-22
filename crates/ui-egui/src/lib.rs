@@ -12,10 +12,14 @@ pub mod i18n;
 pub mod theme;
 
 mod chrome;
+mod dialogs;
 mod editor;
 pub mod fonts;
 pub mod icons;
 mod pdf_view;
+mod rail;
+mod status;
+mod top_bar;
 pub mod ui_cmd;
 pub mod widgets;
 
@@ -40,23 +44,14 @@ pub enum Layout {
     PreviewOnly,
 }
 
-/// A dialog that asks for one line of text, then runs a command with it.
-pub(crate) struct Prompt {
-    pub title: &'static str,
-    pub label: &'static str,
-    pub value: String,
-    pub command: &'static str,
-    /// Builds the command's parameters from the text typed.
-    pub params: fn(&str) -> Value,
-    pub focus: bool,
-}
-
 /// The view state the interface keeps for itself.
 pub(crate) struct View {
     pub side: Option<Side>,
     pub layout: Layout,
     pub logs: bool,
-    pub prompt: Option<Prompt>,
+    pub dialog: Option<dialogs::Dialog>,
+    /// The caret's line and column (from 1) in the editor, for the status bar.
+    pub cursor: Option<(u32, u32)>,
     /// The latest message for the status line, also announced to screen readers.
     pub status: Option<(String, bool)>,
     /// Seconds (egui time) of the last edit, for the automatic build.
@@ -81,7 +76,16 @@ impl App {
             session,
             tokens: Tokens::dark(),
             // A project is built once when it opens, through the automatic build's timer.
-            view: View { side: Some(Side::Files), layout: Layout::Split, logs: false, prompt: None, status: None, last_edit: Some(0.0), goto: None },
+            view: View {
+                side: Some(Side::Files),
+                layout: Layout::Split,
+                logs: false,
+                dialog: None,
+                cursor: None,
+                status: None,
+                last_edit: Some(0.0),
+                goto: None,
+            },
             editor: editor::Editor::default(),
             pdf: pdf_view::PdfView::default(),
             applied: None,
@@ -136,13 +140,14 @@ impl App {
         }
         self.auto_compile(ctx);
         self.shortcuts(ctx);
-        chrome::top_bar(self, ui);
-        chrome::rail(self, ui);
+        top_bar::show(self, ui);
+        status::show(self, ui);
+        rail::show(self, ui);
         if self.view.side.is_some() {
             chrome::side_panel(self, ui);
         }
         self.panes(ui);
-        chrome::prompt(self, ctx);
+        dialogs::show(self, ctx);
         if self.session.is_building() {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }

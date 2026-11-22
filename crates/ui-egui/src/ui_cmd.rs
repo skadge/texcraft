@@ -4,32 +4,42 @@
 
 use serde_json::json;
 
+use crate::dialogs::{Dialog, Prompt};
 use crate::theme::{Scheme, Tokens};
-use crate::{App, Layout, Prompt, Side};
+use crate::{App, Layout, Side};
 
 pub struct UiCommand {
     pub id: &'static str,
     pub label: &'static str,
     pub menu: &'static str,
+    /// Entries of one group are separated from the next by a line.
+    pub group: &'static str,
+    pub shortcut: Option<&'static str>,
+}
+
+const fn ui(id: &'static str, label: &'static str, menu: &'static str, group: &'static str, shortcut: Option<&'static str>) -> UiCommand {
+    UiCommand { id, label, menu, group, shortcut }
 }
 
 /// View commands, in menu order.
 pub const UI_COMMANDS: &[UiCommand] = &[
-    UiCommand { id: "view.layout.split", label: "Editor and Preview", menu: "View" },
-    UiCommand { id: "view.layout.editor", label: "Editor Only", menu: "View" },
-    UiCommand { id: "view.layout.preview", label: "Preview Only", menu: "View" },
-    UiCommand { id: "view.side.files", label: "Project Files", menu: "View" },
-    UiCommand { id: "view.side.outline", label: "Outline", menu: "View" },
-    UiCommand { id: "view.side.hide", label: "Hide Side Panel", menu: "View" },
-    UiCommand { id: "view.logs", label: "Build Log", menu: "View" },
-    UiCommand { id: "view.theme", label: "Switch Light and Dark", menu: "View" },
-    UiCommand { id: "view.zoom_in", label: "Zoom In", menu: "View" },
-    UiCommand { id: "view.zoom_out", label: "Zoom Out", menu: "View" },
-    UiCommand { id: "view.fit_width", label: "Fit Width", menu: "View" },
+    ui("view.layout.split", "Editor and PDF", "View", "layout", None),
+    ui("view.layout.editor", "Editor Only", "View", "layout", None),
+    ui("view.layout.preview", "PDF Only", "View", "layout", None),
+    ui("view.side.files", "Project Files", "View", "side", None),
+    ui("view.side.outline", "Outline", "View", "side", None),
+    ui("view.side.hide", "Hide Side Panel", "View", "side", None),
+    ui("view.logs", "Build Log", "View", "pdf", None),
+    ui("view.zoom_in", "Zoom In", "View", "pdf", Some("Cmd+=")),
+    ui("view.zoom_out", "Zoom Out", "View", "pdf", Some("Cmd+-")),
+    ui("view.fit_width", "Fit Width", "View", "pdf", None),
+    ui("view.theme", "Switch Light and Dark", "View", "theme", None),
+    ui("help.shortcuts", "Keyboard Shortcuts", "Help", "help", None),
+    ui("help.about", "About TeXCraft", "Help", "about", None),
 ];
 
 /// The menus of the menu bar, in order.
-pub const MENUS: &[&str] = &["File", "Build", "View"];
+pub const MENUS: &[&str] = &["File", "Build", "View", "Help"];
 
 /// Runs `id`: a view command, an engine command that first asks for input, or a plain engine
 /// command.
@@ -49,10 +59,14 @@ pub fn run(app: &mut App, id: &str) {
         "view.zoom_in" => app.pdf.zoom_by(1.25),
         "view.zoom_out" => app.pdf.zoom_by(0.8),
         "view.fit_width" => app.pdf.fit_width(),
-        "project.open" => ask(app, tl!("Open Project Folder"), tl!("Folder"), "project.open", |v| json!({"path": v})),
-        "project.save_as" => ask(app, tl!("Save Project As"), tl!("Folder"), "project.save_as", |v| json!({"path": v})),
+        "help.shortcuts" => app.view.dialog = Some(Dialog::Shortcuts),
+        "help.about" => app.view.dialog = Some(Dialog::About),
+        // Native file and folder pickers come with craft-dialogs (docs/plan.md, phase 1); until then the path is typed.
+        "project.open" => ask(app, tl!("Open Project Folder"), tl!("The folder that holds the project's files"), tl!("Open"), "project.open"),
+        "project.save_as" => ask(app, tl!("Save Project As"), tl!("The folder to write the project's files to"), tl!("Save"), "project.save_as"),
+        "build.save_pdf" => ask(app, tl!("Save PDF As"), tl!("The file to write the PDF to"), tl!("Save"), "build.save_pdf"),
         "project.save" if app.session.dir().is_none() => run(app, "project.save_as"),
-        "file.new" => ask(app, tl!("New File"), tl!("File name"), "file.new", |v| json!({"path": v})),
+        "file.new" => ask(app, tl!("New File"), tl!("Its path in the project, such as chapters/intro.tex"), tl!("Create"), "file.new"),
         "build.auto" => {
             let on = !app.session.settings.auto_compile;
             app.run("build.auto", json!({"on": on}));
@@ -63,7 +77,7 @@ pub fn run(app: &mut App, id: &str) {
     }
 }
 
-fn ask(app: &mut App, title: &'static str, label: &'static str, command: &'static str, params: fn(&str) -> serde_json::Value) {
-    // Native folder pickers come with craft-dialogs (docs/plan.md, phase 1); until then the path is typed.
-    app.view.prompt = Some(Prompt { title, label, value: String::new(), command, params, focus: true });
+fn ask(app: &mut App, title: &'static str, label: &'static str, action: &'static str, command: &'static str) {
+    let prompt = Prompt { title, label, value: String::new(), action, command, params: |v| json!({"path": v}), focus: true };
+    app.view.dialog = Some(Dialog::Prompt(prompt));
 }

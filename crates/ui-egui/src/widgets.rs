@@ -50,6 +50,30 @@ pub fn icon_button(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, enabled: bo
     r.on_hover_text(label)
 }
 
+/// A square icon button that stays highlighted while `on`.
+pub fn icon_toggle(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, on: bool) -> Response {
+    let side = t.toolbar_height - 2.0 * t.unit;
+    let (rect, r) = ui.allocate_exact_size(Vec2::splat(side), Sense::click());
+    r.widget_info(|| WidgetInfo::selected(Role::Button, true, on, label));
+    if ui.is_rect_visible(rect) {
+        let base = if on { blend(t.frame, t.accent_soft) } else { t.frame };
+        let fill = state_fill(t, &r, base);
+        if fill != t.frame {
+            ui.painter().rect_filled(rect, t.corner(), fill);
+        }
+        let color = if on {
+            t.accent
+        } else if r.hovered() {
+            t.text
+        } else {
+            t.text_muted
+        };
+        icons::paint(ui, rect, icon, t.icon_size, color);
+        focus_ring(ui, t, &r, rect, t.corner());
+    }
+    r.on_hover_text(label)
+}
+
 /// A button showing `text` in the interface font, without a frame until hovered.
 pub fn text_button(ui: &mut Ui, t: &Tokens, text: &str, enabled: bool) -> Response {
     let galley = ui.painter().layout_no_wrap(text.to_owned(), t.body(), t.text);

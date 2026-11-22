@@ -3,77 +3,10 @@
 
 use serde_json::json;
 use texcraft_engine::Severity;
-use texcraft_engine::cmd;
 use texcraft_engine::project::{Contents, ProjectPath};
 
-use crate::ui_cmd::{self, MENUS, UI_COMMANDS};
+use crate::ui_cmd;
 use crate::{App, Side};
-
-pub(crate) fn top_bar(app: &mut App, ui: &mut egui::Ui) {
-    egui::Panel::top("top").show(ui, |ui| {
-        ui.horizontal(|ui| {
-            egui::MenuBar::new().ui(ui, |ui| {
-                for menu in MENUS {
-                    ui.menu_button(crate::i18n::t(menu), |ui| menu_items(app, ui, menu));
-                }
-            });
-            ui.separator();
-            let name = app
-                .session
-                .dir()
-                .and_then(|d| d.file_name())
-                .map_or_else(|| tl!("Untitled project").to_owned(), |n| n.to_string_lossy().into_owned());
-            let unsaved = if app.session.is_dirty() { " •" } else { "" };
-            ui.strong(format!("{name}{unsaved}"));
-        });
-    });
-}
-
-fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
-    let mut chosen = None;
-    for spec in cmd::all().iter().filter(|c| c.menu.first() == Some(&menu)) {
-        let enabled = (spec.enabled)(&app.session);
-        let mut button = egui::Button::new(crate::i18n::t(spec.label));
-        if let Some(s) = spec.shortcut {
-            button = button.shortcut_text(s.replace("Cmd", if cfg!(target_os = "macos") { "Cmd" } else { "Ctrl" }));
-        }
-        let mut response = ui.add_enabled(enabled.is_ok(), button);
-        if let Err(reason) = &enabled {
-            response = response.on_disabled_hover_text(reason.as_str());
-        }
-        if spec.id == "build.auto" {
-            response = response.on_hover_text(if app.session.settings.auto_compile { tl!("On") } else { tl!("Off") });
-        }
-        if response.clicked() {
-            chosen = Some(spec.id);
-        }
-    }
-    for c in UI_COMMANDS.iter().filter(|c| c.menu == menu) {
-        if ui.button(crate::i18n::t(c.label)).clicked() {
-            chosen = Some(c.id);
-        }
-    }
-    if let Some(id) = chosen {
-        ui.close();
-        ui_cmd::run(app, id);
-    }
-}
-
-pub(crate) fn rail(app: &mut App, ui: &mut egui::Ui) {
-    let width = app.tokens.rail_width;
-    egui::Panel::left("rail").exact_size(width).resizable(false).show(ui, |ui| {
-        ui.vertical_centered(|ui| {
-            for (side, label, hint) in [(Side::Files, "F", tl!("Project Files")), (Side::Outline, "O", tl!("Outline"))] {
-                let active = app.view.side == Some(side);
-                // Painted icons come with the icon set (docs/plan.md, phase 1); a letter stands in.
-                let response = ui.add_sized([width - 8.0, width - 8.0], egui::Button::selectable(active, label)).on_hover_text(hint);
-                if response.clicked() {
-                    app.view.side = if active { None } else { Some(side) };
-                }
-            }
-        });
-    });
-}
 
 pub(crate) fn side_panel(app: &mut App, ui: &mut egui::Ui) {
     egui::Panel::left("side").resizable(true).default_size(220.0).min_size(160.0).show(ui, |ui| match app.view.side {
@@ -126,8 +59,20 @@ fn files(app: &mut App, ui: &mut egui::Ui) {
             });
         }
     });
-    if let Some((id, path)) = action {
-        app.run(id, json!({"path": path.as_str()}));
+    match action {
+        Some(("file.delete", path)) => {
+            app.view.dialog = Some(crate::dialogs::Dialog::Confirm(crate::dialogs::Confirm {
+                title: tl!("Delete {file}?").replace("{file}", path.file_name()),
+                message: tl!("The file is removed from the project. This cannot be undone.").to_owned(),
+                action: tl!("Delete"),
+                command: "file.delete",
+                params: json!({"path": path.as_str()}),
+            }));
+        }
+        Some((id, path)) => {
+            app.run(id, json!({"path": path.as_str()}));
+        }
+        None => {}
     }
 }
 
@@ -237,34 +182,5 @@ pub(crate) fn logs(app: &mut App, ui: &mut egui::Ui) {
     if let Some((path, line)) = goto {
         app.run("file.open", json!({"path": path.as_str()}));
         app.view.goto = Some((path, line));
-    }
-}
-
-pub(crate) fn prompt(app: &mut App, ctx: &egui::Context) {
-    let Some(prompt) = &mut app.view.prompt else { return };
-    let mut submit = false;
-    let mut cancel = false;
-    egui::Modal::new(egui::Id::unique("prompt")).show(ctx, |ui| {
-        ui.heading(prompt.title);
-        let edit = ui.add(egui::TextEdit::singleline(&mut prompt.value).hint_text(prompt.label));
-        if prompt.focus {
-            edit.request_focus();
-            prompt.focus = false;
-        }
-        if edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            submit = true;
-        }
-        ui.horizontal(|ui| {
-            submit |= ui.button(tl!("OK")).clicked();
-            cancel |= ui.button(tl!("Cancel")).clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape));
-        });
-    });
-    if submit {
-        if let Some(p) = app.view.prompt.take() {
-            let params = (p.params)(p.value.trim());
-            app.run(p.command, params);
-        }
-    } else if cancel {
-        app.view.prompt = None;
     }
 }
