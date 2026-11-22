@@ -4,4 +4,5 @@ mod contrast;
 mod frame;
 mod insert;
 mod recent;
+mod shortcuts;
 mod unsaved;

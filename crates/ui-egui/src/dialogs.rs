@@ -4,7 +4,6 @@
 
 use egui::{Align, Layout, RichText};
 use serde_json::Value;
-use texcraft_engine::cmd;
 
 use crate::App;
 use crate::theme::Tokens;
@@ -51,22 +50,23 @@ pub(crate) enum Dialog {
 
 /// The window's open dialog, if any.
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
+    if matches!(app.view.dialog, Some(Dialog::Shortcuts)) {
+        shortcuts(app, ctx);
+        return;
+    }
     let project = app.project_name();
     let engine = app.session.backend_name();
     let Some(dialog) = app.view.dialog.as_mut() else { return };
     let t = app.tokens;
     let mut outcome = Outcome::Open;
-    let width = match dialog {
-        Dialog::Shortcuts => 520.0,
-        _ => 400.0,
-    };
+    let width = 400.0;
     let modal = egui::Modal::new(egui::Id::unique("texcraft-dialog")).show(ctx, |ui| {
         ui.set_width(width);
         match dialog {
             Dialog::Prompt(p) => outcome = prompt(ui, &t, p),
             Dialog::Confirm(c) => outcome = confirm(ui, &t, c),
             Dialog::Unsaved(_) => outcome = unsaved(ui, &t, &project),
-            Dialog::Shortcuts => outcome = shortcuts(ui, &t),
+            Dialog::Shortcuts => {}
             Dialog::About => outcome = about(ui, &t, &engine),
         }
     });
@@ -170,44 +170,24 @@ fn confirm(ui: &mut egui::Ui, t: &Tokens, c: &Confirm) -> Outcome {
     buttons(ui, t, c.action, true, true)
 }
 
-fn shortcuts(ui: &mut egui::Ui, t: &Tokens) -> Outcome {
-    title(ui, t, tl!("Keyboard Shortcuts"));
-    let mut rows: Vec<(&str, String)> = cmd::all().iter().filter_map(|c| c.shortcut.map(|s| (c.label, platform_keys(s)))).collect();
-    rows.extend([(tl!("Find in file"), platform_keys("Cmd+F")), (tl!("Undo"), platform_keys("Cmd+Z")), (tl!("Redo"), platform_keys("Cmd+Shift+Z"))]);
-    egui::Grid::new("shortcuts").num_columns(2).spacing(egui::vec2(t.unit * 8.0, t.unit * 2.0)).show(ui, |ui| {
-        for (label, keys) in rows {
-            ui.label(crate::i18n::t(label));
-            ui.horizontal(|ui| {
-                for key in keys.split('+') {
-                    key_cap(ui, t, key);
-                }
-            });
-            ui.end_row();
+/// The shared Keyboard Shortcuts dialog (craft-keymap): every command, its shortcuts, editing
+/// and conflicts. Changes are kept in the preferences.
+fn shortcuts(app: &mut App, ctx: &egui::Context) {
+    let text = crate::i18n::keymap_text();
+    let outcome = craft_keymap::ui::ShortcutsDialog::new(&mut app.keys.keymap, &text).show(ctx, &mut app.keys.dialog);
+    match outcome {
+        Some(craft_keymap::ui::Outcome::Ok) => {
+            app.prefs.shortcuts = app.keys.keymap.overrides().clone();
+            app.prefs_changed = true;
+            app.view.dialog = None;
         }
-    });
-    let mut outcome = Outcome::Open;
-    ui.add_space(t.unit * 4.0);
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        if ui.add(egui::Button::new(tl!("Close")).min_size(egui::vec2(80.0, 30.0))).clicked() {
-            outcome = Outcome::Cancel;
+        Some(craft_keymap::ui::Outcome::Changed) => {
+            app.prefs.shortcuts = app.keys.keymap.overrides().clone();
+            app.prefs_changed = true;
         }
-    });
-    outcome
-}
-
-fn key_cap(ui: &mut egui::Ui, t: &Tokens, key: &str) {
-    egui::Frame::new()
-        .fill(t.frame)
-        .stroke(t.hairline())
-        .corner_radius(4)
-        .inner_margin(egui::Margin::symmetric(6, 2))
-        .show(ui, |ui| ui.label(RichText::new(key).font(t.small())));
-}
-
-/// `Cmd+S` written the way this platform's users read it.
-pub(crate) fn platform_keys(spec: &str) -> String {
-    let cmd = if cfg!(target_os = "macos") { "Cmd" } else { "Ctrl" };
-    spec.replace("Cmd", cmd)
+        Some(craft_keymap::ui::Outcome::Cancel) => app.view.dialog = None,
+        _ => {}
+    }
 }
 
 fn about(ui: &mut egui::Ui, t: &Tokens, engine: &str) -> Outcome {

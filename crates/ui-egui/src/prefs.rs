@@ -30,6 +30,9 @@ pub struct Prefs {
     pub side: String,
     /// Project folders, most recent first.
     pub recent: Vec<String>,
+    /// The user's shortcut changes, as craft-keymap stores them.
+    #[serde(with = "craft_keymap::keymap::overrides_list")]
+    pub shortcuts: craft_keymap::Overrides,
 }
 
 impl Default for Prefs {
@@ -41,6 +44,7 @@ impl Default for Prefs {
             layout: "split".to_owned(),
             side: "files".to_owned(),
             recent: Vec::new(),
+            shortcuts: craft_keymap::Overrides::default(),
         }
     }
 }

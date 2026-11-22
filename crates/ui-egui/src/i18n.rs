@@ -37,6 +37,11 @@ pub fn trn(n: usize, one: &'static str, other: &'static str) -> String {
     I18N.trn(CURRENT.get(), n as u64, one, other)
 }
 
+/// The shared Keyboard Shortcuts dialog's words, in the current language.
+pub fn keymap_text() -> craft_keymap::ui::I18nText<'static> {
+    craft_keymap::ui::I18nText { i18n: &I18N, lang: CURRENT.get() }
+}
+
 /// Follows the system language.
 pub fn use_system_language() {
     CURRENT.set(I18N.system_lang());

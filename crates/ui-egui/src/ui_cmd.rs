@@ -87,6 +87,11 @@ pub fn run(app: &mut App, id: &str) {
                 app.view.status = Some((tl!("Open a text file to insert into it.").to_owned(), true));
             }
         }
+        "file.close" => {
+            if let Some(path) = app.session.current().cloned() {
+                app.run("file.close", json!({"path": path.as_str()}));
+            }
+        }
         "help.shortcuts" => app.view.dialog = Some(Dialog::Shortcuts),
         "help.about" => app.view.dialog = Some(Dialog::About),
         "project.open" => app.guard(Next::PickProject),

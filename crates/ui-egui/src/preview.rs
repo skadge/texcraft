@@ -35,7 +35,8 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         if main.clicked() {
             app.run("build.compile", json!({}));
         }
-        let _ = main.on_hover_text(crate::dialogs::platform_keys("Cmd+Enter"));
+        let tip = app.keys.shortcut_text("build.compile").map_or_else(|| label.to_owned(), |k| format!("{label} ({k})"));
+        let _ = main.on_hover_text(tip);
         egui::Popup::menu(&menu).show(|ui| compile_menu(app, ui));
         ui.add_space(t.unit * 2.0);
         let (errors, warnings) = app.session.last_outcome().map_or((0, 0), |o| (o.errors(), o.warnings()));

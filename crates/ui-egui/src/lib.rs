@@ -15,6 +15,7 @@ mod dialogs;
 mod editor;
 pub mod fonts;
 pub mod icons;
+mod keys;
 mod pdf_view;
 pub mod prefs;
 pub use picks::{Pick, PickKind, PickRequest};
@@ -77,6 +78,7 @@ pub struct App {
     applied: Option<Scheme>,
     fonts_ready: bool,
     prefs: prefs::Prefs,
+    keys: keys::Keys,
     /// Picks for the shell to show.
     picks: Vec<picks::PickRequest>,
     /// Whether the shell shows native pickers; without them paths are typed.
@@ -103,6 +105,7 @@ impl App {
         session.settings.auto_compile = prefs.auto_compile;
         session.settings.auto_compile_delay_ms = prefs.auto_compile_delay_ms.clamp(200, 10_000);
         let (layout, side) = (prefs.layout(), prefs.side());
+        let keys = keys::Keys::new(prefs.shortcuts.clone());
         let mut app = Self {
             session,
             tokens: Tokens::dark(),
@@ -124,6 +127,7 @@ impl App {
             applied: None,
             fonts_ready: false,
             prefs,
+            keys,
             picks: Vec::new(),
             after_save: None,
             quit: false,
@@ -286,7 +290,9 @@ impl App {
             self.view.status = Some(message);
         }
         self.auto_compile(ctx);
-        self.shortcuts(ctx);
+        for id in self.keys.dispatch(ctx) {
+            ui_cmd::run(self, &id);
+        }
         top_bar::show(self, ui);
         status::show(self, ui);
         rail::show(self, ui);
@@ -328,18 +334,6 @@ impl App {
             self.run("build.compile", json!({}));
         } else {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(delay - (now - edited)));
-        }
-    }
-
-    fn shortcuts(&mut self, ctx: &egui::Context) {
-        use egui::{Key, KeyboardShortcut, Modifiers};
-        let save = KeyboardShortcut::new(Modifiers::COMMAND, Key::S);
-        let compile = KeyboardShortcut::new(Modifiers::COMMAND, Key::Enter);
-        if ctx.input_mut(|i| i.consume_shortcut(&compile)) {
-            self.run("build.compile", json!({}));
-        }
-        if ctx.input_mut(|i| i.consume_shortcut(&save)) {
-            ui_cmd::run(self, "project.save");
         }
     }
 }

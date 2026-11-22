@@ -16,6 +16,7 @@ texcraft-latex = { workspace = true }
 texcraft-preview = { workspace = true }
 craft-i18n = { workspace = true }
 craft-ui = { workspace = true }
+craft-keymap = { workspace = true }
 egui_extras = { workspace = true, features = ["svg"] }
 egui = { workspace = true }
 serde_json = { workspace = true }

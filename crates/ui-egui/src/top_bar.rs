@@ -38,13 +38,13 @@ fn mark(ui: &mut egui::Ui, t: &Tokens) {
 }
 
 /// One menu item with an optional icon and shortcut; disabled items say why on hover.
-pub(crate) fn item(ui: &mut egui::Ui, t: &Tokens, icon: Option<&str>, label: &str, shortcut: Option<&str>, enabled: Result<(), String>) -> bool {
+pub(crate) fn item(ui: &mut egui::Ui, t: &Tokens, icon: Option<&str>, label: &str, shortcut: Option<String>, enabled: Result<(), String>) -> bool {
     let mut button = match icon {
         Some(name) => egui::Button::image_and_text(icons::image(name, t.icon_size, t.text_muted), label),
         None => egui::Button::new(label),
     };
     if let Some(s) = shortcut {
-        button = button.shortcut_text(RichText::new(crate::dialogs::platform_keys(s)).color(t.text_muted));
+        button = button.shortcut_text(RichText::new(s).color(t.text_muted));
     }
     let response = ui.add_enabled(enabled.is_ok(), button.frame_when_inactive(false));
     match enabled {
@@ -63,6 +63,8 @@ fn icon_for(id: &str) -> Option<&'static str> {
         "project.open" => "folder-open",
         "project.save" => "download",
         "file.import" => "upload",
+        "file.new" => "file-code",
+        "file.close" => "x",
         "project.save_as" => "folder-plus",
         "build.save_pdf" => "file-text",
         "build.compile" => "play",
@@ -95,7 +97,7 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
         if spec.id == "build.auto" && app.session.settings.auto_compile {
             label = format!("{label} ✓");
         }
-        if item(ui, &t, icon_for(spec.id), &label, spec.shortcut, (spec.enabled)(&app.session)) {
+        if item(ui, &t, icon_for(spec.id), &label, app.keys.shortcut_text(spec.id), (spec.enabled)(&app.session)) {
             chosen = Some(spec.id);
         }
     }
@@ -109,7 +111,7 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
             ui.separator();
         }
         last_group = c.group;
-        if item(ui, &t, icon_for(c.id), crate::i18n::t(c.label), c.shortcut, Ok(())) {
+        if item(ui, &t, icon_for(c.id), crate::i18n::t(c.label), app.keys.shortcut_text(c.id), Ok(())) {
             chosen = Some(c.id);
         }
     }
@@ -147,7 +149,7 @@ fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
         ui.separator();
         for id in ["project.save", "project.save_as", "build.save_pdf", "project.open", "project.new"] {
             if let Some(spec) = cmd::find(id)
-                && item(ui, &t, icon_for(id), crate::i18n::t(spec.label), spec.shortcut, (spec.enabled)(&app.session))
+                && item(ui, &t, icon_for(id), crate::i18n::t(spec.label), app.keys.shortcut_text(id), (spec.enabled)(&app.session))
             {
                 chosen = Some(id);
             }
@@ -189,7 +191,7 @@ pub(crate) fn recent_menu(app: &mut App, ui: &mut egui::Ui) {
         for path in &app.prefs.recent {
             let p = std::path::Path::new(path);
             let name = p.file_name().map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned());
-            let parent = p.parent().map(|d| d.display().to_string()).unwrap_or_default();
+            let parent = p.parent().map(|d| home_relative(&d.display().to_string())).unwrap_or_default();
             let exists = cfg!(target_arch = "wasm32") || p.is_dir();
             let mut job = egui::text::LayoutJob::default();
             let strong = egui::TextFormat { font_id: t.body(), color: t.text, ..Default::default() };
@@ -215,5 +217,14 @@ pub(crate) fn recent_menu(app: &mut App, ui: &mut egui::Ui) {
     }
     if clear {
         ui_cmd::run(app, "project.clear_recent");
+    }
+}
+
+/// `path` with the home folder written as `~`.
+fn home_relative(path: &str) -> String {
+    match std::env::var("HOME").ok().filter(|h| !h.is_empty()) {
+        Some(home) if path == home => "~".to_owned(),
+        Some(home) if path.starts_with(&format!("{home}/")) => format!("~{}", &path[home.len()..]),
+        _ => path.to_owned(),
     }
 }
