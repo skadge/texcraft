@@ -23,3 +23,14 @@ fn compiling_without_an_engine_says_why_instead_of_showing_success() {
     assert!(harness.query_all_by_label_contains("No engine in this test.").next().is_some());
     assert!(harness.query_by_label_contains("Compiled in").is_none());
 }
+
+#[test]
+fn the_app_icon_goes_back_to_the_start_page() {
+    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app());
+    harness.run();
+    // Section titles are shown in capitals.
+    assert!(harness.query_by_label("RECENT PROJECTS").is_none(), "the start page is already shown");
+    harness.get_by_label("Start Page").click();
+    harness.run();
+    assert!(harness.query_by_label("RECENT PROJECTS").is_some(), "the start page is not shown");
+}

@@ -14,7 +14,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     egui::Panel::top("top-bar").exact_size(t.top_bar_height).frame(frame).show(ui, |ui| {
         let bar = ui.max_rect();
         ui.horizontal_centered(|ui| {
-            mark(ui, &t);
+            if mark(ui, &t) {
+                ui_cmd::run(app, "app.start");
+            }
             ui.add_space(t.unit * 2.0);
             egui::MenuBar::new().ui(ui, |ui| {
                 for menu in MENUS {
@@ -33,11 +35,20 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     });
 }
 
-/// The app mark: the app icon, small.
-fn mark(ui: &mut egui::Ui, _t: &Tokens) {
-    let (rect, response) = ui.allocate_exact_size(vec2(26.0, 26.0), Sense::hover());
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, "TeXCraft"));
-    crate::app_icon::paint(ui, rect);
+/// The app mark: the app icon, small. It is a button to the start page (the projects); returns
+/// whether it was clicked.
+fn mark(ui: &mut egui::Ui, t: &Tokens) -> bool {
+    let (rect, response) = ui.allocate_exact_size(vec2(30.0, 30.0), Sense::click());
+    let name = tl!("Start Page");
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, name));
+    if response.hovered() {
+        ui.painter().rect_filled(rect, t.corner(), t.hover);
+    }
+    crate::app_icon::paint(ui, rect.shrink(2.0));
+    widgets::focus_ring(ui, t, &response, rect, t.corner());
+    let clicked = response.clicked();
+    let _ = response.on_hover_text(tl!("TeXCraft: back to the start page")).on_hover_cursor(egui::CursorIcon::PointingHand);
+    clicked
 }
 
 /// One menu item with an optional icon and shortcut; disabled items say why on hover.
