@@ -1,0 +1,91 @@
+[workspace]
+resolver = "3"
+members = ["xtask"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.95"
+repository = "https://gitlab.com/severin-lemaignan/texcraft"
+
+[workspace.dependencies]
+# Shared Craft libraries, all at one craft-libs `main` rev (AGENTS.md rule 10).
+craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f", default-features = false, features = ["raster"] }
+craft-i18n = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
+craft-mcp-server = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
+
+# The typesetting engine and language server (CC0-1.0). Not a storytold repository: a departure from
+# rule 10 agreed with the operator, whose engine it is (AGENTS.md › This repository).
+retex = { git = "https://gitlab.com/severin-lemaignan/retex.git", rev = "93509ead36384d0cf3b4cd7ecf55ab0ccba15686" }
+retex-lsp = { git = "https://gitlab.com/severin-lemaignan/retex.git", rev = "93509ead36384d0cf3b4cd7ecf55ab0ccba15686" }
+
+# internal
+texcraft-project = { path = "crates/project" }
+texcraft-latex = { path = "crates/latex" }
+texcraft-compile = { path = "crates/compile", default-features = false }
+texcraft-preview = { path = "crates/preview" }
+texcraft-engine = { path = "crates/engine", default-features = false }
+texcraft-ui-egui = { path = "crates/ui-egui" }
+texcraft-mcp = { path = "crates/mcp" }
+
+# foundation
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+log = "0.4"
+
+# ui
+egui = "0.37"
+eframe = { version = "0.37", default-features = false }
+egui_kittest = "0.37"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+cognitive_complexity = "deny"
+too_many_arguments = "deny"
+wildcard_imports = "deny"
+dbg_macro = "warn"
+# Shipped code never panics (AGENTS.md rule 13); tests may (clippy.toml).
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# The suite's egui and winit forks, and craft-libs' vendored hayro, at the revs craft-libs pins.
+[patch.crates-io]
+hayro = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
+hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
+hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
+hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
+hayro-cmap = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
+hayro-postscript = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
+vello_common = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
+vello_cpu = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
+ecolor = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+emath = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+epaint = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+epaint_default_fonts = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui-winit = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui-wgpu = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_glow = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_kittest = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+eframe = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+winit = { git = "https://github.com/storytold/winit.git", rev = "a517b3846ee8457d84ee4975110bfda6797c44dc" }
