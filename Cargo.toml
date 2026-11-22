@@ -28,6 +28,7 @@ craft-mcp-server = { git = "https://github.com/storytold/craft-libs", rev = "f8c
 retex = "2"
 retex-lsp = "2"
 # Only LF ends a line, as for TeX; CR stays in the line.
+regex = { version = "1", default-features = false, features = ["std", "unicode", "perf"] }
 ropey = { version = "1.6", default-features = false, features = ["simd"] }
 retex-texlive = "2"
 retex-kpath = "2"
@@ -41,6 +42,7 @@ texcraft-engine = { path = "crates/engine", default-features = false }
 texcraft-ui-egui = { path = "crates/ui-egui" }
 texcraft-mcp = { path = "crates/mcp" }
 texcraft-buffer = { path = "crates/buffer" }
+texcraft-vim = { path = "crates/vim" }
 texcraft-templates = { path = "crates/templates", default-features = false }
 
 # foundation

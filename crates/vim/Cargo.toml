@@ -1,0 +1,15 @@
+[package]
+name = "texcraft-vim"
+description = "Vim key bindings for the editor: modes, motions, operators, text objects, registers, the command line"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+texcraft-buffer = { workspace = true }
+regex = { workspace = true }
