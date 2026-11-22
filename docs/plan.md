@@ -1,6 +1,6 @@
 # TeXCraft plan
 
-> **Last updated:** 2026-11-22 · **Change:** retex's agreed embedding design; retex from crates.io
+> **Last updated:** 2026-11-22 · **Change:** phase 1 progress; recent projects as a planned item of their own
 
 TeXCraft is a LaTeX editor for the desktop and the browser, written in Rust on egui and the Craft shared libraries, with [retex](https://gitlab.com/severin-lemaignan/retex) as its typesetting engine and language server. Its scope is that of the established online LaTeX editors: a project of files, a source editor, a PDF preview kept up to date while typing, a build log tied to the source, navigation between the source and the PDF, and later sharing, history and collaboration. Layout and conventions follow those editors where users expect them (clean-room standard, "Assets" rule 7). Code, wording, icons and artwork are our own.
 
@@ -36,32 +36,46 @@ Measured on the example project (`examples/article`): `texcraft-cli compile` wri
 
 Each phase ends with a usable app. Work items name the shared crate or retex change they depend on.
 
-### Phase 1: the window and the suite (next)
+### Phase 1: the window and the suite (in progress)
 
-1. **Shell from craft-libs.**
-   - `craft-window`: title bar policy and the app id `ai.storyteller.texcraft`.
-   - `craft-ui`: `panes::PaneHost` and `Rail` for the side panel and the dividers (collapse arrows on the dividers), `ComboBox`, and the account and share pieces later.
-   - `craft-menu`: the macOS menu bar.
-   - `craft-quit`: quitting with unsaved changes.
-   - `craft-dialogs`: native folder and file pickers. This replaces the typed-path prompt.
-2. **Menus.** File, Edit, Insert, View, Format, Build, Help, built from the command registry. A **Layout** menu: editor and preview, editor only, preview only, preview in a separate window (an egui viewport), and a distraction-free mode that hides the menus and the rail.
-3. **Keyboard.** `craft-keymap` for every shortcut, user overrides, the shared Keyboard Shortcuts dialog, F6 to cycle regions, and Alt/F10 to reach the menu bar.
-4. **Settings dialog**, stored through `craft-settings`:
-   - Editor tab: automatic completion, closing brackets, code check, spelling language, key bindings.
-   - Build tab: engine mode (retex default, `--compat=lualatex`, `--compat=pdflatex`), main document.
-   - Appearance tab: theme, editor colours, font size, font family, line height.
-5. **Control channel.** `craft-control` (loopback JSON lines with a token) for `engine.execute`, `engine.commands`, `ui.inspect`, `ui.screenshot`. A `ui_cmd` mirror check in xtask. `craft-web-api` gives the web build `window.texcraft`.
-6. **Accessibility.**
-   - Announce build results through a live region.
-   - Drawn icons for the rail, with names.
-   - kittest keyboard-path tests for each panel.
-7. **Translations.** Request `texcraft.tsv` in storytold/craft-i18n, pin it with a `craft-i18n.rev` file, and use plural forms (`trn`) for counts.
-8. **Release plumbing.**
-   - `packaging/` (desktop file, metainfo, icons drawn in code or by a contributor).
-   - CI workflows calling `storytold/craft-common-actions`.
-   - `craft-update`, which needs a `texcraft` entry in craft-libs' `update/src/suite.rs` (a craft-libs PR).
-   - `ATTRIBUTION.md` and `NOTICE` kept by `cargo xtask assets`.
-   - `contributors/`.
+Done items are marked **done** with the commit subject that brought them. The rest is in the order it is planned.
+
+1. **The window's look** (**done**). The design language in [docs/design.md](design.md): theme tokens, Inter and a monospace face from craft-fonts, Lucide icons, TeXCraft's own controls. The window is rebuilt on them: top bar, rail, file tree and outline, editor pane, preview pane and build log, status bar.
+2. **Projects and files.**
+   - Native pickers through `craft-dialogs` (**done**): open a project folder, save to a folder, save the PDF, add files.
+   - Asking before unsaved changes are lost, through `craft-quit` for the window (**done**).
+   - **Recent projects** (**done**): File › Open Recent and the project menu list them by folder name with their location, mark the open one, show missing folders disabled with the reason, and can be cleared. Up to twelve, kept in the preferences.
+   - Still to do:
+     - A start page when no project is open: recent projects with their first page as a thumbnail, new project, open folder, templates.
+     - Recent files of the open project in the Go to File palette (with phase 2's palette).
+     - Recent projects in the operating system's own lists (the dock menu on macOS, jump lists on Windows, recently-used on Linux).
+     - Pinning a project to the top of the list, and removing one entry.
+     - Renaming a project folder from the project menu.
+3. **Menus** (**done** for File, Insert, Format, Build, View, Help, all built from the command registry). Still to do:
+   - An Edit menu with undo, redo, find and go to line (with phase 2's editor);
+   - the PDF in a separate window (an egui viewport);
+   - a distraction-free mode that hides the menus and the rail;
+   - `craft-menu` for the macOS menu bar.
+4. **Keyboard** (**done**: `craft-keymap` for every shortcut, user overrides kept in the preferences, the shared Keyboard Shortcuts dialog). Still to do: F6 to cycle regions, and Alt or F10 to reach the menu bar.
+5. **Settings** (**done**: a Settings dialog with Appearance, Editor, Building and Keyboard tabs, kept through `craft-settings`). Options waiting for retex 2.1 are shown disabled with the reason. Editor options (completion, closing brackets, spelling language, key bindings) arrive with phase 2's editor.
+6. **Control channel** (**done** for `engine.commands`, `engine.execute`, `document.inspect`, `document.revision`, `ui.inspect`; see [docs/control-protocol.md](control-protocol.md)). Still to do:
+   - `ui.screenshot` and synthetic input;
+   - `texcraft-cli mcp --connect` to drive the open window;
+   - `craft-web-api` for the web build's `window.texcraft`.
+7. **Shell from craft-libs.**
+   - `craft-window`: the title bar policy, with the app id `ai.storyteller.texcraft`.
+   - `craft-ui`'s `panes::PaneHost` for dividers with collapse handles.
+8. **Accessibility.**
+   - Build results are announced through a live region (**done**).
+   - Every control has a role, name and state, and the kittest harness's check stays on (**done**; it found unnamed controls twice).
+   - Still to do: kittest keyboard-path tests for each panel, and a screen-reader pass.
+9. **Translations.** Request `texcraft.tsv` in storytold/craft-i18n and pin it with a `craft-i18n.rev` file. Plural forms are used for counts (**done** in the status bar).
+10. **Release plumbing.**
+    - GitLab CI running `cargo xtask ci` (**done**; the project is on gitlab.com, so not craft-common-actions).
+    - `packaging/`: desktop file, metainfo, and icons drawn in code or by a contributor.
+    - `craft-update`, which needs a `texcraft` entry in craft-libs' `update/src/suite.rs` (a craft-libs PR).
+    - `cargo xtask assets` to keep `ATTRIBUTION.md` complete.
+    - `contributors/`.
 
 ### Phase 2: the source editor
 
@@ -205,7 +219,7 @@ retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua i
 
 ### Phase 7: comfort
 
-- A start page with recent projects and templates (our own, CC0, generated in the repository).
+- Templates for new projects (our own, CC0, generated in the repository), offered on the start page (phase 1).
 - Word count (`craft-latex`'s reader).
 - Vim and Emacs key bindings.
 
