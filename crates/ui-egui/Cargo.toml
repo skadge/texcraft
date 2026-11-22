@@ -11,6 +11,7 @@ publish = false
 workspace = true
 
 [dependencies]
+base64 = "0.22"
 texcraft-engine = { workspace = true, default-features = false }
 texcraft-latex = { workspace = true }
 texcraft-preview = { workspace = true }

@@ -43,3 +43,17 @@ fn an_edit_replaces_exactly_its_range_and_refuses_split_characters() {
     let text = s.execute("file.read", &json!({"path": "main.tex"})).unwrap();
     assert_eq!(text["text"], "é \\textbf{and} more");
 }
+
+#[test]
+fn a_file_given_by_its_contents_is_added_without_a_disk() {
+    let mut s = session();
+    // "fig" in base64, then a PNG's first bytes: one text file and one binary file.
+    s.execute("file.import", &json!({"path": "notes.txt", "data": "Zmln"})).unwrap();
+    s.execute("file.import", &json!({"path": "figure.png", "data": "iVBORw0KGgo="})).unwrap();
+    let text = s.execute("file.read", &json!({"path": "notes.txt"})).unwrap();
+    assert_eq!(text["text"], "fig", "{text}");
+    let listed = s.execute("project.inspect", &json!({})).unwrap().to_string();
+    assert!(listed.contains("figure.png"), "the binary file is not in the project: {listed}");
+    assert!(s.execute("file.import", &json!({"path": "bad.txt", "data": "not base64!"})).is_err(), "bad base64 was taken");
+    assert!(s.execute("file.import", &json!({"data": "Zmln"})).is_err(), "contents without a path were taken");
+}

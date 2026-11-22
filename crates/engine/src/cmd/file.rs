@@ -105,7 +105,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             menu: &["File"],
             shortcut: None,
             params: import_schema,
-            enabled: on_disk,
+            enabled: always,
             run: import,
             changes: true,
         },
@@ -236,16 +236,28 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
 fn import_schema() -> Value {
     json!({"type": "object", "properties": {
         "source": {"type": "string", "description": "A file on disk to copy into the project."},
+        "data": {"type": "string", "description": "Or the file's contents, in base64 (the browser, a dropped file); `path` is then required."},
         "path": {"type": "string", "description": "Its path in the project (default: its file name)."}
-    }, "required": ["source"], "additionalProperties": false})
+    }, "additionalProperties": false})
 }
 
 fn on_disk(_: &Session) -> Result<()> {
     if cfg!(target_arch = "wasm32") { Err("Adding files from disk is not available in the browser yet.".to_owned()) } else { Ok(()) }
 }
 
-/// Copies a file from disk into the project, replacing a file of the same path.
+/// Copies a file from disk, or contents given in base64, into the project, replacing a file of
+/// the same path.
 fn import(s: &mut Session, p: &Value) -> Result<Value> {
+    if let Some(data) = p.get("data") {
+        use base64::Engine as _;
+        let data = data.as_str().ok_or("`data` must be a base64 string")?;
+        let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| format!("`data` is not base64: {e}"))?;
+        if bytes.len() > texcraft_project::MAX_FILE_BYTES {
+            return Err("The file is larger than a project file may be.".to_owned());
+        }
+        let path = ProjectPath::new(string(p, "path")?).map_err(|e| e.to_string())?;
+        return add_contents(s, path, Contents::from_bytes(bytes));
+    }
     on_disk(s)?;
     let source = std::path::PathBuf::from(string(p, "source")?);
     let source = match &s.roots {
@@ -262,7 +274,10 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(format!("{} is larger than a project file may be", source.display()));
     }
     let bytes = std::fs::read(&source).map_err(|e| format!("{}: {e}", source.display()))?;
-    let contents = Contents::from_bytes(bytes);
+    add_contents(s, path, Contents::from_bytes(bytes))
+}
+
+fn add_contents(s: &mut Session, path: ProjectPath, contents: Contents) -> Result<Value> {
     if s.project.get(&path).is_some() {
         s.project.set(&path, contents).map_err(|e| e.to_string())?;
     } else {

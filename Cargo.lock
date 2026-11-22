@@ -4864,6 +4864,7 @@ dependencies = [
 name = "texcraft-engine"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "log",
  "regex",
  "retex-lsp",
@@ -4929,6 +4930,7 @@ dependencies = [
 name = "texcraft-ui-egui"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "craft-fonts-build",
  "craft-i18n",
  "craft-keymap",
@@ -4965,6 +4967,7 @@ dependencies = [
  "eframe",
  "egui",
  "log",
+ "rfd",
  "texcraft-engine",
  "texcraft-ui-egui",
  "wasm-bindgen",
