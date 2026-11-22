@@ -35,6 +35,8 @@ pub(crate) struct Editor {
     pub focus: bool,
     /// Vim's last message (an error when true) and when it came, for the Vim line.
     vim_message: Option<(String, bool, f64)>,
+    /// Which files are shown formatted, and that view's state.
+    pub formatted: crate::formatted::Formatted,
 }
 
 fn session_text(project: &texcraft_engine::project::Project, path: Option<&ProjectPath>) -> Option<String> {
@@ -141,10 +143,13 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         app.editor.sync(current.as_ref(), app.session.revision(), app.session.project());
         let is_text = current.as_ref().is_some_and(|p| matches!(app.session.project().get(p), Some(Contents::Text(_))));
         let as_image = current.as_ref().is_some_and(|p| crate::figure_view::is_svg(p) && !app.figure.as_text.contains(p));
+        let formatted = current.as_ref().is_some_and(|p| app.editor.formatted.shows(p));
         if is_text && !as_image {
             toolbar(app, ui);
             widgets::hairline(ui, &t);
-            crate::find_bar::show(app, ui);
+            if !formatted {
+                crate::find_bar::show(app, ui);
+            }
         }
         match current {
             None => empty(ui, &t, "file-text", tl!("No file is open"), tl!("Choose a file in the project files to edit it.")),
@@ -161,7 +166,11 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 if crate::figure_view::is_svg(&path) {
                     crate::figure_view::svg_bar(app, ui, &path);
                 }
-                source(app, ui, &path)
+                if formatted {
+                    crate::formatted::show(app, ui, &path);
+                } else {
+                    source(app, ui, &path);
+                }
             }
         }
     });
@@ -273,6 +282,10 @@ pub(crate) fn edit(app: &mut App, id: &str) -> bool {
     let shown_text = app.session.current().is_some_and(|p| matches!(app.session.project().get(p), Some(Contents::Text(_))));
     if !shown_text {
         return false;
+    }
+    // The formatted view is read-only for now: an edit shows the source it changes.
+    if let Some(path) = app.session.current().cloned() {
+        app.editor.formatted.set(&path, false);
     }
     let source = &mut app.editor.source;
     match id {
@@ -444,8 +457,24 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         ui.painter().rect_filled(ui.max_rect(), 0.0, t.surface);
         ui.spacing_mut().item_spacing.x = 2.0;
         ui.add_space(t.unit * 2.0);
-        let formatted = tl!("The formatted view comes with docs/plan.md phase 3.");
-        widgets::segmented(ui, &t, "mode", &[(tl!("Source"), None), (tl!("Formatted"), Some(formatted))], 0);
+        let path = app.session.current().cloned();
+        let can = path.as_ref().is_some_and(crate::formatted::available);
+        let on = path.as_ref().is_some_and(|p| app.editor.formatted.shows(p));
+        let only_tex = tl!("Only LaTeX files (.tex) have a formatted view.");
+        let options = [(tl!("Source"), None), (tl!("Formatted"), if can { None } else { Some(only_tex) })];
+        if let (Some(choice), Some(path)) = (widgets::segmented(ui, &t, "mode", &options, usize::from(on)), path.as_ref()) {
+            app.editor.formatted.set(path, choice == 1);
+            if choice == 0 {
+                app.editor.focus = true;
+            }
+        }
+        if on {
+            divider(ui, &t);
+            ui.add_space(t.unit * 2.0);
+            let hint = tl!("Read-only for now: double-click any part to edit its source.");
+            ui.add(egui::Label::new(egui::RichText::new(hint).font(t.small()).color(t.text_muted)).truncate());
+            return;
+        }
         // Room for Find and the More menu on the right.
         let mut room = ui.max_rect().right() - ui.cursor().left() - 80.0;
         let mut hidden: Vec<usize> = Vec::new();

@@ -66,6 +66,14 @@ pub struct Tokens {
     pub title_size: f32,
     pub code_size: f32,
     pub code_line_height: f32,
+    /// The formatted view's text (docs/design.md, Type).
+    pub reading_size: f32,
+    /// Its line height, as a multiple of the size.
+    pub reading_leading: f32,
+    /// Its measure, in average characters.
+    pub reading_measure: f32,
+    /// Its headings, from `\part` (0) to `\subparagraph` (6).
+    pub heading_sizes: [f32; 7],
     // Shape
     pub radius: u8,
     pub radius_large: u8,
@@ -171,6 +179,10 @@ impl Tokens {
             title_size: 16.0,
             code_size: 13.5,
             code_line_height: 21.0,
+            reading_size: 16.0,
+            reading_leading: 1.6,
+            reading_measure: 70.0,
+            heading_sizes: [30.0, 26.0, 22.0, 18.5, 16.5, 16.0, 16.0],
             radius: 6,
             radius_large: 8,
             top_bar_height: 44.0,
@@ -231,6 +243,16 @@ impl Tokens {
 
     pub fn title(&self) -> FontId {
         FontId::new(self.title_size, crate::fonts::semibold())
+    }
+
+    /// The formatted view's text face at `size`, in its weight and slant.
+    pub fn reading(&self, size: f32, bold: bool, italic: bool) -> FontId {
+        let family = match (bold, italic) {
+            (true, _) => crate::fonts::reading_semibold(),
+            (false, true) => crate::fonts::reading_italic(),
+            (false, false) => crate::fonts::reading(),
+        };
+        FontId::new(size, family)
     }
 
     pub fn corner(&self) -> CornerRadius {

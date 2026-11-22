@@ -1,8 +1,7 @@
 //! LaTeX source analysis the editor needs on every keystroke: highlighting tokens ([`lex`]), the
-//! outline of sections ([`outline`]) and the tolerant syntax tree of the formatted view ([`tree`]) and what that view shows of it
-//! ([`view`]).
-//! All are pure functions of the text, with no I/O, so they run the same natively and in the
-//! browser.
+//! outline of sections ([`outline`]), the tolerant syntax tree of the formatted view ([`tree`])
+//! and what that view shows of it ([`view`]). All are pure functions of the text, with no I/O, so
+//! they run the same natively and in the browser.
 //!
 //! The lexer follows TeX's reading rules for the default category codes (The TeXbook, chapters 7
 //! and 8): a control word is `\` followed by letters, a control symbol is `\` followed by one other

@@ -1,5 +1,6 @@
 //! Interface faces (docs/design.md, Type): Inter for the interface, in regular, semibold and
-//! italic, and a monospace face for source text, embedded from craft-fonts by `build.rs`. They
+//! italic, a monospace face for source text, and Source Serif 4 for reading in the formatted view,
+//! embedded from craft-fonts by `build.rs`. They
 //! head craft-ui's font stack, which adds faces for other scripts and emoji behind them, and on the
 //! desktop the installed fonts last. Without the craft-fonts checkout, egui's bundled faces stand in.
 
@@ -18,12 +19,27 @@ pub fn italic() -> FontFamily {
     FontFamily::Name("italic".into())
 }
 
+/// The formatted view's text face.
+pub fn reading() -> FontFamily {
+    FontFamily::Name("reading".into())
+}
+
+/// The formatted view's italic face.
+pub fn reading_italic() -> FontFamily {
+    FontFamily::Name("reading-italic".into())
+}
+
+/// The formatted view's semibold face, for headings and bold text.
+pub fn reading_semibold() -> FontFamily {
+    FontFamily::Name("reading-semibold".into())
+}
+
 pub fn install(ctx: &egui::Context) {
     let mut fonts = UiFonts::new(&I18nScripts);
-    let all = [FontFamily::Proportional, semibold(), italic(), FontFamily::Monospace];
+    let all = [FontFamily::Proportional, semibold(), italic(), FontFamily::Monospace, reading(), reading_italic(), reading_semibold()];
     if UI_FACES.is_empty() {
         // egui's bundled faces stand in for craft-fonts' (docs/design.md, Type).
-        let text = [FontFamily::Proportional, semibold(), italic()];
+        let text = [FontFamily::Proportional, semibold(), italic(), reading(), reading_italic(), reading_semibold()];
         fonts = fonts.egui_face("Ubuntu-Light", &text).egui_face("Hack", &[FontFamily::Monospace]);
     }
     for (name, bytes) in UI_FACES {
@@ -31,6 +47,9 @@ pub fn install(ctx: &egui::Context) {
             "Inter-SemiBold" => vec![semibold()],
             "Inter-Italic" => vec![italic()],
             "Mono" => vec![FontFamily::Monospace],
+            "Serif" => vec![reading()],
+            "Serif-Italic" => vec![reading_italic()],
+            "Serif-Semibold" => vec![reading_semibold()],
             _ => vec![FontFamily::Proportional],
         };
         fonts = fonts.app_face(name, FontData::from_static(bytes), &families);

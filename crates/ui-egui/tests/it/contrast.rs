@@ -16,7 +16,8 @@ fn text_and_controls_keep_their_contrast_in_both_themes() {
                 assert!(contrast(fg, surface) >= 3.0, "{:?}: {name} on {surface:?} is {:.2}:1", t.scheme, contrast(fg, surface));
             }
         }
-        let code = [t.surface, blend(t.surface, t.current_line)];
+        // Formulas in the formatted view sit on a pressed surface.
+        let code = [t.surface, blend(t.surface, t.current_line), blend(t.surface, t.pressed)];
         for surface in code {
             for (name, fg) in [
                 ("command", t.syntax_command),

@@ -5,8 +5,8 @@
 //! makes that an error.
 //!
 //! Also embeds the interface faces from storytold/craft-fonts' opt-in Latin catalog
-//! (`fonts/latin-manifest.txt`) when `CRAFT_FONTS_DIR` names a checkout: Inter for the interface and
-//! Liberation Mono for source text, each checked against the manifest's SHA-256. Without the
+//! (`fonts/latin-manifest.txt`) when `CRAFT_FONTS_DIR` names a checkout: Inter for the interface,
+//! Liberation Mono for source text and Source Serif 4 for the formatted view's text, each checked against the manifest's SHA-256. Without the
 //! checkout `UI_FACES` is empty and egui's bundled faces are used (docs/design.md, Type).
 
 use std::fmt::Write as _;
@@ -77,6 +77,9 @@ const FACES: &[(&str, &str, &str)] = &[
     ("Inter-SemiBold", "Inter", "SemiBold"),
     ("Inter-Italic", "Inter", "Italic"),
     ("Mono", "Liberation Mono", "Regular"),
+    ("Serif", "Source Serif 4", "Regular"),
+    ("Serif-Italic", "Source Serif 4", "Italic"),
+    ("Serif-Semibold", "Source Serif 4", "Semibold"),
 ];
 
 fn ui_faces() {

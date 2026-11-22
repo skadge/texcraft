@@ -57,8 +57,9 @@ Syntax colours are tuned per theme and reach 4.5:1 on `surface`.
 | Small labels, counts, status bar | Inter | 12 / 16 px | Regular |
 | Dialog titles | Inter | 16 / 22 px | SemiBold |
 | Source | Monospace | 13.5 / 21 px | Regular |
+| Formatted view text | Source Serif 4 | 16 / 26 px, about 70 characters to the line | Regular, Italic; Semibold for headings (30 to 16 px by level) and bold |
 
-Faces come from storytold/craft-fonts through the optional `CRAFT_FONTS_DIR`: Inter from its Latin catalog, and Liberation Mono for code until craft-fonts offers a face drawn for code (to be proposed there). Without the checkout, egui's bundled faces are used and every size stays the same.
+Faces come from storytold/craft-fonts through the optional `CRAFT_FONTS_DIR`: Inter and Source Serif 4 from its Latin catalog, and Liberation Mono for code until craft-fonts offers a face drawn for code (to be proposed there). Without the checkout, egui's bundled faces are used and every size stays the same.
 
 ## Space and shape
 

@@ -163,6 +163,8 @@ A second way to show the same file: sections as headings, emphasis as bold and i
 
 A toggle at the top of the editor switches between **Source** and **Formatted**, per file, remembered with the project.
 
+**Status:** the toggle works for `.tex` files, per file for the session (not yet remembered with the project). The formatted view is read-only: it draws the view model (item 2) at a reading measure in Source Serif 4, with formulas as their source in a soft pill, chips for labels, references, citations and `\input`, footnote markers, links, figure cards with their images, the preamble folded into a bar, and source blocks for the rest. Double-clicking a part, or Enter on it, shows the source with the caret at that part's start. It re-parses the whole file when the session's revision changes.
+
 1. **A tolerant LaTeX structure parser** (`texcraft-latex`).
    - It produces a concrete syntax tree with byte spans: commands with their optional and required arguments, groups, environments, math (inline and display), comments, verbatim, paragraphs.
    - It never fails. Unbalanced or half-typed input yields error nodes that cover the text exactly.

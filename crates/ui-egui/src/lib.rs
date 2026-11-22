@@ -18,6 +18,7 @@ mod editor;
 mod figure_view;
 mod find_bar;
 pub mod fonts;
+mod formatted;
 mod gallery;
 pub mod icons;
 mod keys;
