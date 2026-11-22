@@ -63,3 +63,20 @@ fn a_desktop_window_has_its_controls_in_the_top_bar_unless_the_system_draws_them
     harness.run();
     assert!(harness.query_by_label("Minimize").is_none(), "window controls next to the system's title bar");
 }
+
+#[test]
+fn the_help_menu_opens_the_retex_manual_in_the_browser() {
+    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app());
+    harness.run();
+    harness.get_by_label("Help").click();
+    harness.run();
+    harness.get_by_label("retex User Manual").click();
+    harness.step();
+    let opened = harness
+        .output()
+        .platform_output
+        .commands
+        .iter()
+        .any(|c| matches!(c, egui::OutputCommand::OpenUrl(open) if open.url == texcraft_ui_egui::ui_cmd::RETEX_MANUAL));
+    assert!(opened, "the manual's address was not opened");
+}

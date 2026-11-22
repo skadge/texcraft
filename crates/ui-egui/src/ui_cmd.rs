@@ -65,8 +65,12 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("app.start", "Start Page", "View", "settings", None),
     ui("app.settings", "Settings…", "View", "settings", Some("Cmd+,")),
     ui("help.shortcuts", "Keyboard Shortcuts", "Help", "help", None),
+    ui("help.manual", "retex User Manual", "Help", "help", None),
     ui("help.about", "About TeXCraft", "Help", "about", None),
 ];
+
+/// retex's user manual: the engine's options, its packages and fonts, and its messages.
+pub const RETEX_MANUAL: &str = "https://severin-lemaignan.gitlab.io/retex/retex-manual.pdf";
 
 /// The menus of the menu bar, in order.
 pub const MENUS: &[&str] = &["File", "Edit", "Insert", "Format", "Build", "View", "Help"];
@@ -114,6 +118,10 @@ pub fn run(app: &mut App, id: &str) {
             }
         }
         "help.shortcuts" => app.view.dialog = Some(Dialog::Shortcuts),
+        "help.manual" => {
+            app.ctx.open_url(egui::OpenUrl::new_tab(RETEX_MANUAL));
+            app.view.status = Some((tl!("Opening the retex user manual (PDF) in your browser.").to_owned(), false));
+        }
         "help.about" => app.view.dialog = Some(Dialog::About),
         "app.settings" => app.view.dialog = Some(Dialog::Settings),
         "app.start" => app.start = true,

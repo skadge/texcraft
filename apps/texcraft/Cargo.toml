@@ -14,7 +14,7 @@ workspace = true
 texcraft-engine = { workspace = true, features = ["retex", "templates-download"] }
 texcraft-compile = { workspace = true, features = ["retex"] }
 texcraft-ui-egui = { workspace = true }
-eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
+eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11", "links"] }
 log = { workspace = true }
 craft-settings = { workspace = true }
 craft-dialogs = { workspace = true }
