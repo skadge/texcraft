@@ -33,3 +33,13 @@ fn an_edit_makes_the_last_build_stale() {
     s.execute("file.write", &json!({"path": "main.tex", "text": "x"})).unwrap();
     assert!(s.is_stale());
 }
+
+#[test]
+fn an_edit_replaces_exactly_its_range_and_refuses_split_characters() {
+    let mut s = session();
+    s.execute("file.write", &json!({"path": "main.tex", "text": "é and more"})).unwrap();
+    assert!(s.execute("file.edit", &json!({"path": "main.tex", "start": 1, "end": 2, "text": "x"})).is_err());
+    s.execute("file.edit", &json!({"path": "main.tex", "start": 3, "end": 6, "text": "\\textbf{and}"})).unwrap();
+    let text = s.execute("file.read", &json!({"path": "main.tex"})).unwrap();
+    assert_eq!(text["text"], "é \\textbf{and} more");
+}
