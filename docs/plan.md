@@ -218,7 +218,7 @@ A toggle at the top of the editor switches between **Source** and **Formatted**,
    - Stop on the first error, or go on.
    - Delete build files.
    - Stop the build (needs R2).
-2. **Progress.** Pass and page counts while building (needs R3). A draft PDF after the first pass of a first build, as retex's own web editor does.
+2. **Progress** (**done**: page of pages, the pass and why, the time; the first build says why it is slower). Pass and page counts while building (needs R3). A draft PDF after the first pass of a first build, as retex's own web editor does.
 3. **Build log.**
    - Groups with counts, entries that open the file at the line and column, help and notes.
    - The raw log with search, and the list of output files with download.
@@ -227,6 +227,7 @@ A toggle at the top of the editor switches between **Source** and **Formatted**,
    - Double-click in the PDF moves the cursor to the source line.
    - A divider button and `Ctrl+Click` in the source move the PDF to the place and mark it.
    - This needs the SyncTeX data from builds (R1) and a reader (R7).
+   - **Status:** **done** with retex 2.1.0's `retex-synctex`: double-click or Ctrl+click in the PDF opens the source line; View › Show in PDF (Cmd+Alt+J, and Ctrl+click in the editor where nothing is defined) marks the caret's line in the PDF for a moment; agents have `pdf.source` and `pdf.locate`. A click in the last paragraph of an `\input` file goes to the including file (docs/retex-changes.md).
 5. **Preview.**
    - Page rendering on a background thread with a texture cache, and the scroll position kept across rebuilds.
    - Page navigation, zoom presets (fit width, fit page, 50–400 %), and a presentation mode.

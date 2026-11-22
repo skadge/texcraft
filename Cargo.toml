@@ -32,6 +32,7 @@ regex = { version = "1", default-features = false, features = ["std", "unicode",
 ropey = { version = "1.6", default-features = false, features = ["simd"] }
 retex-texlive = "2.1"
 retex-kpath = "2.1"
+retex-synctex = "2.1"
 # Figures for the editor pane: retex's own decoders (already built for retex), and the JPEG
 # decoder the PDF renderer uses.
 retex-image = { version = "2.1", features = ["jxl"] }

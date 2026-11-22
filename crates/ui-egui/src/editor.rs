@@ -691,7 +691,8 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
                 let _ = app.run("file.open", json!({"path": file.as_str()}));
                 app.view.goto = Some((file, l as u32 + 1));
             }
-            None => app.view.status = Some((tl!("No definition found here.").to_owned(), false)),
+            // Nothing to define here: Ctrl+click shows the line's place in the PDF.
+            None => crate::preview::show_in_pdf(app, path, line as u32 + 1),
         }
     }
     if let Some(line) = out.fixes_for {

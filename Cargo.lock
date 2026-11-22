@@ -4833,6 +4833,7 @@ dependencies = [
  "log",
  "regex",
  "retex-lsp",
+ "retex-synctex",
  "serde",
  "serde_json",
  "texcraft-compile",

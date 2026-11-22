@@ -9,7 +9,9 @@ pub mod cmd;
 pub mod file_access;
 pub mod find;
 mod language;
+mod sync;
 pub use language::{Completion, Fix, Lint, TextEdit};
+pub use sync::PageRect;
 pub mod guard;
 
 use std::path::PathBuf;
@@ -71,6 +73,8 @@ pub struct Session {
     roots: Option<file_access::AutomationRoots>,
     /// The language server, over the project's text files.
     language: language::Language,
+    /// The SyncTeX data of the last build that wrote some.
+    sync: Option<sync::Sync>,
     /// Where templates are kept; none without a data folder.
     templates: Option<texcraft_templates::Store>,
 }
@@ -103,6 +107,7 @@ impl Session {
             settings: Settings::default(),
             roots: None,
             language: language::Language::new(None),
+            sync: None,
             templates: None,
         }
     }
@@ -235,6 +240,7 @@ impl Session {
         self.open = self.current.iter().cloned().collect();
         self.project = project;
         self.language = language::Language::new(dir.as_deref());
+        self.sync = None;
         self.dir = dir;
         self.dirty = false;
         self.touch();
@@ -305,6 +311,17 @@ impl Session {
         self.language().definition(path, line, column)
     }
 
+    /// The project file and line (from 1) that made a point of the PDF (`page` from 0, `x` and
+    /// `y` in PDF points from the page's top left corner).
+    pub fn source_at(&self, page: u32, x: f32, y: f32) -> Option<(ProjectPath, u32)> {
+        self.sync.as_ref()?.source(&self.project, page, x, y)
+    }
+
+    /// Where line `line` (from 1) of `path` is in the PDF: rectangles of its first page that has it.
+    pub fn locate(&self, path: &ProjectPath, line: u32) -> Vec<PageRect> {
+        self.sync.as_ref().map(|s| s.locate(&self.project, path, line)).unwrap_or_default()
+    }
+
     /// The fixes the language server suggests for the problems on a line (from 0).
     pub fn fixes(&mut self, path: &ProjectPath, line: usize) -> Vec<Fix> {
         self.language().fixes(path, line)
@@ -321,6 +338,10 @@ impl Session {
         // citations from the build.
         let symbols = outcome.symbols.clone();
         self.language().build_finished(main.as_ref(), symbols);
+        // A build that wrote a PDF brings its SyncTeX data; a failed one keeps the last PDF's.
+        if outcome.pdf.is_some() {
+            self.sync = outcome.synctex.as_deref().and_then(|d| sync::Sync::parse(d));
+        }
         if let Some(pdf) = &outcome.pdf {
             self.pdf = Some(pdf.clone());
         }

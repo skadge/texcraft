@@ -55,6 +55,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.side.outline", "Outline", "View", "side", None),
     ui("view.side.hide", "Hide Side Panel", "View", "side", None),
     ui("view.logs", "Build Log", "View", "pdf", None),
+    ui("view.show_in_pdf", "Show in PDF", "View", "pdf", Some("Cmd+Alt+J")),
     ui("view.zoom_in", "Zoom In", "View", "pdf", Some("Cmd+=")),
     ui("view.zoom_out", "Zoom Out", "View", "pdf", Some("Cmd+-")),
     ui("view.fit_width", "Fit Width", "View", "pdf", None),
@@ -90,6 +91,10 @@ pub fn run(app: &mut App, id: &str) {
             app.prefs.recent.clear();
             app.prefs_changed = true;
         }
+        "view.show_in_pdf" => match (app.session.current().cloned(), app.view.cursor) {
+            (Some(path), Some((line, _))) => crate::preview::show_in_pdf(app, &path, line),
+            _ => app.view.status = Some((tl!("Open a source file to show its place in the PDF.").to_owned(), false)),
+        },
         "view.zoom_in" => app.pdf.zoom_by(1.25),
         "view.zoom_out" => app.pdf.zoom_by(0.8),
         "view.fit_width" => app.pdf.fit_width(),

@@ -14,6 +14,7 @@ use crate::{Result, Session};
 mod build;
 mod file;
 mod language;
+mod pdf;
 mod project;
 mod template;
 
@@ -70,6 +71,7 @@ pub fn all() -> &'static [CommandSpec] {
         v.extend(build::specs());
         v.extend(template::specs());
         v.extend(language::specs());
+        v.extend(pdf::specs());
         v
     })
 }

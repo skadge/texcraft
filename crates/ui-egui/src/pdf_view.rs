@@ -49,6 +49,13 @@ pub(crate) struct PdfView {
     pub page: usize,
     /// Scroll so that this page is at the top, next frame.
     scroll_to: Option<usize>,
+    /// A page double-clicked or Ctrl+clicked: its index and the point, in PDF points from its
+    /// top left corner. The preview pane takes it to the source.
+    pub clicked: Option<(usize, f32, f32)>,
+    /// Places marked on the pages (the caret's line, shown in the PDF) and when, to fade them.
+    mark: Option<(Vec<texcraft_engine::PageRect>, f64)>,
+    /// Scroll to this page and height (PDF points) next frame.
+    reveal: Option<(usize, f32)>,
 }
 
 impl Default for PdfView {
@@ -63,6 +70,9 @@ impl Default for PdfView {
             textures: HashMap::new(),
             page: 0,
             scroll_to: None,
+            clicked: None,
+            mark: None,
+            reveal: None,
         }
     }
 }
@@ -129,6 +139,14 @@ impl PdfView {
     pub fn go_to_page(&mut self, page: usize) {
         if !self.sizes.is_empty() {
             self.scroll_to = Some(page.min(self.sizes.len() - 1));
+        }
+    }
+
+    /// Marks `rects` (a source line's place) for a moment and scrolls to the first.
+    pub fn show_place(&mut self, rects: Vec<texcraft_engine::PageRect>, now: f64) {
+        if let Some(first) = rects.first() {
+            self.reveal = Some((first.page as usize, first.y));
+            self.mark = Some((rects, now));
         }
     }
 
@@ -205,6 +223,23 @@ impl PdfView {
         {
             area = area.vertical_scroll_offset(top - PAGE_GAP);
         }
+        // A place shown from the source: a third of the way down the pane.
+        if let Some((page, y)) = self.reveal.take()
+            && let Some(top) = tops.get(page)
+        {
+            area = area.vertical_scroll_offset((top + y * zoom - rect.height() / 3.0).max(0.0));
+        }
+        let now = ui.input(|i| i.time);
+        const MARK_SECONDS: f64 = 1.8;
+        if self.mark.as_ref().is_some_and(|(_, since)| now - since > MARK_SECONDS) {
+            self.mark = None;
+        }
+        let mark = self.mark.clone();
+        // Ctrl held: the modifiers' state, or the click's own (as the click event carries them).
+        let command = ui.input(|i| {
+            i.modifiers.command || i.events.iter().any(|e| matches!(e, egui::Event::PointerButton { modifiers, .. } if modifiers.command))
+        });
+        let mut clicked = None;
         let shadow = egui::Shadow { offset: [0, 2], blur: 10, spread: 0, color: t.shadow };
         let sizes = self.sizes.clone();
         area.show_viewport(ui, |ui, viewport| {
@@ -227,11 +262,32 @@ impl PdfView {
                     let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
                     ui.painter().image(texture.id(), page, uv, egui::Color32::WHITE);
                 }
+                // Double-click or Ctrl+click: the source of that point.
+                let r = ui.interact(page, ui.scope_id().with(("pdf-page", i)), egui::Sense::click());
+                if (r.double_clicked() || (r.clicked() && command))
+                    && let Some(p) = r.interact_pointer_pos()
+                {
+                    clicked = Some((i, (p.x - page.left()) / zoom, (p.y - page.top()) / zoom));
+                }
+                // The place shown from the source, fading.
+                if let Some((rects, since)) = &mark {
+                    let fade = (1.0 - ((now - since) / MARK_SECONDS) as f32).clamp(0.0, 1.0);
+                    for m in rects.iter().filter(|m| m.page as usize == i) {
+                        let r = egui::Rect::from_min_size(page.min + egui::vec2(m.x * zoom, m.y * zoom), egui::vec2(m.width * zoom, m.height * zoom))
+                            .expand(2.0);
+                        ui.painter().rect_filled(r, 2.0, t.search_match.gamma_multiply(fade));
+                        ui.painter().rect_stroke(r, 2.0, egui::Stroke::new(1.5, t.accent.gamma_multiply(fade)), egui::StrokeKind::Outside);
+                    }
+                    ui.ctx().request_repaint();
+                }
             }
             if let Some(i) = first_visible {
                 self.page = i;
             }
         });
+        if clicked.is_some() {
+            self.clicked = clicked;
+        }
     }
 
     fn texture(&mut self, ctx: &egui::Context, index: usize, scale: f32) -> Option<egui::TextureHandle> {

@@ -45,6 +45,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     } else {
         app.pdf.sync(app.session.pdf());
         app.pdf.show(ui, &t, building.as_ref());
+        if let Some((page, x, y)) = app.pdf.clicked.take() {
+            go_to_source(app, page, x, y);
+        }
     }
 }
 
@@ -292,4 +295,33 @@ fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Opti
         });
     });
     clicked
+}
+
+/// A point of the PDF double-clicked or Ctrl+clicked: its source line, shown in the editor.
+fn go_to_source(app: &mut App, page: usize, x: f32, y: f32) {
+    match app.session.source_at(page as u32, x, y) {
+        Some((path, line)) => {
+            if app.session.current() != Some(&path) {
+                let _ = app.run("file.open", json!({"path": path.as_str()}));
+            }
+            app.view.goto = Some((path, line));
+            app.editor.focus = true;
+        }
+        None => app.view.status = Some((tl!("No source line is known for that place; compile the project first.").to_owned(), false)),
+    }
+}
+
+/// Shows the place of `line` (from 1) of `path` in the PDF, marked for a moment.
+pub(crate) fn show_in_pdf(app: &mut App, path: &texcraft_engine::project::ProjectPath, line: u32) {
+    let rects = app.session.locate(path, line);
+    if rects.is_empty() {
+        app.view.status = Some((tl!("This line is not in the PDF yet; compile the project first.").to_owned(), false));
+        return;
+    }
+    if app.view.layout == crate::Layout::EditorOnly {
+        app.view.layout = crate::Layout::Split;
+    }
+    app.view.logs = false;
+    let now = app.ctx.input(|i| i.time);
+    app.pdf.show_place(rects, now);
 }
