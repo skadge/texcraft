@@ -16,6 +16,7 @@ const APP_CATALOG: &str = "texcraft.tsv";
 
 fn main() {
     ui_faces();
+    icons();
     println!("cargo::rerun-if-env-changed=CRAFT_I18N_DIR");
     println!("cargo::rerun-if-env-changed=CRAFT_I18N_REQUIRED");
     let required = std::env::var("CRAFT_I18N_REQUIRED").is_ok_and(|v| v.trim() == "1");
@@ -131,4 +132,28 @@ fn latin_faces(dir: &Path) -> Result<Vec<(&'static str, PathBuf)>, String> {
         out.push((*name, file));
     }
     Ok(out)
+}
+
+/// `ICONS`: every SVG in `assets/icons/` (the Lucide subset listed in ATTRIBUTION.md), by name.
+fn icons() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/icons");
+    println!("cargo::rerun-if-changed={}", dir.display());
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .map(|list| {
+            list.flatten()
+                .filter_map(|e| e.file_name().to_str().and_then(|n| n.strip_suffix(".svg")).map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    let mut out = String::from("/// The embedded icon catalog (build.rs): (name, SVG).\npub static ICONS: &[(&str, &[u8])] = &[\n");
+    for name in names {
+        let path = dir.join(format!("{name}.svg"));
+        let _ = writeln!(out, "    ({name:?}, include_bytes!({:?})),", path.display().to_string());
+    }
+    out.push_str("];\n");
+    let target = PathBuf::from(std::env::var_os("OUT_DIR").unwrap_or_default()).join("icons.rs");
+    if let Err(e) = std::fs::write(&target, out) {
+        println!("cargo::error=writing {}: {e}", target.display());
+    }
 }

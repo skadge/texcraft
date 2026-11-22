@@ -13,6 +13,7 @@ pub mod theme;
 
 mod chrome;
 pub mod fonts;
+pub mod icons;
 mod editor;
 mod pdf_view;
 pub mod ui_cmd;
@@ -108,6 +109,7 @@ impl App {
         let ctx = &ui.ctx().clone();
         if !self.fonts_ready {
             fonts::install(ctx);
+            icons::install(ctx);
             self.fonts_ready = true;
         }
         if self.applied != Some(self.tokens.scheme) {

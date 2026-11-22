@@ -5,4 +5,5 @@ Licensed under the MIT licence or the Apache License 2.0, at your option.
 Third-party material:
 - retex (https://gitlab.com/severin-lemaignan/retex), CC0-1.0: the typesetting engine and language server, linked as a library.
 - storytold/craft-libs, MIT OR Apache-2.0: shared Craft libraries, including its vendored copies of hayro and vello (MIT OR Apache-2.0).
+- Lucide icons (https://lucide.dev), release 1.77.0, ISC AND MIT: assets/icons/, licence text in assets/icons/LICENSE.
 - Crates from crates.io under the licences their packages state.
