@@ -1,6 +1,6 @@
 # Working together: live editing and review
 
-> **Status:** plan, 2026-11-22. Nothing built yet. It details `docs/plan.md` phase 7, items 3 to 5, and replaces their one-line sketches once the operator has settled the decisions at the end.
+> **Status:** plan, 2026-11-22, decisions settled (§9). Nothing built yet. It details `docs/plan.md` phase 7, items 3 to 5. The ordered work is in [`collaboration-roadmap.md`](collaboration-roadmap.md).
 
 Overleaf's two collaborative features are the ones people choose it for:
 - several people typing in the same project at once;
@@ -222,13 +222,12 @@ C2 and C3 are worth shipping before any live editing. Asynchronous review over g
 - **Interface.** kittest tests for the margin, suggest mode and accepting, with screenshots for the look. The accessibility tree is checked for threads and suggestions.
 - **Network.** A loopback transport and an in-process relay for tests. Real-relay tests are manual and listed in the release checklist.
 
-## 9. Decisions for the operator
+## 9. Decisions
 
-1. **The RFC-0020 contracts PR.** The live-session contract and the `Texts` API are accepted but not written. TeXCraft would be their first real user.
-   - **Recommended:** TeXCraft writes them, with the in-process mock and the differential oracle the RFC asks for. Until then TeXCraft builds against the same shapes in its own crate, and the PR moves them to craft-libs.
-   - The other options are to wait for someone else, or to keep TeXCraft's own trait.
-2. **The CRDT.** yrs, for interoperability with retex's web editor (§5.1), or loro.
-3. **No server of ours,** as above: public relays and direct connections. Or a small relay we run, which is simpler and more reliable but is a service to operate. Recommended: serverless by default, with the transport trait open to a relay later.
-4. **Where review data lives:** `.texcraft/review/` in the project (shared through git; recommended), or outside the project by default.
-5. **Identity without accounts:** display names with per-person keys, as above, or accounts from the start.
-6. **The order:** review (C2, C3) before live editing (C4 to C6), as recommended, or live editing first.
+Settled by the operator on 2026-11-22; the roadmap in [`collaboration-roadmap.md`](collaboration-roadmap.md) follows them:
+1. **RFC-0020:** follow its principles, contract shapes and constraints, so moving to the suite's contracts later is easy; TeXCraft does not write the craft-libs contracts PR now.
+2. **The CRDT:** yrs.
+3. **Servers:** none to maintain. A small relay may be hosted for testing only; production runs on peers and public infrastructure.
+4. **Review data:** `.texcraft/review/`, next to the sources and added to git.
+5. **Identity:** no accounts to start; display names with per-person keys.
+6. **Order:** review first. It is useful on its own, outside collaboration.

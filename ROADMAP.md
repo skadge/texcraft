@@ -2,7 +2,7 @@
 
 **Stage:** scaffold (phase 0 of [docs/plan.md](docs/plan.md)). **Next:** phase 1, the window and the suite.
 
-The plan, phase by phase, and the changes TeXCraft needs in retex are in [docs/plan.md](docs/plan.md).
+The plan, phase by phase, and the changes TeXCraft needs in retex are in [docs/plan.md](docs/plan.md). Review and working together have their own design and roadmap: [docs/collaboration.md](docs/collaboration.md) and [docs/collaboration-roadmap.md](docs/collaboration-roadmap.md).
 
 ## Progress log
 
