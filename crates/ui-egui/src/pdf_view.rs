@@ -52,10 +52,25 @@ struct Drawn {
 }
 
 /// Draws pages on a thread of its own, so a slow page (a full-page photograph) never holds the
-/// window up. The newest request for a page wins over older ones still queued.
+/// window up. The newest request for a page wins over older ones still queued. The browser build
+/// has no threads: there the queue is drawn on the window's thread, when the view takes the pages.
 struct Renderer {
     tx: std::sync::mpsc::Sender<Request>,
     rx: std::sync::mpsc::Receiver<Drawn>,
+    #[cfg(target_arch = "wasm32")]
+    queue: (std::sync::mpsc::Receiver<Request>, std::sync::mpsc::Sender<Drawn>),
+}
+
+/// Draws the newest request of each page of `queue`, in the order asked; stops when `done` refuses.
+fn draw_newest(queue: Vec<Request>, mut done: impl FnMut(Drawn) -> bool) {
+    let mut seen = std::collections::HashSet::new();
+    let newest: Vec<Request> = queue.into_iter().rev().filter(|r| seen.insert(r.index)).collect();
+    for r in newest.into_iter().rev() {
+        let image = r.doc.render(r.index, r.scale).map_err(|e| e.to_string());
+        if !done(Drawn { generation: r.generation, index: r.index, scale: r.scale, image }) {
+            return;
+        }
+    }
 }
 
 impl Renderer {
@@ -68,17 +83,16 @@ impl Renderer {
             .name("texcraft-pdf-pages".to_owned())
             .spawn(move || {
                 while let Ok(first) = requests.recv() {
-                    // Of what is queued, the newest request of each page.
                     let mut queue = vec![first];
                     queue.extend(requests.try_iter());
-                    let mut seen = std::collections::HashSet::new();
-                    let newest: Vec<Request> = queue.into_iter().rev().filter(|r| seen.insert(r.index)).collect();
-                    for r in newest.into_iter().rev() {
-                        let image = r.doc.render(r.index, r.scale).map_err(|e| e.to_string());
-                        if done.send(Drawn { generation: r.generation, index: r.index, scale: r.scale, image }).is_err() {
-                            return;
-                        }
+                    let mut open = true;
+                    draw_newest(queue, |d| {
+                        open = done.send(d).is_ok();
                         ctx.request_repaint();
+                        open
+                    });
+                    if !open {
+                        return;
                     }
                 }
             })
@@ -86,10 +100,18 @@ impl Renderer {
         Some(Self { tx, rx })
     }
 
-    /// The browser build has no threads: pages are drawn when asked.
     #[cfg(target_arch = "wasm32")]
     fn start(_: &egui::Context) -> Option<Self> {
-        None
+        let (tx, requests) = std::sync::mpsc::channel::<Request>();
+        let (done, rx) = std::sync::mpsc::channel();
+        Some(Self { tx, rx, queue: (requests, done) })
+    }
+
+    /// The pages drawn since last asked.
+    fn drawn(&self) -> Vec<Drawn> {
+        #[cfg(target_arch = "wasm32")]
+        draw_newest(self.queue.0.try_iter().collect(), |d| self.queue.1.send(d).is_ok());
+        self.rx.try_iter().collect()
     }
 }
 
@@ -376,6 +398,9 @@ impl PdfView {
                     let request = Request { generation: self.generation, index, scale, doc };
                     if renderer.tx.send(request).is_ok() {
                         self.pending.insert(index, scale);
+                        // The browser draws the queue next frame.
+                        #[cfg(target_arch = "wasm32")]
+                        ctx.request_repaint();
                     }
                 }
                 // Until then, the page as it was drawn before (another scale, the last PDF).
@@ -391,7 +416,7 @@ impl PdfView {
 
     /// Takes the pages the renderer drew.
     fn receive(&mut self, ctx: &egui::Context) {
-        let drawn: Vec<Drawn> = self.renderer.as_ref().map(|r| r.rx.try_iter().collect()).unwrap_or_default();
+        let drawn: Vec<Drawn> = self.renderer.as_ref().map(Renderer::drawn).unwrap_or_default();
         for d in drawn {
             self.take(ctx, d);
         }
