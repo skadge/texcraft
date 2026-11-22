@@ -38,6 +38,25 @@ pub struct Completion {
     pub from: usize,
 }
 
+/// One replacement of a fix: lines and columns in characters, from 0.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct TextEdit {
+    pub line: usize,
+    pub column: usize,
+    pub end_line: usize,
+    pub end_column: usize,
+    pub text: String,
+}
+
+/// A suggested fix: its title, the edits it makes, and for which problem (its message).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Fix {
+    pub title: String,
+    pub edits: Vec<TextEdit>,
+    pub preferred: bool,
+    pub problem: Option<String>,
+}
+
 pub(crate) struct Language {
     server: Server,
     /// The URI of the project's folder, ending with `/`.
@@ -223,6 +242,44 @@ impl Language {
         let file = self.path(location.get("uri")?.as_str()?)?;
         let start = location.pointer("/range/start")?;
         Some((file, start.get("line")?.as_u64()? as usize, start.get("character")?.as_u64()? as usize))
+    }
+
+    /// The fixes for the problems on `line` (from 0), and the one that fixes every hint of the
+    /// file, if any (last, its `problem` none).
+    pub fn fixes(&mut self, path: &ProjectPath, line: usize) -> Vec<Fix> {
+        let uri = self.uri(path);
+        let params = json!({"textDocument": {"uri": uri}, "range": {"start": {"line": line, "character": 0}, "end": {"line": line, "character": 0}}, "context": {"diagnostics": []}});
+        let result = self.request("textDocument/codeAction", params);
+        let canonical = uri::canonical(&uri);
+        let at = |v: &Value, p: &str| v.pointer(p).and_then(Value::as_u64).map_or(0, |n| n as usize);
+        result
+            .as_array()
+            .map(|actions| {
+                actions
+                    .iter()
+                    .filter_map(|a| {
+                        let changes = a.pointer("/edit/changes")?.as_object()?;
+                        let edits = changes.iter().find(|(u, _)| uri::canonical(u) == canonical)?.1.as_array()?;
+                        let edits = edits
+                            .iter()
+                            .map(|e| TextEdit {
+                                line: at(e, "/range/start/line"),
+                                column: at(e, "/range/start/character"),
+                                end_line: at(e, "/range/end/line"),
+                                end_column: at(e, "/range/end/character"),
+                                text: e.get("newText").and_then(Value::as_str).unwrap_or_default().to_owned(),
+                            })
+                            .collect();
+                        Some(Fix {
+                            title: a.get("title")?.as_str()?.to_owned(),
+                            edits,
+                            preferred: a.get("isPreferred").and_then(Value::as_bool).unwrap_or(false),
+                            problem: a.pointer("/diagnostics/0/message").and_then(Value::as_str).map(str::to_owned),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// A build finished: the builds the server asked for take its `symbols` record (when the

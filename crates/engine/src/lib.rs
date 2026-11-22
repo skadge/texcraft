@@ -9,7 +9,7 @@ pub mod cmd;
 pub mod file_access;
 pub mod find;
 mod language;
-pub use language::{Completion, Lint};
+pub use language::{Completion, Fix, Lint, TextEdit};
 pub mod guard;
 
 use std::path::PathBuf;
@@ -285,6 +285,11 @@ impl Session {
         self.language().definition(path, line, column)
     }
 
+    /// The fixes the language server suggests for the problems on a line (from 0).
+    pub fn fixes(&mut self, path: &ProjectPath, line: usize) -> Vec<Fix> {
+        self.language().fixes(path, line)
+    }
+
     /// The problems the language server's lint finds in a text file, as typed.
     pub fn lint(&mut self, path: &ProjectPath) -> Vec<Lint> {
         self.language().lint(path).to_vec()
@@ -305,4 +310,30 @@ impl Default for Session {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// `text` with `edits` made (lines and columns in characters, from 0; edits must not overlap).
+pub fn apply_edits(text: &str, edits: &[TextEdit]) -> Result<String> {
+    let starts: Vec<usize> = std::iter::once(0).chain(text.match_indices('\n').map(|(i, _)| i + 1)).collect();
+    let byte = |line: usize, column: usize| -> Result<usize> {
+        let start = *starts.get(line).ok_or_else(|| format!("line {} is past the end", line + 1))?;
+        let rest = &text[start..];
+        let end = rest.find('\n').unwrap_or(rest.len());
+        Ok(start + rest[..end].char_indices().nth(column).map_or(end, |(i, _)| i))
+    };
+    let mut spans =
+        edits.iter().map(|e| Ok((byte(e.line, e.column)?, byte(e.end_line, e.end_column)?, e.text.as_str()))).collect::<Result<Vec<_>>>()?;
+    spans.sort_by_key(|(s, _, _)| *s);
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0;
+    for (s, e, t) in spans {
+        if s < at || e < s {
+            return Err("The fix's edits overlap.".to_owned());
+        }
+        out.push_str(&text[at..s]);
+        out.push_str(t);
+        at = e;
+    }
+    out.push_str(&text[at..]);
+    Ok(out)
 }

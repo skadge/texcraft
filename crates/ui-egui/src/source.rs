@@ -83,6 +83,33 @@ pub(crate) struct Output {
     pub definition_at: Option<(usize, usize)>,
     /// Ask what the thing the pointer rests on is (its line and column).
     pub hover_at: Option<(usize, usize)>,
+    /// Ask the language server for the fixes of the problems on this line (from 0).
+    pub fixes_for: Option<usize>,
+    /// Apply this fix.
+    pub apply_fix: Option<texcraft_engine::Fix>,
+}
+
+/// A problem in the text: a build's message or the language server's hint, on chars `start..end`.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Problem {
+    pub start: usize,
+    pub end: usize,
+    pub line: usize,
+    pub severity: Severity,
+    pub message: String,
+    pub help: Vec<String>,
+}
+
+/// The popup of a problem: its message, help and fixes.
+pub(crate) struct ProblemPopup {
+    pub problem: Problem,
+    /// Where it opens, on screen.
+    at: Pos2,
+    /// The fixes, once the editor pane asked the language server (with Fix All last).
+    pub fixes: Option<Vec<texcraft_engine::Fix>>,
+    /// Opened from the keyboard (Quick Fix): it stays until Escape or a fix, and Up/Down choose.
+    pinned: bool,
+    selected: usize,
 }
 
 /// Completions offered at the caret.
@@ -119,8 +146,12 @@ pub(crate) struct SourceEditor {
     /// The find bar's matches (chars, in order) and its current one, painted in the text.
     pub matches: Vec<(usize, usize)>,
     pub current_match: Option<(usize, usize)>,
-    /// The language server's hints on the text (chars, in order), underlined.
-    pub hints: Vec<(usize, usize)>,
+    /// The problems in the text, underlined by severity.
+    pub problems: Vec<Problem>,
+    pub popup: Option<ProblemPopup>,
+    /// Where the popup was last drawn, so the pointer can move into it.
+    popup_rect: Option<Rect>,
+    apply_fix: Option<texcraft_engine::Fix>,
     /// The completion list, while it is open.
     pub completion: Option<CompletionList>,
     /// Ask for completions at the end of this frame.
@@ -150,7 +181,10 @@ impl Default for SourceEditor {
             view: (0, 40),
             matches: Vec::new(),
             current_match: None,
-            hints: Vec::new(),
+            problems: Vec::new(),
+            popup: None,
+            popup_rect: None,
+            apply_fix: None,
             completion: None,
             wants_completion: false,
             caret_screen: None,
@@ -433,7 +467,8 @@ impl SourceEditor {
             self.completion = None;
         }
         self.paint_completion(&ctx, t, id);
-        if let Some((_, text)) = self.hover.as_ref().filter(|(_, text)| !text.is_empty())
+        self.paint_popup(&ctx, t, id);
+        if let Some((_, text)) = self.hover.as_ref().filter(|(_, text)| !text.is_empty() && self.popup.is_none())
             && let Some(p) = ctx.pointer_hover_pos()
         {
             let text = text.replace('`', "");
@@ -459,10 +494,27 @@ impl SourceEditor {
             out.definition_at = Some(line_col(&self.doc.buffer, p));
         }
         let now = ctx.input(|i| i.time);
+        // Resting on a problem's text opens its popup.
+        if let Some((p, since)) = self.resting
+            && now - since >= 0.4
+            && self.completion.is_none()
+            && self.popup.as_ref().is_none_or(|pp| !(pp.pinned || (pp.problem.start <= p && p <= pp.problem.end)))
+            && let Some(problem) = self.problems.iter().find(|pr| pr.start <= p && p <= pr.end).cloned()
+            && let Some(pointer) = ctx.pointer_hover_pos()
+        {
+            self.popup = Some(ProblemPopup { problem, at: pointer + vec2(0.0, 14.0), fixes: None, pinned: false, selected: 0 });
+        }
+        if let Some(popup) = &self.popup
+            && popup.fixes.is_none()
+        {
+            out.fixes_for = Some(popup.problem.line);
+        }
+        out.apply_fix = self.apply_fix.take();
         if let Some((p, since)) = self.resting
             && now - since >= 0.6
             && self.hover.is_none()
             && self.completion.is_none()
+            && self.popup.is_none()
         {
             out.hover_at = Some(line_col(&self.doc.buffer, p));
             // Asked once per resting place: an empty answer is kept.
@@ -539,7 +591,7 @@ impl SourceEditor {
     }
 
     fn key(&mut self, key: egui::Key, modifiers: egui::Modifiers, now: f64, indent: &str, ctx: &egui::Context, out: &mut Output) {
-        if self.completion_key(key, modifiers) {
+        if self.completion_key(key, modifiers) || self.popup_key(key) {
             return;
         }
         let inserting = self.vim.as_ref().is_none_or(|v| v.mode().is_inserting());
@@ -1017,6 +1069,139 @@ impl SourceEditor {
         }
     }
 
+    /// Opens the popup of the problem at the caret, or the first one on its line (Quick Fix,
+    /// Cmd+.); false when there is none.
+    pub fn quick_fix(&mut self) -> bool {
+        let caret = self.caret();
+        let line = self.doc.buffer.char_to_line(caret);
+        let found =
+            self.problems.iter().find(|p| p.start <= caret && caret <= p.end).or_else(|| self.problems.iter().find(|p| p.line == line)).cloned();
+        let Some(problem) = found else { return false };
+        let at = self.caret_screen.map_or(Pos2::ZERO, |c| c.left_bottom() + vec2(0.0, 4.0));
+        self.popup = Some(ProblemPopup { problem, at, fixes: None, pinned: true, selected: 0 });
+        true
+    }
+
+    /// Keys for a popup opened from the keyboard; true when it used the key.
+    fn popup_key(&mut self, key: egui::Key) -> bool {
+        use egui::Key as K;
+        let Some(popup) = self.popup.as_mut().filter(|p| p.pinned) else { return false };
+        let n = popup.fixes.as_ref().map_or(0, Vec::len);
+        match key {
+            K::ArrowDown if n > 0 => popup.selected = (popup.selected + 1) % n,
+            K::ArrowUp if n > 0 => popup.selected = (popup.selected + n - 1) % n,
+            K::Enter | K::Tab if n > 0 => {
+                self.apply_fix = popup.fixes.as_ref().and_then(|f| f.get(popup.selected)).cloned();
+                self.popup = None;
+            }
+            K::Escape => self.popup = None,
+            _ => {
+                self.popup = None;
+                return false;
+            }
+        }
+        true
+    }
+
+    /// The problem popup: the message, its help, and a button per fix.
+    fn paint_popup(&mut self, ctx: &egui::Context, t: &Tokens, id: egui::Id) {
+        let Some(popup) = &self.popup else {
+            self.popup_rect = None;
+            return;
+        };
+        // A popup the pointer opened closes when the pointer leaves both the text and the popup.
+        if !popup.pinned
+            && let Some(p) = ctx.pointer_hover_pos()
+        {
+            let in_popup = self.popup_rect.is_some_and(|r| r.expand(8.0).contains(p));
+            let on_text = self.resting.is_some_and(|(at, _)| popup.problem.start <= at && at <= popup.problem.end);
+            if !in_popup && !on_text {
+                self.popup = None;
+                self.popup_rect = None;
+                return;
+            }
+        }
+        let mut chosen = None;
+        let mut close = false;
+        let (icon, color) = match popup.problem.severity {
+            Severity::Error => ("circle-exclamation-point", t.error),
+            Severity::Warning => ("triangle-exclamation-point", t.warning),
+            _ => ("info", t.note),
+        };
+        let area = egui::Area::new(id.with("problem")).order(egui::Order::Foreground).fixed_pos(popup.at).show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).fill(t.raised).stroke(t.hairline()).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
+                ui.set_max_width(440.0);
+                ui.horizontal(|ui| {
+                    ui.add(crate::icons::image(icon, 16.0, color));
+                    let label = ui.add(egui::Label::new(egui::RichText::new(&popup.problem.message).font(t.strong()).color(t.text)).wrap());
+                    crate::status::announce(ui, &label, &popup.problem.message);
+                });
+                for help in &popup.problem.help {
+                    ui.label(egui::RichText::new(help).font(t.small()).color(t.text_muted));
+                }
+                match &popup.fixes {
+                    Some(fixes) if !fixes.is_empty() => {
+                        ui.add_space(t.unit * 2.0);
+                        for (i, fix) in fixes.iter().enumerate() {
+                            let all = fix.problem.is_none();
+                            let text = if all { tl!("Fix all hints in this file") } else { fix.title.as_str() };
+                            let selected = popup.pinned && i == popup.selected;
+                            let button =
+                                egui::Button::image_and_text(crate::icons::image(if all { "list" } else { "pencil" }, 14.0, t.text_muted), text)
+                                    .fill(if selected { t.accent_soft } else { t.surface })
+                                    .stroke(if selected { egui::Stroke::new(1.0, t.accent) } else { t.hairline() });
+                            if ui.add(button).clicked() {
+                                chosen = Some(fix.clone());
+                            }
+                        }
+                    }
+                    Some(_) => {}
+                    None => {
+                        ui.label(egui::RichText::new(tl!("Looking for fixes…")).font(t.small()).color(t.text_muted));
+                    }
+                }
+                if popup.pinned {
+                    ui.add_space(t.unit);
+                    let hint = tl!("Up and Down choose a fix, Enter applies it, Escape closes.");
+                    ui.label(egui::RichText::new(hint).font(t.small()).color(t.text_muted));
+                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                        close = true;
+                    }
+                }
+            });
+        });
+        self.popup_rect = Some(area.response.rect);
+        if let Some(fix) = chosen {
+            self.apply_fix = Some(fix);
+            self.popup = None;
+            ctx.memory_mut(|m| m.request_focus(id));
+        } else if close {
+            self.popup = None;
+        }
+    }
+
+    /// Makes a fix's edits on the buffer, as one undoable edit.
+    pub fn apply_fix(&mut self, fix: &texcraft_engine::Fix) {
+        let b = &self.doc.buffer;
+        let at = |line: usize, col: usize| {
+            let line = line.min(b.len_lines().saturating_sub(1));
+            (b.line_to_char(line) + col).min(b.line_end(line))
+        };
+        let changes = fix
+            .edits
+            .iter()
+            .map(|e| texcraft_buffer::Change { start: at(e.line, e.column), end: at(e.end_line, e.end_column), text: e.text.clone() })
+            .collect();
+        let Ok(tx) = Transaction::new(changes) else { return };
+        let before = self.doc.selection.clone();
+        let after = before.map(&tx);
+        if self.doc.buffer.edit(tx, &before, &after, EditKind::Other).is_ok() {
+            self.doc.buffer.seal();
+            self.doc.selection = after;
+            self.vim_sync();
+        }
+    }
+
     /// Notes where the pointer rests on the text, for the language server's description.
     fn rest(&mut self, response: &egui::Response, origin: Pos2, ctx: &egui::Context) {
         let Some(p) = response.hover_pos().filter(|_| !response.dragged()) else {
@@ -1033,7 +1218,7 @@ impl SourceEditor {
                 if self.hover.as_ref().is_some_and(|(at, _)| *at != pos) {
                     self.hover = None;
                 }
-                ctx.request_repaint_after(std::time::Duration::from_millis(600));
+                ctx.request_repaint_after(std::time::Duration::from_millis(400));
             }
         }
     }
@@ -1167,10 +1352,16 @@ impl SourceEditor {
                 paint_span(painter, galley, origin + vec2(0.0, *top), (s, e), t.selection, through_break);
             }
             painter.galley(origin + vec2(0.0, *top), galley.clone(), t.text);
-            // The language server's hints, underlined with dots.
-            for (hs, he) in self.hints.iter().filter(|(s, e)| *e > line_start && *s <= line_start + line_len) {
-                let (s, e) = (hs.saturating_sub(line_start).min(line_len), (he - line_start).min(line_len));
-                underline(painter, galley, origin + vec2(0.0, *top), (s, e.max(s + 1).min(line_len.max(s + 1))), t.note);
+            // Problems, underlined: hints with dots, warnings and errors with waves.
+            for p in self.problems.iter().filter(|p| p.end > line_start && p.start <= line_start + line_len) {
+                let (s, e) = (p.start.saturating_sub(line_start).min(line_len), (p.end - line_start).min(line_len));
+                let span = (s, e.max(s + 1).min(line_len.max(s + 1)));
+                let at = origin + vec2(0.0, *top);
+                match p.severity {
+                    Severity::Error => underline(painter, galley, at, span, t.error, true),
+                    Severity::Warning => underline(painter, galley, at, span, t.warning, true),
+                    _ => underline(painter, galley, at, span, t.note, false),
+                }
             }
             // The gutter.
             let first_row = galley.rows.first().map_or(t.code_line_height, |r| r.max_y());
@@ -1339,8 +1530,8 @@ fn opening(c: char) -> Option<char> {
     }
 }
 
-/// A dotted line under chars `s..e` of one line's galley.
-fn underline(painter: &egui::Painter, galley: &Galley, at: Pos2, (s, e): (usize, usize), color: egui::Color32) {
+/// A dotted (or, `wavy`, a wavy) line under chars `s..e` of one line's galley.
+fn underline(painter: &egui::Painter, galley: &Galley, at: Pos2, (s, e): (usize, usize), color: egui::Color32, wavy: bool) {
     let mut row_start = 0;
     for row in &galley.rows {
         let n = row.char_count_excluding_newline().0;
@@ -1349,10 +1540,22 @@ fn underline(painter: &egui::Painter, galley: &Galley, at: Pos2, (s, e): (usize,
             let x0 = at.x + row.pos.x + row.x_offset(egui::text::CharIndex(a - row_start));
             let x1 = at.x + row.pos.x + row.x_offset(egui::text::CharIndex(z - row_start));
             let y = at.y + row.max_y() - 1.5;
-            let mut x = x0;
-            while x < x1 {
-                painter.circle_filled(pos2(x + 1.0, y), 1.0, color);
-                x += 3.5;
+            if wavy {
+                let mut points = Vec::new();
+                let mut x = x0;
+                let mut up = true;
+                while x <= x1 {
+                    points.push(pos2(x, if up { y - 1.2 } else { y + 1.2 }));
+                    x += 2.5;
+                    up = !up;
+                }
+                painter.add(egui::Shape::line(points, egui::Stroke::new(1.0, color)));
+            } else {
+                let mut x = x0;
+                while x < x1 {
+                    painter.circle_filled(pos2(x + 1.0, y), 1.0, color);
+                    x += 3.5;
+                }
             }
         }
         row_start += n;

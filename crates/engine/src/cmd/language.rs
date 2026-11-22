@@ -14,6 +14,17 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         spec("language.hover", "Describe", at_schema, hover),
         spec("language.definition", "Go to Definition", at_schema, definition),
         spec("language.lint", "Hints", path_schema, lint),
+        spec("language.fixes", "Quick Fixes", line_schema, fixes),
+        CommandSpec {
+            id: "language.fix",
+            label: "Apply Quick Fix",
+            menu: &[],
+            shortcut: None,
+            params: fix_schema,
+            enabled: always,
+            run: fix,
+            changes: true,
+        },
     ]
 }
 
@@ -27,6 +38,41 @@ fn at_schema() -> Value {
 
 fn path_schema() -> Value {
     json!({"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"], "additionalProperties": false})
+}
+
+fn line_schema() -> Value {
+    json!({"type": "object", "properties": {"path": {"type": "string"}, "line": {"type": "integer", "minimum": 1}}, "required": ["path", "line"], "additionalProperties": false})
+}
+
+fn fix_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "path": {"type": "string"},
+        "line": {"type": "integer", "minimum": 1},
+        "index": {"type": "integer", "minimum": 0, "description": "Which of language.fixes's fixes for the line."}
+    }, "required": ["path", "line", "index"], "additionalProperties": false})
+}
+
+fn line_of(p: &Value) -> Result<(texcraft_project::ProjectPath, usize)> {
+    let path = path_param(p, "path")?;
+    let line = p.get("line").and_then(Value::as_u64).filter(|n| *n >= 1).ok_or("`line` (from 1) is missing")?;
+    Ok((path, line as usize - 1))
+}
+
+fn fixes(s: &mut Session, p: &Value) -> Result<Value> {
+    let (path, line) = line_of(p)?;
+    let fixes: Vec<Value> = s.fixes(&path, line).iter().map(|f| json!({"title": f.title, "problem": f.problem, "preferred": f.preferred})).collect();
+    Ok(json!({"fixes": fixes}))
+}
+
+/// Applies a fix to the file's text.
+fn fix(s: &mut Session, p: &Value) -> Result<Value> {
+    let (path, line) = line_of(p)?;
+    let index = p.get("index").and_then(Value::as_u64).ok_or("`index` is missing")? as usize;
+    let fix = s.fixes(&path, line).into_iter().nth(index).ok_or("There is no such fix on that line.")?;
+    let text = s.project().text(&path).map_err(|e| e.to_string())?.to_owned();
+    let new = crate::apply_edits(&text, &fix.edits)?;
+    s.execute("file.write", &json!({"path": path.as_str(), "text": new}))?;
+    Ok(json!({"applied": fix.title}))
 }
 
 fn at(p: &Value) -> Result<(texcraft_project::ProjectPath, usize, usize)> {

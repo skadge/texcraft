@@ -32,3 +32,13 @@ fn a_reference_leads_to_its_label() {
     let r = s.execute("language.definition", &json!({"path": "main.tex", "line": 3, "column": 11})).unwrap();
     assert_eq!((r["line"].as_u64(), r["path"].as_str()), (Some(2), Some("main.tex")), "{r}");
 }
+
+#[test]
+fn a_hint_has_a_fix_that_agents_can_apply() {
+    let mut s = session("Old style: {\\bf bold}.\n").unwrap();
+    let fixes = s.execute("language.fixes", &json!({"path": "main.tex", "line": 1})).unwrap();
+    assert!(fixes["fixes"].as_array().is_some_and(|f| !f.is_empty()), "no fix for \\bf: {fixes}");
+    s.execute("language.fix", &json!({"path": "main.tex", "line": 1, "index": 0})).unwrap();
+    let text = s.project().text(&texcraft_engine::project::ProjectPath::new("main.tex").unwrap()).unwrap().to_owned();
+    assert!(!text.contains("\\bf "), "the fix did not change the text: {text}");
+}

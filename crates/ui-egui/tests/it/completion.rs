@@ -65,3 +65,14 @@ fn f12_goes_from_a_reference_to_its_label() {
     harness.run();
     assert!(harness.query_by_label_contains("Ln 2,").is_some(), "F12 did not go to the label");
 }
+
+#[test]
+fn quick_fix_from_the_keyboard_applies_the_first_fix() {
+    let mut harness = editor("Old style: {\\bf bold}.", false).unwrap();
+    texcraft_ui_egui::ui_cmd::run(harness.state_mut(), "edit.quick_fix");
+    harness.run();
+    harness.run();
+    harness.key_press(egui::Key::Enter);
+    harness.run();
+    assert!(!text(&mut harness).contains("\\bf "), "the fix was not applied: {}", text(&mut harness));
+}

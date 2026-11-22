@@ -283,6 +283,13 @@ pub(crate) fn edit(app: &mut App, id: &str) -> bool {
             app.editor.focus = true;
             return true;
         }
+        "edit.quick_fix" => {
+            if !source.quick_fix() {
+                app.view.status = Some((tl!("There is no problem on this line.").to_owned(), false));
+            }
+            app.editor.focus = true;
+            return true;
+        }
         "edit.select_all" => {
             let len = source.doc.buffer.len_chars();
             source.select(0, len);
@@ -516,6 +523,55 @@ fn apply_wrap(app: &mut App, _ctx: &egui::Context, w: &Wrap) {
 }
 
 /// Lines (from 0) of `path` with warnings or errors.
+/// The problems in the shown file's text: the language server's hints, and the last build's
+/// errors and warnings, placed on the word at their column (or the line's text).
+fn problems(app: &mut App, path: &ProjectPath) -> Vec<crate::source::Problem> {
+    let b = &app.editor.source.doc.buffer;
+    let last = b.len_lines().saturating_sub(1);
+    let at = |line: usize, col: usize| {
+        let line = line.min(last);
+        (b.line_to_char(line) + col).min(b.line_end(line))
+    };
+    let mut out: Vec<crate::source::Problem> = app
+        .session
+        .lint(path)
+        .iter()
+        .map(|h| crate::source::Problem {
+            start: at(h.line, h.column),
+            end: at(h.end_line, h.end_column),
+            line: h.line,
+            severity: h.severity,
+            message: h.message.clone(),
+            help: Vec::new(),
+        })
+        .collect();
+    let b = &app.editor.source.doc.buffer;
+    if let Some(outcome) = app.session.last_outcome() {
+        for d in outcome.diagnostics.iter().filter(|d| d.file.as_deref() == Some(path.as_str()) && d.severity >= Severity::Warning) {
+            let Some(line) = d.line.map(|l| (l.saturating_sub(1) as usize).min(last)) else { continue };
+            let text: Vec<char> = b.line(line).chars().collect();
+            let (start, end) = match d.column.map(|c| (c.saturating_sub(1) as usize).min(text.len())) {
+                Some(c) => {
+                    let end = (c + 1..=text.len()).find(|i| *i == text.len() || text[*i].is_whitespace()).unwrap_or(text.len());
+                    (c, end.max(c + 1).min(text.len().max(c)))
+                }
+                None => (text.iter().take_while(|c| c.is_whitespace()).count(), text.len()),
+            };
+            let base = b.line_to_char(line);
+            out.push(crate::source::Problem {
+                start: base + start,
+                end: base + end,
+                line,
+                severity: d.severity,
+                message: d.message.clone(),
+                help: d.help.clone(),
+            });
+        }
+    }
+    out.sort_by_key(|p| p.start);
+    out
+}
+
 /// The gutter's markers: the last build's errors and warnings, and the language server's hints
 /// on the text as it is now.
 fn markers(app: &mut App, path: &ProjectPath) -> Markers {
@@ -557,20 +613,7 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     if std::mem::take(&mut app.editor.focus) {
         ui.memory_mut(|m| m.request_focus(id));
     }
-    // The hints' text, underlined.
-    let b = &app.editor.source.doc.buffer;
-    let hints = app
-        .session
-        .lint(path)
-        .iter()
-        .map(|h| {
-            let at = |line: usize, col: usize| {
-                (b.line_to_char(line) + col).min(b.line_end(line.min(b.len_lines().saturating_sub(1))).max(b.line_to_char(line)))
-            };
-            (at(h.line, h.column), at(h.end_line, h.end_column))
-        })
-        .collect();
-    app.editor.source.hints = hints;
+    app.editor.source.problems = problems(app, path);
     app.editor.source.set_vim(app.prefs.vim);
     app.editor.source.auto_close = app.prefs.auto_close;
     vim_line(app, ui);
@@ -613,6 +656,20 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             }
             None => app.view.status = Some((tl!("No definition found here.").to_owned(), false)),
         }
+    }
+    if let Some(line) = out.fixes_for {
+        let message = app.editor.source.popup.as_ref().map(|p| p.problem.message.clone());
+        let fixes: Vec<texcraft_engine::Fix> =
+            app.session.fixes(path, line).into_iter().filter(|f| f.problem.is_none() || f.problem == message).collect();
+        // "Fix all" only when there is a fix of the problem itself.
+        let own = fixes.iter().any(|f| f.problem.is_some());
+        let fixes = fixes.into_iter().filter(|f| own && (f.problem.is_some() || f.edits.len() > 1)).collect();
+        if let Some(popup) = app.editor.source.popup.as_mut() {
+            popup.fixes = Some(fixes);
+        }
+    }
+    if let Some(fix) = out.apply_fix {
+        app.editor.source.apply_fix(&fix);
     }
     for effect in out.effects {
         match effect {

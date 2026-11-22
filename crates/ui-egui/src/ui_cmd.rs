@@ -31,6 +31,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("edit.find", "Find", "Edit", "find", Some("Cmd+F")),
     ui("edit.replace", "Replace", "Edit", "find", Some("Cmd+Alt+F")),
     ui("edit.goto_line", "Go to Line…", "Edit", "find", Some("Cmd+Alt+G")),
+    ui("edit.quick_fix", "Quick Fix", "Edit", "fix", Some("Cmd+.")),
     ui("edit.figure", "Figure", "Insert", "float", None),
     ui("edit.table", "Table", "Insert", "float", None),
     ui("edit.math_inline", "Inline Formula", "Insert", "math", Some("Cmd+Shift+M")),
