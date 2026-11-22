@@ -1,0 +1,16 @@
+[package]
+name = "texcraft-mcp"
+description = "TeXCraft's agent tools (MCP over stdio): the command registry as tools, confined to the automation roots"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+texcraft-engine = { workspace = true, default-features = false }
+craft-mcp-server = { workspace = true }
+serde_json = { workspace = true }
