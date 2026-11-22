@@ -516,8 +516,16 @@ fn apply_wrap(app: &mut App, _ctx: &egui::Context, w: &Wrap) {
 }
 
 /// Lines (from 0) of `path` with warnings or errors.
-fn markers(app: &App, path: &ProjectPath) -> Markers {
+/// The gutter's markers: the last build's errors and warnings, and the language server's hints
+/// on the text as it is now.
+fn markers(app: &mut App, path: &ProjectPath) -> Markers {
     let mut out = Markers::new();
+    for hint in app.session.lint(path) {
+        let line = hint.line as u32;
+        if out.get(&line).is_none_or(|(s, _)| *s < hint.severity) {
+            out.insert(line, (hint.severity, hint.message.clone()));
+        }
+    }
     let Some(outcome) = app.session.last_outcome() else { return out };
     for d in outcome.diagnostics.iter().filter(|d| d.file.as_deref() == Some(path.as_str()) && d.severity >= Severity::Warning) {
         let Some(line) = d.line.map(|l| l.saturating_sub(1)) else { continue };
@@ -549,6 +557,20 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     if std::mem::take(&mut app.editor.focus) {
         ui.memory_mut(|m| m.request_focus(id));
     }
+    // The hints' text, underlined.
+    let b = &app.editor.source.doc.buffer;
+    let hints = app
+        .session
+        .lint(path)
+        .iter()
+        .map(|h| {
+            let at = |line: usize, col: usize| {
+                (b.line_to_char(line) + col).min(b.line_end(line.min(b.len_lines().saturating_sub(1))).max(b.line_to_char(line)))
+            };
+            (at(h.line, h.column), at(h.end_line, h.end_column))
+        })
+        .collect();
+    app.editor.source.hints = hints;
     app.editor.source.set_vim(app.prefs.vim);
     app.editor.source.auto_close = app.prefs.auto_close;
     vim_line(app, ui);

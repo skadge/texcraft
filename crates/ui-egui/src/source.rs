@@ -115,6 +115,8 @@ pub(crate) struct SourceEditor {
     /// The find bar's matches (chars, in order) and its current one, painted in the text.
     pub matches: Vec<(usize, usize)>,
     pub current_match: Option<(usize, usize)>,
+    /// The language server's hints on the text (chars, in order), underlined.
+    pub hints: Vec<(usize, usize)>,
     /// The completion list, while it is open.
     pub completion: Option<CompletionList>,
     /// Ask for completions at the end of this frame.
@@ -139,6 +141,7 @@ impl Default for SourceEditor {
             view: (0, 40),
             matches: Vec::new(),
             current_match: None,
+            hints: Vec::new(),
             completion: None,
             wants_completion: false,
             caret_screen: None,
@@ -1089,14 +1092,22 @@ impl SourceEditor {
                 paint_span(painter, galley, origin + vec2(0.0, *top), (s, e), t.selection, through_break);
             }
             painter.galley(origin + vec2(0.0, *top), galley.clone(), t.text);
+            // The language server's hints, underlined with dots.
+            for (hs, he) in self.hints.iter().filter(|(s, e)| *e > line_start && *s <= line_start + line_len) {
+                let (s, e) = (hs.saturating_sub(line_start).min(line_len), (he - line_start).min(line_len));
+                underline(painter, galley, origin + vec2(0.0, *top), (s, e.max(s + 1).min(line_len.max(s + 1))), t.note);
+            }
             // The gutter.
             let first_row = galley.rows.first().map_or(t.code_line_height, |r| r.max_y());
             let mid = y0 + first_row / 2.0;
             let color = if line == caret_line { t.text } else { t.text_muted };
             painter.text(pos2(number_right, mid), Align2::RIGHT_CENTER, (line + 1).to_string(), font.clone(), color);
             if let Some((severity, message)) = markers.get(&(line as u32)) {
-                let (icon, color) =
-                    if *severity == Severity::Error { ("circle-exclamation-point", t.error) } else { ("triangle-exclamation-point", t.warning) };
+                let (icon, color) = match severity {
+                    Severity::Error => ("circle-exclamation-point", t.error),
+                    Severity::Warning => ("triangle-exclamation-point", t.warning),
+                    _ => ("info", t.note),
+                };
                 let r = Rect::from_center_size(pos2(rect.left() + 2.5 * t.unit, mid), vec2(14.0, 14.0));
                 icons::paint(ui, r, icon, 13.0, color);
                 let hover = ui.interact(r, ui.scope_id().with(("marker", line)), Sense::hover());
@@ -1250,5 +1261,25 @@ fn opening(c: char) -> Option<char> {
         ']' => Some('['),
         '}' => Some('{'),
         _ => None,
+    }
+}
+
+/// A dotted line under chars `s..e` of one line's galley.
+fn underline(painter: &egui::Painter, galley: &Galley, at: Pos2, (s, e): (usize, usize), color: egui::Color32) {
+    let mut row_start = 0;
+    for row in &galley.rows {
+        let n = row.char_count_excluding_newline().0;
+        let (a, z) = (s.max(row_start), e.min(row_start + n));
+        if a < z {
+            let x0 = at.x + row.pos.x + row.x_offset(egui::text::CharIndex(a - row_start));
+            let x1 = at.x + row.pos.x + row.x_offset(egui::text::CharIndex(z - row_start));
+            let y = at.y + row.max_y() - 1.5;
+            let mut x = x0;
+            while x < x1 {
+                painter.circle_filled(pos2(x + 1.0, y), 1.0, color);
+                x += 3.5;
+            }
+        }
+        row_start += n;
     }
 }
