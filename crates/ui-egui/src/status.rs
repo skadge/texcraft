@@ -72,7 +72,7 @@ fn seconds(s: f64) -> String {
 }
 
 /// Announces `text` through a live region when it changes (AGENTS.md rule 21).
-fn announce(ui: &egui::Ui, label: &egui::Response, text: &str) {
+pub(crate) fn announce(ui: &egui::Ui, label: &egui::Response, text: &str) {
     ui.ctx().accesskit_node_builder(label.id, |node| {
         node.set_live(egui::accesskit::Live::Polite);
         node.set_label(text);

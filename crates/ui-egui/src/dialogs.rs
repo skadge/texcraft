@@ -96,6 +96,14 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         Outcome::Open => {}
         Outcome::Cancel => app.view.dialog = None,
         Outcome::Run => match app.view.dialog.take() {
+            // Go to Line moves the editor's caret: a view action, not an engine command.
+            Some(Dialog::Prompt(p)) if p.command == "view.goto_line" => match (p.value.trim().parse::<u32>(), app.session.current().cloned()) {
+                (Ok(line), Some(path)) if line > 0 => {
+                    app.view.goto = Some((path, line));
+                    app.editor.focus = true;
+                }
+                _ => app.view.status = Some((tl!("Type a line number, from 1.").to_owned(), true)),
+            },
             Some(Dialog::Prompt(p)) => {
                 let params = (p.params)(p.value.trim());
                 app.run(p.command, params);

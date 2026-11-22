@@ -136,6 +136,7 @@ The interim editor is egui's multi-line text field with a highlighting layouter.
    - Tests: a table of keystroke sequences and the text and caret they must give, written from Vim's documentation (`:help`), as the clean-room standard allows. Vim's code is not read, and its documentation is not copied.
 
 4. **Find and replace.** Match case, regular expression (`regex`, MIT/Apache-2.0), whole word, within selection, replace all. Then project-wide search with results grouped by file.
+   - **Status:** the find bar is **done** (Edit › Find, Cmd+F; Replace, Cmd+Alt+F): match case, regular expression, whole word, in selection, the count, Previous/Next, Replace and Replace All as one undoable edit; agents have `file.find` and `file.replace` with the same matching. Project-wide search is to do. Edit › Go to Line… moves the caret to a line.
 5. **Language features from retex-lsp, in process** (`retex_lsp::Server::handle`, no JSON-RPC transport):
    - Completion of commands, environments, `\ref` labels and `\cite` keys.
    - Hover, go to definition (also into read-only TeX Live files).

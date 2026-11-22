@@ -2,6 +2,7 @@
 
 mod contrast;
 mod control;
+mod find;
 mod frame;
 mod gallery;
 mod insert;

@@ -15,6 +15,7 @@ mod app_icon;
 pub mod control;
 mod dialogs;
 mod editor;
+mod find_bar;
 pub mod fonts;
 mod gallery;
 pub mod icons;

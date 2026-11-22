@@ -29,6 +29,10 @@ pub(crate) struct Editor {
     sent: u64,
     /// The other open files' text, caret and undo history.
     parked: HashMap<ProjectPath, Doc>,
+    /// The find and replace bar, when open.
+    pub find: Option<crate::find_bar::FindBar>,
+    /// Give the editor the keyboard next frame.
+    pub focus: bool,
 }
 
 fn session_text(project: &texcraft_engine::project::Project, path: Option<&ProjectPath>) -> Option<String> {
@@ -112,6 +116,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         if is_text {
             toolbar(app, ui);
             widgets::hairline(ui, &t);
+            crate::find_bar::show(app, ui);
         }
         match current {
             None => empty(ui, &t, "file-text", tl!("No file is open"), tl!("Choose a file in the project files to edit it.")),
@@ -231,6 +236,47 @@ fn wrap_for(id: &str) -> Option<Wrap> {
 /// Runs an `edit.*` command on the shown file's selection; false when no text file is shown.
 pub(crate) fn edit(app: &mut App, id: &str) -> bool {
     let shown_text = app.session.current().is_some_and(|p| matches!(app.session.project().get(p), Some(Contents::Text(_))));
+    if !shown_text {
+        return false;
+    }
+    let source = &mut app.editor.source;
+    match id {
+        "edit.find" | "edit.replace" => {
+            let old = app.editor.find.take();
+            app.editor.find = Some(crate::find_bar::FindBar::open(source, id == "edit.replace", old));
+            return true;
+        }
+        "edit.undo" | "edit.redo" => {
+            let sel = if id == "edit.undo" { source.doc.buffer.undo() } else { source.doc.buffer.redo() };
+            if let Some(sel) = sel {
+                let len = source.doc.buffer.len_chars();
+                source.doc.selection = sel.clamp(len);
+                source.reveal = true;
+            }
+            app.editor.focus = true;
+            return true;
+        }
+        "edit.select_all" => {
+            let len = source.doc.buffer.len_chars();
+            source.select(0, len);
+            app.editor.focus = true;
+            return true;
+        }
+        "edit.goto_line" => {
+            let prompt = crate::dialogs::Prompt {
+                title: tl!("Go to Line"),
+                label: tl!("Line number"),
+                value: String::new(),
+                action: tl!("Go"),
+                command: "view.goto_line",
+                params: Box::new(|_| json!({})),
+                focus: true,
+            };
+            app.view.dialog = Some(crate::dialogs::Dialog::Prompt(prompt));
+            return true;
+        }
+        _ => {}
+    }
     match wrap_for(id) {
         Some(w) if shown_text => {
             let ctx = app.ctx.clone();
@@ -413,6 +459,9 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         } else {
             app.view.goto = Some((goto_path, line));
         }
+    }
+    if std::mem::take(&mut app.editor.focus) {
+        ui.memory_mut(|m| m.request_focus(id));
     }
     app.editor.source.set_vim(app.prefs.vim);
     let name = format!("{} {}", path.file_name(), tl!("source"));

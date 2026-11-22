@@ -17,6 +17,11 @@ pub struct Query {
     pub word: bool,
 }
 
+/// `text` as a regular expression that matches it literally.
+pub fn escape(text: &str) -> String {
+    regex::escape(text)
+}
+
 /// At most this many matches are listed.
 pub const MAX_MATCHES: usize = 10_000;
 

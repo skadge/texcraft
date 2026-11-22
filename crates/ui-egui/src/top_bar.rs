@@ -64,6 +64,9 @@ fn icon_for(id: &str) -> Option<&'static str> {
     Some(match id {
         "project.new" => "file-plus",
         "project.from_template" => "book-open",
+        "edit.undo" => "undo-2",
+        "edit.redo" => "redo-2",
+        "edit.find" => "search",
         "project.open" => "folder-open",
         "project.save" => "download",
         "file.import" => "upload",

@@ -99,6 +99,9 @@ pub(crate) struct SourceEditor {
     claimed: Vec<egui::Event>,
     /// The first line shown and how many fit.
     view: (usize, usize),
+    /// The find bar's matches (chars, in order) and its current one, painted in the text.
+    pub matches: Vec<(usize, usize)>,
+    pub current_match: Option<(usize, usize)>,
 }
 
 impl Default for SourceEditor {
@@ -115,6 +118,8 @@ impl Default for SourceEditor {
             scroll: None,
             claimed: Vec::new(),
             view: (0, 40),
+            matches: Vec::new(),
+            current_match: None,
         }
     }
 }
@@ -756,8 +761,17 @@ impl SourceEditor {
             }
             let line_start = b.line_to_char(line);
             let line_len = galley.rows.iter().map(|r| r.char_count_excluding_newline().0).sum::<usize>();
-            // Search matches.
-            if let Some(re) = highlight {
+            // The find bar's matches.
+            let line_end = line_start + line_len;
+            let from = self.matches.partition_point(|(_, e)| *e <= line_start);
+            for (ms, me) in self.matches[from..].iter().take_while(|(s, _)| *s <= line_end) {
+                let s = ms.saturating_sub(line_start).min(line_len);
+                let e = me.saturating_sub(line_start).min(line_len);
+                let color = if self.current_match == Some((*ms, *me)) { t.selection } else { t.search_match };
+                paint_span(painter, galley, origin + vec2(0.0, *top), (s, e.max(s)), color, *me > line_end);
+            }
+            // Vim's search matches.
+            if let Some(re) = highlight.filter(|_| self.matches.is_empty()) {
                 let text = b.line(line);
                 for m in re.find_iter(&text) {
                     let (s, e) = (text[..m.start()].chars().count(), text[..m.end()].chars().count());

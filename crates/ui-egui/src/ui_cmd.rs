@@ -25,6 +25,12 @@ const fn ui(id: &'static str, label: &'static str, menu: &'static str, group: &'
 
 /// View commands, in menu order.
 pub const UI_COMMANDS: &[UiCommand] = &[
+    ui("edit.undo", "Undo", "Edit", "history", Some("Cmd+Z")),
+    ui("edit.redo", "Redo", "Edit", "history", Some("Cmd+Shift+Z")),
+    ui("edit.select_all", "Select All", "Edit", "select", Some("Cmd+A")),
+    ui("edit.find", "Find", "Edit", "find", Some("Cmd+F")),
+    ui("edit.replace", "Replace", "Edit", "find", Some("Cmd+Alt+F")),
+    ui("edit.goto_line", "Go to Line…", "Edit", "find", Some("Cmd+Alt+G")),
     ui("edit.figure", "Figure", "Insert", "float", None),
     ui("edit.table", "Table", "Insert", "float", None),
     ui("edit.math_inline", "Inline Formula", "Insert", "math", Some("Cmd+Shift+M")),
@@ -61,7 +67,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
 ];
 
 /// The menus of the menu bar, in order.
-pub const MENUS: &[&str] = &["File", "Insert", "Format", "Build", "View", "Help"];
+pub const MENUS: &[&str] = &["File", "Edit", "Insert", "Format", "Build", "View", "Help"];
 
 /// Runs `id`: a view command, an engine command that first asks for input, or a plain engine
 /// command.
@@ -88,7 +94,7 @@ pub fn run(app: &mut App, id: &str) {
         "view.fit_width" => app.pdf.fit_width(),
         id if id.starts_with("edit.") => {
             if !crate::editor::edit(app, id) {
-                app.view.status = Some((tl!("Open a text file to insert into it.").to_owned(), true));
+                app.view.status = Some((tl!("Open a text file to edit it.").to_owned(), true));
             }
         }
         "file.close" => {
