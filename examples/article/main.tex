@@ -1,30 +1,59 @@
-\documentclass{article}
+\documentclass[11pt]{article}
 \usepackage{amsmath}
-\title{A TeXCraft example}
+\usepackage{booktabs}
+\title{Notes on a Small Pendulum}
 \author{The TeXCraft contributors}
+\date{}
 \begin{document}
 \maketitle
+
+\begin{abstract}
+  This short document exercises what a typical paper uses: sections in several files,
+  numbered equations with cross-references, a list and a table. It is the example
+  project that comes with TeXCraft.
+\end{abstract}
 
 \section{Introduction}
 \input{sections/intro}
 
-\section{Results}
-The energy of a body at rest is
+\section{Model}
+For small angles the restoring force of a pendulum of length $\ell$ is proportional
+to its displacement, which gives the equation of motion
+\begin{align}
+  \ddot\theta + \frac{g}{\ell}\,\theta &= 0, \label{eq:motion}\\
+  \theta(t) &= \theta_0 \cos\left(\sqrt{g/\ell}\;t\right). \label{eq:solution}
+\end{align}
+Equation~\eqref{eq:solution} solves~\eqref{eq:motion} for a pendulum released at rest.
+Its period,
 \begin{equation}
-  E = mc^2 .
-  \label{eq:energy}
+  T = 2\pi\sqrt{\frac{\ell}{g}},
+  \label{eq:period}
 \end{equation}
-Equation~\ref{eq:energy} is referred to above.
+does not depend on the amplitude, as long as the amplitude stays small.
+
+\section{Measurements}
+We timed ten swings for three lengths:
+\begin{itemize}
+  \item each length was measured from the pivot to the centre of the bob;
+  \item each time is the mean of five runs;
+  \item the amplitude stayed below ten degrees.
+\end{itemize}
 
 \begin{table}[h]
   \centering
-  \begin{tabular}{lr}
-    Item & Value \\
-    \hline
-    One & 1 \\
-    Two & 2 \\
+  \begin{tabular}{rrr}
+    \toprule
+    Length (m) & Measured $T$ (s) & Predicted $T$ (s) \\
+    \midrule
+    0.25 & 1.01 & 1.003 \\
+    0.50 & 1.42 & 1.419 \\
+    1.00 & 2.01 & 2.006 \\
+    \bottomrule
   \end{tabular}
-  \caption{A small table.}
+  \caption{Measured and predicted periods, from~\eqref{eq:period} with $g = 9.81\,\mathrm{m/s^2}$.}
+  \label{tab:periods}
 \end{table}
+
+Table~\ref{tab:periods} shows agreement within one percent.
 
 \end{document}
