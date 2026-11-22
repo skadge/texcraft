@@ -4867,11 +4867,13 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "texcraft-buffer",
  "texcraft-compile",
  "texcraft-engine",
  "texcraft-latex",
  "texcraft-preview",
  "texcraft-templates",
+ "texcraft-vim",
 ]
 
 [[package]]

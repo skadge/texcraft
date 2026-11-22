@@ -1,0 +1,887 @@
+//! TeXCraft's source editor widget (docs/plan.md, phase 2, item 3): a [`Buffer`] laid out one
+//! galley per line, with the gutter, the caret line's band, selection, search matches and the
+//! caret painted around it.
+//!
+//! - **Input** comes in the order the platform sent it through craft-ui's IME [`Composer`]: typed
+//!   and committed text, keys, line breaks, clipboard events and the IME's corrections. The marked
+//!   text of a composition is painted at the caret.
+//! - **Key bindings** are the standard ones, or Vim's ([`Vim`]) when the setting is on. In Vim
+//!   mode, Vim's Ctrl keys are taken from the input before the window's shortcuts see them
+//!   ([`SourceEditor::claim_keys`]); the others (Ctrl+S) still run the window's commands.
+//! - **Accessibility:** the editor is an editable multi-line text node with its value, caret and
+//!   selection, one text run per line. Escape leaves the editor in the standard bindings, and F6
+//!   moves between regions in both, so the keyboard is never trapped.
+//!
+//! The widget knows nothing of projects or sessions: the editor pane hands it a document and reads
+//! back whether the text changed and what Vim asked the window to do.
+
+use std::sync::Arc;
+
+use craft_ui::ime::{Composer, Edit};
+use egui::text::{CCursor, LayoutJob, TextFormat};
+use egui::{Align2, Galley, Pos2, Rect, Sense, Vec2, pos2, vec2};
+use texcraft_buffer::{Buffer, EditKind, Selection, Transaction};
+use texcraft_engine::Severity;
+use texcraft_vim::{Ctx, Effect, Key, Mode, Vim};
+
+use crate::icons;
+use crate::theme::Tokens;
+
+/// One file's text and where its caret is.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Doc {
+    pub buffer: Buffer,
+    pub selection: Selection,
+}
+
+impl Doc {
+    pub fn new(text: &str) -> Self {
+        Self { buffer: Buffer::new(text), selection: Selection::point(0) }
+    }
+}
+
+/// Diagnostics by line (from 0): the most severe one's severity and message.
+pub(crate) type Markers = std::collections::HashMap<u32, (Severity, String)>;
+
+#[derive(Default)]
+struct Layout {
+    version: u64,
+    width: f32,
+    /// The theme's text colour and the source font, so a theme or size change rebuilds the jobs.
+    theme: (egui::Color32, egui::FontId),
+    /// One per line, rebuilt when the text changes.
+    jobs: Vec<LayoutJob>,
+    /// Laid out every frame: egui keeps the galleys of unchanged jobs, and they follow its font
+    /// atlas, which a kept galley would not.
+    galleys: Vec<Arc<Galley>>,
+    /// Each line's top, from the text's top; one more entry for the end.
+    tops: Vec<f32>,
+}
+
+/// Where a frame paints: the editor's rectangle, the text's top left, the gutter's width, the
+/// lines shown, and whether the editor has the keyboard.
+struct Area {
+    rect: Rect,
+    origin: Pos2,
+    gutter: f32,
+    lines: (usize, usize),
+    focused: bool,
+}
+
+/// What a frame of the editor did.
+#[derive(Default)]
+pub(crate) struct Output {
+    /// The text changed.
+    pub changed: bool,
+    /// The caret's line and column, from 0.
+    pub caret: (usize, usize),
+    /// What Vim asked the window to do.
+    pub effects: Vec<Effect>,
+}
+
+/// The editor's state across frames (one per editor pane).
+pub(crate) struct SourceEditor {
+    pub doc: Doc,
+    pub vim: Option<Vim>,
+    composer: Composer,
+    layout: Layout,
+    /// Where a mouse drag started.
+    drag: Option<usize>,
+    /// The last click's time and position, and how many clicks it made (word, line).
+    clicks: (f64, usize, u8),
+    /// The horizontal position kept by Up and Down.
+    want_x: Option<f32>,
+    /// Bring the caret into view next frame.
+    pub reveal: bool,
+    /// A scroll asked for by Vim, applied next frame.
+    scroll: Option<texcraft_vim::Scroll>,
+    /// Keys taken from the input for Vim before the window's shortcuts ran.
+    claimed: Vec<egui::Event>,
+    /// The first line shown and how many fit.
+    view: (usize, usize),
+}
+
+impl Default for SourceEditor {
+    fn default() -> Self {
+        Self {
+            doc: Doc::default(),
+            vim: None,
+            composer: Composer::new(),
+            layout: Layout::default(),
+            drag: None,
+            clicks: (0.0, 0, 0),
+            want_x: None,
+            reveal: false,
+            scroll: None,
+            claimed: Vec::new(),
+            view: (0, 40),
+        }
+    }
+}
+
+/// Vim's Ctrl keys, by mode: taken before the window's shortcuts.
+fn vim_claims(mode: Mode, key: egui::Key) -> bool {
+    use egui::Key as K;
+    match mode {
+        Mode::Insert | Mode::Replace => matches!(key, K::W | K::U | K::O | K::R | K::H | K::OpenBracket),
+        _ => matches!(
+            key,
+            K::R | K::D | K::U | K::F | K::B | K::O | K::I | K::V | K::A | K::X | K::E | K::Y | K::N | K::P | K::H | K::J | K::OpenBracket
+        ),
+    }
+}
+
+/// An egui key as Vim's, when Vim has a use for it.
+fn vim_key(key: egui::Key, modifiers: egui::Modifiers) -> Option<Key> {
+    use egui::Key as K;
+    if modifiers.command || modifiers.ctrl {
+        let name = key.name();
+        let c = match key {
+            K::OpenBracket => '[',
+            _ if name.len() == 1 => name.chars().next()?.to_ascii_lowercase(),
+            _ => return None,
+        };
+        return Some(Key::Ctrl(c));
+    }
+    Some(match key {
+        K::Escape => Key::Esc,
+        K::Enter => Key::Enter,
+        K::Backspace => Key::Backspace,
+        K::Delete => Key::Delete,
+        K::Tab => Key::Tab,
+        K::ArrowLeft => Key::Left,
+        K::ArrowRight => Key::Right,
+        K::ArrowUp => Key::Up,
+        K::ArrowDown => Key::Down,
+        K::Home => Key::Home,
+        K::End => Key::End,
+        K::PageUp => Key::PageUp,
+        K::PageDown => Key::PageDown,
+        // Printable keys arrive as text.
+        _ => return None,
+    })
+}
+
+fn is_word(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+impl SourceEditor {
+    /// Before the window's shortcuts run: in Vim mode, takes Vim's own Ctrl keys from the input
+    /// when the editor has the keyboard.
+    pub fn claim_keys(&mut self, ctx: &egui::Context, id: egui::Id) {
+        let Some(vim) = &self.vim else { return };
+        if !ctx.memory(|m| m.has_focus(id)) {
+            return;
+        }
+        let mode = vim.mode();
+        let mut claimed = Vec::new();
+        ctx.input_mut(|i| {
+            i.events.retain(|e| match e {
+                egui::Event::Key { key, pressed: true, modifiers, .. }
+                    if modifiers.command && !modifiers.shift && !modifiers.alt && vim_claims(mode, *key) =>
+                {
+                    claimed.push(e.clone());
+                    false
+                }
+                _ => true,
+            });
+        });
+        self.claimed.extend(claimed);
+    }
+
+    /// A new document: Vim's marks and commands in progress belong to the old one.
+    pub fn set_doc(&mut self, doc: Doc) {
+        self.doc = doc;
+        self.layout = Layout::default();
+        self.drag = None;
+        self.want_x = None;
+        if let Some(vim) = &mut self.vim {
+            vim.switch_buffer();
+        }
+        self.reveal = true;
+    }
+
+    pub fn set_vim(&mut self, on: bool) {
+        match (on, self.vim.is_some()) {
+            (true, false) => self.vim = Some(Vim::new()),
+            (false, true) => self.vim = None,
+            _ => {}
+        }
+    }
+
+    pub fn caret(&self) -> usize {
+        match &self.vim {
+            Some(v) => v.cursor(),
+            None => self.doc.selection.primary().head,
+        }
+    }
+
+    /// Selects `start..end` and brings it into view.
+    pub fn select(&mut self, start: usize, end: usize) {
+        let len = self.doc.buffer.len_chars();
+        self.doc.selection = Selection::single(start.min(len), end.min(len));
+        self.doc.buffer.seal();
+        self.reveal = true;
+    }
+
+    fn lay_out(&mut self, ui: &egui::Ui, t: &Tokens, width: f32) {
+        let version = self.doc.buffer.version();
+        let theme = (t.text, t.code_font());
+        let l = &self.layout;
+        if l.version != version || (l.width - width).abs() >= 0.5 || l.theme != theme || l.jobs.is_empty() {
+            self.layout.jobs = self.jobs(t, width);
+            self.layout.version = version;
+            self.layout.width = width;
+            self.layout.theme = theme;
+        }
+        let mut galleys = Vec::with_capacity(self.layout.jobs.len());
+        let mut tops = Vec::with_capacity(self.layout.jobs.len() + 1);
+        let mut y = 0.0;
+        ui.fonts_mut(|f| {
+            for job in &self.layout.jobs {
+                let galley = f.layout_job(job.clone());
+                tops.push(y);
+                y += galley.size().y.max(t.code_line_height);
+                galleys.push(galley);
+            }
+        });
+        tops.push(y);
+        self.layout.galleys = galleys;
+        self.layout.tops = tops;
+    }
+
+    /// One layout job per line, coloured by the LaTeX lexer.
+    fn jobs(&self, t: &Tokens, width: f32) -> Vec<LayoutJob> {
+        let text = self.doc.buffer.text();
+        let font = t.code_font();
+        let format = |kind| TextFormat { font_id: font.clone(), color: t.syntax(kind), line_height: Some(t.code_line_height), ..Default::default() };
+        let mut jobs = vec![LayoutJob::default()];
+        for token in texcraft_latex::lex(&text) {
+            let Some(run) = text.get(token.range.clone()) else { continue };
+            for (i, piece) in run.split('\n').enumerate() {
+                if i > 0 {
+                    jobs.push(LayoutJob::default());
+                }
+                if !piece.is_empty()
+                    && let Some(job) = jobs.last_mut()
+                {
+                    job.append(piece, 0.0, format(token.kind));
+                }
+            }
+        }
+        let plain = TextFormat { font_id: font.clone(), color: t.text, line_height: Some(t.code_line_height), ..Default::default() };
+        for job in &mut jobs {
+            if job.sections.is_empty() {
+                job.append("", 0.0, plain.clone());
+            }
+            job.wrap.max_width = width;
+        }
+        jobs
+    }
+
+    fn line_at_y(&self, y: f32) -> usize {
+        let tops = &self.layout.tops;
+        tops.partition_point(|top| *top <= y).saturating_sub(1).min(self.layout.galleys.len().saturating_sub(1))
+    }
+
+    /// The position under `p` (relative to the text's top left).
+    fn pos_at(&self, p: Vec2) -> usize {
+        let line = self.line_at_y(p.y);
+        let Some(galley) = self.layout.galleys.get(line) else { return 0 };
+        let top = self.layout.tops.get(line).copied().unwrap_or(0.0);
+        let col: usize = galley.cursor_from_pos(vec2(p.x, p.y - top)).index.into();
+        self.doc.buffer.line_to_char(line) + col.min(self.doc.buffer.line(line).chars().count())
+    }
+
+    /// The caret's rectangle at `pos` (relative to the text's top left).
+    fn rect_at(&self, pos: usize) -> Rect {
+        let b = &self.doc.buffer;
+        let line = b.char_to_line(pos);
+        let col = pos - b.line_to_char(line);
+        let top = self.layout.tops.get(line).copied().unwrap_or(0.0);
+        match self.layout.galleys.get(line) {
+            Some(g) => g.pos_from_cursor(CCursor::new(col)).translate(vec2(0.0, top)),
+            None => Rect::from_min_size(pos2(0.0, top), vec2(0.0, 16.0)),
+        }
+    }
+
+    /// Shows the editor; `id` is its focus and accessibility id.
+    pub fn show(&mut self, ui: &mut egui::Ui, t: &Tokens, id: egui::Id, markers: &Markers, name: &str, indent: &str) -> Output {
+        let mut out = Output::default();
+        let ctx = ui.ctx().clone();
+        let focused = ctx.memory(|m| m.has_focus(id));
+        let vim_mode = self.vim.as_ref().map(Vim::mode);
+        ctx.memory_mut(|m| {
+            m.set_focus_lock_filter(id, egui::EventFilter { tab: true, horizontal_arrows: true, vertical_arrows: true, escape: vim_mode.is_some() });
+        });
+        let version = self.doc.buffer.version();
+        // Input first, so this frame shows its result.
+        let edits = self.composer.update(&ctx, focused);
+        let claimed = std::mem::take(&mut self.claimed);
+        if focused {
+            let now = ctx.input(|i| i.time);
+            for event in claimed {
+                if let egui::Event::Key { key, modifiers, .. } = event {
+                    self.key(key, modifiers, now, indent, &ctx, &mut out);
+                }
+            }
+            for edit in edits {
+                self.apply(edit, now, indent, &ctx, &mut out);
+            }
+        }
+        out.changed = self.doc.buffer.version() != version;
+
+        let lines = self.doc.buffer.len_lines();
+        let digits = lines.to_string().len().max(2) as f32;
+        let char_w = ui.fonts_mut(|f| f.glyph_width(&t.code_font(), '0'));
+        let gutter = digits * char_w + 9.0 * t.unit;
+        let margin = vec2(4.0, 8.0);
+        let mut scroll = egui::ScrollArea::vertical().id_salt(id.with("scroll")).auto_shrink([false, false]);
+        if let Some(request) = self.scroll.take() {
+            let caret_top = self.rect_at(self.caret()).top();
+            let (view_h, offset) = ui.ctx().data(|d| d.get_temp::<(f32, f32)>(id.with("view"))).unwrap_or((400.0, 0.0));
+            let target = match request {
+                texcraft_vim::Scroll::Center => caret_top - view_h / 2.0,
+                texcraft_vim::Scroll::Top => caret_top,
+                texcraft_vim::Scroll::Bottom => caret_top - view_h + t.code_line_height * 2.0,
+                texcraft_vim::Scroll::Lines(n) => offset + n as f32 * t.code_line_height,
+            };
+            scroll = scroll.vertical_scroll_offset(target.max(0.0));
+        }
+        scroll.show_viewport(ui, |ui, viewport| {
+            // The visible width, less the gutter, the margins and the scroll bar.
+            let width = (viewport.width() - gutter - margin.x - 24.0).max(40.0);
+            self.lay_out(ui, t, width);
+            let height = self.layout.tops.last().copied().unwrap_or(0.0) + margin.y + 40.0;
+            let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height.max(viewport.height())), Sense::hover());
+            ui.ctx().data_mut(|d| d.insert_temp(id.with("view"), (viewport.height(), viewport.min.y)));
+            let origin = rect.min + vec2(gutter + margin.x, margin.y);
+            let response = ui.interact(rect, id, Sense::click_and_drag());
+            if response.clicked() || response.drag_started() {
+                response.request_focus();
+            }
+            self.mouse(&response, origin, &ctx);
+            let first = self.line_at_y(viewport.min.y - margin.y);
+            let last = self.line_at_y(viewport.max.y - margin.y);
+            self.view = (first, last.saturating_sub(first).max(1));
+            let area = Area { rect, origin, gutter, lines: (first, last), focused };
+            self.paint(ui, t, &area, markers);
+            let caret = self.rect_at(self.caret()).translate(origin.to_vec2());
+            if std::mem::take(&mut self.reveal) {
+                ui.scroll_to_rect(caret.expand2(vec2(0.0, t.code_line_height)), None);
+            }
+            if focused {
+                self.composer.set_caret(&ctx, caret);
+            }
+            self.accessibility(ui, &response, id, name, origin);
+        });
+        let caret = self.caret();
+        let b = &self.doc.buffer;
+        let line = b.char_to_line(caret);
+        out.caret = (line, caret - b.line_to_char(line));
+        out
+    }
+
+    // ----- Input -----
+
+    fn apply(&mut self, edit: Edit, now: f64, indent: &str, ctx: &egui::Context, out: &mut Output) {
+        match edit {
+            Edit::Preedit { .. } => {}
+            Edit::Insert(text) => {
+                if self.vim.is_some() {
+                    for c in text.chars() {
+                        self.vim_key(Key::Char(c), now, indent, ctx, out);
+                    }
+                } else {
+                    self.replace_selection(&text, EditKind::Typing { at: now });
+                }
+            }
+            Edit::LineBreak { modifiers } => self.key(egui::Key::Enter, modifiers, now, indent, ctx, out),
+            Edit::Key { key, modifiers, .. } => self.key(key, modifiers, now, indent, ctx, out),
+            Edit::Paste(text) => match &self.vim {
+                Some(v) if v.mode().is_inserting() => {
+                    for c in text.chars() {
+                        self.vim_key(Key::Char(c), now, indent, ctx, out);
+                    }
+                }
+                Some(_) => self.vim_key(Key::Ctrl('v'), now, indent, ctx, out),
+                None => self.replace_selection(&text, EditKind::Other),
+            },
+            Edit::Copy | Edit::Cut => {
+                if self.vim.is_some() {
+                    let key = if edit == Edit::Copy { 'c' } else { 'x' };
+                    self.vim_key(Key::Ctrl(key), now, indent, ctx, out);
+                    return;
+                }
+                let r = self.doc.selection.primary();
+                if r.is_empty() {
+                    return;
+                }
+                ctx.copy_text(self.doc.buffer.slice(r.start(), r.end()));
+                if edit == Edit::Cut {
+                    self.replace_selection("", EditKind::Other);
+                }
+            }
+            Edit::DeleteSurrounding { before_chars, after_chars } => {
+                let caret = self.caret();
+                let len = self.doc.buffer.len_chars();
+                self.replace_range(caret.saturating_sub(before_chars), (caret + after_chars).min(len), "", EditKind::Other);
+            }
+            Edit::DeleteSurroundingBytes { before_bytes, after_bytes } => {
+                let caret = self.caret();
+                let b = &self.doc.buffer;
+                let line = b.char_to_line(caret);
+                let (before, after) = (b.slice(b.line_to_char(line), caret), b.slice(caret, b.line_end(line)));
+                let (bc, ac) = craft_ui::ime::surrounding_chars(&before, &after, before_bytes, after_bytes);
+                self.replace_range(caret - bc, caret + ac, "", EditKind::Other);
+            }
+        }
+    }
+
+    fn key(&mut self, key: egui::Key, modifiers: egui::Modifiers, now: f64, indent: &str, ctx: &egui::Context, out: &mut Output) {
+        if self.vim.is_some() {
+            if let Some(k) = vim_key(key, modifiers) {
+                self.vim_key(k, now, indent, ctx, out);
+            }
+            return;
+        }
+        self.standard_key(key, modifiers, now, indent, ctx);
+    }
+
+    fn vim_key(&mut self, key: Key, now: f64, indent: &str, ctx: &egui::Context, out: &mut Output) {
+        let Some(vim) = &mut self.vim else { return };
+        let (rows, top) = (self.view.1, self.view.0);
+        let mut vctx =
+            Ctx { buffer: &mut self.doc.buffer, selection: &mut self.doc.selection, now, view_top: top, view_rows: rows, clipboard: None, indent };
+        let result = vim.key(key, &mut vctx);
+        for effect in result.effects {
+            match effect {
+                Effect::Copy(text) => ctx.copy_text(text),
+                Effect::Scroll(s) => self.scroll = Some(s),
+                other => out.effects.push(other),
+            }
+        }
+        self.reveal = true;
+    }
+
+    fn replace_range(&mut self, start: usize, end: usize, text: &str, kind: EditKind) {
+        let before = self.doc.selection.clone();
+        let after = Selection::point(start + text.chars().count());
+        if self.doc.buffer.edit(Transaction::replace(start, end, text), &before, &after, kind).is_ok() {
+            self.doc.selection = after;
+        }
+        self.want_x = None;
+        self.reveal = true;
+    }
+
+    fn replace_selection(&mut self, text: &str, kind: EditKind) {
+        let r = self.doc.selection.primary();
+        // Typing over a selection is its own undo step.
+        if !r.is_empty() {
+            self.doc.buffer.seal();
+        }
+        self.replace_range(r.start(), r.end(), text, if r.is_empty() { kind } else { EditKind::Other });
+    }
+
+    fn move_to(&mut self, pos: usize, extend: bool) {
+        let anchor = if extend { self.doc.selection.primary().anchor } else { pos };
+        self.doc.selection = Selection::single(anchor, pos.min(self.doc.buffer.len_chars()));
+        self.doc.buffer.seal();
+        self.reveal = true;
+    }
+
+    fn word_left(&self, pos: usize) -> usize {
+        let b = &self.doc.buffer;
+        let mut p = pos;
+        while p > 0 && b.char_at(p - 1).is_some_and(|c| c.is_whitespace()) {
+            p -= 1;
+        }
+        let word = b.char_at(p.saturating_sub(1)).is_some_and(is_word);
+        while p > 0 && b.char_at(p - 1).is_some_and(|c| !c.is_whitespace() && is_word(c) == word) {
+            p -= 1;
+        }
+        p
+    }
+
+    fn word_right(&self, pos: usize) -> usize {
+        let b = &self.doc.buffer;
+        let len = b.len_chars();
+        let mut p = pos;
+        let word = b.char_at(p).is_some_and(is_word);
+        while p < len && b.char_at(p).is_some_and(|c| !c.is_whitespace() && is_word(c) == word) {
+            p += 1;
+        }
+        while p < len && b.char_at(p).is_some_and(|c| c.is_whitespace() && c != '\n') {
+            p += 1;
+        }
+        if p == pos && p < len {
+            p += 1;
+        }
+        p
+    }
+
+    /// The position one visual row above or below `pos`, keeping `want_x`.
+    fn row_step(&mut self, pos: usize, rows: f32) -> usize {
+        let caret = self.rect_at(pos);
+        let x = *self.want_x.get_or_insert(caret.left());
+        let y = caret.center().y + rows * caret.height().max(1.0);
+        let total = self.layout.tops.last().copied().unwrap_or(0.0);
+        if y < 0.0 {
+            return 0;
+        }
+        if y > total {
+            return self.doc.buffer.len_chars();
+        }
+        self.pos_at(vec2(x, y))
+    }
+
+    fn standard_key(&mut self, key: egui::Key, m: egui::Modifiers, now: f64, indent: &str, ctx: &egui::Context) {
+        use egui::Key as K;
+        let b = &self.doc.buffer;
+        let r = self.doc.selection.primary();
+        let pos = r.head;
+        let line = b.char_to_line(pos);
+        let word = m.command || m.alt;
+        let keep_x = matches!(key, K::ArrowUp | K::ArrowDown | K::PageUp | K::PageDown);
+        match key {
+            K::ArrowLeft | K::ArrowRight => {
+                let left = key == K::ArrowLeft;
+                let to = if !r.is_empty() && !m.shift {
+                    if left { r.start() } else { r.end() }
+                } else if word {
+                    if left { self.word_left(pos) } else { self.word_right(pos) }
+                } else if left {
+                    pos.saturating_sub(1)
+                } else {
+                    (pos + 1).min(b.len_chars())
+                };
+                self.move_to(to, m.shift);
+            }
+            K::ArrowUp | K::ArrowDown => {
+                let to = self.row_step(pos, if key == K::ArrowUp { -1.0 } else { 1.0 });
+                self.move_to(to, m.shift);
+            }
+            K::PageUp | K::PageDown => {
+                let rows = self.view.1.max(2) as f32 - 1.0;
+                let to = self.row_step(pos, if key == K::PageUp { -rows } else { rows });
+                self.move_to(to, m.shift);
+            }
+            K::Home => {
+                let to = if m.command {
+                    0
+                } else {
+                    // The first non-blank, then the line's start.
+                    let start = b.line_to_char(line);
+                    let first = start + b.line(line).chars().take_while(|c| *c == ' ' || *c == '\t').count();
+                    if pos == first { start } else { first }
+                };
+                self.move_to(to, m.shift);
+            }
+            K::End => {
+                let to = if m.command { b.len_chars() } else { b.line_end(line) };
+                self.move_to(to, m.shift);
+            }
+            K::Backspace | K::Delete => {
+                if !r.is_empty() {
+                    self.replace_selection("", EditKind::Other);
+                } else if key == K::Backspace && pos > 0 {
+                    let from = if word { self.word_left(pos) } else { pos - 1 };
+                    self.replace_range(from, pos, "", EditKind::Deleting { at: now });
+                } else if key == K::Delete && pos < b.len_chars() {
+                    let to = if word { self.word_right(pos) } else { pos + 1 };
+                    self.replace_range(pos, to, "", EditKind::Deleting { at: now });
+                }
+            }
+            K::Enter => {
+                let lead: String = b.line(line).chars().take(pos - b.line_to_char(line)).take_while(|c| *c == ' ' || *c == '\t').collect();
+                self.replace_selection(&format!("\n{lead}"), EditKind::Typing { at: now });
+            }
+            K::Tab => {
+                let (first, last) = (b.char_to_line(r.start()), b.char_to_line(r.end().saturating_sub(1).max(r.start())));
+                if m.shift || first != last {
+                    self.shift_lines(first, last, !m.shift, indent);
+                } else {
+                    self.replace_selection(indent, EditKind::Typing { at: now });
+                }
+            }
+            K::A if m.command => {
+                self.doc.selection = Selection::single(0, b.len_chars());
+            }
+            K::Z if m.command && !m.shift => self.undo(false),
+            K::Z if m.command && m.shift => self.undo(true),
+            K::Y if m.command => self.undo(true),
+            K::Slash if m.command => self.toggle_comment(),
+            _ => {}
+        }
+        if !keep_x {
+            self.want_x = None;
+        }
+        let _ = ctx;
+    }
+
+    fn undo(&mut self, redo: bool) {
+        let sel = if redo { self.doc.buffer.redo() } else { self.doc.buffer.undo() };
+        if let Some(sel) = sel {
+            self.doc.selection = sel.clamp(self.doc.buffer.len_chars());
+            self.reveal = true;
+        }
+    }
+
+    fn shift_lines(&mut self, first: usize, last: usize, right: bool, indent: &str) {
+        let b = &self.doc.buffer;
+        let width = indent.chars().count().max(1);
+        let mut changes = Vec::new();
+        for l in first..=last {
+            let start = b.line_to_char(l);
+            let text = b.line(l);
+            if right {
+                if !text.is_empty() {
+                    changes.push(texcraft_buffer::Change { start, end: start, text: indent.to_owned() });
+                }
+            } else {
+                let n = text.chars().take(width).take_while(|c| *c == ' ').count().max(usize::from(text.starts_with('\t')));
+                if n > 0 {
+                    changes.push(texcraft_buffer::Change { start, end: start + n, text: String::new() });
+                }
+            }
+        }
+        let Ok(tx) = Transaction::new(changes) else { return };
+        let before = self.doc.selection.clone();
+        let after = before.map(&tx);
+        if self.doc.buffer.edit(tx, &before, &after, EditKind::Other).is_ok() {
+            // Keep whole lines selected.
+            let b = &self.doc.buffer;
+            self.doc.selection =
+                if first == last && before.primary().is_empty() { after } else { Selection::single(b.line_to_char(first), b.line_end(last)) };
+        }
+    }
+
+    /// Ctrl+/ comments the selected lines out with `%`, or back in when all are comments.
+    fn toggle_comment(&mut self) {
+        let b = &self.doc.buffer;
+        let r = self.doc.selection.primary();
+        let (first, last) = (b.char_to_line(r.start()), b.char_to_line(r.end().saturating_sub(1).max(r.start())));
+        let lines: Vec<(usize, String)> = (first..=last).map(|l| (l, b.line(l))).collect();
+        let all = lines.iter().filter(|(_, t)| !t.trim().is_empty()).all(|(_, t)| t.trim_start().starts_with('%'));
+        let mut changes = Vec::new();
+        for (l, text) in &lines {
+            if text.trim().is_empty() {
+                continue;
+            }
+            let lead = text.chars().take_while(|c| *c == ' ' || *c == '\t').count();
+            let at = b.line_to_char(*l) + lead;
+            if all {
+                let n = if text.chars().nth(lead + 1) == Some(' ') { 2 } else { 1 };
+                changes.push(texcraft_buffer::Change { start: at, end: at + n, text: String::new() });
+            } else {
+                changes.push(texcraft_buffer::Change { start: at, end: at, text: "% ".to_owned() });
+            }
+        }
+        let Ok(tx) = Transaction::new(changes) else { return };
+        let before = self.doc.selection.clone();
+        let after = before.map(&tx);
+        if self.doc.buffer.edit(tx, &before, &after, EditKind::Other).is_ok() {
+            self.doc.selection = after;
+        }
+    }
+
+    fn mouse(&mut self, response: &egui::Response, origin: Pos2, ctx: &egui::Context) {
+        let Some(p) = response.interact_pointer_pos() else {
+            self.drag = None;
+            return;
+        };
+        let pos = self.pos_at(p - origin);
+        let shift = ctx.input(|i| i.modifiers.shift);
+        if response.drag_started() || response.clicked() {
+            let now = ctx.input(|i| i.time);
+            let (last_time, last_pos, count) = self.clicks;
+            let count = if now - last_time < 0.4 && last_pos == pos { count % 3 + 1 } else { 1 };
+            self.clicks = (now, pos, count);
+            let b = &self.doc.buffer;
+            let (start, end) = match count {
+                2 => {
+                    let mut s = pos;
+                    while s > 0 && b.char_at(s - 1).is_some_and(is_word) {
+                        s -= 1;
+                    }
+                    let mut e = pos;
+                    while b.char_at(e).is_some_and(is_word) {
+                        e += 1;
+                    }
+                    (s, e)
+                }
+                3 => {
+                    let line = b.char_to_line(pos);
+                    (b.line_to_char(line), (b.line_end(line) + 1).min(b.len_chars()))
+                }
+                _ => (pos, pos),
+            };
+            if shift && count == 1 {
+                self.move_to(pos, true);
+            } else {
+                self.doc.selection = Selection::single(start, end);
+                self.doc.buffer.seal();
+            }
+            self.drag = Some(self.doc.selection.primary().anchor);
+            self.want_x = None;
+        } else if response.dragged()
+            && let Some(anchor) = self.drag
+        {
+            self.doc.selection = Selection::single(anchor, pos);
+        }
+    }
+
+    // ----- Painting -----
+
+    fn paint(&self, ui: &egui::Ui, t: &Tokens, area: &Area, markers: &Markers) {
+        let Area { rect, origin, gutter, lines: (first, last), focused } = *area;
+        let painter = ui.painter();
+        let b = &self.doc.buffer;
+        let caret = self.caret();
+        let caret_line = b.char_to_line(caret);
+        let font = egui::FontId::new(t.code_size - 1.5, egui::FontFamily::Monospace);
+        let number_right = rect.left() + gutter - 3.0 * t.unit;
+        let sel = self.doc.selection.primary();
+        let highlight = self.vim.as_ref().and_then(Vim::highlighted);
+        for line in first..=last.min(self.layout.galleys.len().saturating_sub(1)) {
+            let (Some(galley), Some(top)) = (self.layout.galleys.get(line), self.layout.tops.get(line)) else { continue };
+            let bottom = self.layout.tops.get(line + 1).copied().unwrap_or(*top);
+            let y0 = origin.y + top;
+            let band = Rect::from_min_max(pos2(rect.left(), y0), pos2(rect.right(), origin.y + bottom));
+            if matches!(markers.get(&(line as u32)), Some((Severity::Error, _))) {
+                painter.rect_filled(band, 0.0, t.error_line);
+            } else if focused && line == caret_line && sel.is_empty() {
+                painter.rect_filled(band, 0.0, t.current_line);
+            }
+            let line_start = b.line_to_char(line);
+            let line_len = galley.rows.iter().map(|r| r.char_count_excluding_newline().0).sum::<usize>();
+            // Search matches.
+            if let Some(re) = highlight {
+                let text = b.line(line);
+                for m in re.find_iter(&text) {
+                    let (s, e) = (text[..m.start()].chars().count(), text[..m.end()].chars().count());
+                    paint_span(painter, galley, origin + vec2(0.0, *top), (s, e.max(s + 1).min(line_len.max(s + 1))), t.search_match, false);
+                }
+            }
+            // The selection.
+            if !sel.is_empty() && sel.start() <= line_start + line_len && sel.end() > line_start {
+                let s = sel.start().saturating_sub(line_start);
+                let e = (sel.end() - line_start).min(line_len);
+                let through_break = sel.end() > line_start + line_len;
+                paint_span(painter, galley, origin + vec2(0.0, *top), (s, e), t.selection, through_break);
+            }
+            painter.galley(origin + vec2(0.0, *top), galley.clone(), t.text);
+            // The gutter.
+            let first_row = galley.rows.first().map_or(t.code_line_height, |r| r.max_y());
+            let mid = y0 + first_row / 2.0;
+            let color = if line == caret_line { t.text } else { t.text_muted };
+            painter.text(pos2(number_right, mid), Align2::RIGHT_CENTER, (line + 1).to_string(), font.clone(), color);
+            if let Some((severity, message)) = markers.get(&(line as u32)) {
+                let (icon, color) =
+                    if *severity == Severity::Error { ("circle-exclamation-point", t.error) } else { ("triangle-exclamation-point", t.warning) };
+                let r = Rect::from_center_size(pos2(rect.left() + 2.5 * t.unit, mid), vec2(14.0, 14.0));
+                icons::paint(ui, r, icon, 13.0, color);
+                let hover = ui.interact(r, ui.scope_id().with(("marker", line)), Sense::hover());
+                let _ = hover.on_hover_text(message.as_str());
+            }
+        }
+        // The caret, and the marked text of a composition.
+        if focused {
+            let c = self.rect_at(caret).translate(origin.to_vec2());
+            let mode = self.vim.as_ref().map(Vim::mode);
+            match mode {
+                Some(m) if !m.is_inserting() => {
+                    let w = ui.fonts_mut(|f| f.glyph_width(&t.code_font(), b.char_at(caret).filter(|c| *c != '\n').unwrap_or(' ')));
+                    let _ = painter.rect_filled(Rect::from_min_size(c.min, vec2(w.max(4.0), c.height())), 1.0, t.caret_block);
+                }
+                Some(Mode::Replace) => {
+                    let _ = painter.rect_filled(Rect::from_min_max(pos2(c.left(), c.bottom() - 2.0), pos2(c.left() + 8.0, c.bottom())), 0.0, t.text);
+                }
+                _ => {
+                    let _ = painter.rect_filled(Rect::from_min_size(c.min, vec2(2.0, c.height())), 0.0, t.text);
+                }
+            }
+            if let Some(pre) = self.composer.preedit() {
+                let g = ui.fonts_mut(|f| f.layout_no_wrap(pre.text.to_owned(), t.code_font(), t.text));
+                let r = Rect::from_min_size(c.min, g.size());
+                painter.rect_filled(r, 0.0, t.surface);
+                painter.galley(c.min, g, t.text);
+                painter.hline(r.x_range(), r.bottom(), egui::Stroke::new(1.0, t.text));
+            }
+        }
+    }
+
+    // ----- Accessibility -----
+
+    fn accessibility(&self, ui: &mut egui::Ui, response: &egui::Response, id: egui::Id, name: &str, origin: Pos2) {
+        let enabled = ui.ctx().accesskit_node_builder(id, |_| ()).is_some();
+        if !enabled {
+            return;
+        }
+        let b = &self.doc.buffer;
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::MultilineTextInput, true, name));
+        let run = |line: usize| id.with(("line", line));
+        let position = |pos: usize| {
+            let line = b.char_to_line(pos);
+            egui::accesskit::TextPosition { node: run(line).accesskit_id(), character_index: pos - b.line_to_char(line) }
+        };
+        let sel = self.doc.selection.primary();
+        let mode = self.vim.as_ref().map(Vim::mode);
+        ui.ctx().accesskit_node_builder(id, |node| {
+            node.set_role(egui::accesskit::Role::MultilineTextInput);
+            node.set_label(name);
+            node.set_value(b.text());
+            let (anchor, focus) = match mode {
+                Some(m) if !m.is_inserting() && !m.is_visual() => (self.caret(), self.caret()),
+                _ => (sel.anchor, sel.head),
+            };
+            node.set_text_selection(egui::accesskit::TextSelection { anchor: position(anchor), focus: position(focus) });
+        });
+        let child = ui.new_child(egui::UiBuilder::new().accessibility_parent(id));
+        for line in 0..b.len_lines() {
+            let mut value = b.line(line);
+            if line + 1 < b.len_lines() {
+                value.push('\n');
+            }
+            let top = self.layout.tops.get(line).copied().unwrap_or(0.0);
+            let bottom = self.layout.tops.get(line + 1).copied().unwrap_or(top);
+            let width = self.layout.galleys.get(line).map_or(0.0, |g| g.size().x);
+            // A widget of a child of the editor's node, so the run is the editor's child.
+            let line_rect = Rect::from_min_max(pos2(origin.x, origin.y + top), pos2(origin.x + width.max(1.0), origin.y + bottom.max(top + 1.0)));
+            let _ = child.interact(line_rect, run(line), Sense::hover());
+            child.ctx().accesskit_node_builder(run(line), |node| {
+                node.set_role(egui::accesskit::Role::TextRun);
+                node.set_bounds(egui::accesskit::Rect {
+                    x0: origin.x.into(),
+                    y0: (origin.y + top).into(),
+                    x1: (origin.x + width).into(),
+                    y1: (origin.y + bottom).into(),
+                });
+                let lengths: Vec<u8> = value.chars().map(|c| c.len_utf8() as u8).collect();
+                node.set_value(value);
+                node.set_character_lengths(lengths);
+            });
+        }
+    }
+}
+
+/// Paints chars `s..e` of one line's galley (`through_break`: and its line break).
+fn paint_span(painter: &egui::Painter, galley: &Galley, at: Pos2, (s, e): (usize, usize), color: egui::Color32, through_break: bool) {
+    let mut row_start = 0;
+    for row in &galley.rows {
+        let n = row.char_count_excluding_newline().0;
+        let (a, z) = (s.max(row_start), e.min(row_start + n));
+        let last_row = row_start + n >= galley.rows.iter().map(|r| r.char_count_excluding_newline().0).sum::<usize>();
+        if a < z || (through_break && last_row && e >= row_start + n) {
+            let x0 = row.pos.x + row.x_offset(egui::text::CharIndex(a - row_start));
+            let mut x1 = row.pos.x + row.x_offset(egui::text::CharIndex(z.max(a) - row_start));
+            if through_break && last_row {
+                x1 += 6.0;
+            }
+            let r = Rect::from_min_max(pos2(x0, row.min_y()), pos2(x1, row.max_y())).translate(at.to_vec2());
+            painter.rect_filled(r, 0.0, color);
+        }
+        row_start += n;
+    }
+}

@@ -1,20 +1,20 @@
 //! The editor pane (docs/design.md, Regions): tabs of the open files, the editor toolbar, and the
 //! source with a gutter of line numbers and error markers and a band on the caret's line.
 //!
-//! The text surface is still egui's multi-line text field with a highlighting layouter. It will
-//! be replaced by TeXCraft's own editor widget (rope buffer, folding, completion, IME through
-//! craft-ui's `ime::Composer`, an editable AccessKit node with caret and selection), docs/plan.md
-//! phase 2. Toolbar actions already edit through `file.edit`, as the new widget will.
+//! The text is TeXCraft's own editor widget ([`crate::source`]). Each open file keeps its text,
+//! caret and undo history while another is shown; edits go to the session with `file.write`, and
+//! a change the session makes (an agent's edit, a reload) comes back as one undoable edit.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use egui::text::{CCursor, CCursorRange, LayoutJob, TextFormat};
 use egui::{Align, Align2, Layout, Rect, Sense, vec2};
 use serde_json::json;
+use texcraft_buffer::{EditKind, Selection, Transaction};
 use texcraft_engine::Severity;
 use texcraft_engine::project::{Contents, ProjectPath};
+use texcraft_vim::Effect;
 
+use crate::source::{Doc, Markers, SourceEditor};
 use crate::theme::{Tokens, blend};
 use crate::{App, icons, widgets};
 
@@ -22,34 +22,82 @@ use crate::{App, icons, widgets};
 #[derive(Default)]
 pub(crate) struct Editor {
     path: Option<ProjectPath>,
-    text: String,
-    /// The session revision `text` matches.
+    /// The session revision the shown text matches.
     revision: u64,
-    /// Select this character range in the text field next frame (after a toolbar edit).
-    select: Option<(usize, usize)>,
+    pub source: SourceEditor,
+    /// The buffer version last sent to the session (or taken from it).
+    sent: u64,
+    /// The other open files' text, caret and undo history.
+    parked: HashMap<ProjectPath, Doc>,
 }
 
-impl Editor {
-    /// Reloads the text when another file is shown or the file changed outside the editor.
-    fn sync(&mut self, path: Option<&ProjectPath>, revision: u64, project: &texcraft_engine::project::Project) {
-        if self.path.as_ref() == path && self.revision == revision {
-            return;
-        }
-        let same_file = self.path.as_ref() == path;
-        self.path = path.cloned();
-        self.revision = revision;
-        let fresh = match path.and_then(|p| project.get(p)) {
-            Some(Contents::Text(t)) => t.clone(),
-            _ => String::new(),
-        };
-        if !same_file || fresh != self.text {
-            self.text = fresh;
-        }
+fn session_text(project: &texcraft_engine::project::Project, path: Option<&ProjectPath>) -> Option<String> {
+    match path.and_then(|p| project.get(p)) {
+        Some(Contents::Text(t)) => Some(t.clone()),
+        _ => None,
     }
 }
 
-/// Diagnostics by line (from 0): the most severe one's severity and message.
-type Markers = HashMap<u32, (Severity, String)>;
+impl Editor {
+    /// Shows another file's text, or takes a change the session made to the shown one.
+    fn sync(&mut self, path: Option<&ProjectPath>, revision: u64, project: &texcraft_engine::project::Project) {
+        if self.path.as_ref() != path {
+            if let Some(old) = self.path.take() {
+                let doc = std::mem::take(&mut self.source.doc);
+                self.parked.insert(old, doc);
+            }
+            self.parked.retain(|p, _| project.get(p).is_some());
+            let fresh = session_text(project, path).unwrap_or_default();
+            let mut doc = path.and_then(|p| self.parked.remove(p)).unwrap_or_else(|| Doc::new(&fresh));
+            if doc.buffer.text() != fresh {
+                let _ = doc.buffer.replace_all(&fresh, &doc.selection);
+                doc.selection = doc.selection.clone().clamp(doc.buffer.len_chars());
+            }
+            self.source.set_doc(doc);
+            self.sent = self.source.doc.buffer.version();
+            self.path = path.cloned();
+            self.revision = revision;
+            return;
+        }
+        if self.revision == revision {
+            return;
+        }
+        self.revision = revision;
+        let fresh = session_text(project, path).unwrap_or_default();
+        let doc = &mut self.source.doc;
+        if doc.buffer.text() != fresh {
+            let _ = doc.buffer.replace_all(&fresh, &doc.selection);
+            doc.selection = doc.selection.clone().clamp(doc.buffer.len_chars());
+        }
+        self.sent = doc.buffer.version();
+    }
+}
+
+/// Vim's state for the status bar: the command line being typed, or the mode with the keys of a
+/// command in progress and the register being recorded.
+pub(crate) fn vim_status(app: &App) -> Option<String> {
+    let vim = app.editor.source.vim.as_ref()?;
+    if let Some(line) = vim.command_line() {
+        return Some(line);
+    }
+    let mut text = vim.mode().label().to_owned();
+    let pending = vim.pending();
+    if !pending.is_empty() {
+        text.push(' ');
+        text.push_str(&pending);
+    }
+    if let Some(r) = vim.recording() {
+        text.push_str(&tl!(" · recording @{r}").replace("{r}", &r.to_string()));
+    }
+    Some(text)
+}
+
+/// Before the window's shortcuts: Vim's Ctrl keys go to the shown file's editor.
+pub(crate) fn claim_keys(app: &mut App, ctx: &egui::Context) {
+    if let Some(path) = app.editor.path.clone() {
+        app.editor.source.claim_keys(ctx, editor_id(&path));
+    }
+}
 
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
@@ -315,24 +363,23 @@ fn editor_id(path: &ProjectPath) -> egui::Id {
     egui::Id::unique(("editor", path.as_str()))
 }
 
-/// Applies a toolbar edit at the editor's selection through `file.edit`.
-fn apply_wrap(app: &mut App, ctx: &egui::Context, w: &Wrap) {
-    let Some(path) = app.session.current().cloned() else { return };
-    let text = &app.editor.text;
-    let (a, b) = egui::text_edit::TextEditState::load(ctx, editor_id(&path)).and_then(|s| s.cursor.char_range()).map_or((0, 0), |r| {
-        let (x, y): (usize, usize) = (r.primary.index.into(), r.secondary.index.into());
-        (x.min(y), x.max(y))
-    });
-    let byte = |c: usize| text.char_indices().nth(c).map_or(text.len(), |(i, _)| i);
-    let (start, end) = (byte(a), byte(b));
-    let selected = text.get(start..end).unwrap_or_default();
-    let inner = if selected.is_empty() { w.placeholder } else { selected };
+/// Applies a toolbar edit at the editor's selection, as one undoable edit. The text goes to the
+/// session with the editor's next frame.
+fn apply_wrap(app: &mut App, _ctx: &egui::Context, w: &Wrap) {
+    let source = &mut app.editor.source;
+    let doc = &mut source.doc;
+    let r = doc.selection.primary();
+    let (a, b) = (r.start(), r.end());
+    let selected = doc.buffer.slice(a, b);
+    let inner = if selected.is_empty() { w.placeholder.to_owned() } else { selected };
     let replacement = format!("{}{inner}{}", w.before, w.after);
-    let inner_chars = inner.chars().count();
     let select_from = a + w.before.chars().count();
-    if app.run("file.edit", json!({"path": path.as_str(), "start": start, "end": end, "text": replacement})).is_some() {
-        app.editor.select = Some((select_from, select_from + inner_chars));
-        app.view.last_edit = Some(ctx.input(|i| i.time));
+    let after = Selection::single(select_from, select_from + inner.chars().count());
+    let before = doc.selection.clone();
+    if doc.buffer.edit(Transaction::replace(a, b, &replacement), &before, &after, EditKind::Other).is_ok() {
+        doc.buffer.seal();
+        source.select(select_from, select_from + inner.chars().count());
+        source.reveal = true;
     }
 }
 
@@ -352,17 +399,6 @@ fn markers(app: &App, path: &ProjectPath) -> Markers {
     out
 }
 
-fn highlight(text: &str, t: &Tokens) -> LayoutJob {
-    let mut job = LayoutJob::default();
-    let font = t.code_font();
-    for token in texcraft_latex::lex(text) {
-        let Some(run) = text.get(token.range.clone()) else { continue };
-        let format = TextFormat { font_id: font.clone(), color: t.syntax(token.kind), line_height: Some(t.code_line_height), ..Default::default() };
-        job.append(run, 0.0, format);
-    }
-    job
-}
-
 fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     let t = app.tokens;
     let markers = markers(app, path);
@@ -370,129 +406,40 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     app.region(crate::Region::Editor, id);
     if let Some((goto_path, line)) = app.view.goto.take() {
         if &goto_path == path {
-            let target = line.saturating_sub(1) as usize;
-            let chars: usize = app.editor.text.split_inclusive('\n').take(target).map(|l| l.chars().count()).sum();
-            app.editor.select = Some((chars, chars));
+            let b = &app.editor.source.doc.buffer;
+            let at = b.line_to_char(line.saturating_sub(1) as usize);
+            app.editor.source.select(at, at);
+            ui.memory_mut(|m| m.request_focus(id));
         } else {
             app.view.goto = Some((goto_path, line));
         }
     }
-    if let Some((a, b)) = app.editor.select.take() {
-        let mut state = egui::text_edit::TextEditState::load(ui.ctx(), id).unwrap_or_default();
-        state.cursor.set_char_range(Some(CCursorRange::two(CCursor::new(a), CCursor::new(b))));
-        state.store(ui.ctx(), id);
-        ui.memory_mut(|m| m.request_focus(id));
-    }
-    let lines = app.editor.text.matches('\n').count() + 1;
-    let digits = lines.to_string().len().max(2) as f32;
-    let char_w = ui.fonts_mut(|f| f.glyph_width(&t.code_font(), '0'));
-    let width = digits * char_w + 9.0 * t.unit;
-    let mut layouter = |ui: &egui::Ui, text: &dyn egui::TextBuffer, wrap: f32| -> Arc<egui::Galley> {
-        let mut job = highlight(text.as_str(), &t);
-        job.wrap.max_width = wrap;
-        ui.fonts_mut(|f| f.layout_job(job))
-    };
+    app.editor.source.set_vim(app.prefs.vim);
     let name = format!("{} {}", path.file_name(), tl!("source"));
-    let mut changed = false;
-    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-        ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-            let (gutter_rect, _) = ui.allocate_exact_size(vec2(width, 0.0), Sense::hover());
-            let band = ui.painter().add(egui::Shape::Noop);
-            let output = egui::TextEdit::multiline(&mut app.editor.text)
-                .id(id)
-                .code_editor()
-                .font(t.code_font())
-                .frame(egui::Frame::NONE)
-                .margin(egui::Margin { left: 4, right: 12, top: 8, bottom: 40 })
-                .desired_width(f32::INFINITY)
-                .desired_rows(40)
-                .layouter(&mut layouter)
-                .show(ui);
-            let response = output.response.response.clone().accessible_name(name);
-            changed = response.changed();
-            let caret = output.cursor_range.map(|r| r.primary.index).or_else(|| output.state.cursor.char_range().map(|r| r.primary.index));
-            let caret_line = caret.map(|c| line_col(&app.editor.text, c.into()));
-            app.view.cursor = caret_line.map(|(l, c)| (l + 1, c + 1));
-            let gutter = Gutter { left: gutter_rect.left(), width, caret_line: caret_line.map(|(l, _)| l), band, focused: response.has_focus() };
-            paint_gutter(ui, &t, &output, &gutter, &markers);
-        });
-    });
-    if changed {
-        let text = app.editor.text.clone();
+    let out = app.editor.source.show(ui, &t, id, &markers, &name, "  ");
+    app.view.cursor = Some((out.caret.0 as u32 + 1, out.caret.1 as u32 + 1));
+    // Typing, and edits made outside the widget (the toolbar, the Insert menu).
+    let version = app.editor.source.doc.buffer.version();
+    if out.changed || version != app.editor.sent {
+        app.editor.sent = version;
+        let text = app.editor.source.doc.buffer.text();
         if let Some(r) = app.run("file.write", json!({"path": path.as_str(), "text": text})) {
             app.editor.revision = r.get("revision").and_then(serde_json::Value::as_u64).unwrap_or(app.editor.revision);
         }
         app.view.last_edit = Some(ui.ctx().input(|i| i.time));
     }
-}
-
-/// Line and column (from 0, in characters) of character index `c`.
-fn line_col(text: &str, c: usize) -> (u32, u32) {
-    let mut line = 0u32;
-    let mut col = 0u32;
-    for ch in text.chars().take(c) {
-        if ch == '\n' {
-            line += 1;
-            col = 0;
-        } else {
-            col += 1;
-        }
-    }
-    (line, col)
-}
-
-/// Where the gutter is and what it marks.
-struct Gutter {
-    left: f32,
-    width: f32,
-    caret_line: Option<u32>,
-    /// The shape slot, below the text, that the caret-line band is painted into.
-    band: egui::layers::ShapeIdx,
-    focused: bool,
-}
-
-fn paint_gutter(ui: &egui::Ui, t: &Tokens, output: &egui::text_edit::TextEditOutput, g: &Gutter, markers: &Markers) {
-    let origin = output.galley_pos;
-    let font = egui::FontId::new(t.code_size - 1.5, egui::FontFamily::Monospace);
-    let right = g.left + g.width - 3.0 * t.unit;
-    let full_width = output.response.response.rect.right() - g.left;
-    let mut line = 0u32;
-    let mut starts_line = true;
-    let mut bands = Vec::new();
-    // A logical line may wrap over several rows; bands cover all of them.
-    let band_for = |line: u32| -> Option<egui::Color32> {
-        if matches!(markers.get(&line), Some((Severity::Error, _))) {
-            Some(t.error_line)
-        } else if g.focused && g.caret_line == Some(line) {
-            Some(t.current_line)
-        } else {
-            None
-        }
-    };
-    for row in &output.galley.rows {
-        let (top, bottom) = (origin.y + row.min_y(), origin.y + row.max_y());
-        if let Some(color) = band_for(line) {
-            let rect = Rect::from_min_max(egui::pos2(g.left, top), egui::pos2(g.left + full_width, bottom));
-            bands.push(egui::Shape::rect_filled(rect, 0.0, color));
-        }
-        if starts_line {
-            let is_caret = g.caret_line == Some(line);
-            let color = if is_caret { t.text } else { t.text_muted };
-            ui.painter().text(egui::pos2(right, (top + bottom) / 2.0), Align2::RIGHT_CENTER, (line + 1).to_string(), font.clone(), color);
-            if let Some((severity, message)) = markers.get(&line) {
-                let (icon, color) =
-                    if *severity == Severity::Error { ("circle-exclamation-point", t.error) } else { ("triangle-exclamation-point", t.warning) };
-                let rect = Rect::from_center_size(egui::pos2(g.left + 2.5 * t.unit, (top + bottom) / 2.0), vec2(14.0, 14.0));
-                icons::paint(ui, rect, icon, 13.0, color);
-                let r = ui.interact(rect, ui.scope_id().with(("marker", line)), Sense::hover());
-                let _ = r.on_hover_text(message.as_str());
+    for effect in out.effects {
+        match effect {
+            Effect::Save | Effect::SaveAll => crate::ui_cmd::run(app, "project.save"),
+            Effect::Close { .. } => {
+                let _ = app.run("file.close", json!({"path": path.as_str()}));
             }
-        }
-        starts_line = row.ends_with_newline;
-        if row.ends_with_newline {
-            line += 1;
+            Effect::Open(name) => {
+                let _ = app.run("file.open", json!({"path": name}));
+            }
+            Effect::Message(m) => app.view.status = Some((m, false)),
+            Effect::Error(m) => app.view.status = Some((m, true)),
+            Effect::Copy(_) | Effect::Scroll(_) => {}
         }
     }
-    ui.painter().set(g.band, egui::Shape::Vec(bands));
 }

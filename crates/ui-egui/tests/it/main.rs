@@ -9,3 +9,4 @@ mod recent;
 mod regions;
 mod shortcuts;
 mod unsaved;
+mod vim;

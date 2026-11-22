@@ -110,17 +110,20 @@ Done items are marked **done** with the commit subject that brought them. The re
 The interim editor is egui's multi-line text field with a highlighting layouter. It cannot show line numbers, folds, gutter markers, multiple carets or a proper accessibility node, and it copies the whole text on every keystroke. Phase 2 replaces it.
 
 1. **Buffer crate** (`texcraft-buffer`, L0).
+   - **Status:** the crate is **done** (rope, transactions, grouped undo, marks, UTF-16 positions). The editor still sends whole texts with `file.write`; `file.edit` with several edits is to do.
    - A rope (`ropey`, MIT).
    - Edits as transactions, undo and redo grouped by pause and word, marks that follow edits (diagnostics, bookmarks, the build's line map), and line and column conversion in UTF-8 and UTF-16.
    - The session's `file.write` gets an `edit` sibling (`file.edit {path, edits:[{start,end,text}]}`) so agents and collaboration send changes, not whole files.
 2. **Incremental lexing.** Per-line start state (text, math kind, verbatim environment, comment), re-lexing from the first changed line until the state matches again.
 3. **Editor widget** (in `ui-egui` first, then a craft-libs widget so other apps can use it).
+   - **Status:** the widget replaces egui's text field (`crates/ui-egui/src/source.rs`): one galley per line, the gutter with line numbers and markers, the caret line's band, soft wrap, mouse selection of words and lines, standard keys with grouped undo, Tab and Shift+Tab on lines, Ctrl+/ for comments, IME through craft-ui's `Composer`, and an editable AccessKit node with one text run per line. Still to do: folding, bracket matching and closing, `\begin`/`\end` pairs, go to line, several carets.
    - Gutter: line numbers, error and warning markers with tooltips, fold markers for environments and sections.
    - Bracket matching, closing brackets and `\begin`/`\end` pairs, comment toggle, indent and outdent, go to line.
    - Soft wrap, current-line highlight, selection of words and lines.
    - IME through `craft_ui::ime::Composer`.
    - AccessKit: an editable multi-line text node with value, caret and selection (RFC-0014; not a read-only document).
 3b. **Vim mode** (essential, part of the widget from the start, not an add-on). A setting (Settings › Editor › Key bindings: Standard or Vim), kept per user, with the mode shown in the status bar (`NORMAL`, `INSERT`, `VISUAL`, `V-LINE`, `REPLACE`, and the pending command).
+   - **Status:** **done** in `texcraft-vim` and the widget, with the setting and the mode in the status bar (announced when it changes). Not yet: Visual block mode, `=`, back-references in patterns, case changes in replacements, `:s` with `c` (each says so when used), and `"+p` pastes the system clipboard only through the window's Paste, as egui cannot read it on demand.
    - **Normal mode.** Counts, motions (`h j k l w W b B e E 0 ^ $ gg G f F t T ; , % { }`, `H M L`), text objects (`iw aw iW aW is as ip ap i( a( i{ a{ i[ a[ i" a"`, and LaTeX's own: `ie ae` for an environment, `i$ a$` for inline math, `ic ac` for a command's argument). Operators (`d c y > < = gu gU g~`) with motions and objects. `x X s S r J p P u Ctrl-R .` and `~`.
    - **Insert mode** and its keys (`Ctrl-W Ctrl-U Ctrl-O`), and completion (phase 2's) that cooperates with it.
    - **Visual modes:** character, line and block, with the operators.

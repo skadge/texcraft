@@ -134,6 +134,14 @@ fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         }
         Some(r)
     });
+    setting(ui, t, tl!("Key bindings"), tl!("Standard editing keys, or Vim's modes and commands."), |ui| {
+        let options = [(tl!("Standard"), None), (tl!("Vim"), None)];
+        if let Some(i) = widgets::segmented(ui, t, "settings-keys", &options, usize::from(app.prefs.vim)) {
+            app.prefs.vim = i == 1;
+            app.prefs_changed = true;
+        }
+        None
+    });
     let preview =
         egui::text::LayoutJob::simple_singleline("\\section{Introduction} % E = mc^2".to_owned(), app.tokens.code_font(), app.tokens.syntax_command);
     egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner()).inner_margin(egui::Margin::same(10)).show(ui, |ui| {

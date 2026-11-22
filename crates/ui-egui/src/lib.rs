@@ -21,6 +21,7 @@ pub mod icons;
 mod keys;
 mod pdf_view;
 pub mod prefs;
+mod source;
 pub use picks::{Pick, PickKind, PickRequest};
 pub use start::{THUMBNAIL_WIDTH, Thumbnail};
 mod picks;
@@ -388,6 +389,8 @@ impl App {
             self.view.status = None;
         }
         self.auto_compile(ctx);
+        // Vim's own Ctrl keys go to the editor before the window's shortcuts see them.
+        editor::claim_keys(self, ctx);
         for id in self.keys.dispatch(ctx) {
             ui_cmd::run(self, &id);
         }
