@@ -103,8 +103,8 @@ fn header(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             .stroke(egui::Stroke::NONE)
             .min_size(vec2(0.0, 34.0));
             if ui.add(new).clicked() {
-                app.guard(Next::NewProject);
-                app.start = false;
+                // A blank project or a template, from the gallery.
+                app.open_gallery();
             }
         });
     });

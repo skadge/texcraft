@@ -86,4 +86,6 @@ Every asset and fixture in this repository, with its source and licence (standar
 | `docs/images/log-dark.png` | TeXCraft's build log, dark theme | The TeXCraft contributors; the documents shown are retex's samples (made for retex, CC0-1.0) | Rendered offscreen from TeXCraft's own interface (egui_kittest), with PDFs built by `texcraft-cli compile` | MIT OR Apache-2.0 (the samples shown: CC0-1.0) | Screenshot of our own app |
 | `docs/images/start.png` | TeXCraft's start page | The TeXCraft contributors; the documents shown are retex's samples (made for retex, CC0-1.0) | Rendered offscreen from TeXCraft's own interface (egui_kittest), with PDFs built by `texcraft-cli compile` | MIT OR Apache-2.0 (the samples shown: CC0-1.0) | Screenshot of our own app |
 
+Publishers' templates are not part of TeXCraft. `templates/catalog.toml` is our own data (MIT OR Apache-2.0): it names each template, its TeX Live package and that package's licence. TeXCraft downloads a template's files from TeX Live when the user asks for it, keeps them in the user's data folder with a `TEMPLATE-LICENSE` note, and copies that note into projects made from it.
+
 Dependencies come from crates.io, from storytold/craft-libs at the rev pinned in `Cargo.toml`, and from retex (CC0-1.0) at the rev pinned there. Their licences are in their own packages.

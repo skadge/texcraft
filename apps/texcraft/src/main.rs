@@ -178,7 +178,11 @@ fn main() -> eframe::Result {
     let (settings, report) = SettingsStore::<Stored>::open(Location::Auto);
     log::info!("preferences: {report:?}");
     let prefs = settings.get().0.clone();
-    let mut app = texcraft_ui_egui::App::with_prefs(texcraft_engine::Session::new(), prefs);
+    let mut session = texcraft_engine::Session::new();
+    if let Some(data) = dirs::data_dir() {
+        session.set_template_store(data.join("TeXCraft").join("templates"));
+    }
+    let mut app = texcraft_ui_egui::App::with_prefs(session, prefs);
     app.set_native_pickers(true);
     for project in &settings.get().0.recent {
         if let Some(thumbnail) = thumbnails::load(project) {

@@ -3,6 +3,7 @@
 mod contrast;
 mod control;
 mod frame;
+mod gallery;
 mod insert;
 mod recent;
 mod regions;

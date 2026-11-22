@@ -63,6 +63,7 @@ pub(crate) fn item(ui: &mut egui::Ui, t: &Tokens, icon: Option<&str>, label: &st
 fn icon_for(id: &str) -> Option<&'static str> {
     Some(match id {
         "project.new" => "file-plus",
+        "project.from_template" => "book-open",
         "project.open" => "folder-open",
         "project.save" => "download",
         "file.import" => "upload",

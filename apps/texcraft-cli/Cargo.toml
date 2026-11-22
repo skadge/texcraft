@@ -14,3 +14,4 @@ workspace = true
 texcraft-engine = { workspace = true, features = ["retex", "templates-download"] }
 texcraft-mcp = { workspace = true }
 serde_json = { workspace = true }
+dirs = { workspace = true }

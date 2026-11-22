@@ -68,7 +68,8 @@ fn mcp(args: &[String]) -> Result<(), String> {
     let read: Vec<PathBuf> = values(args, "--automation-read-root")?.into_iter().map(PathBuf::from).collect();
     let write: Vec<PathBuf> = values(args, "--automation-write-root")?.into_iter().map(PathBuf::from).collect();
     let roots = AutomationRoots::new(&read, &write)?;
-    texcraft_mcp::serve(roots).map_err(|e| format!("mcp: {e}"))
+    let templates = dirs::data_dir().map(|d| d.join("TeXCraft").join("templates"));
+    texcraft_mcp::serve(roots, templates).map_err(|e| format!("mcp: {e}"))
 }
 
 fn compile(args: &[String]) -> Result<(), String> {

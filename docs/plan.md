@@ -52,6 +52,7 @@ Done items are marked **done** with the commit subject that brought them. The re
      - Pinning a project to the top of the list, and removing one entry.
      - Renaming a project folder from the project menu.
 2b. **Templates from publishers.** A new project can start from a journal's, a conference's, a thesis or a CV template. The templates are not bundled: their licences rarely allow it (many are LPPL, which the Craft licence list lacks, and some publishers' terms forbid redistribution). TeXCraft downloads them from their original source, the way retex downloads TeX Live packages, and keeps them for offline use.
+   - **Status:** the catalogue (15 templates from TeX Live packages), checked downloads, kept copies, `template.list`, `template.fetch`, `project.from_template`, and the gallery with categories, search, source and licence, and Download All are **done**. Templates come from the installed TeX Live's year so they match its classes; `cargo xtask templates` fetches and builds each one. Still to do: the first-start offer, thumbnails, refreshing kept copies when TeX Live's version changes, and publishers' own downloads.
    - **The catalogue** is TeXCraft's own data (`templates/catalog.toml`, MIT OR Apache-2.0), one entry per template:
      - its title, publisher and category (journal, conference, thesis, report, CV, letter, slides, poster, book);
      - where it comes from;

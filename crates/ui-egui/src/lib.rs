@@ -16,6 +16,7 @@ pub mod control;
 mod dialogs;
 mod editor;
 pub mod fonts;
+mod gallery;
 pub mod icons;
 mod keys;
 mod pdf_view;
@@ -110,6 +111,7 @@ pub struct App {
     fonts_ready: bool,
     prefs: prefs::Prefs,
     keys: keys::Keys,
+    gallery: gallery::Gallery,
     /// The start page is shown in place of the project.
     start: bool,
     thumbs: start::Thumbnails,
@@ -165,6 +167,7 @@ impl App {
             fonts_ready: false,
             prefs,
             keys,
+            gallery: gallery::Gallery::default(),
             start: false,
             thumbs: start::Thumbnails::default(),
             picks: Vec::new(),
@@ -377,6 +380,7 @@ impl App {
             self.tokens.apply(ctx);
             self.applied = Some(self.tokens.scheme);
         }
+        self.poll_gallery();
         let mut thumbnail = false;
         if let Some(outcome) = self.session.poll() {
             thumbnail = outcome.pdf.is_some();
@@ -395,6 +399,7 @@ impl App {
         status::show(self, ui);
         if self.start {
             start::show(self, ui);
+            gallery::show(self, ctx);
             dialogs::show(self, ctx);
             return;
         }
@@ -403,6 +408,7 @@ impl App {
             side::show(self, ui);
         }
         self.panes(ui);
+        gallery::show(self, ctx);
         dialogs::show(self, ctx);
         if self.session.is_building() {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));

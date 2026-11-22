@@ -72,10 +72,14 @@ impl Tools for TexTools {
     }
 }
 
-/// Serves the tools on stdin/stdout until stdin closes. Logs go to stderr only.
-pub fn serve(roots: AutomationRoots) -> std::io::Result<()> {
+/// Serves the tools on stdin/stdout until stdin closes. Logs go to stderr only. `templates` is
+/// where templates are kept; confined sessions use the kept ones and download none.
+pub fn serve(roots: AutomationRoots, templates: Option<std::path::PathBuf>) -> std::io::Result<()> {
     eprintln!("texcraft mcp: files confined to {}", roots.describe());
     let mut session = Session::new();
+    if let Some(dir) = templates {
+        session.set_template_store(dir);
+    }
     session.confine(roots);
     let info = Info { name: "texcraft", title: "TeXCraft", version: env!("CARGO_PKG_VERSION"), max_line: 16 * 1024 * 1024 };
     let mut server = Server::new(info, TexTools::new(session));

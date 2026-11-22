@@ -14,6 +14,7 @@ workspace = true
 texcraft-engine = { workspace = true, default-features = false }
 texcraft-latex = { workspace = true }
 texcraft-preview = { workspace = true }
+texcraft-templates = { workspace = true }
 craft-i18n = { workspace = true }
 craft-ui = { workspace = true }
 craft-keymap = { workspace = true }

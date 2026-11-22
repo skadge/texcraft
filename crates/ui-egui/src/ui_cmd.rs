@@ -104,6 +104,7 @@ pub fn run(app: &mut App, id: &str) {
         "view.previous_region" => app.cycle_region(false),
         "project.open" => app.guard(Next::PickProject),
         "project.new" => app.guard(Next::NewProject),
+        "project.from_template" => app.open_gallery(),
         "project.save_as" if app.native_pickers => app.request_pick(Pick::SaveProjectAs),
         "build.save_pdf" if app.native_pickers => app.request_pick(Pick::SavePdf),
         "file.import" if app.native_pickers => app.request_pick(Pick::AddFiles),

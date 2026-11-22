@@ -16,6 +16,8 @@ pub enum Pick {
     SaveProjectAs,
     SavePdf,
     AddFiles,
+    /// A new or empty folder for a project made from a template.
+    TemplateFolder,
 }
 
 /// The kind of native dialog.
@@ -65,6 +67,7 @@ impl App {
             Pick::SavePdf => {
                 self.run("build.save_pdf", json!({"path": first}));
             }
+            Pick::TemplateFolder => self.template_folder_chosen(first),
             Pick::AddFiles => {
                 for path in paths {
                     self.run("file.import", json!({"source": path.display().to_string()}));
@@ -94,6 +97,7 @@ impl App {
                 (PickKind::SaveFile, tl!("Save PDF As"), Some(format!("{stem}.pdf")), Some((tl!("PDF documents").to_owned(), vec!["pdf"])))
             }
             Pick::AddFiles => (PickKind::OpenFiles, tl!("Add Files to the Project"), None, None),
+            Pick::TemplateFolder => (PickKind::Folder, tl!("Choose a New or Empty Folder for the Project"), None, None),
         };
         self.picks.push(PickRequest { pick, kind, title: title.to_owned(), directory, file_name, filter });
     }
