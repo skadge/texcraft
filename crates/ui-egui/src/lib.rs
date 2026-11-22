@@ -11,12 +11,12 @@
 pub mod i18n;
 pub mod theme;
 
-mod chrome;
 mod dialogs;
 mod editor;
 pub mod fonts;
 pub mod icons;
 mod pdf_view;
+mod preview;
 mod rail;
 mod side;
 mod status;
@@ -51,6 +51,8 @@ pub(crate) struct View {
     pub layout: Layout,
     pub logs: bool,
     pub dialog: Option<dialogs::Dialog>,
+    /// Which messages the build log lists.
+    pub log_filter: preview::Filter,
     /// Folders folded in the file tree.
     pub collapsed: std::collections::HashSet<String>,
     /// The caret's line and column (from 1) in the editor, for the status bar.
@@ -85,6 +87,7 @@ impl App {
                 logs: false,
                 dialog: None,
                 cursor: None,
+                log_filter: preview::Filter::All,
                 collapsed: std::collections::HashSet::new(),
                 status: None,
                 last_edit: Some(0.0),
@@ -158,26 +161,18 @@ impl App {
     }
 
     fn panes(&mut self, ui: &mut egui::Ui) {
-        let show_preview = self.view.layout != Layout::EditorOnly;
-        let show_editor = self.view.layout != Layout::PreviewOnly;
-        if show_preview && show_editor {
-            let width = ui.available_width() * 0.5;
-            egui::Panel::right("preview").resizable(true).default_size(width).min_size(200.0).show(ui, |ui| self.preview(ui));
-            editor::show(self, ui);
-        } else if show_editor {
-            editor::show(self, ui);
-        } else {
-            egui::CentralPanel::default().show(ui, |ui| self.preview(ui));
-        }
-    }
-
-    fn preview(&mut self, ui: &mut egui::Ui) {
-        chrome::preview_toolbar(self, ui);
-        if self.view.logs {
-            chrome::logs(self, ui);
-        } else {
-            self.pdf.sync(self.session.pdf());
-            self.pdf.show(ui, &self.tokens);
+        let t = self.tokens;
+        let frame = egui::Frame::new().fill(t.frame);
+        match self.view.layout {
+            Layout::Split => {
+                let width = ui.available_width() * 0.5;
+                egui::Panel::right("preview").resizable(true).default_size(width).min_size(280.0).frame(frame).show(ui, |ui| preview::show(self, ui));
+                editor::show(self, ui);
+            }
+            Layout::EditorOnly => editor::show(self, ui),
+            Layout::PreviewOnly => {
+                egui::CentralPanel::default().frame(frame).show(ui, |ui| preview::show(self, ui));
+            }
         }
     }
 

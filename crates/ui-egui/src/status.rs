@@ -4,6 +4,7 @@
 use egui::{Align, Layout, Sense, vec2};
 use texcraft_engine::Status;
 
+use crate::i18n::trn;
 use crate::{App, icons, widgets};
 
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
@@ -44,17 +45,17 @@ fn state(app: &App) -> (Option<&'static str>, egui::Color32, String) {
     };
     match &o.status {
         Status::Unavailable(reason) => (Some("circle-exclamation-point"), t.error, reason.clone()),
-        Status::Failed => (Some("circle-exclamation-point"), t.error, count(tl!("Failed: {n} errors"), o.errors())),
-        Status::Built if o.errors() > 0 => (Some("circle-exclamation-point"), t.error, count(tl!("Compiled with {n} errors"), o.errors())),
-        Status::Built if o.warnings() > 0 => {
-            (Some("triangle-exclamation-point"), t.warning, count(tl!("Compiled with {n} warnings"), o.warnings()) + &seconds(o.seconds))
+        Status::Failed => (Some("circle-exclamation-point"), t.error, trn(o.errors(), "Failed with {n} error", "Failed with {n} errors")),
+        Status::Built if o.errors() > 0 => {
+            (Some("circle-exclamation-point"), t.error, trn(o.errors(), "Compiled with {n} error", "Compiled with {n} errors"))
         }
+        Status::Built if o.warnings() > 0 => (
+            Some("triangle-exclamation-point"),
+            t.warning,
+            trn(o.warnings(), "Compiled with {n} warning", "Compiled with {n} warnings") + &seconds(o.seconds),
+        ),
         Status::Built => (Some("circle-check"), t.success, tl!("Compiled").to_owned() + &seconds(o.seconds)),
     }
-}
-
-fn count(template: &str, n: usize) -> String {
-    template.replace("{n}", &n.to_string())
 }
 
 fn seconds(s: f64) -> String {

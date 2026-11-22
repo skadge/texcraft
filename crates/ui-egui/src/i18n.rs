@@ -31,6 +31,12 @@ pub fn t(source: &'static str) -> &'static str {
     I18N.t(CURRENT.get(), source)
 }
 
+/// `one` or `other` (English keys, each with `{n}`) for the count `n`, in the current language's
+/// plural forms.
+pub fn trn(n: usize, one: &'static str, other: &'static str) -> String {
+    I18N.trn(CURRENT.get(), n as u64, one, other)
+}
+
 /// Follows the system language.
 pub fn use_system_language() {
     CURRENT.set(I18N.system_lang());

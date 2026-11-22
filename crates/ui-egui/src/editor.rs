@@ -316,24 +316,13 @@ fn markers(app: &App, path: &ProjectPath) -> Markers {
     out
 }
 
-fn highlight(text: &str, t: &Tokens, markers: &Markers) -> LayoutJob {
+fn highlight(text: &str, t: &Tokens) -> LayoutJob {
     let mut job = LayoutJob::default();
     let font = t.code_font();
-    let mut line = 0u32;
     for token in texcraft_latex::lex(text) {
-        let color = t.syntax(token.kind);
         let Some(run) = text.get(token.range.clone()) else { continue };
-        for piece in run.split_inclusive('\n') {
-            let background = match markers.get(&line) {
-                Some((Severity::Error, _)) => t.error_line,
-                _ => egui::Color32::TRANSPARENT,
-            };
-            let format = TextFormat { font_id: font.clone(), color, background, line_height: Some(t.code_line_height), ..Default::default() };
-            job.append(piece, 0.0, format);
-            if piece.ends_with('\n') {
-                line += 1;
-            }
-        }
+        let format = TextFormat { font_id: font.clone(), color: t.syntax(token.kind), line_height: Some(t.code_line_height), ..Default::default() };
+        job.append(run, 0.0, format);
     }
     job
 }
@@ -360,9 +349,9 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     let lines = app.editor.text.matches('\n').count() + 1;
     let digits = lines.to_string().len().max(2) as f32;
     let char_w = ui.fonts_mut(|f| f.glyph_width(&t.code_font(), '0'));
-    let width = digits * char_w + 7.0 * t.unit;
+    let width = digits * char_w + 9.0 * t.unit;
     let mut layouter = |ui: &egui::Ui, text: &dyn egui::TextBuffer, wrap: f32| -> Arc<egui::Galley> {
-        let mut job = highlight(text.as_str(), &t, &markers);
+        let mut job = highlight(text.as_str(), &t);
         job.wrap.max_width = wrap;
         ui.fonts_mut(|f| f.layout_job(job))
     };
@@ -433,14 +422,25 @@ fn paint_gutter(ui: &egui::Ui, t: &Tokens, output: &egui::text_edit::TextEditOut
     let full_width = output.response.response.rect.right() - g.left;
     let mut line = 0u32;
     let mut starts_line = true;
+    let mut bands = Vec::new();
+    // A logical line may wrap over several rows; bands cover all of them.
+    let band_for = |line: u32| -> Option<egui::Color32> {
+        if matches!(markers.get(&line), Some((Severity::Error, _))) {
+            Some(t.error_line)
+        } else if g.focused && g.caret_line == Some(line) {
+            Some(t.current_line)
+        } else {
+            None
+        }
+    };
     for row in &output.galley.rows {
         let (top, bottom) = (origin.y + row.min_y(), origin.y + row.max_y());
+        if let Some(color) = band_for(line) {
+            let rect = Rect::from_min_max(egui::pos2(g.left, top), egui::pos2(g.left + full_width, bottom));
+            bands.push(egui::Shape::rect_filled(rect, 0.0, color));
+        }
         if starts_line {
             let is_caret = g.caret_line == Some(line);
-            if is_caret && g.focused {
-                let rect = Rect::from_min_max(egui::pos2(g.left, top), egui::pos2(g.left + full_width, bottom));
-                ui.painter().set(g.band, egui::Shape::rect_filled(rect, 0.0, t.current_line));
-            }
             let color = if is_caret { t.text } else { t.text_muted };
             ui.painter().text(egui::pos2(right, (top + bottom) / 2.0), Align2::RIGHT_CENTER, (line + 1).to_string(), font.clone(), color);
             if let Some((severity, message)) = markers.get(&line) {
@@ -457,4 +457,5 @@ fn paint_gutter(ui: &egui::Ui, t: &Tokens, output: &egui::text_edit::TextEditOut
             line += 1;
         }
     }
+    ui.painter().set(g.band, egui::Shape::Vec(bands));
 }
