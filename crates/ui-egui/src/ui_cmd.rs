@@ -4,7 +4,7 @@
 
 use serde_json::json;
 
-use crate::dialogs::{Dialog, Prompt};
+use crate::dialogs::{Dialog, Next, Prompt};
 use crate::picks::Pick;
 use crate::prefs::ThemePref;
 use crate::theme::Scheme;
@@ -68,7 +68,8 @@ pub fn run(app: &mut App, id: &str) {
         "view.fit_width" => app.pdf.fit_width(),
         "help.shortcuts" => app.view.dialog = Some(Dialog::Shortcuts),
         "help.about" => app.view.dialog = Some(Dialog::About),
-        "project.open" if app.native_pickers => app.request_pick(Pick::OpenProject),
+        "project.open" => app.guard(Next::PickProject),
+        "project.new" => app.guard(Next::NewProject),
         "project.save_as" if app.native_pickers => app.request_pick(Pick::SaveProjectAs),
         "build.save_pdf" if app.native_pickers => app.request_pick(Pick::SavePdf),
         "file.import" if app.native_pickers => app.request_pick(Pick::AddFiles),
@@ -85,7 +86,6 @@ pub fn run(app: &mut App, id: &str) {
             };
             app.view.dialog = Some(Dialog::Prompt(prompt));
         }
-        "project.open" => ask(app, tl!("Open Project Folder"), tl!("The folder that holds the project's files"), tl!("Open"), "project.open"),
         "project.save_as" => ask(app, tl!("Save Project As"), tl!("The folder to write the project's files to"), tl!("Save"), "project.save_as"),
         "build.save_pdf" => ask(app, tl!("Save PDF As"), tl!("The file to write the PDF to"), tl!("Save"), "build.save_pdf"),
         "project.save" if app.session.dir().is_none() => run(app, "project.save_as"),
@@ -103,4 +103,13 @@ pub fn run(app: &mut App, id: &str) {
 fn ask(app: &mut App, title: &'static str, label: &'static str, action: &'static str, command: &'static str) {
     let prompt = Prompt { title, label, value: String::new(), action, command, params: Box::new(|v| json!({"path": v})), focus: true };
     app.view.dialog = Some(Dialog::Prompt(prompt));
+}
+
+/// Asks for a project folder: with a native picker, or a typed path.
+pub(crate) fn pick_project(app: &mut App) {
+    if app.native_pickers {
+        app.request_pick(Pick::OpenProject);
+    } else {
+        ask(app, tl!("Open Project Folder"), tl!("The folder that holds the project's files"), tl!("Open"), "project.open");
+    }
 }

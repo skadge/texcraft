@@ -17,5 +17,6 @@ eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "
 log = { workspace = true }
 craft-settings = { workspace = true }
 craft-dialogs = { workspace = true }
+craft-quit = { workspace = true }
 serde = { workspace = true }
 egui = { workspace = true }

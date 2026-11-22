@@ -17,6 +17,7 @@ craft-i18n = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36
 craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 craft-fonts-build = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 craft-dialogs = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
+craft-quit = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f", features = ["egui"] }
 craft-settings = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 craft-mcp-server = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 

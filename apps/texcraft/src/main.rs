@@ -64,6 +64,20 @@ impl Shell {
 }
 
 impl eframe::App for Shell {
+    /// Runs before `ui`, also while the window is hidden: closing asks about unsaved changes first
+    /// (craft-quit's order: the app's decision, then `on_close_request`).
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if ctx.input(|i| i.viewport().close_requested()) && self.app.close_requested() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
+        if self.app.take_quit() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        craft_quit::on_close_request(ctx);
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let app = &mut self.app;
         if let Err(e) = texcraft_engine::guard::catch_panic(|| app.frame(ui)) {

@@ -57,6 +57,9 @@ impl App {
             Pick::SaveProjectAs => {
                 if self.run("project.save_as", json!({"path": first})).is_some() {
                     self.remember_project();
+                    if let Some(next) = self.after_save.take() {
+                        self.proceed(next);
+                    }
                 }
             }
             Pick::SavePdf => {

@@ -30,15 +30,29 @@ pub(crate) struct Confirm {
     pub params: Value,
 }
 
+/// What happens once unsaved changes are saved or discarded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Next {
+    Quit,
+    NewProject,
+    OpenProject(String),
+    /// Choose a project folder, then open it.
+    PickProject,
+}
+
 pub(crate) enum Dialog {
     Prompt(Prompt),
     Confirm(Confirm),
+    /// The project has unsaved changes and `Next` would lose them.
+    Unsaved(Next),
     Shortcuts,
     About,
 }
 
 /// The window's open dialog, if any.
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
+    let project = app.project_name();
+    let engine = app.session.backend_name();
     let Some(dialog) = app.view.dialog.as_mut() else { return };
     let t = app.tokens;
     let mut outcome = Outcome::Open;
@@ -51,8 +65,9 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         match dialog {
             Dialog::Prompt(p) => outcome = prompt(ui, &t, p),
             Dialog::Confirm(c) => outcome = confirm(ui, &t, c),
+            Dialog::Unsaved(_) => outcome = unsaved(ui, &t, &project),
             Dialog::Shortcuts => outcome = shortcuts(ui, &t),
-            Dialog::About => outcome = about(ui, &t, &app.session.backend_name()),
+            Dialog::About => outcome = about(ui, &t, &engine),
         }
     });
     if modal.should_close() || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -69,8 +84,14 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             Some(Dialog::Confirm(c)) => {
                 app.run(c.command, c.params);
             }
+            Some(Dialog::Unsaved(next)) => app.save_then(next),
             _ => {}
         },
+        Outcome::Discard => {
+            if let Some(Dialog::Unsaved(next)) = app.view.dialog.take() {
+                app.proceed(next);
+            }
+        }
     }
 }
 
@@ -78,6 +99,30 @@ enum Outcome {
     Open,
     Cancel,
     Run,
+    /// Go on without saving.
+    Discard,
+}
+
+fn unsaved(ui: &mut egui::Ui, t: &Tokens, project: &str) -> Outcome {
+    title(ui, t, &tl!("Save the changes to {project}?").replace("{project}", project));
+    ui.label(tl!("Changes that are not saved are lost."));
+    let mut outcome = Outcome::Open;
+    ui.add_space(t.unit * 4.0);
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        let save = egui::Button::new(RichText::new(tl!("Save")).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
+        if ui.add(save.min_size(egui::vec2(88.0, 30.0))).clicked() {
+            outcome = Outcome::Run;
+        }
+        if ui.add(egui::Button::new(tl!("Cancel")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+            outcome = Outcome::Cancel;
+        }
+        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+            if ui.add(egui::Button::new(RichText::new(tl!("Don't Save")).color(t.error)).min_size(egui::vec2(96.0, 30.0))).clicked() {
+                outcome = Outcome::Discard;
+            }
+        });
+    });
+    outcome
 }
 
 fn title(ui: &mut egui::Ui, t: &Tokens, text: &str) {

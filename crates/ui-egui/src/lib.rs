@@ -81,6 +81,12 @@ pub struct App {
     picks: Vec<picks::PickRequest>,
     /// Whether the shell shows native pickers; without them paths are typed.
     native_pickers: bool,
+    /// What to do once a Save As for unsaved changes has finished.
+    after_save: Option<dialogs::Next>,
+    /// The user chose to quit; the shell closes the window.
+    quit: bool,
+    /// Closing was confirmed: the next close request is let through.
+    close_confirmed: bool,
     /// The context of the last frame, for commands run outside one.
     ctx: egui::Context,
     /// The preferences changed since the shell last took them.
@@ -119,6 +125,9 @@ impl App {
             fonts_ready: false,
             prefs,
             picks: Vec::new(),
+            after_save: None,
+            quit: false,
+            close_confirmed: false,
             native_pickers: false,
             ctx: egui::Context::default(),
             prefs_changed: false,
@@ -137,6 +146,65 @@ impl App {
             self.prefs_changed = true;
         }
         if std::mem::take(&mut self.prefs_changed) { Some(self.prefs.clone()) } else { None }
+    }
+
+    /// The project's name: its folder's, or "Untitled project".
+    pub(crate) fn project_name(&self) -> String {
+        self.session.dir().and_then(|d| d.file_name()).map_or_else(|| tl!("Untitled project").to_owned(), |n| n.to_string_lossy().into_owned())
+    }
+
+    /// Does `next` now, or first asks what to do with unsaved changes.
+    pub(crate) fn guard(&mut self, next: dialogs::Next) {
+        if self.session.is_dirty() {
+            self.view.dialog = Some(dialogs::Dialog::Unsaved(next));
+        } else {
+            self.proceed(next);
+        }
+    }
+
+    pub(crate) fn proceed(&mut self, next: dialogs::Next) {
+        match next {
+            dialogs::Next::Quit => {
+                self.close_confirmed = true;
+                self.quit = true;
+            }
+            dialogs::Next::NewProject => {
+                if self.run("project.new", json!({})).is_some() {
+                    self.pdf = pdf_view::PdfView::default();
+                }
+            }
+            dialogs::Next::OpenProject(folder) => self.open_project(&folder),
+            dialogs::Next::PickProject => ui_cmd::pick_project(self),
+        }
+    }
+
+    /// Saves, then does `next`. A project without a folder is saved through Save As first.
+    pub(crate) fn save_then(&mut self, next: dialogs::Next) {
+        if self.session.dir().is_some() {
+            if self.run("project.save", json!({})).is_some() {
+                self.proceed(next);
+            }
+        } else {
+            self.after_save = Some(next);
+            ui_cmd::run(self, "project.save_as");
+        }
+    }
+
+    /// The window was asked to close. Returns whether the close must be cancelled (the user is
+    /// asked about unsaved changes first).
+    pub fn close_requested(&mut self) -> bool {
+        if self.close_confirmed || !self.session.is_dirty() {
+            return false;
+        }
+        if !matches!(self.view.dialog, Some(dialogs::Dialog::Unsaved(_))) {
+            self.view.dialog = Some(dialogs::Dialog::Unsaved(dialogs::Next::Quit));
+        }
+        true
+    }
+
+    /// Whether the user chose to quit since the last call; the shell then closes the window.
+    pub fn take_quit(&mut self) -> bool {
+        std::mem::take(&mut self.quit)
     }
 
     /// Opens the project in `folder` and remembers it among the recent projects.

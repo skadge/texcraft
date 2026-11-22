@@ -111,7 +111,7 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
 
 fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
     let t = app.tokens;
-    let name = app.session.dir().and_then(|d| d.file_name()).map_or_else(|| tl!("Untitled project").to_owned(), |n| n.to_string_lossy().into_owned());
+    let name = app.project_name();
     let galley = ui.painter().layout_no_wrap(name.clone(), t.strong(), t.text);
     let width = galley.size().x + 3.0 * t.unit + t.icon_size + 6.0 * t.unit;
     let rect = egui::Rect::from_center_size(bar.center(), vec2(width, t.toolbar_height - 8.0));
@@ -201,7 +201,7 @@ pub(crate) fn recent_menu(app: &mut App, ui: &mut egui::Ui) {
         }
     });
     if let Some(path) = open {
-        app.open_project(&path);
+        app.guard(crate::dialogs::Next::OpenProject(path));
     }
     if clear {
         ui_cmd::run(app, "project.clear_recent");
