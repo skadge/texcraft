@@ -1,0 +1,161 @@
+# TeXCraft's template catalogue (docs/plan.md, phase 1, item 2b). TeXCraft's own data, under the
+# repository's licence. The templates themselves are not here: they are downloaded from their
+# source, checked, and kept in the user's data folder.
+#
+# A `texlive` template is a set of files from the documentation of a TeX Live package, which
+# comes from a TeX Live mirror and is checked against TeX Live's signed package database. `files`
+# are paths inside the package's documentation folder (doc/latex/<package>/); `main` is the one
+# compiled. `licence` is the package's, as CTAN's catalogue gives it; the user sees it before
+# creating a project. Templates are taken from the TeX Live year installed (so they match its
+# classes); `aliases` lists a file's names in other years.
+
+[[template]]
+id = "elsevier-num"
+title = "Elsevier journal article (numbered references)"
+publisher = "Elsevier"
+category = "journal"
+source = { texlive = "elsarticle" }
+files = ["elsarticle-template-num.tex"]
+main = "elsarticle-template-num.tex"
+licence = "LPPL-1.3"
+
+[[template]]
+id = "elsevier-harv"
+title = "Elsevier journal article (author–year references)"
+publisher = "Elsevier"
+category = "journal"
+source = { texlive = "elsarticle" }
+files = ["elsarticle-template-harv.tex"]
+main = "elsarticle-template-harv.tex"
+licence = "LPPL-1.3"
+
+[[template]]
+id = "ieee-journal"
+title = "IEEE journal article"
+publisher = "IEEE"
+category = "journal"
+source = { texlive = "ieeetran" }
+files = ["bare_jrnl.tex"]
+main = "bare_jrnl.tex"
+licence = "LPPL-1.3"
+
+[[template]]
+id = "ieee-conference"
+title = "IEEE conference paper"
+publisher = "IEEE"
+category = "conference"
+source = { texlive = "ieeetran" }
+files = ["bare_conf.tex"]
+main = "bare_conf.tex"
+licence = "LPPL-1.3"
+
+[[template]]
+id = "acm-sigconf"
+title = "ACM conference paper (sigconf)"
+publisher = "ACM"
+category = "conference"
+source = { texlive = "acmart" }
+files = ["samples/sigconf.tex", "samples/sample-base.bib", "samples/sampleteaser.pdf", "samples/sample-franklin.png"]
+main = "sigconf.tex"
+aliases = { "samples/sigconf.tex" = ["samples/sample-sigconf.tex"] }
+licence = "LPPL-1.3"
+
+[[template]]
+id = "aps-revtex"
+title = "APS journal article (REVTeX)"
+publisher = "American Physical Society"
+category = "journal"
+source = { texlive = "revtex" }
+files = ["sample/aps/apstemplate.tex"]
+main = "apstemplate.tex"
+licence = "LPPL-1.3c"
+
+[[template]]
+id = "aas-aastex"
+title = "AAS journal article (AASTeX)"
+publisher = "American Astronomical Society"
+category = "journal"
+source = { texlive = "aastex" }
+files = ["aastex701-sample.tex", "aastex701-sample.bib", "orcid-ID.png", "AuthorChargeInfographic.png"]
+main = "aastex701-sample.tex"
+licence = "LPPL-1.3c"
+
+[[template]]
+id = "mnras"
+title = "Monthly Notices of the RAS article"
+publisher = "Royal Astronomical Society"
+category = "journal"
+source = { texlive = "mnras" }
+files = ["mnras_template.tex", "example.bib", "example.png"]
+main = "mnras_template.tex"
+licence = "LPPL-1.3"
+
+[[template]]
+id = "nature"
+title = "Nature article"
+publisher = "Nature"
+category = "journal"
+source = { texlive = "nature" }
+files = ["nature-template.tex"]
+main = "nature-template.tex"
+licence = "LPPL-1"
+
+[[template]]
+id = "acs-achemso"
+title = "American Chemical Society article (achemso)"
+publisher = "American Chemical Society"
+category = "journal"
+source = { texlive = "achemso" }
+files = ["achemso-demo.tex", "achemso-demo.bib"]
+main = "achemso-demo.tex"
+licence = "LPPL-1.3c"
+
+[[template]]
+id = "apa7"
+title = "APA 7th edition manuscript"
+publisher = "American Psychological Association style"
+category = "journal"
+source = { texlive = "apa7" }
+files = ["samples/shortsample.tex", "samples/bibliography.bib", "samples/Figure1.pdf"]
+main = "shortsample.tex"
+licence = "LPPL-1.3c"
+
+[[template]]
+id = "asme-conference"
+title = "ASME conference paper"
+publisher = "ASME"
+category = "conference"
+source = { texlive = "asmeconf" }
+files = ["asmeconf-template.tex", "asmeconf-sample.bib", "sample-figure-1.pdf", "sample-figure-2a.pdf", "sample-figure-2b.pdf"]
+main = "asmeconf-template.tex"
+licence = "MIT"
+
+[[template]]
+id = "moderncv"
+title = "Curriculum vitae (moderncv)"
+publisher = "moderncv"
+category = "cv"
+source = { texlive = "moderncv" }
+files = ["template.tex", "picture.jpg", "publications.bib", "signature.png"]
+main = "template.tex"
+licence = "LPPL-1.3c"
+
+[[template]]
+id = "europass-cv"
+title = "Europass curriculum vitae"
+publisher = "Europass"
+category = "cv"
+source = { texlive = "europasscv" }
+files = ["example/europasscv_en.tex"]
+main = "europasscv_en.tex"
+licence = "LPPL-1.3"
+
+[[template]]
+id = "tikzposter"
+title = "Scientific poster (tikzposter)"
+publisher = "tikzposter"
+category = "poster"
+source = { texlive = "tikzposter" }
+files = ["tikzposter-template.tex"]
+main = "tikzposter-template.tex"
+licence = "LPPL-1.2"

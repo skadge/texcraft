@@ -27,6 +27,8 @@ craft-mcp-server = { git = "https://github.com/storytold/craft-libs", rev = "f8c
 # TeXCraft is in retex's docs/design/embedding.md (and docs/retex-changes.md here).
 retex = "2"
 retex-lsp = "2"
+retex-texlive = "2"
+retex-kpath = "2"
 
 # internal
 texcraft-project = { path = "crates/project" }
@@ -36,12 +38,15 @@ texcraft-preview = { path = "crates/preview" }
 texcraft-engine = { path = "crates/engine", default-features = false }
 texcraft-ui-egui = { path = "crates/ui-egui" }
 texcraft-mcp = { path = "crates/mcp" }
+texcraft-templates = { path = "crates/templates", default-features = false }
 
 # foundation
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 log = "0.4"
+toml = { version = "0.9", default-features = false, features = ["parse", "serde"] }
+tar = { version = "0.4", default-features = false }
 # The control channel's token (random bytes) and its folder.
 getrandom = "0.3"
 dirs = "6"

@@ -1,0 +1,28 @@
+[package]
+name = "texcraft-templates"
+description = "Project templates: TeXCraft's catalogue, downloading them from their source with TeX Live's checks, and keeping them for offline use"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+default = ["download"]
+# Fetching templates from TeX Live mirrors (desktop and CLI). Without it, only kept templates are
+# offered.
+download = ["dep:retex-texlive", "dep:retex-kpath", "dep:tar"]
+
+[dependencies]
+serde = { workspace = true }
+toml = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+retex-texlive = { workspace = true, optional = true, features = ["download"] }
+retex-kpath = { workspace = true, optional = true }
+tar = { workspace = true, optional = true }

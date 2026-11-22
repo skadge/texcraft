@@ -5,6 +5,8 @@
 //! - `wasm`: the web app and the crates it uses build for wasm32-unknown-unknown.
 //! - `ci`: fmt, clippy, tests, layers, wasm, in that order.
 //! - `icons`: every app icon file, from the SVG master in `assets/app-icon/`.
+//! - `templates [ID]`: fetches every template of the catalogue (or one) from its source, with its
+//!   checks, into a scratch store, and builds each with `texcraft-cli compile`. Needs the network.
 
 mod icons;
 
@@ -16,6 +18,7 @@ use serde_json::Value;
 const LAYERS: &[(&str, Option<u8>)] = &[
     ("texcraft-project", Some(0)),
     ("texcraft-latex", Some(0)),
+    ("texcraft-templates", Some(0)),
     ("texcraft-compile", Some(1)),
     ("texcraft-preview", Some(1)),
     ("texcraft-engine", Some(2)),
@@ -37,7 +40,8 @@ fn main() -> ExitCode {
         "wasm" => wasm(),
         "ci" => ci(),
         "icons" => icons::run(),
-        _ => Err("usage: cargo xtask layers | wasm | ci | icons".to_owned()),
+        "templates" => templates(std::env::args().nth(2).as_deref()),
+        _ => Err("usage: cargo xtask layers | wasm | ci | icons | templates [ID]".to_owned()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -104,4 +108,42 @@ fn ci() -> Result<(), String> {
     run(cargo, &["test", "--workspace"])?;
     layers()?;
     wasm()
+}
+
+fn templates(only: Option<&str>) -> Result<(), String> {
+    let catalog = texcraft_templates::Catalog::builtin().map_err(|e| e.to_string())?;
+    let scratch = std::env::temp_dir().join(format!("texcraft-templates-{}", std::process::id()));
+    let store = texcraft_templates::Store::new(scratch.join("store"));
+    run(env!("CARGO"), &["build", "--release", "-q", "-p", "texcraft-cli"])?;
+    let cli = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/release/texcraft-cli");
+    let mut failed = Vec::new();
+    for t in catalog.templates().iter().filter(|t| only.is_none_or(|id| t.id == id)) {
+        let dir = match store.fetch(t) {
+            Ok(dir) => dir,
+            Err(e) => {
+                eprintln!("FETCH FAIL {}: {e}", t.id);
+                failed.push(t.id.clone());
+                continue;
+            }
+        };
+        let out = scratch.join(format!("{}.pdf", t.id));
+        let status = Command::new(&cli)
+            .args(["compile", &dir.display().to_string(), "--output", &out.display().to_string()])
+            .output()
+            .map_err(|e| format!("texcraft-cli: {e}"))?;
+        let log = String::from_utf8_lossy(&status.stderr);
+        let errors = log.lines().filter(|l| l.contains("error:")).count();
+        if status.status.success() && errors == 0 {
+            eprintln!("ok         {}  {}", t.id, log.lines().last().unwrap_or_default());
+        } else {
+            eprintln!(
+                "BUILD FAIL {} ({errors} errors)\n{}",
+                t.id,
+                log.lines().filter(|l| l.contains("error")).take(5).collect::<Vec<_>>().join("\n")
+            );
+            failed.push(t.id.clone());
+        }
+    }
+    eprintln!("store: {}", scratch.display());
+    if failed.is_empty() { Ok(()) } else { Err(format!("failed: {}", failed.join(", "))) }
 }
