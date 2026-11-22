@@ -1,0 +1,15 @@
+[package]
+name = "texcraft-latex"
+description = "LaTeX source analysis for the editor: highlighting tokens and the document outline"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+retex-lsp = { workspace = true }
+serde = { workspace = true }
