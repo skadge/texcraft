@@ -49,6 +49,20 @@ pub(crate) enum Dialog {
     About,
 }
 
+impl Dialog {
+    /// The dialog's name for the control channel.
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            Dialog::Prompt(_) => "prompt",
+            Dialog::Confirm(_) => "confirm",
+            Dialog::Unsaved(_) => "unsaved",
+            Dialog::Shortcuts => "shortcuts",
+            Dialog::Settings => "settings",
+            Dialog::About => "about",
+        }
+    }
+}
+
 /// The window's open dialog, if any.
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     if matches!(app.view.dialog, Some(Dialog::Shortcuts)) {

@@ -1,6 +1,7 @@
 //! Integration tests for texcraft-ui-egui.
 
 mod contrast;
+mod control;
 mod frame;
 mod insert;
 mod recent;

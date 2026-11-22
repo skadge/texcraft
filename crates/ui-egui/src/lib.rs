@@ -11,6 +11,7 @@
 pub mod i18n;
 pub mod theme;
 
+pub mod control;
 mod dialogs;
 mod editor;
 pub mod fonts;
