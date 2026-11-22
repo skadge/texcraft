@@ -64,7 +64,7 @@
 ## Why TeXCraft
 
 - **Familiar.** The arrangement people know from online LaTeX editors: project files on the left, the source in the middle, the PDF on the right, the build log in the PDF's place, an Insert menu and a toolbar for the usual markup.
-- **The PDF follows your typing.** A build starts when typing pauses, and the PDF keeps its place across builds. retex runs inside TeXCraft: it reads an installed TeX Live, or downloads the packages a document needs.
+- **The PDF follows your typing.** A build starts when typing pauses, and the PDF keeps its place across builds.
 - **Messages you can act on.** retex explains errors and warnings in words, with help on how to fix them; each one links to its line, and the editor marks the lines.
 - **Yours, offline.** A project is a folder on your disk, opened, saved and versioned like any other.
 - **Agent-native.** Every command of the menus can be run over a JSON control channel of the open window and by an **MCP server**, confined to the folders it is given.
@@ -72,22 +72,13 @@
 
 ## What retex brings
 
-[retex](https://gitlab.com/severin-lemaignan/retex) is a TeX engine written in Rust, a reimplementation of `lualatex`. It runs inside TeXCraft, so these come with every build:
+TeXCraft builds with [retex](https://gitlab.com/severin-lemaignan/retex), a TeX engine written in Rust that runs inside it. A few things work that a LaTeX setup usually needs extra tools for:
 
-- **The same pages as lualatex.** retex reads your TeX Live's packages and fonts; on the 647 lualatex documents of its test corpus, 640 have every page identical to lualatex's at 300 dpi. A `--compat=pdflatex` mode covers documents written for pdflatex.
-- **Faster builds.** One pass takes a third to a half of lualatex's time on most documents.
-- **One build, every pass.** References, tables of contents, bibliographies (its own BibTeX and biber) and indexes (its own makeindex) settle in one build, without latexmk or external programs.
-- **Errors you can act on.** Each error and warning comes with its source line, its cause and, where it can, a fix; all of them are reported, not only the first.
-- **Missing packages fetched.** A package the installed TeX Live lacks is downloaded from TeX Live; without TeX Live, retex keeps a tree of its own.
-- **Images as they are.** `\includegraphics` takes **SVG** (without Inkscape), **JPEG XL**, **WebP**, PNG, JPEG, GIF, TIFF, JBIG2 and PDF.
-- **Fonts and scripts.** OpenType fonts through HarfBuzz shaping, colour emoji, right-to-left and vertical writing.
-- **Code without Python.** minted highlights code in process, without Python or `-shell-escape`.
-
-retex can also write more than a screen PDF. TeXCraft does not offer these yet; they are planned ([`docs/plan.md`](docs/plan.md), phase 5):
-
-- **Print-ready PDF/X** (PDF/X-4 and PDF/X-1a) with bleed and crop marks, checked after GWG 2022: image resolution, ink coverage, small text, the bleed.
-- **Accessible PDF**: tagged PDF/UA-2, checked for what screen readers need.
-- **Other formats from the same source**: one SVG file, OpenDocument (an article as a Writer document, a beamer deck as an Impress presentation, both experimental), HTML and Markdown.
+- **More image formats.** `\includegraphics` takes **SVG** directly (no Inkscape, no `-shell-escape`), **JPEG XL**, **WebP**, GIF and TIFF, as well as PNG, JPEG and PDF.
+- **No TeX installation needed.** A package the document needs and the installed TeX Live lacks is downloaded from TeX Live; without a TeX Live at all, retex keeps a tree of its own.
+- **Bibliographies and indexes without external programs.** BibTeX, biber and makeindex are built into the engine (no Perl, no Java), and run as many times as the document needs within one build.
+- **minted without Python.** Code listings are highlighted in process, without Python, Pygments or `-shell-escape`.
+- **Colour emoji** in documents, through OpenType colour fonts.
 
 ## Quick start
 
@@ -133,7 +124,6 @@ TeXCraft is in early development. [`docs/plan.md`](docs/plan.md) has what works,
 - TeXCraft's own editor widget, with completion, find and replace, and spell checking;
 - a formatted editing mode, with sections, emphasis, formulas and tables shown formatted;
 - navigation between the source and the PDF;
-- retex's other outputs: PDF/X for print with preflight checks, accessible PDF, SVG, OpenDocument, HTML and Markdown;
 - the engine in the browser;
 - history, sharing and working together.
 
