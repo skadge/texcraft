@@ -4793,6 +4793,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "serde_json",
+ "texcraft-compile",
  "texcraft-engine",
  "texcraft-ui-egui",
 ]

@@ -299,7 +299,7 @@ retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua i
 ## 4. retex
 
 retex's design note `docs/design/embedding.md` (in the retex repository) answers TeXCraft's requests R1 to R12. [docs/retex-changes.md](retex-changes.md) says what TeXCraft does with each release and lists the points still open. In short:
-- **2.1.0 (in use):** progress, cancelling, SyncTeX bytes, symbols and fixes in process are used (docs/retex-changes.md); still to use: the `retex worker` process per project (cancelling, preamble snapshots, unsaved buffers as an overlay, OS-level confinement for agent sessions), the SyncTeX reader and fragments for the formatted mode.
+- **2.1.0 (in use):** progress, cancelling, SyncTeX, symbols and fixes, and the worker's preamble snapshot in the desktop app (docs/retex-changes.md); still to use: the `retex worker` process per project (cancelling, preamble snapshots, unsaved buffers as an overlay, OS-level confinement for agent sessions), the SyncTeX reader and fragments for the formatted mode.
 - **2.2.0:** typed language-server queries.
 
 Phases 2 to 5 of this plan follow those releases. Where a phase needs a later release, its work starts on the TeXCraft side (interfaces, UI, tests against the in-process backend) and is finished when the release lands.

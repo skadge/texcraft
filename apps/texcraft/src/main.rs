@@ -164,7 +164,23 @@ fn parse_args() -> Result<Args, String> {
     Ok(args)
 }
 
-fn main() -> eframe::Result {
+fn main() -> std::process::ExitCode {
+    // Started again as the build worker (retex's `worker`): run that, and nothing of the window.
+    if let Some(code) = texcraft_compile::worker_entry() {
+        return code;
+    }
+    // Builds go to a worker running this program, which keeps the preamble snapshot.
+    texcraft_compile::use_this_program_as_worker();
+    match run() {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("texcraft: {e}");
+            std::process::ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> eframe::Result {
     let args = match parse_args() {
         Ok(a) => a,
         Err(e) => {

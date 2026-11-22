@@ -216,11 +216,35 @@ impl Backend for Unavailable {
     }
 }
 
+/// The program that runs the build worker, once [`use_this_program_as_worker`] said so.
+#[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
+static WORKER_PROGRAM: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// For `main`, first: when this process was started as a build worker, runs it and returns its
+/// exit code; `None` otherwise.
+#[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
+pub fn worker_entry() -> Option<std::process::ExitCode> {
+    retex::worker_entry()
+}
+
+/// Builds go to a worker process running this program (which calls [`worker_entry`] first in
+/// `main`), keeping the preamble snapshot between builds.
+#[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
+pub fn use_this_program_as_worker() {
+    if let Ok(exe) = std::env::current_exe() {
+        let _ = WORKER_PROGRAM.set(exe);
+    }
+}
+
 /// The best backend this build has.
 pub fn default_backend(cache_dir: Option<std::path::PathBuf>) -> Box<dyn Backend> {
     #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
     {
-        Box::new(retex_backend::Retex::new(cache_dir))
+        let backend = retex_backend::Retex::new(cache_dir);
+        match WORKER_PROGRAM.get() {
+            Some(program) => Box::new(backend.with_worker(program.clone())),
+            None => Box::new(backend),
+        }
     }
     #[cfg(not(all(feature = "retex", not(target_arch = "wasm32"))))]
     {
