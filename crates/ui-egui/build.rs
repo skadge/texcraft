@@ -118,10 +118,8 @@ fn latin_faces(dir: &Path) -> Result<Vec<(&'static str, PathBuf)>, String> {
     let entries = craft_fonts_build::parse_manifest(&text).map_err(|e| format!("{}: {e}", manifest_path.display()))?;
     let mut out = Vec::new();
     for (name, family, style) in FACES {
-        let entry = entries
-            .iter()
-            .find(|e| e.family == *family && e.style == *style)
-            .ok_or_else(|| format!("the Latin catalog has no {family} {style}"))?;
+        let entry =
+            entries.iter().find(|e| e.family == *family && e.style == *style).ok_or_else(|| format!("the Latin catalog has no {family} {style}"))?;
         let file = dir.join(&entry.file);
         let bytes = std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?;
         let digest: String = sha2::Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
@@ -139,11 +137,7 @@ fn icons() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/icons");
     println!("cargo::rerun-if-changed={}", dir.display());
     let mut names: Vec<String> = std::fs::read_dir(&dir)
-        .map(|list| {
-            list.flatten()
-                .filter_map(|e| e.file_name().to_str().and_then(|n| n.strip_suffix(".svg")).map(str::to_owned))
-                .collect()
-        })
+        .map(|list| list.flatten().filter_map(|e| e.file_name().to_str().and_then(|n| n.strip_suffix(".svg")).map(str::to_owned)).collect())
         .unwrap_or_default();
     names.sort();
     let mut out = String::from("/// The embedded icon catalog (build.rs): (name, SVG).\npub static ICONS: &[(&str, &[u8])] = &[\n");

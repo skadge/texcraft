@@ -102,7 +102,7 @@ fn files(app: &mut App, ui: &mut egui::Ui) {
             if dir != folder {
                 folder = dir.to_owned();
                 if !dir.is_empty() {
-                    ui.label(egui::RichText::new(format!("{dir}/")).color(app.tokens.text_dim));
+                    ui.label(egui::RichText::new(format!("{dir}/")).color(app.tokens.text_muted));
                 }
             }
             let marker = if main.as_ref() == Some(path) { tl!(" (main)") } else { "" };
@@ -138,7 +138,7 @@ fn outline(app: &mut App, ui: &mut egui::Ui) {
     let Ok(text) = app.session.project().text(&path) else { return };
     let headings = texcraft_latex::outline(text);
     if headings.is_empty() {
-        ui.label(egui::RichText::new(tl!("No sections in this file.")).color(app.tokens.text_dim));
+        ui.label(egui::RichText::new(tl!("No sections in this file.")).color(app.tokens.text_muted));
     }
     for h in headings {
         let indent = f32::from(h.level.saturating_sub(1)) * 10.0;
@@ -184,7 +184,7 @@ pub(crate) fn preview_toolbar(app: &mut App, ui: &mut egui::Ui) {
         }
     });
     if let Some((message, is_error)) = &app.view.status {
-        let color = if *is_error { app.tokens.error } else { app.tokens.text_dim };
+        let color = if *is_error { app.tokens.error } else { app.tokens.text_muted };
         ui.colored_label(color, message.as_str());
     }
     ui.separator();
@@ -205,8 +205,8 @@ pub(crate) fn logs(app: &mut App, ui: &mut egui::Ui) {
             let (title, color) = match severity {
                 Severity::Error => (tl!("Errors"), app.tokens.error),
                 Severity::Warning => (tl!("Warnings"), app.tokens.warning),
-                Severity::Note => (tl!("Notes"), app.tokens.info),
-                Severity::Hint => (tl!("Hints"), app.tokens.text_dim),
+                Severity::Note => (tl!("Notes"), app.tokens.note),
+                Severity::Hint => (tl!("Hints"), app.tokens.text_muted),
             };
             ui.colored_label(color, format!("{title} ({})", items.len()));
             for d in items {
@@ -219,7 +219,7 @@ pub(crate) fn logs(app: &mut App, ui: &mut egui::Ui) {
                 let text = format!("{}  {place}  {}", title, d.message);
                 let r = ui.selectable_label(false, text);
                 for h in &d.help {
-                    ui.label(egui::RichText::new(h.as_str()).color(app.tokens.text_dim));
+                    ui.label(egui::RichText::new(h.as_str()).color(app.tokens.text_muted));
                 }
                 if r.clicked()
                     && let (Some(f), Some(l)) = (&d.file, d.line)

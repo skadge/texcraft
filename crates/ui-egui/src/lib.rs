@@ -12,9 +12,9 @@ pub mod i18n;
 pub mod theme;
 
 mod chrome;
+mod editor;
 pub mod fonts;
 pub mod icons;
-mod editor;
 mod pdf_view;
 pub mod ui_cmd;
 
@@ -111,6 +111,10 @@ impl App {
             fonts::install(ctx);
             icons::install(ctx);
             self.fonts_ready = true;
+        }
+        if self.applied.is_none() {
+            // The first frame follows the system's theme; View › Switch Light and Dark changes it.
+            self.tokens = Tokens::system(ctx);
         }
         if self.applied != Some(self.tokens.scheme) {
             self.tokens.apply(ctx);

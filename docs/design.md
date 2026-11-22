@@ -30,15 +30,15 @@ Two themes, light and dark, following the system by default. Neutrals are slight
 | `canvas` | `#E6E8EC` | `#2A2D32` | Behind the PDF pages |
 | `raised` | `#FFFFFF` | `#25282D` | Menus, popovers, tooltips |
 | `separator` | `#E1E4E8` | `#2C3036` | Hairlines between regions (decorative) |
-| `control_border` | `#8C939E` | `#6B727D` | Outlines of fields and buttons (3:1) |
+| `control_border` | `#727985` | `#7D8490` | Outlines of fields and buttons (3:1) |
 | `text` | `#1B1E23` | `#E7E9EC` | Body text |
 | `text_muted` | `#5B626C` | `#A2A8B1` | Secondary text, inactive icons |
 | `accent` | `#2557D6` | `#7AA7FF` | Primary action, selection, focus |
 | `on_accent` | `#FFFFFF` | `#0D1830` | Text on the accent |
 | `accent_soft` | accent at 10 % | accent at 16 % | Selected rows, active toggles |
-| `error` | `#C42B1C` | `#FF8A80` | Errors |
-| `warning` | `#8A5A00` | `#F2C45A` | Warnings |
-| `success` | `#1E7A46` | `#6FD39A` | A clean build |
+| `error` | `#B0261A` | `#FF8A80` | Errors |
+| `warning` | `#7F5200` | `#F2C45A` | Warnings |
+| `success` | `#17683B` | `#6FD39A` | A clean build |
 
 Hover is the text colour at 6 % over the surface, and pressed is 10 %. Selection in text is the accent at 22 % (light) or 30 % (dark).
 
