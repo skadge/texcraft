@@ -1,10 +1,10 @@
 //! Interface faces (docs/design.md, Type): Inter for the interface, in regular, semibold and
 //! italic, and a monospace face for source text, embedded from craft-fonts by `build.rs`. They
-//! head craft-ui's font stack, which adds faces for other scripts and emoji behind them. Without
-//! the craft-fonts checkout, egui's bundled faces stand in and the named families map to them.
+//! head craft-ui's font stack, which adds faces for other scripts and emoji behind them, and on the
+//! desktop the installed fonts last. Without the craft-fonts checkout, egui's bundled faces stand in.
 
 use craft_ui::fonts::{I18nScripts, UiFonts};
-use egui::{FontData, FontDefinitions, FontFamily};
+use egui::{FontData, FontFamily};
 
 include!(concat!(env!("OUT_DIR"), "/ui_faces.rs"));
 
@@ -19,23 +19,13 @@ pub fn italic() -> FontFamily {
 }
 
 pub fn install(ctx: &egui::Context) {
-    if UI_FACES.is_empty() {
-        let mut defs = FontDefinitions::default();
-        let proportional = defs.families.get(&FontFamily::Proportional).cloned().unwrap_or_default();
-        // egui's monospace family has no emoji face by default; source text may contain emoji.
-        if let Some(mono) = defs.families.get_mut(&FontFamily::Monospace) {
-            for face in ["NotoEmoji-Regular", "emoji-icon-font"] {
-                if !mono.iter().any(|f| f == face) {
-                    mono.push(face.to_owned());
-                }
-            }
-        }
-        defs.families.insert(semibold(), proportional.clone());
-        defs.families.insert(italic(), proportional);
-        ctx.set_fonts(defs);
-        return;
-    }
     let mut fonts = UiFonts::new(&I18nScripts);
+    let all = [FontFamily::Proportional, semibold(), italic(), FontFamily::Monospace];
+    if UI_FACES.is_empty() {
+        // egui's bundled faces stand in for craft-fonts' (docs/design.md, Type).
+        let text = [FontFamily::Proportional, semibold(), italic()];
+        fonts = fonts.egui_face("Ubuntu-Light", &text).egui_face("Hack", &[FontFamily::Monospace]);
+    }
     for (name, bytes) in UI_FACES {
         let families = match *name {
             "Inter-SemiBold" => vec![semibold()],
@@ -45,9 +35,9 @@ pub fn install(ctx: &egui::Context) {
         };
         fonts = fonts.app_face(name, FontData::from_static(bytes), &families);
     }
-    // Arrows and other symbols Inter lacks come from egui's Hack, and emoji (which documents
-    // contain, also in source text) from egui's emoji faces, ahead of system fonts.
-    let all = [FontFamily::Proportional, semibold(), italic(), FontFamily::Monospace];
+    // Arrows and other symbols come from egui's Hack, emoji (which documents contain, also in
+    // source text) from egui's emoji faces; installed fonts follow on the desktop, for what none
+    // of these draw.
     fonts = fonts.egui_face("Hack", &all).egui_face("Ubuntu-Light", &all).egui_face("NotoEmoji-Regular", &all).egui_face("emoji-icon-font", &all);
     fonts.install(ctx);
 }

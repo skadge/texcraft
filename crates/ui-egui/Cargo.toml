@@ -25,6 +25,11 @@ log = { workspace = true }
 # Decodes the app icon for the top bar, the start page and About.
 png = "0.18"
 
+# Installed fonts after the bundled ones, for characters they lack (newer emoji, rare scripts), and
+# colour glyphs (colour emoji); desktop only.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+craft-ui = { workspace = true, features = ["system_fonts", "color_fonts"] }
+
 [build-dependencies]
 craft-fonts-build = { workspace = true }
 sha2 = { workspace = true }
