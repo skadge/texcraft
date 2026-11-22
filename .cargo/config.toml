@@ -1,2 +1,8 @@
 [alias]
 xtask = "run --package xtask --"
+
+# The craft-fonts checkout the interface faces come from (docs/design.md, Type). Clone
+# https://github.com/storytold/craft-fonts into ./craft-fonts (gitignored) to use them; without it
+# the build warns once and egui's bundled faces are used.
+[env]
+CRAFT_FONTS_DIR = { value = "craft-fonts", relative = true }

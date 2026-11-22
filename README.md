@@ -17,6 +17,8 @@ cargo run --release -p texcraft-cli -- mcp --automation-read-root DIR --automati
 cd apps/texcraft-web && trunk serve                                  # web app (no engine in the browser yet)
 ```
 
+For the interface faces, clone [craft-fonts](https://github.com/storytold/craft-fonts) into `./craft-fonts` (gitignored); `.cargo/config.toml` points `CRAFT_FONTS_DIR` there. Without it, egui's bundled faces are used.
+
 The desktop app finds TeX Live the way retex does: an installed TeX Live 2025 or 2026, or the tree retex downloads.
 
 ## Checks

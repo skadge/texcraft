@@ -12,6 +12,7 @@ pub mod i18n;
 pub mod theme;
 
 mod chrome;
+pub mod fonts;
 mod editor;
 mod pdf_view;
 pub mod ui_cmd;
@@ -69,6 +70,7 @@ pub struct App {
     editor: editor::Editor,
     pdf: pdf_view::PdfView,
     applied: Option<Scheme>,
+    fonts_ready: bool,
 }
 
 impl App {
@@ -81,6 +83,7 @@ impl App {
             editor: editor::Editor::default(),
             pdf: pdf_view::PdfView::default(),
             applied: None,
+            fonts_ready: false,
         }
     }
 
@@ -103,6 +106,10 @@ impl App {
     /// `eframe::App::ui`.
     pub fn frame(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
+        if !self.fonts_ready {
+            fonts::install(ctx);
+            self.fonts_ready = true;
+        }
         if self.applied != Some(self.tokens.scheme) {
             self.tokens.apply(ctx);
             self.applied = Some(self.tokens.scheme);
