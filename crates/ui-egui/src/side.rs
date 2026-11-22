@@ -77,6 +77,13 @@ enum Action {
 fn files(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     header(ui, &t, tl!("Files"), |ui| {
+        let import = texcraft_engine::cmd::find("file.import").map_or(Ok(()), |c| (c.enabled)(&app.session));
+        let add = widgets::icon_button(ui, &t, "upload", tl!("Add Files…"), import.is_ok());
+        if let Err(reason) = &import {
+            let _ = add.on_disabled_hover_text(reason.as_str());
+        } else if add.clicked() {
+            ui_cmd::run(app, "file.import");
+        }
         if widgets::icon_button(ui, &t, "file-plus", tl!("New File…"), true).clicked() {
             ui_cmd::run(app, "file.new");
         }

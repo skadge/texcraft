@@ -17,6 +17,8 @@ pub mod fonts;
 pub mod icons;
 mod pdf_view;
 pub mod prefs;
+pub use picks::{Pick, PickKind, PickRequest};
+mod picks;
 mod preview;
 mod rail;
 mod side;
@@ -75,6 +77,10 @@ pub struct App {
     applied: Option<Scheme>,
     fonts_ready: bool,
     prefs: prefs::Prefs,
+    /// Picks for the shell to show.
+    picks: Vec<picks::PickRequest>,
+    /// Whether the shell shows native pickers; without them paths are typed.
+    native_pickers: bool,
     /// The context of the last frame, for commands run outside one.
     ctx: egui::Context,
     /// The preferences changed since the shell last took them.
@@ -112,6 +118,8 @@ impl App {
             applied: None,
             fonts_ready: false,
             prefs,
+            picks: Vec::new(),
+            native_pickers: false,
             ctx: egui::Context::default(),
             prefs_changed: false,
         };

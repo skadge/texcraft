@@ -5,6 +5,7 @@
 use serde_json::json;
 
 use crate::dialogs::{Dialog, Prompt};
+use crate::picks::Pick;
 use crate::prefs::ThemePref;
 use crate::theme::Scheme;
 use crate::{App, Layout, Side};
@@ -67,7 +68,23 @@ pub fn run(app: &mut App, id: &str) {
         "view.fit_width" => app.pdf.fit_width(),
         "help.shortcuts" => app.view.dialog = Some(Dialog::Shortcuts),
         "help.about" => app.view.dialog = Some(Dialog::About),
-        // Native file and folder pickers come with craft-dialogs (docs/plan.md, phase 1); until then the path is typed.
+        "project.open" if app.native_pickers => app.request_pick(Pick::OpenProject),
+        "project.save_as" if app.native_pickers => app.request_pick(Pick::SaveProjectAs),
+        "build.save_pdf" if app.native_pickers => app.request_pick(Pick::SavePdf),
+        "file.import" if app.native_pickers => app.request_pick(Pick::AddFiles),
+        // Without native pickers (the web app, for now) the path is typed.
+        "file.import" => {
+            let prompt = Prompt {
+                title: tl!("Add a File"),
+                label: tl!("The file on disk to copy into the project"),
+                value: String::new(),
+                action: tl!("Add"),
+                command: "file.import",
+                params: Box::new(|v| json!({"source": v})),
+                focus: true,
+            };
+            app.view.dialog = Some(Dialog::Prompt(prompt));
+        }
         "project.open" => ask(app, tl!("Open Project Folder"), tl!("The folder that holds the project's files"), tl!("Open"), "project.open"),
         "project.save_as" => ask(app, tl!("Save Project As"), tl!("The folder to write the project's files to"), tl!("Save"), "project.save_as"),
         "build.save_pdf" => ask(app, tl!("Save PDF As"), tl!("The file to write the PDF to"), tl!("Save"), "build.save_pdf"),
