@@ -105,7 +105,7 @@ pub fn signature(name: &str) -> &'static [Spec] {
         | "mbox" | "url" | "label" | "ref" | "eqref" | "pageref" | "autoref" | "nameref" | "cref" | "Cref" | "input" | "include" | "includeonly"
         | "bibliography" | "bibliographystyle" | "addbibresource" | "hspace" | "vspace" => &[R],
         "cite" | "citep" | "citet" | "parencite" | "textcite" | "autocite" | "footcite" | "nocite" | "citeauthor" | "citeyear" => &[O, O, R],
-        "footnote" | "caption" | "title" | "author" | "date" | "documentclass" | "usepackage" | "includegraphics" => &[O, R],
+        "footnote" | "thanks" | "caption" | "title" | "author" | "date" | "documentclass" | "usepackage" | "includegraphics" => &[O, R],
         "href" => &[R, R],
         "item" => &[O],
         "newcommand" | "renewcommand" | "providecommand" => &[R, O, O, R],

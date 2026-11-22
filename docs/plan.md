@@ -186,6 +186,8 @@ A toggle at the top of the editor switches between **Source** and **Formatted**,
    | `\footnote`, `\url`, `\href` | Marker with a popover; link text |
    | Anything else | The source itself, inline, in the code font. Nothing is hidden that cannot be shown faithfully |
 
+   **Status:** the mapping is in (`texcraft_latex::view`), except heading and equation numbers from the `.aux`; tables stay as source until the grid editor. Text environments (`abstract`, `quote`, `center`…) show their body formatted under their name, and a figure that holds more than an image, a caption and a label stays as source.
+
 3. **Typeset formulas.**
    - Formulas are typeset by retex with the document's own preamble, in batches, through a fragment API (docs/retex-changes.md, R11).
    - The images are cached by the formula text and the preamble's hash, and drawn by craft-pdf at the screen's density.

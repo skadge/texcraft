@@ -130,10 +130,15 @@ const STRUCTURAL: &[char] = &['{', '}', '[', ']', '\\', '$', '%', '\n'];
 fn check(text: &str) {
     let tree = parse(text);
     assert!(tiles(&tree, 0..text.len()), "does not tile: {text:?}");
+    let mut at = 0;
+    for block in texcraft_latex::view::build(text, &tree) {
+        assert!(block.range.start >= at && block.range.end <= text.len(), "view out of the text: {text:?}");
+        at = block.range.end;
+    }
 }
 
 #[test]
-fn hostile_input_never_breaks_the_tiling() {
+fn hostile_input_never_breaks_the_tiling_or_the_view() {
     let samples = [MAIN, INTRO, FIGURE, "é$\\(ü\\[ö{\\verb\u{2603}x\u{2603}\\begin{ä}%ß\n\n}"];
     for sample in samples {
         let boundaries: Vec<usize> = (0..=sample.len()).filter(|i| sample.is_char_boundary(*i)).collect();

@@ -1,5 +1,6 @@
 //! LaTeX source analysis the editor needs on every keystroke: highlighting tokens ([`lex`]), the
-//! outline of sections ([`outline`]) and the tolerant syntax tree of the formatted view ([`tree`]).
+//! outline of sections ([`outline`]) and the tolerant syntax tree of the formatted view ([`tree`]) and what that view shows of it
+//! ([`view`]).
 //! All are pure functions of the text, with no I/O, so they run the same natively and in the
 //! browser.
 //!
@@ -13,6 +14,7 @@
 use std::ops::Range;
 
 pub mod tree;
+pub mod view;
 
 /// What a run of source text is, for colouring.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
