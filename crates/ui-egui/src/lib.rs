@@ -256,6 +256,23 @@ impl App {
         self.start = true;
     }
 
+    /// Opens what the command line or the desktop names: a project folder, or a file of one (its
+    /// folder is opened and the file shown).
+    pub fn open_path(&mut self, path: &str) {
+        let p = std::path::Path::new(path);
+        if p.is_file()
+            && let (Some(dir), Some(name)) = (p.parent(), p.file_name().and_then(|n| n.to_str()))
+        {
+            let dir = if dir.as_os_str().is_empty() { std::path::Path::new(".") } else { dir };
+            self.open_project(&dir.display().to_string());
+            if self.session.dir().is_some() {
+                self.run("file.open", json!({"path": name}));
+            }
+            return;
+        }
+        self.open_project(path);
+    }
+
     /// Opens the project in `folder` and remembers it among the recent projects.
     pub fn open_project(&mut self, folder: &str) {
         if self.run("project.open", json!({"path": folder})).is_some() {

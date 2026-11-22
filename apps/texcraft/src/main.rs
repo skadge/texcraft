@@ -1,4 +1,4 @@
-//! TeXCraft for the desktop: `texcraft [--control [PORT]] [FOLDER]`.
+//! TeXCraft for the desktop: `texcraft [--control [PORT]] [FOLDER | FILE]`.
 //!
 //! `--control` (or `TEXCRAFT_CONTROL_PORT`) starts the control channel for agents and scripts,
 //! docs/control-protocol.md.
@@ -119,9 +119,10 @@ const WINDOW_ICON: &[u8] = include_bytes!("../../../assets/app-icon/texcraft-mac
 #[cfg(not(target_os = "macos"))]
 const WINDOW_ICON: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.texcraft.png");
 
-const USAGE: &str = "usage: texcraft [--control [PORT]] [FOLDER]
+const USAGE: &str = "usage: texcraft [--control [PORT]] [FOLDER | FILE]
 
   FOLDER            open the project in this folder
+  FILE              open the project in the file's folder, showing the file
   --control [PORT]  start the control channel for agents and scripts on PORT (default: the first
                     free port from 7841); see docs/control-protocol.md. Also TEXCRAFT_CONTROL_PORT.
   --version         print the version";
@@ -185,7 +186,7 @@ fn main() -> eframe::Result {
         }
     }
     match &args.folder {
-        Some(folder) => app.open_project(folder),
+        Some(path) => app.open_path(path),
         None => app.show_start_page(),
     }
     let mut viewport =
