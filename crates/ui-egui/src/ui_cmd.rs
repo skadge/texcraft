@@ -98,6 +98,11 @@ pub fn run(app: &mut App, id: &str) {
         "view.zoom_in" => app.pdf.zoom_by(1.25),
         "view.zoom_out" => app.pdf.zoom_by(0.8),
         "view.fit_width" => app.pdf.fit_width(),
+        id if id.starts_with("window.") => {
+            if !crate::window::run(app, id) {
+                log::warn!("unknown window command {id}");
+            }
+        }
         id if id.starts_with("edit.") => {
             if !crate::editor::edit(app, id) {
                 app.view.status = Some((tl!("Open a text file to edit it.").to_owned(), true));

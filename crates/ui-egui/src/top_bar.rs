@@ -1,5 +1,6 @@
 //! The top bar (docs/design.md, Regions): the app mark and the menus on the left, the project's
-//! name with its menu in the centre, and the layout switch on the right.
+//! name with its menu in the centre, and the layout switch on the right, then the window's
+//! controls when the app draws the window's frame (`window.rs`).
 
 use egui::{Align, Layout as EguiLayout, RichText, Sense, vec2};
 use texcraft_engine::cmd;
@@ -13,6 +14,8 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let frame = egui::Frame::new().fill(t.frame).inner_margin(egui::Margin::symmetric(12, 0));
     egui::Panel::top("top-bar").exact_size(t.top_bar_height).frame(frame).show(ui, |ui| {
         let bar = ui.max_rect();
+        // The bar's empty space moves the window; the controls drawn after it take the pointer.
+        crate::window::bar_space(app, ui, ui.max_rect().expand2(vec2(12.0, 0.0)));
         ui.horizontal_centered(|ui| {
             if mark(ui, &t) {
                 ui_cmd::run(app, "app.start");
@@ -24,13 +27,22 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 }
             });
         });
-        if app.start {
-            return;
+        if !app.start {
+            project_title(app, ui, bar);
         }
-        project_title(app, ui, bar);
         let rect = egui::Rect::from_min_max(egui::pos2(bar.center().x, bar.top()), bar.max);
         ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(EguiLayout::right_to_left(Align::Center)), |ui| {
-            layout_switch(app, ui);
+            if app.own_frame() {
+                crate::window::controls(app, ui);
+                if !app.start {
+                    ui.add_space(t.unit);
+                    ui.add(egui::Separator::default().vertical().shrink(t.unit * 3.0));
+                    ui.add_space(t.unit);
+                }
+            }
+            if !app.start {
+                layout_switch(app, ui);
+            }
         });
     });
 }

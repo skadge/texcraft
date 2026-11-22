@@ -194,6 +194,7 @@ fn run() -> eframe::Result {
     let (settings, report) = SettingsStore::<Stored>::open(Location::Auto);
     log::info!("preferences: {report:?}");
     let prefs = settings.get().0.clone();
+    let system_title_bar = prefs.system_title_bar;
     let mut session = texcraft_engine::Session::new();
     if let Some(data) = dirs::data_dir() {
         session.set_template_store(data.join("TeXCraft").join("templates"));
@@ -209,8 +210,13 @@ fn run() -> eframe::Result {
         Some(path) => app.open_path(path),
         None => app.show_start_page(),
     }
-    let mut viewport =
-        egui::ViewportBuilder::default().with_title("TeXCraft").with_app_id("ai.storyteller.texcraft").with_inner_size([1400.0, 900.0]);
+    // Without the system's title bar, the top bar holds the window's controls.
+    app.set_desktop_window(true);
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_title("TeXCraft")
+        .with_app_id("ai.storyteller.texcraft")
+        .with_inner_size([1400.0, 900.0])
+        .with_decorations(system_title_bar);
     match eframe::icon_data::from_png_bytes(WINDOW_ICON) {
         Ok(icon) => viewport = viewport.with_icon(Arc::new(icon)),
         Err(e) => log::warn!("the window icon: {e}"),

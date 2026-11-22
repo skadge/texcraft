@@ -41,6 +41,8 @@ pub struct Prefs {
     pub vim: bool,
     /// The editor closes brackets and environments as they are typed.
     pub auto_close: bool,
+    /// The desktop window has the system's title bar, not the window controls in the top bar.
+    pub system_title_bar: bool,
 }
 
 impl Default for Prefs {
@@ -57,6 +59,7 @@ impl Default for Prefs {
             shortcuts: craft_keymap::Overrides::default(),
             vim: false,
             auto_close: true,
+            system_title_bar: false,
         }
     }
 }

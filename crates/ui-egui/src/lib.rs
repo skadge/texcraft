@@ -36,6 +36,7 @@ mod status;
 mod top_bar;
 pub mod ui_cmd;
 pub mod widgets;
+mod window;
 
 use serde_json::{Value, json};
 use texcraft_engine::Session;
@@ -135,6 +136,10 @@ pub struct App {
     ctx: egui::Context,
     /// The preferences changed since the shell last took them.
     prefs_changed: bool,
+    /// The shell runs in a desktop window, whose frame the app can draw itself.
+    desktop_window: bool,
+    /// Whether the system's frame was last asked for (`ViewportCommand::Decorations`).
+    decorations: Option<bool>,
 }
 
 impl App {
@@ -185,9 +190,22 @@ impl App {
             native_pickers: false,
             ctx: egui::Context::default(),
             prefs_changed: false,
+            desktop_window: false,
+            decorations: None,
         };
         app.remember_project();
         app
+    }
+
+    /// The shell runs in a desktop window: unless the preferences ask for the system's title bar,
+    /// the window has no system frame and the top bar holds its controls (`window.rs`).
+    pub fn set_desktop_window(&mut self, on: bool) {
+        self.desktop_window = on;
+    }
+
+    /// Whether the app draws the window's frame: its controls, moving and resizing.
+    pub(crate) fn own_frame(&self) -> bool {
+        self.desktop_window && !self.prefs.system_title_bar
     }
 
     /// The preferences, when they changed since the last call; the shell stores them.
@@ -405,6 +423,10 @@ impl App {
         if thumbnail {
             self.update_thumbnail();
         }
+        if self.desktop_window && self.decorations != Some(self.prefs.system_title_bar) {
+            self.decorations = Some(self.prefs.system_title_bar);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(self.prefs.system_title_bar));
+        }
         self.view.regions.clear();
         top_bar::show(self, ui);
         status::show(self, ui);
@@ -412,6 +434,7 @@ impl App {
             start::show(self, ui);
             gallery::show(self, ctx);
             dialogs::show(self, ctx);
+            window::edges(self, ctx);
             return;
         }
         rail::show(self, ui);
@@ -421,6 +444,7 @@ impl App {
         self.panes(ui);
         gallery::show(self, ctx);
         dialogs::show(self, ctx);
+        window::edges(self, ctx);
         if self.session.is_building() {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }

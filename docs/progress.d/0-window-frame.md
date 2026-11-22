@@ -1,0 +1,1 @@
+- 2026-11-22: The desktop window has no empty system title bar: minimize, maximize and close sit at the right of the top bar (Lucide icons), the bar moves the window and a double-click on it maximizes or restores it, and the edges resize it. Settings › Appearance › System title bar brings the system's frame back.

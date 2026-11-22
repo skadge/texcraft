@@ -34,3 +34,32 @@ fn the_app_icon_goes_back_to_the_start_page() {
     harness.run();
     assert!(harness.query_by_label("RECENT PROJECTS").is_some(), "the start page is not shown");
 }
+
+fn maximize_asked(harness: &Harness<'_, App>) -> bool {
+    harness.output().viewport_output.values().any(|v| v.commands.iter().any(|c| matches!(c, egui::ViewportCommand::Maximized(true))))
+}
+
+#[test]
+fn a_desktop_window_has_its_controls_in_the_top_bar_unless_the_system_draws_them() {
+    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app());
+    harness.run();
+    assert!(harness.query_by_label("Minimize").is_none(), "the browser's page has window controls");
+
+    let mut desktop = app();
+    desktop.set_desktop_window(true);
+    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), desktop);
+    harness.run();
+    for label in ["Minimize", "Maximize", "Close"] {
+        assert!(harness.query_by_label(label).is_some(), "no {label} button in the top bar");
+    }
+    harness.get_by_label("Maximize").click();
+    harness.step();
+    assert!(maximize_asked(&harness), "the Maximize button did not ask the window to maximize");
+
+    let prefs = texcraft_ui_egui::prefs::Prefs { system_title_bar: true, ..Default::default() };
+    let mut framed = App::with_prefs(Session::with_backend(Box::new(Unavailable("No engine in this test.".into()))), prefs);
+    framed.set_desktop_window(true);
+    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), framed);
+    harness.run();
+    assert!(harness.query_by_label("Minimize").is_none(), "window controls next to the system's title bar");
+}

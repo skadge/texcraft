@@ -90,6 +90,23 @@ fn appearance(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         }
         None
     });
+    if app.desktop_window {
+        setting(
+            ui,
+            t,
+            tl!("System title bar"),
+            tl!("The system's title bar above the window, in place of the window's buttons in the top bar."),
+            |ui| {
+                let mut on = app.prefs.system_title_bar;
+                let r = ui.checkbox(&mut on, "");
+                if r.changed() {
+                    app.prefs.system_title_bar = on;
+                    app.prefs_changed = true;
+                }
+                Some(r)
+            },
+        );
+    }
     let languages = crate::i18n::languages();
     let help = if languages.len() > 1 {
         tl!("The language of menus and messages.")
