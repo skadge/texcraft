@@ -13,15 +13,19 @@ workspace = true
 [features]
 default = ["retex"]
 retex = ["texcraft-compile/retex"]
+# Downloading templates from TeX Live (desktop and CLI).
+templates-download = ["texcraft-templates/download"]
 
 [dependencies]
 texcraft-project = { workspace = true }
 texcraft-latex = { workspace = true }
 texcraft-compile = { workspace = true, default-features = false }
+texcraft-templates = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 
 [dev-dependencies]
+texcraft-templates = { workspace = true }
 texcraft-compile = { workspace = true, default-features = false }
 serde_json = { workspace = true }

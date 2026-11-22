@@ -14,6 +14,7 @@ use crate::{Result, Session};
 mod build;
 mod file;
 mod project;
+mod template;
 
 pub type Run = fn(&mut Session, &Value) -> Result<Value>;
 pub type Enabled = fn(&Session) -> Result<()>;
@@ -66,6 +67,7 @@ pub fn all() -> &'static [CommandSpec] {
         let mut v = project::specs();
         v.extend(file::specs());
         v.extend(build::specs());
+        v.extend(template::specs());
         v
     })
 }

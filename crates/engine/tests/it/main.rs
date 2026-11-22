@@ -3,3 +3,4 @@
 mod command_sweep;
 mod file_access;
 mod files;
+mod templates;

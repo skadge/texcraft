@@ -66,6 +66,8 @@ pub struct Session {
     pdf: Option<Arc<Vec<u8>>>,
     pub settings: Settings,
     roots: Option<file_access::AutomationRoots>,
+    /// Where templates are kept; none without a data folder.
+    templates: Option<texcraft_templates::Store>,
 }
 
 impl Session {
@@ -95,7 +97,17 @@ impl Session {
             pdf: None,
             settings: Settings::default(),
             roots: None,
+            templates: None,
         }
+    }
+
+    /// Keeps templates in `dir` (the shell's data folder).
+    pub fn set_template_store(&mut self, dir: PathBuf) {
+        self.templates = Some(texcraft_templates::Store::new(dir));
+    }
+
+    pub fn template_store(&self) -> Option<&texcraft_templates::Store> {
+        self.templates.as_ref()
     }
 
     /// Confines every file access of this session to `roots` (agent sessions, RFC-0015).
@@ -182,7 +194,7 @@ impl Session {
         self.revision = self.revision.wrapping_add(1);
     }
 
-    fn replace_project(&mut self, project: Project, dir: Option<PathBuf>) {
+    pub(crate) fn replace_project(&mut self, project: Project, dir: Option<PathBuf>) {
         self.current = project.main().cloned();
         self.open = self.current.iter().cloned().collect();
         self.project = project;

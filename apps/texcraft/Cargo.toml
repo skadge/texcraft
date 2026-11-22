@@ -11,7 +11,7 @@ publish = false
 workspace = true
 
 [dependencies]
-texcraft-engine = { workspace = true, features = ["retex"] }
+texcraft-engine = { workspace = true, features = ["retex", "templates-download"] }
 texcraft-ui-egui = { workspace = true }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
 log = { workspace = true }
