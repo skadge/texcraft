@@ -6,3 +6,4 @@ plan/
 .DS_Store
 /craft-fonts
 .claude/settings.local.json
+.cargo-home/
