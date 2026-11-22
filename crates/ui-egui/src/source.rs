@@ -815,7 +815,31 @@ impl SourceEditor {
         }
     }
 
+    /// Vim takes a selection the mouse made at once, so its caret shows where the click was.
+    fn vim_sync(&mut self) {
+        let Some(vim) = &mut self.vim else { return };
+        let (top, rows) = self.view;
+        let mut vctx = Ctx {
+            buffer: &mut self.doc.buffer,
+            selection: &mut self.doc.selection,
+            now: 0.0,
+            view_top: top,
+            view_rows: rows,
+            clipboard: None,
+            indent: "  ",
+        };
+        vim.sync(&mut vctx);
+    }
+
     fn mouse(&mut self, response: &egui::Response, origin: Pos2, ctx: &egui::Context) {
+        let before = self.doc.selection.clone();
+        self.mouse_select(response, origin, ctx);
+        if self.doc.selection != before {
+            self.vim_sync();
+        }
+    }
+
+    fn mouse_select(&mut self, response: &egui::Response, origin: Pos2, ctx: &egui::Context) {
         let Some(p) = response.interact_pointer_pos() else {
             self.drag = None;
             return;
@@ -937,14 +961,31 @@ impl SourceEditor {
                 );
             }
         }
+        // Without the keyboard, Vim's caret stays visible as an outline.
+        if !focused && self.vim.as_ref().is_some_and(|v| !v.mode().is_inserting()) {
+            let c = self.rect_at(caret).translate(origin.to_vec2());
+            let w = ui.fonts_mut(|f| f.glyph_width(&t.code_font(), b.char_at(caret).filter(|c| *c != '\n').unwrap_or(' ')));
+            painter.rect_stroke(
+                Rect::from_min_size(c.min, vec2(w.max(4.0), c.height())),
+                1.0,
+                egui::Stroke::new(1.0, t.text_muted),
+                egui::StrokeKind::Inside,
+            );
+        }
         // The caret, and the marked text of a composition.
         if focused {
             let c = self.rect_at(caret).translate(origin.to_vec2());
             let mode = self.vim.as_ref().map(Vim::mode);
             match mode {
                 Some(m) if !m.is_inserting() => {
-                    let w = ui.fonts_mut(|f| f.glyph_width(&t.code_font(), b.char_at(caret).filter(|c| *c != '\n').unwrap_or(' ')));
-                    let _ = painter.rect_filled(Rect::from_min_size(c.min, vec2(w.max(4.0), c.height())), 1.0, t.caret_block);
+                    // A solid block, its character drawn over it in reverse.
+                    let under = b.char_at(caret).filter(|c| *c != '\n');
+                    let w = ui.fonts_mut(|f| f.glyph_width(&t.code_font(), under.unwrap_or(' ')));
+                    let block = Rect::from_min_size(c.min, vec2(w.max(4.0), c.height()));
+                    let _ = painter.rect_filled(block, 1.0, t.caret_block);
+                    if let Some(ch) = under {
+                        painter.text(pos2(block.left(), block.center().y), Align2::LEFT_CENTER, ch.to_string(), t.code_font(), t.caret_text);
+                    }
                 }
                 Some(Mode::Replace) => {
                     let _ = painter.rect_filled(Rect::from_min_max(pos2(c.left(), c.bottom() - 2.0), pos2(c.left() + 8.0, c.bottom())), 0.0, t.text);

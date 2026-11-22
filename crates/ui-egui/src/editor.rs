@@ -33,6 +33,8 @@ pub(crate) struct Editor {
     pub find: Option<crate::find_bar::FindBar>,
     /// Give the editor the keyboard next frame.
     pub focus: bool,
+    /// Vim's last message (an error when true) and when it came, for the Vim line.
+    vim_message: Option<(String, bool, f64)>,
 }
 
 fn session_text(project: &texcraft_engine::project::Project, path: Option<&ProjectPath>) -> Option<String> {
@@ -77,23 +79,48 @@ impl Editor {
     }
 }
 
-/// Vim's state for the status bar: the command line being typed, or the mode with the keys of a
-/// command in progress and the register being recorded.
-pub(crate) fn vim_status(app: &App) -> Option<String> {
-    let vim = app.editor.source.vim.as_ref()?;
-    if let Some(line) = vim.command_line() {
-        return Some(line);
+/// How long Vim's messages stay on its line, in seconds.
+const MESSAGE_SECONDS: f64 = 8.0;
+
+/// Vim's line, at the bottom of the editor as in Vim: the command line being typed (`:`, `/`, `?`)
+/// or Vim's last message on the left; the mode, the keys of a command in progress and the
+/// register being recorded on the right. Both are announced when they change.
+fn vim_line(app: &mut App, ui: &mut egui::Ui) {
+    let Some(vim) = app.editor.source.vim.as_ref() else { return };
+    let t = app.tokens;
+    let now = ui.ctx().input(|i| i.time);
+    if vim.command_line().is_some() || app.editor.vim_message.as_ref().is_some_and(|(_, _, at)| now - at > MESSAGE_SECONDS) {
+        app.editor.vim_message = None;
     }
-    let mut text = vim.mode().label().to_owned();
+    let mut mode = vim.mode().label().to_owned();
     let pending = vim.pending();
     if !pending.is_empty() {
-        text.push(' ');
-        text.push_str(&pending);
+        mode.push(' ');
+        mode.push_str(&pending);
     }
     if let Some(r) = vim.recording() {
-        text.push_str(&tl!(" · recording @{r}").replace("{r}", &r.to_string()));
+        mode.push_str(&tl!(" · recording @{r}").replace("{r}", &r.to_string()));
     }
-    Some(text)
+    let (left, color) = match (vim.command_line(), &app.editor.vim_message) {
+        (Some(line), _) => (format!("{line}\u{258F}"), t.text),
+        (None, Some((m, error, _))) => (m.clone(), if *error { t.error } else { t.text }),
+        (None, None) => (String::new(), t.text),
+    };
+    let font = t.code_font();
+    let frame = egui::Frame::new().fill(t.raised).inner_margin(egui::Margin::symmetric(10, 3));
+    egui::Panel::bottom(egui::Id::unique("texcraft-vim-line")).exact_size(t.code_line_height + 8.0).frame(frame).show(ui, |ui| {
+        ui.horizontal_centered(|ui| {
+            let line = ui.add(egui::Label::new(egui::RichText::new(&left).font(font.clone()).color(color)).truncate());
+            crate::status::announce(ui, &line, &left);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let label = ui.label(egui::RichText::new(&mode).font(font.clone()).color(t.text_muted));
+                crate::status::announce(ui, &label, &mode);
+            });
+        });
+    });
+    if !left.is_empty() {
+        ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(MESSAGE_SECONDS));
+    }
 }
 
 /// Before the window's shortcuts: Vim's Ctrl keys go to the shown file's editor.
@@ -524,6 +551,7 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     }
     app.editor.source.set_vim(app.prefs.vim);
     app.editor.source.auto_close = app.prefs.auto_close;
+    vim_line(app, ui);
     let name = format!("{} {}", path.file_name(), tl!("source"));
     let out = app.editor.source.show(ui, &t, id, &markers, &name, "  ");
     app.view.cursor = Some((out.caret.0 as u32 + 1, out.caret.1 as u32 + 1));
@@ -546,8 +574,9 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             Effect::Open(name) => {
                 let _ = app.run("file.open", json!({"path": name}));
             }
-            Effect::Message(m) => app.view.status = Some((m, false)),
-            Effect::Error(m) => app.view.status = Some((m, true)),
+            // Vim's messages show on its line, at the bottom of the editor.
+            Effect::Message(m) => app.editor.vim_message = Some((m, false, ui.ctx().input(|i| i.time))),
+            Effect::Error(m) => app.editor.vim_message = Some((m, true, ui.ctx().input(|i| i.time))),
             Effect::Copy(_) | Effect::Scroll(_) => {}
         }
     }

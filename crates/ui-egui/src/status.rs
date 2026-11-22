@@ -29,11 +29,6 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 if let Some((line, col)) = app.view.cursor {
                     ui.label(small(tl!("Ln {line}, Col {col}").replace("{line}", &line.to_string()).replace("{col}", &col.to_string())));
                 }
-                // Vim's mode, in words as well as by the caret's shape; announced when it changes.
-                if let Some(vim) = crate::editor::vim_status(app) {
-                    let label = ui.label(egui::RichText::new(&vim).font(egui::FontId::monospace(t.small().size)).color(t.text));
-                    announce(ui, &label, &vim);
-                }
             });
         });
     });

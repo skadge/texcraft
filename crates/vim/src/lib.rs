@@ -311,6 +311,13 @@ impl Vim {
         self.written = None;
     }
 
+    /// Takes a selection made outside at once (a click places the caret, a drag or a double click
+    /// selects in Visual mode), rather than with the next key.
+    pub fn sync(&mut self, ctx: &mut Ctx) {
+        self.adopt(ctx);
+        self.write(ctx);
+    }
+
     /// Handles a key.
     pub fn key(&mut self, key: Key, ctx: &mut Ctx) -> Outcome {
         self.adopt(ctx);

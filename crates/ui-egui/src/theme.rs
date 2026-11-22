@@ -49,8 +49,9 @@ pub struct Tokens {
     pub current_line: Color32,
     /// Behind search matches in the source.
     pub search_match: Color32,
-    /// Vim's block caret, over the character it is on (which stays readable through it).
+    /// Vim's block caret; the character under it is drawn in `caret_text`.
     pub caret_block: Color32,
+    pub caret_text: Color32,
     pub shadow: Color32,
     // Syntax
     pub syntax_command: Color32,
@@ -117,7 +118,8 @@ impl Tokens {
             error_line: alpha(rgb(0xC42B1C), 22),
             current_line: alpha(rgb(0x1B1E23), 8),
             search_match: alpha(rgb(0xE8A317), 77),
-            caret_block: alpha(text, 92),
+            caret_block: text,
+            caret_text: rgb(0xFFFFFF),
             shadow: Color32::from_black_alpha(36),
             syntax_command: rgb(0x2050C0),
             syntax_comment: rgb(0x5A6B4E),
@@ -155,7 +157,8 @@ impl Tokens {
             error_line: alpha(rgb(0xFF6B6B), 36),
             current_line: alpha(rgb(0xFFFFFF), 10),
             search_match: alpha(rgb(0xF2C45A), 64),
-            caret_block: alpha(text, 110),
+            caret_block: text,
+            caret_text: rgb(0x16181C),
             shadow: Color32::from_black_alpha(102),
             syntax_command: rgb(0x82AEFF),
             syntax_comment: rgb(0x93A38D),

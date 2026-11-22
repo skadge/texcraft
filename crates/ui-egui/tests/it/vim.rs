@@ -34,3 +34,21 @@ fn vim_keys_typed_into_the_editor_edit_the_file_and_its_ctrl_keys_reach_it() {
     harness.run();
     assert_eq!(text(&mut harness), "hell", "Ctrl-R did not reach Vim");
 }
+
+#[test]
+fn a_click_moves_vims_caret_at_once() {
+    let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    s.execute("file.write", &json!({"path": "main.tex", "text": "abc\ndef"})).unwrap();
+    let app = App::with_prefs(s, Prefs { auto_compile: false, vim: true, ..Prefs::default() });
+    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    harness.run();
+    // The second line's first character: the source's top left is laid out as the window draws it.
+    let line_one = harness.get_by_label("main.tex source").rect();
+    let p = egui::pos2(line_one.left() + 60.0, line_one.top() + 8.0 + 21.0 + 10.0);
+    harness.event(egui::Event::PointerMoved(p));
+    harness.event(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
+    harness.event(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE });
+    harness.run();
+    // Before any key: the caret shown (and the status bar's place) is where the click was.
+    assert!(harness.query_by_label_contains("Ln 2,").is_some(), "Vim's caret stayed on line 1 after the click");
+}
