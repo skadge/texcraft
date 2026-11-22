@@ -1,6 +1,7 @@
 //! Integration tests for texcraft-ui-egui.
 
 mod closing;
+mod completion;
 mod contrast;
 mod control;
 mod find;

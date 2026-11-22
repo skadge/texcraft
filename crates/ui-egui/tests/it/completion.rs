@@ -1,0 +1,53 @@
+use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
+use serde_json::json;
+use texcraft_compile::Unavailable;
+use texcraft_engine::Session;
+use texcraft_engine::project::ProjectPath;
+use texcraft_ui_egui::App;
+use texcraft_ui_egui::prefs::Prefs;
+
+fn editor(text: &str, vim: bool) -> Result<Harness<'static, App>, String> {
+    let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    s.execute("file.write", &json!({"path": "main.tex", "text": text}))?;
+    let app = App::with_prefs(s, Prefs { auto_compile: false, vim, ..Prefs::default() });
+    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    harness.run();
+    harness.get_by_label("main.tex source").focus();
+    harness.run();
+    Ok(harness)
+}
+
+fn type_chars(harness: &mut Harness<'_, App>, text: &str) {
+    for c in text.chars() {
+        harness.event(egui::Event::Text(c.to_string()));
+        harness.run();
+    }
+}
+
+fn text(harness: &mut Harness<'_, App>) -> String {
+    let path = ProjectPath::new("main.tex").ok();
+    path.and_then(|p| harness.state_mut().session().project().text(&p).ok().map(str::to_owned)).unwrap_or_default()
+}
+
+#[test]
+fn a_label_is_offered_in_a_reference_and_enter_puts_it_in() {
+    let mut harness = editor("", false).unwrap();
+    type_chars(&mut harness, "\\label{sec:intro} \\ref{s");
+    assert!(harness.query_by_label("sec:intro").is_some(), "the label is not offered");
+    harness.key_press(egui::Key::Enter);
+    harness.run();
+    assert_eq!(text(&mut harness), "\\label{sec:intro} \\ref{sec:intro}");
+    assert!(harness.query_by_label("sec:intro").is_none(), "the list stayed open");
+}
+
+#[test]
+fn escape_closes_the_list_before_it_leaves_vims_insert_mode() {
+    let mut harness = editor("", true).unwrap();
+    type_chars(&mut harness, "i\\label{a} \\ref{");
+    assert!(harness.query_by_label("a").is_some(), "the label is not offered in Insert mode");
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+    assert!(harness.query_by_label("a").is_none(), "Escape left the list open");
+    assert!(harness.query_by_label_contains("INSERT").is_some(), "Escape also left Insert mode");
+}

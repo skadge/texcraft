@@ -77,7 +77,18 @@ pub(crate) struct Output {
     pub caret: (usize, usize),
     /// What Vim asked the window to do.
     pub effects: Vec<Effect>,
+    /// Ask the language server for completions at this line and column (characters, from 0).
+    pub complete_at: Option<(usize, usize)>,
 }
+
+/// Completions offered at the caret.
+pub(crate) struct CompletionList {
+    pub items: Vec<texcraft_engine::Completion>,
+    pub selected: usize,
+}
+
+/// Rows of the completion list shown at once.
+const COMPLETION_ROWS: usize = 8;
 
 /// The editor's state across frames (one per editor pane).
 pub(crate) struct SourceEditor {
@@ -104,6 +115,12 @@ pub(crate) struct SourceEditor {
     /// The find bar's matches (chars, in order) and its current one, painted in the text.
     pub matches: Vec<(usize, usize)>,
     pub current_match: Option<(usize, usize)>,
+    /// The completion list, while it is open.
+    pub completion: Option<CompletionList>,
+    /// Ask for completions at the end of this frame.
+    wants_completion: bool,
+    /// The caret's rectangle on screen, for the completion list.
+    caret_screen: Option<Rect>,
 }
 
 impl Default for SourceEditor {
@@ -122,6 +139,9 @@ impl Default for SourceEditor {
             view: (0, 40),
             matches: Vec::new(),
             current_match: None,
+            completion: None,
+            wants_completion: false,
+            caret_screen: None,
             auto_close: true,
         }
     }
@@ -321,7 +341,15 @@ impl SourceEditor {
         let focused = ctx.memory(|m| m.has_focus(id));
         let vim_mode = self.vim.as_ref().map(Vim::mode);
         ctx.memory_mut(|m| {
-            m.set_focus_lock_filter(id, egui::EventFilter { tab: true, horizontal_arrows: true, vertical_arrows: true, escape: vim_mode.is_some() });
+            m.set_focus_lock_filter(
+                id,
+                egui::EventFilter {
+                    tab: true,
+                    horizontal_arrows: true,
+                    vertical_arrows: true,
+                    escape: vim_mode.is_some() || self.completion.is_some(),
+                },
+            );
         });
         let version = self.doc.buffer.version();
         // Input first, so this frame shows its result.
@@ -382,12 +410,20 @@ impl SourceEditor {
             if focused {
                 self.composer.set_caret(&ctx, caret);
             }
+            self.caret_screen = (focused && ui.clip_rect().intersects(caret)).then_some(caret);
             self.accessibility(ui, &response, id, name, origin);
         });
+        if self.caret_screen.is_none() {
+            self.completion = None;
+        }
+        self.paint_completion(&ctx, t, id);
         let caret = self.caret();
         let b = &self.doc.buffer;
         let line = b.char_to_line(caret);
         out.caret = (line, caret - b.line_to_char(line));
+        if std::mem::take(&mut self.wants_completion) {
+            out.complete_at = Some(out.caret);
+        }
         out
     }
 
@@ -397,6 +433,7 @@ impl SourceEditor {
         match edit {
             Edit::Preedit { .. } => {}
             Edit::Insert(text) => {
+                let inserting = self.vim.as_ref().is_none_or(|v| v.mode().is_inserting());
                 if self.vim.is_some() {
                     for c in text.chars() {
                         self.vim_key(Key::Char(c), now, indent, ctx, out);
@@ -406,6 +443,13 @@ impl SourceEditor {
                     self.type_char(c, now, indent);
                 } else {
                     self.replace_selection(&text, EditKind::Typing { at: now });
+                }
+                // A command, a reference, a citation, an environment being typed: ask what fits.
+                let trigger = text.chars().last().is_some_and(|c| c.is_alphanumeric() || matches!(c, '\\' | '{' | ',' | ':' | '-' | '_'));
+                if inserting && (trigger || self.completion.is_some()) {
+                    self.wants_completion = true;
+                } else {
+                    self.completion = None;
                 }
             }
             Edit::LineBreak { modifiers } => self.key(egui::Key::Enter, modifiers, now, indent, ctx, out),
@@ -451,6 +495,19 @@ impl SourceEditor {
     }
 
     fn key(&mut self, key: egui::Key, modifiers: egui::Modifiers, now: f64, indent: &str, ctx: &egui::Context, out: &mut Output) {
+        if self.completion_key(key, modifiers) {
+            return;
+        }
+        let inserting = self.vim.as_ref().is_none_or(|v| v.mode().is_inserting());
+        if key == egui::Key::Space && modifiers.command && inserting {
+            self.wants_completion = true;
+            return;
+        }
+        if key == egui::Key::Backspace && self.completion.is_some() {
+            self.wants_completion = true;
+        } else {
+            self.completion = None;
+        }
         if self.vim.is_some() {
             if let Some(k) = vim_key(key, modifiers) {
                 self.vim_key(k, now, indent, ctx, out);
@@ -815,6 +872,103 @@ impl SourceEditor {
         }
     }
 
+    /// Keys for the completion list while it is open; true when the list used the key.
+    fn completion_key(&mut self, key: egui::Key, m: egui::Modifiers) -> bool {
+        use egui::Key as K;
+        let Some(list) = &mut self.completion else { return false };
+        if m.command || m.alt {
+            return false;
+        }
+        let n = list.items.len().max(1);
+        match key {
+            K::ArrowDown => list.selected = (list.selected + 1) % n,
+            K::ArrowUp => list.selected = (list.selected + n - 1) % n,
+            K::PageDown => list.selected = (list.selected + COMPLETION_ROWS).min(n - 1),
+            K::PageUp => list.selected = list.selected.saturating_sub(COMPLETION_ROWS),
+            K::Enter | K::Tab => self.accept_completion(),
+            K::Escape => self.completion = None,
+            _ => return false,
+        }
+        true
+    }
+
+    /// Puts the chosen completion in place of what it completes.
+    fn accept_completion(&mut self) {
+        let Some(list) = self.completion.take() else { return };
+        let Some(item) = list.items.get(list.selected) else { return };
+        let caret = self.caret();
+        let b = &self.doc.buffer;
+        let start = b.line_to_char(b.char_to_line(caret)) + item.from;
+        if start > caret {
+            return;
+        }
+        let text = item.text.clone();
+        self.replace_range(start, caret, &text, EditKind::Other);
+        self.vim_sync();
+    }
+
+    /// The editor pane's answer to `Output::complete_at`.
+    pub fn offer(&mut self, items: Vec<texcraft_engine::Completion>) {
+        let keep = self.completion.as_ref().and_then(|l| l.items.get(l.selected)).map(|i| i.label.clone());
+        self.completion = if items.is_empty() {
+            None
+        } else {
+            let selected = keep.and_then(|k| items.iter().position(|i| i.label == k)).unwrap_or(0);
+            Some(CompletionList { items, selected })
+        };
+    }
+
+    /// The completion list under the caret, when it is open.
+    fn paint_completion(&mut self, ctx: &egui::Context, t: &Tokens, id: egui::Id) {
+        let (Some(list), Some(caret)) = (&self.completion, self.caret_screen) else { return };
+        let selected = list.selected;
+        let first = selected.saturating_sub(COMPLETION_ROWS - 1);
+        let mut chosen = None;
+        egui::Area::new(id.with("completion")).order(egui::Order::Foreground).fixed_pos(caret.left_bottom() + vec2(-4.0, 2.0)).show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).fill(t.raised).stroke(t.hairline()).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
+                ui.set_width(380.0);
+                ui.spacing_mut().item_spacing.y = 0.0;
+                for (i, item) in list.items.iter().enumerate().skip(first).take(COMPLETION_ROWS) {
+                    let (rect, r) = ui.allocate_exact_size(vec2(380.0, t.code_line_height + 4.0), Sense::click());
+                    r.widget_info(|| egui::WidgetInfo::selected(egui::Role::ListBoxOption, true, i == selected, &item.label));
+                    if i == selected {
+                        ui.painter().rect_filled(rect, t.corner(), t.accent_soft);
+                    } else if r.hovered() {
+                        ui.painter().rect_filled(rect, t.corner(), t.hover);
+                    }
+                    let mid = rect.left_center() + vec2(8.0, 0.0);
+                    ui.painter().text(mid, Align2::LEFT_CENTER, &item.label, t.code_font(), t.text);
+                    let detail = rect.right_center() - vec2(8.0, 0.0);
+                    ui.painter().text(detail, Align2::RIGHT_CENTER, &item.detail, t.small(), t.text_muted);
+                    if r.clicked() {
+                        chosen = Some(i);
+                    }
+                }
+                if list.items.len() > COMPLETION_ROWS {
+                    ui.label(
+                        egui::RichText::new(crate::i18n::trn(list.items.len(), "{n} completion", "{n} completions"))
+                            .font(t.small())
+                            .color(t.text_muted),
+                    );
+                }
+                // The highlighted entry, announced as it changes.
+                if let Some(item) = list.items.get(selected) {
+                    let text = format!("{} {}", item.label, item.detail);
+                    let (rect, _) = ui.allocate_exact_size(vec2(0.0, 0.0), Sense::hover());
+                    let r = ui.interact(rect, id.with("completion-live"), Sense::hover());
+                    crate::status::announce(ui, &r, text.trim());
+                }
+            });
+        });
+        if let Some(i) = chosen {
+            if let Some(list) = &mut self.completion {
+                list.selected = i;
+            }
+            self.accept_completion();
+            ctx.memory_mut(|m| m.request_focus(id));
+        }
+    }
+
     /// Vim takes a selection the mouse made at once, so its caret shows where the click was.
     fn vim_sync(&mut self) {
         let Some(vim) = &mut self.vim else { return };
@@ -835,6 +989,7 @@ impl SourceEditor {
         let before = self.doc.selection.clone();
         self.mouse_select(response, origin, ctx);
         if self.doc.selection != before {
+            self.completion = None;
             self.vim_sync();
         }
     }

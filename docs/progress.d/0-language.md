@@ -1,0 +1,1 @@
+- 2026-11-22: retex-lsp in the editor. The language server runs inside the engine and the editor offers completions as you type (labels in references now; commands, environments and citations once builds give it retex 2.1.0's symbols). Agents can ask for completions, hover, definitions and the lint's hints.

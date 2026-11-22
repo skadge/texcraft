@@ -565,6 +565,12 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         }
         app.view.last_edit = Some(ui.ctx().input(|i| i.time));
     }
+    // After the text went to the session, so the language server sees what was typed.
+    if let Some((line, column)) = out.complete_at {
+        let items = app.session.complete(path, line, column);
+        app.editor.source.offer(items);
+        ui.ctx().request_repaint();
+    }
     for effect in out.effects {
         match effect {
             Effect::Save | Effect::SaveAll => crate::ui_cmd::run(app, "project.save"),

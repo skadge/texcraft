@@ -138,6 +138,7 @@ The interim editor is egui's multi-line text field with a highlighting layouter.
 4. **Find and replace.** Match case, regular expression (`regex`, MIT/Apache-2.0), whole word, within selection, replace all. Then project-wide search with results grouped by file.
    - **Status:** the find bar is **done** (Edit › Find, Cmd+F; Replace, Cmd+Alt+F): match case, regular expression, whole word, in selection, the count, Previous/Next, Replace and Replace All as one undoable edit; agents have `file.find` and `file.replace` with the same matching. Project-wide search is to do. Edit › Go to Line… moves the caret to a line.
 5. **Language features from retex-lsp, in process** (`retex_lsp::Server::handle`, no JSON-RPC transport):
+   - **Status:** the server runs in the engine (`crates/engine/src/language.rs`) and the editor has its completion list (after `\`, in `\ref{`, `\cite{`, `\begin{`…, and on Ctrl+Space; Up/Down, Enter/Tab, Escape; in Vim's Insert mode too). Agents have `language.complete`, `language.hover`, `language.definition` and `language.lint`. Waiting for retex 2.1.0: the build's `symbols` record, which gives completion its commands, environments and citations. Still to do: the lint's hints in the gutter, hover, Ctrl+click to definitions, quick fixes, links, the outline from the server.
    - Completion of commands, environments, `\ref` labels and `\cite` keys.
    - Hover, go to definition (also into read-only TeX Live files).
    - Outline from `documentSymbol`.
