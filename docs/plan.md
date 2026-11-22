@@ -168,6 +168,7 @@ A toggle at the top of the editor switches between **Source** and **Formatted**,
    - It never fails. Unbalanced or half-typed input yields error nodes that cover the text exactly.
    - It is incremental by block, reusing the per-line lexer state from phase 2.
    - Hostile-input mutation sweep and a round-trip property: the spans tile the text.
+   - **Status:** the parser is in (`texcraft_latex::tree`), with the sweep and the tiling check. It re-parses the whole file; incremental parsing by block is still to do.
 2. **The view model.** It maps the tree to blocks and inline atoms, each holding the source span it stands for:
 
    | Source | Shown as |

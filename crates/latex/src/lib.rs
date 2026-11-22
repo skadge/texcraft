@@ -1,6 +1,7 @@
-//! LaTeX source analysis the editor needs on every keystroke: highlighting tokens ([`lex`]) and
-//! the outline of sections ([`outline`]). Both are pure functions of the text, with no I/O, so they
-//! run the same natively and in the browser.
+//! LaTeX source analysis the editor needs on every keystroke: highlighting tokens ([`lex`]), the
+//! outline of sections ([`outline`]) and the tolerant syntax tree of the formatted view ([`tree`]).
+//! All are pure functions of the text, with no I/O, so they run the same natively and in the
+//! browser.
 //!
 //! The lexer follows TeX's reading rules for the default category codes (The TeXbook, chapters 7
 //! and 8): a control word is `\` followed by letters, a control symbol is `\` followed by one other
@@ -10,6 +11,8 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 use std::ops::Range;
+
+pub mod tree;
 
 /// What a run of source text is, for colouring.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

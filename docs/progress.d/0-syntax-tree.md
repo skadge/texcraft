@@ -1,0 +1,1 @@
+- 2026-11-22: A tolerant LaTeX syntax tree for the coming formatted view: commands with their arguments, groups, environments, formulas, verbatim, comments and paragraphs, with every span mapped to the source, and half-typed or unbalanced input marked instead of rejected.
