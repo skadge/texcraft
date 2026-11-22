@@ -1,4 +1,4 @@
-//! The start page, shown when TeXCraft starts without a project and from View › Start Page:
+//! The start page, shown when TeXCraft starts without a project and from the app mark in the top bar:
 //! creating or opening a project, and the recent projects as cards with the first page of their
 //! last PDF. Thumbnails are made here after a successful build and stored by the shell (the
 //! desktop app keeps them in its data folder), which hands them back at the next start.
