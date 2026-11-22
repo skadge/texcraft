@@ -642,6 +642,7 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             let b = &app.editor.source.doc.buffer;
             let at = b.line_to_char(line.saturating_sub(1) as usize);
             app.editor.source.select(at, at);
+            app.editor.source.flash_line(line.saturating_sub(1) as usize, ui.input(|i| i.time));
             ui.memory_mut(|m| m.request_focus(id));
         } else {
             app.view.goto = Some((goto_path, line));

@@ -120,6 +120,9 @@ pub(crate) struct CompletionList {
     pub selected: usize,
 }
 
+/// How long a line gone to stays highlighted, in seconds.
+const FLASH_SECONDS: f64 = 1.5;
+
 /// Rows of the completion list shown at once.
 const COMPLETION_ROWS: usize = 8;
 
@@ -154,6 +157,8 @@ pub(crate) struct SourceEditor {
     /// Where the popup was last drawn, so the pointer can move into it.
     popup_rect: Option<Rect>,
     apply_fix: Option<texcraft_engine::Fix>,
+    /// A line just gone to (from the PDF, the log, the outline) and when, flashed for a moment.
+    flash: Option<(usize, f64)>,
     /// The completion list, while it is open.
     pub completion: Option<CompletionList>,
     /// Ask for completions at the end of this frame.
@@ -187,6 +192,7 @@ impl Default for SourceEditor {
             popup: None,
             popup_rect: None,
             apply_fix: None,
+            flash: None,
             completion: None,
             wants_completion: false,
             caret_screen: None,
@@ -294,6 +300,11 @@ impl SourceEditor {
             Some(v) => v.cursor(),
             None => self.doc.selection.primary().head,
         }
+    }
+
+    /// Highlights line `line` (from 0) for a moment, to show where a jump landed.
+    pub fn flash_line(&mut self, line: usize, now: f64) {
+        self.flash = Some((line, now));
     }
 
     /// Selects `start..end` and brings it into view.
@@ -1344,6 +1355,17 @@ impl SourceEditor {
             }
             let line_start = b.line_to_char(line);
             let line_len = galley.rows.iter().map(|r| r.char_count_excluding_newline().0).sum::<usize>();
+            // A line just gone to, fading.
+            if let Some((flashed, since)) = self.flash
+                && flashed == line
+            {
+                let now = ui.input(|i| i.time);
+                let fade = 1.0 - ((now - since) / FLASH_SECONDS) as f32;
+                if fade > 0.0 {
+                    painter.rect_filled(band, 0.0, t.search_match.gamma_multiply(fade.clamp(0.0, 1.0)));
+                    ui.ctx().request_repaint();
+                }
+            }
             // The find bar's matches.
             let line_end = line_start + line_len;
             let from = self.matches.partition_point(|(_, e)| *e <= line_start);
