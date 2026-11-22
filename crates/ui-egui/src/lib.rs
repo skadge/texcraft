@@ -17,6 +17,7 @@ pub mod fonts;
 pub mod icons;
 mod pdf_view;
 pub mod ui_cmd;
+pub mod widgets;
 
 use serde_json::{Value, json};
 use texcraft_engine::Session;
