@@ -35,16 +35,79 @@ pub(crate) enum Fit {
     Zoom(f32),
 }
 
+/// A page to draw: the document's generation, the page, the scale, the document.
+struct Request {
+    generation: u64,
+    index: usize,
+    scale: f32,
+    doc: Arc<Document>,
+}
+
+/// A page drawn, or why not.
+struct Drawn {
+    generation: u64,
+    index: usize,
+    scale: f32,
+    image: Result<texcraft_preview::Image, String>,
+}
+
+/// Draws pages on a thread of its own, so a slow page (a full-page photograph) never holds the
+/// window up. The newest request for a page wins over older ones still queued.
+struct Renderer {
+    tx: std::sync::mpsc::Sender<Request>,
+    rx: std::sync::mpsc::Receiver<Drawn>,
+}
+
+impl Renderer {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn start(ctx: &egui::Context) -> Option<Self> {
+        let (tx, requests) = std::sync::mpsc::channel::<Request>();
+        let (done, rx) = std::sync::mpsc::channel();
+        let ctx = ctx.clone();
+        std::thread::Builder::new()
+            .name("texcraft-pdf-pages".to_owned())
+            .spawn(move || {
+                while let Ok(first) = requests.recv() {
+                    // Of what is queued, the newest request of each page.
+                    let mut queue = vec![first];
+                    queue.extend(requests.try_iter());
+                    let mut seen = std::collections::HashSet::new();
+                    let newest: Vec<Request> = queue.into_iter().rev().filter(|r| seen.insert(r.index)).collect();
+                    for r in newest.into_iter().rev() {
+                        let image = r.doc.render(r.index, r.scale).map_err(|e| e.to_string());
+                        if done.send(Drawn { generation: r.generation, index: r.index, scale: r.scale, image }).is_err() {
+                            return;
+                        }
+                        ctx.request_repaint();
+                    }
+                }
+            })
+            .ok()?;
+        Some(Self { tx, rx })
+    }
+
+    /// The browser build has no threads: pages are drawn when asked.
+    #[cfg(target_arch = "wasm32")]
+    fn start(_: &egui::Context) -> Option<Self> {
+        None
+    }
+}
+
 pub(crate) struct PdfView {
     source: Option<Arc<Vec<u8>>>,
-    doc: Option<Document>,
+    doc: Option<Arc<Document>>,
+    /// Goes up with each new PDF: a drawing of an older one is shown until its page is drawn again.
+    generation: u64,
+    renderer: Option<Renderer>,
+    /// Pages asked of the renderer, at their scale, for this generation.
+    pending: HashMap<usize, f32>,
     sizes: Vec<[f32; 2]>,
     error: Option<String>,
     fit: Fit,
     /// The zoom used for the last frame.
     zoom: f32,
-    /// Drawn pages: the pixel scale each was drawn at, and its texture.
-    textures: HashMap<usize, (f32, egui::TextureHandle)>,
+    /// Drawn pages: the pixel scale and generation each was drawn at, and its texture.
+    textures: HashMap<usize, (f32, u64, egui::TextureHandle)>,
     /// The first page in view, from 0.
     pub page: usize,
     /// Scroll so that this page is at the top, next frame.
@@ -63,6 +126,9 @@ impl Default for PdfView {
         Self {
             source: None,
             doc: None,
+            generation: 0,
+            renderer: None,
+            pending: HashMap::new(),
             sizes: Vec::new(),
             error: None,
             fit: Fit::Width,
@@ -89,7 +155,9 @@ impl PdfView {
             return;
         }
         self.source = pdf.cloned();
-        self.textures.clear();
+        // The pages drawn stay on screen until the new PDF's are drawn.
+        self.generation += 1;
+        self.pending.clear();
         self.error = None;
         self.doc = None;
         self.sizes.clear();
@@ -97,7 +165,8 @@ impl PdfView {
             match Document::open(bytes.clone()) {
                 Ok(doc) => {
                     self.sizes = doc.page_sizes();
-                    self.doc = Some(doc);
+                    self.textures.retain(|i, _| *i < self.sizes.len());
+                    self.doc = Some(Arc::new(doc));
                 }
                 Err(e) => self.error = Some(e.to_string()),
             }
@@ -152,6 +221,7 @@ impl PdfView {
 
     /// `building`: the running build's progress, when one runs.
     pub fn show(&mut self, ui: &mut egui::Ui, t: &Tokens, building: Option<&Building>) {
+        self.receive(ui.ctx());
         let rect = ui.available_rect_before_wrap();
         ui.painter().rect_filled(rect, 0.0, t.canvas);
         // The first build: no PDF to show yet, so its progress takes the place.
@@ -291,23 +361,56 @@ impl PdfView {
     }
 
     fn texture(&mut self, ctx: &egui::Context, index: usize, scale: f32) -> Option<egui::TextureHandle> {
-        if let Some((drawn, handle)) = self.textures.get(&index)
-            && (drawn - scale).abs() < 0.01
-        {
-            return Some(handle.clone());
+        let shown = self.textures.get(&index).map(|(drawn, generation, handle)| (*drawn, *generation, handle.clone()));
+        let fresh = shown.as_ref().is_some_and(|(drawn, generation, _)| *generation == self.generation && (drawn - scale).abs() < 0.01);
+        if fresh {
+            return shown.map(|(_, _, h)| h);
         }
-        let doc = self.doc.as_ref()?;
-        match doc.render(index, scale) {
+        let doc = self.doc.clone()?;
+        if self.renderer.is_none() {
+            self.renderer = Renderer::start(ctx);
+        }
+        match &self.renderer {
+            Some(renderer) => {
+                if self.pending.get(&index).is_none_or(|s| (s - scale).abs() >= 0.01) {
+                    let request = Request { generation: self.generation, index, scale, doc };
+                    if renderer.tx.send(request).is_ok() {
+                        self.pending.insert(index, scale);
+                    }
+                }
+                // Until then, the page as it was drawn before (another scale, the last PDF).
+                shown.map(|(_, _, h)| h)
+            }
+            None => {
+                let image = doc.render(index, scale).map_err(|e| e.to_string());
+                self.take(ctx, Drawn { generation: self.generation, index, scale, image });
+                self.textures.get(&index).map(|(_, _, h)| h.clone())
+            }
+        }
+    }
+
+    /// Takes the pages the renderer drew.
+    fn receive(&mut self, ctx: &egui::Context) {
+        let drawn: Vec<Drawn> = self.renderer.as_ref().map(|r| r.rx.try_iter().collect()).unwrap_or_default();
+        for d in drawn {
+            self.take(ctx, d);
+        }
+    }
+
+    fn take(&mut self, ctx: &egui::Context, d: Drawn) {
+        if d.generation != self.generation {
+            return;
+        }
+        if self.pending.get(&d.index).is_some_and(|s| (s - d.scale).abs() < 0.01) {
+            self.pending.remove(&d.index);
+        }
+        match d.image {
             Ok(image) => {
                 let color = egui::ColorImage::from_rgba_premultiplied([image.width as usize, image.height as usize], &image.rgba);
-                let handle = ctx.load_texture(format!("pdf-page-{index}"), color, egui::TextureOptions::LINEAR);
-                self.textures.insert(index, (scale, handle.clone()));
-                Some(handle)
+                let handle = ctx.load_texture(format!("pdf-page-{}", d.index), color, egui::TextureOptions::LINEAR);
+                self.textures.insert(d.index, (d.scale, d.generation, handle));
             }
-            Err(e) => {
-                log::warn!("page {}: {e}", index + 1);
-                None
-            }
+            Err(e) => log::warn!("page {}: {e}", d.index + 1),
         }
     }
 }
