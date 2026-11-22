@@ -52,7 +52,8 @@ impl Backend for Retex {
             Err(e) => return Outcome { log: e.clone(), ..Outcome::unavailable(job.id, e) },
         };
         let main_dir = job.main.as_str().rsplit_once('/').map(|(d, _)| d.to_owned());
-        let place = |d: &retex::Diagnostic| convert(d, main_dir.as_deref());
+        let src = std::fs::canonicalize(self.dir.join("src")).unwrap_or_else(|_| self.dir.join("src"));
+        let place = |d: &retex::Diagnostic| convert(d, &src, main_dir.as_deref());
         let result = retex::Retex::new().keep_files(self.dir.join("out")).compile_file(&main);
         let seconds = started.elapsed().as_secs_f64();
         match result {
@@ -92,12 +93,26 @@ fn failure(job: u64, message: &str) -> Outcome {
     Outcome { job, status: Status::Failed, pdf: None, diagnostics: vec![diagnostic], log: String::new(), seconds: 0.0, pages: 0 }
 }
 
-/// retex names files relative to the main document's folder; the project names them from its root.
-fn convert(d: &retex::Diagnostic, main_dir: Option<&str>) -> Diagnostic {
-    let file = d.file.as_ref().filter(|f| !Path::new(f).is_absolute()).map(|f| match main_dir {
-        Some(dir) => format!("{dir}/{f}"),
-        None => f.clone(),
-    });
+/// The project path of a file retex names: relative to the main document's folder, or absolute
+/// inside the build's copy of the project (`src`). Files elsewhere (the TeX tree) have none.
+fn project_file(file: &str, src: &Path, main_dir: Option<&str>) -> Option<String> {
+    let path = Path::new(file);
+    if path.is_absolute() {
+        let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let rel = canonical.strip_prefix(src).ok()?;
+        return Some(rel.to_string_lossy().replace('\\', "/"));
+    }
+    Some(match main_dir {
+        Some(dir) => format!("{dir}/{file}"),
+        None => file.to_owned(),
+    })
+}
+
+fn convert(d: &retex::Diagnostic, src: &Path, main_dir: Option<&str>) -> Diagnostic {
+    let file = d.file.as_deref().and_then(|f| project_file(f, src, main_dir));
+    if d.file.is_some() && file.is_none() {
+        log::debug!("diagnostic outside the project: {:?}", d.file);
+    }
     Diagnostic {
         severity: match d.severity {
             retex::Severity::Hint => Severity::Hint,
