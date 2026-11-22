@@ -163,9 +163,9 @@ impl App {
         if show_preview && show_editor {
             let width = ui.available_width() * 0.5;
             egui::Panel::right("preview").resizable(true).default_size(width).min_size(200.0).show(ui, |ui| self.preview(ui));
-            egui::CentralPanel::default().show(ui, |ui| editor::show(self, ui));
+            editor::show(self, ui);
         } else if show_editor {
-            egui::CentralPanel::default().show(ui, |ui| editor::show(self, ui));
+            editor::show(self, ui);
         } else {
             egui::CentralPanel::default().show(ui, |ui| self.preview(ui));
         }
