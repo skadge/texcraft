@@ -1,0 +1,27 @@
+[package]
+name = "texcraft-engine"
+description = "The TeXCraft session: the open project, its builds, the command registry every frontend goes through, and confined file access for agents"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+default = ["retex"]
+retex = ["texcraft-compile/retex"]
+
+[dependencies]
+texcraft-project = { workspace = true }
+texcraft-latex = { workspace = true }
+texcraft-compile = { workspace = true, default-features = false }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+texcraft-compile = { workspace = true, default-features = false }
+serde_json = { workspace = true }

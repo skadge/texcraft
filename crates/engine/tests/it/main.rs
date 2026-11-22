@@ -1,0 +1,5 @@
+//! Integration tests for texcraft-engine.
+
+mod command_sweep;
+mod file_access;
+mod files;
