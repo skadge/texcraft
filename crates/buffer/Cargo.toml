@@ -1,0 +1,15 @@
+[package]
+name = "texcraft-buffer"
+description = "The editor's text: a rope with transactions, grouped undo, marks that follow edits, and position conversions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+ropey = { workspace = true }
+thiserror = { workspace = true }
