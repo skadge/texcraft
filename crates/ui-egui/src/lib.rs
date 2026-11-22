@@ -18,6 +18,7 @@ pub mod fonts;
 pub mod icons;
 mod pdf_view;
 mod rail;
+mod side;
 mod status;
 mod top_bar;
 pub mod ui_cmd;
@@ -50,6 +51,8 @@ pub(crate) struct View {
     pub layout: Layout,
     pub logs: bool,
     pub dialog: Option<dialogs::Dialog>,
+    /// Folders folded in the file tree.
+    pub collapsed: std::collections::HashSet<String>,
     /// The caret's line and column (from 1) in the editor, for the status bar.
     pub cursor: Option<(u32, u32)>,
     /// The latest message for the status line, also announced to screen readers.
@@ -82,6 +85,7 @@ impl App {
                 logs: false,
                 dialog: None,
                 cursor: None,
+                collapsed: std::collections::HashSet::new(),
                 status: None,
                 last_edit: Some(0.0),
                 goto: None,
@@ -144,7 +148,7 @@ impl App {
         status::show(self, ui);
         rail::show(self, ui);
         if self.view.side.is_some() {
-            chrome::side_panel(self, ui);
+            side::show(self, ui);
         }
         self.panes(ui);
         dialogs::show(self, ctx);

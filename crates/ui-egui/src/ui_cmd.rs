@@ -78,6 +78,6 @@ pub fn run(app: &mut App, id: &str) {
 }
 
 fn ask(app: &mut App, title: &'static str, label: &'static str, action: &'static str, command: &'static str) {
-    let prompt = Prompt { title, label, value: String::new(), action, command, params: |v| json!({"path": v}), focus: true };
+    let prompt = Prompt { title, label, value: String::new(), action, command, params: Box::new(|v| json!({"path": v})), focus: true };
     app.view.dialog = Some(Dialog::Prompt(prompt));
 }

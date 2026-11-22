@@ -17,7 +17,7 @@ pub(crate) struct Prompt {
     pub action: &'static str,
     pub command: &'static str,
     /// Builds the command's parameters from the text typed.
-    pub params: fn(&str) -> Value,
+    pub params: Box<dyn Fn(&str) -> Value>,
     pub focus: bool,
 }
 
