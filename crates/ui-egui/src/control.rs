@@ -12,6 +12,8 @@ impl App {
     /// Answers one control request: `{"ok": true, "result": …}` or `{"ok": false, "error": …}`.
     pub fn control(&mut self, method: &str, params: &Value) -> Value {
         let result = match method {
+            // A line with only the token: the connection is open.
+            "" => Ok(json!({"app": "TeXCraft", "version": env!("CARGO_PKG_VERSION"), "protocol": "docs/control-protocol.md"})),
             "engine.commands" => Ok(self.commands()),
             "engine.execute" => self.execute(params),
             "document.inspect" => self.session.execute("project.inspect", &json!({})).map(|mut v| {

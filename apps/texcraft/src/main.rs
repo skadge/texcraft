@@ -1,6 +1,11 @@
-//! TeXCraft for the desktop: `texcraft [FOLDER]`.
+//! TeXCraft for the desktop: `texcraft [--control [PORT]] [FOLDER]`.
+//!
+//! `--control` (or `TEXCRAFT_CONTROL_PORT`) starts the control channel for agents and scripts,
+//! docs/control-protocol.md.
 
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
+mod control;
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -25,6 +30,7 @@ struct Shell {
     settings: SettingsStore<Stored>,
     /// Native pickers, shown without blocking the event loop.
     dialogs: Dialogs<Pick>,
+    control: Option<control::Control>,
 }
 
 fn file_dialog(req: PickRequest) -> FileDialog {
@@ -79,6 +85,9 @@ impl eframe::App for Shell {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        if let Some(control) = &self.control {
+            control.answer(&mut self.app);
+        }
         let app = &mut self.app;
         if let Err(e) = texcraft_engine::guard::catch_panic(|| app.frame(ui)) {
             log::error!("frame: {e}");
@@ -91,21 +100,75 @@ impl eframe::App for Shell {
     }
 
     fn on_exit(&mut self) {
+        if let Some(control) = &mut self.control {
+            control.shut_down();
+        }
         if let Err(e) = self.settings.flush() {
             log::warn!("saving the preferences: {e}");
         }
     }
 }
 
+const USAGE: &str = "usage: texcraft [--control [PORT]] [FOLDER]
+
+  FOLDER            open the project in this folder
+  --control [PORT]  start the control channel for agents and scripts on PORT (default: the first
+                    free port from 7841); see docs/control-protocol.md. Also TEXCRAFT_CONTROL_PORT.
+  --version         print the version";
+
+/// What the command line asks for.
+struct Args {
+    folder: Option<String>,
+    /// `Some(None)`: the control channel on the default port.
+    control: Option<Option<u16>>,
+}
+
+fn parse_args() -> Result<Args, String> {
+    let mut args = Args { folder: None, control: None };
+    if let Some(port) = std::env::var("TEXCRAFT_CONTROL_PORT").ok().filter(|p| !p.is_empty()) {
+        args.control = Some(Some(port.parse().map_err(|_| format!("TEXCRAFT_CONTROL_PORT is not a port: {port}"))?));
+    }
+    let mut list = std::env::args().skip(1).peekable();
+    while let Some(a) = list.next() {
+        match a.as_str() {
+            "--control" => {
+                let port = match list.peek() {
+                    Some(next) if !next.starts_with('-') && next.parse::<u16>().is_ok() => list.next().and_then(|p| p.parse().ok()),
+                    _ => None,
+                };
+                args.control = Some(port);
+            }
+            "--version" => {
+                println!("texcraft {}", env!("CARGO_PKG_VERSION"));
+                std::process::exit(0);
+            }
+            "--help" | "-h" => {
+                println!("{USAGE}");
+                std::process::exit(0);
+            }
+            flag if flag.starts_with('-') => return Err(format!("unknown option {flag}\n{USAGE}")),
+            folder => args.folder = Some(folder.to_owned()),
+        }
+    }
+    Ok(args)
+}
+
 fn main() -> eframe::Result {
+    let args = match parse_args() {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(2);
+        }
+    };
     texcraft_ui_egui::i18n::use_system_language();
     let (settings, report) = SettingsStore::<Stored>::open(Location::Auto);
     log::info!("preferences: {report:?}");
     let prefs = settings.get().0.clone();
     let mut app = texcraft_ui_egui::App::with_prefs(texcraft_engine::Session::new(), prefs);
     app.set_native_pickers(true);
-    if let Some(folder) = std::env::args().nth(1) {
-        app.open_project(&folder);
+    if let Some(folder) = &args.folder {
+        app.open_project(folder);
     }
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_title("TeXCraft").with_app_id("ai.storyteller.texcraft").with_inner_size([1400.0, 900.0]),
@@ -116,8 +179,16 @@ fn main() -> eframe::Result {
         options,
         Box::new(|cc| {
             let ctx = cc.egui_ctx.clone();
-            let dialogs = Dialogs::new(Arc::new(move || ctx.request_repaint()));
-            Ok(Box::new(Shell { app, settings, dialogs }))
+            let wake = ctx.clone();
+            let dialogs = Dialogs::new(Arc::new(move || wake.request_repaint()));
+            let control = match args.control {
+                Some(port) => control::Control::start(port, ctx).unwrap_or_else(|e| {
+                    eprintln!("{e}");
+                    None
+                }),
+                None => None,
+            };
+            Ok(Box::new(Shell { app, settings, dialogs, control }))
         }),
     )
 }
