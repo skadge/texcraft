@@ -87,7 +87,7 @@ impl eframe::App for Shell {
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         if let Some(control) = &self.control {
-            control.answer(&mut self.app);
+            control.answer(&mut self.app, ui.ctx());
         }
         let app = &mut self.app;
         if let Err(e) = texcraft_engine::guard::catch_panic(|| app.frame(ui)) {

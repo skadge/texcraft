@@ -46,6 +46,7 @@ impl Protocol for TexProtocol {
         let command = params.get("command").and_then(Value::as_str);
         let effect = match method {
             "engine.commands" | "document.inspect" | "document.revision" | "ui.inspect" => Effect::ReadsOnly,
+            "ui.screenshot" => Effect::WritesFile,
             _ => Effect::Changes,
         };
         let what = match command {
@@ -67,7 +68,7 @@ impl Protocol for TexProtocol {
         "docs/control-protocol.md"
     }
     fn capabilities(&self) -> Value {
-        json!({"methods": ["engine.commands", "engine.execute", "document.inspect", "document.revision", "ui.inspect"]})
+        json!({"methods": ["engine.commands", "engine.execute", "document.inspect", "document.revision", "ui.inspect", "ui.screenshot"]})
     }
 }
 
@@ -117,9 +118,13 @@ impl Control {
     }
 
     /// Answers the requests that arrived, on the UI thread.
-    pub fn answer(&self, app: &mut texcraft_ui_egui::App) {
+    pub fn answer(&self, app: &mut texcraft_ui_egui::App, ctx: &egui::Context) {
         for request in self.requests.try_iter().take(PER_FRAME) {
             request.started.store(true, Ordering::SeqCst);
+            if request.method == "ui.screenshot" {
+                screenshot(request, ctx);
+                continue;
+            }
             let reply = match texcraft_engine::guard::catch_panic(|| app.control(&request.method, &request.params)) {
                 Ok(reply) => reply,
                 Err(e) => json!({"ok": false, "error": e}),
@@ -138,4 +143,55 @@ impl Control {
         }
         APP.remove_current_port(self.port, &self.token);
     }
+}
+
+/// `ui.screenshot {path?}`: the window's next frame as a PNG, written to `path`, or returned as
+/// base64 in `data`. The reply is sent when the frame has been drawn.
+fn screenshot(request: ControlRequest, ctx: &egui::Context) {
+    let path = request.params.get("path").and_then(Value::as_str).map(PathBuf::from);
+    let reply = request.reply;
+    let callback = egui::ScreenshotCallback::new(move |image| {
+        let answer = match encode(&image) {
+            Err(e) => json!({"ok": false, "error": e}),
+            Ok(bytes) => match &path {
+                Some(path) => match std::fs::write(path, &bytes) {
+                    Ok(()) => json!({"ok": true, "result": {"path": path.display().to_string(), "width": image.width(), "height": image.height()}}),
+                    Err(e) => json!({"ok": false, "error": format!("writing {}: {e}", path.display())}),
+                },
+                None => {
+                    json!({"ok": true, "result": {"mime": "image/png", "width": image.width(), "height": image.height(), "data": base64(&bytes)}})
+                }
+            },
+        };
+        let _ = reply.send(answer);
+    });
+    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(callback));
+    ctx.request_repaint();
+}
+
+fn encode(image: &egui::ColorImage) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
+    let [w, h] = image.size;
+    let (w, h) = (u32::try_from(w).map_err(|e| e.to_string())?, u32::try_from(h).map_err(|e| e.to_string())?);
+    let mut encoder = png::Encoder::new(&mut out, w, h);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
+    let rgba: Vec<u8> = image.pixels.iter().flat_map(|c| c.to_srgba_unmultiplied()).collect();
+    writer.write_image_data(&rgba).map_err(|e| e.to_string())?;
+    writer.finish().map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
+fn base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let b = [chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0)];
+        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+        for i in 0..4 {
+            out.push(if i <= chunk.len() { char::from(ALPHABET[((n >> (18 - 6 * i)) & 63) as usize]) } else { '=' });
+        }
+    }
+    out
 }

@@ -24,5 +24,7 @@ getrandom = { workspace = true }
 dirs = { workspace = true }
 chrono = { workspace = true }
 env_logger = { workspace = true }
+# ui.screenshot's PNG.
+png = "0.18"
 serde = { workspace = true }
 egui = { workspace = true }

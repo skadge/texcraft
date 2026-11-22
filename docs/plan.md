@@ -56,10 +56,10 @@ Done items are marked **done** with the commit subject that brought them. The re
    - the PDF in a separate window (an egui viewport);
    - a distraction-free mode that hides the menus and the rail;
    - `craft-menu` for the macOS menu bar.
-4. **Keyboard** (**done**: `craft-keymap` for every shortcut, user overrides kept in the preferences, the shared Keyboard Shortcuts dialog). Still to do: F6 to cycle regions, and Alt or F10 to reach the menu bar.
+4. **Keyboard** (**done**: `craft-keymap` for every shortcut, user overrides kept in the preferences, the shared Keyboard Shortcuts dialog, F6 and Shift+F6 between regions). Still to do: Alt or F10 to reach the menu bar.
 5. **Settings** (**done**: a Settings dialog with Appearance, Editor, Building and Keyboard tabs, kept through `craft-settings`). Options waiting for retex 2.1 are shown disabled with the reason. Editor options (completion, closing brackets, spelling language, key bindings) arrive with phase 2's editor.
 6. **Control channel** (**done** for `engine.commands`, `engine.execute`, `document.inspect`, `document.revision`, `ui.inspect`; see [docs/control-protocol.md](control-protocol.md)). Still to do:
-   - `ui.screenshot` and synthetic input;
+   - `ui.screenshot` (**done**) and synthetic input;
    - `texcraft-cli mcp --connect` to drive the open window;
    - `craft-web-api` for the web build's `window.texcraft`.
 7. **Shell from craft-libs.**
@@ -72,7 +72,7 @@ Done items are marked **done** with the commit subject that brought them. The re
 9. **Translations.** Request `texcraft.tsv` in storytold/craft-i18n and pin it with a `craft-i18n.rev` file. Plural forms are used for counts (**done** in the status bar).
 10. **Release plumbing.**
     - GitLab CI running `cargo xtask ci` (**done**; the project is on gitlab.com, so not craft-common-actions).
-    - `packaging/`: desktop file, metainfo, and icons drawn in code or by a contributor.
+    - The app icon (**done**, `assets/app-icon/`, `cargo xtask icons`) and the Linux desktop entry, metainfo and a user install script (**done**, `packaging/linux/`). Still to do: macOS and Windows packaging, Flatpak.
     - `craft-update`, which needs a `texcraft` entry in craft-libs' `update/src/suite.rs` (a craft-libs PR).
     - `cargo xtask assets` to keep `ATTRIBUTION.md` complete.
     - `contributors/`.
