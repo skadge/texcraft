@@ -4,6 +4,9 @@
 //!   `ui-egui` layer and the apps may use a UI toolkit.
 //! - `wasm`: the web app and the crates it uses build for wasm32-unknown-unknown.
 //! - `ci`: fmt, clippy, tests, layers, wasm, in that order.
+//! - `icons`: every app icon file, from the SVG master in `assets/app-icon/`.
+
+mod icons;
 
 use std::process::{Command, ExitCode};
 
@@ -33,7 +36,8 @@ fn main() -> ExitCode {
         "layers" => layers(),
         "wasm" => wasm(),
         "ci" => ci(),
-        _ => Err("usage: cargo xtask layers | wasm | ci".to_owned()),
+        "icons" => icons::run(),
+        _ => Err("usage: cargo xtask layers | wasm | ci | icons".to_owned()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

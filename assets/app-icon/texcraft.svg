@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  TeXCraft app icon: the master. Everything else in this folder is rendered from it by
+  `cargo xtask icons`. Edit freely, then rerun that command.
+
+  - The tile: a 512 square with rounded corners (rx 112), as every Crafting App's icon.
+  - The field: TeXCraft's colour (the interface accent).
+  - The blackbird: the owner's drawing, source/blackbird.png, placed (and so framed) by the
+    <image> element's x, y, width and height; it runs off the tile's left and bottom edges.
+  - The "engrave" filter maps the drawing's black and white to the suite's ink (#0b0b0c) and
+    paper (#efe9dc); the position of the first paper value in its tables sets the threshold.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <clipPath id="tile">
+      <rect width="512" height="512" rx="112"/>
+    </clipPath>
+    <filter id="engrave" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB">
+      <!-- Grey first, so the three channels switch together. -->
+      <feColorMatrix type="saturate" values="0"/>
+      <!-- Seven equal steps: below 3/7 of the way to white is ink, above is paper. -->
+      <feComponentTransfer>
+        <feFuncR type="discrete" tableValues="0.0431 0.0431 0.0431 0.9373 0.9373 0.9373 0.9373"/>
+        <feFuncG type="discrete" tableValues="0.0431 0.0431 0.0431 0.9137 0.9137 0.9137 0.9137"/>
+        <feFuncB type="discrete" tableValues="0.0471 0.0471 0.0471 0.8627 0.8627 0.8627 0.8627"/>
+      </feComponentTransfer>
+    </filter>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect id="field" width="512" height="512" fill="#2557d6"/>
+    <image id="blackbird" xlink:href="source/blackbird.png" href="source/blackbird.png"
+           x="-407.3" y="34.9" width="893.1" height="595.8" filter="url(#engrave)"/>
+  </g>
+</svg>

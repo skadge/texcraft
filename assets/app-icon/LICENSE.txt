@@ -1,0 +1,13 @@
+TeXCraft app icon (texcraft.svg, source/blackbird.png and every file rendered from them in this
+directory: texcraft-1024.png, texcraft-macos-512.png, texcraft.ico, hicolor/).
+
+Original artwork made for this project by the project owner (the blackbird drawing), placed on the
+Crafting Apps' icon tile for TeXCraft (no third-party material). Licensed like the rest of
+TeXCraft, under either of
+
+  * Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+  * MIT license (https://opensource.org/licenses/MIT)
+
+at your option.
+
+Render the derived files again with `cargo xtask icons`.

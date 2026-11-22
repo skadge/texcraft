@@ -12,3 +12,5 @@ workspace = true
 
 [dependencies]
 serde_json = { workspace = true }
+# `cargo xtask icons`: renders the app icon's SVG master (Apache-2.0 OR MIT).
+resvg = { version = "0.48", default-features = false, features = ["raster-images"] }
