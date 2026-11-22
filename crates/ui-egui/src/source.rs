@@ -1039,10 +1039,23 @@ impl SourceEditor {
                     } else if r.hovered() {
                         ui.painter().rect_filled(rect, t.corner(), t.hover);
                     }
-                    let mid = rect.left_center() + vec2(8.0, 0.0);
-                    ui.painter().text(mid, Align2::LEFT_CENTER, &item.label, t.code_font(), t.text);
-                    let detail = rect.right_center() - vec2(8.0, 0.0);
-                    ui.painter().text(detail, Align2::RIGHT_CENTER, &item.detail, t.small(), t.text_muted);
+                    // One line each: the label, then the detail in what is left, cut with "…".
+                    let one_line = |text: &str, font: egui::FontId, color: egui::Color32, width: f32| {
+                        let mut job = LayoutJob::simple_singleline(text.to_owned(), font, color);
+                        job.wrap =
+                            egui::text::TextWrapping {
+                                max_width: width.max(0.0), max_rows: 1, break_anywhere: true, overflow_character: Some('…')
+                            };
+                        ui.fonts_mut(|f| f.layout_job(job))
+                    };
+                    let inner = rect.shrink2(vec2(8.0, 0.0));
+                    let label = one_line(&item.label, t.code_font(), t.text, inner.width() * 0.6);
+                    let gap = 12.0;
+                    let detail = one_line(&item.detail, t.small(), t.text_muted, inner.width() - label.size().x - gap);
+                    let painter = ui.painter_at(rect);
+                    painter.galley(egui::pos2(inner.left(), rect.center().y - label.size().y / 2.0), label, t.text);
+                    painter.galley(egui::pos2(inner.right() - detail.size().x, rect.center().y - detail.size().y / 2.0), detail, t.text_muted);
+                    let r = if item.detail.is_empty() { r } else { r.on_hover_text(&item.detail) };
                     if r.clicked() {
                         chosen = Some(i);
                     }
