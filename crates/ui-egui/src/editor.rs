@@ -523,6 +523,7 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         ui.memory_mut(|m| m.request_focus(id));
     }
     app.editor.source.set_vim(app.prefs.vim);
+    app.editor.source.auto_close = app.prefs.auto_close;
     let name = format!("{} {}", path.file_name(), tl!("source"));
     let out = app.editor.source.show(ui, &t, id, &markers, &name, "  ");
     app.view.cursor = Some((out.caret.0 as u32 + 1, out.caret.1 as u32 + 1));

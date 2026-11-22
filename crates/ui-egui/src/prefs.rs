@@ -39,6 +39,8 @@ pub struct Prefs {
     pub shortcuts: craft_keymap::Overrides,
     /// The editor's key bindings are Vim's.
     pub vim: bool,
+    /// The editor closes brackets and environments as they are typed.
+    pub auto_close: bool,
 }
 
 impl Default for Prefs {
@@ -54,6 +56,7 @@ impl Default for Prefs {
             recent: Vec::new(),
             shortcuts: craft_keymap::Overrides::default(),
             vim: false,
+            auto_close: true,
         }
     }
 }

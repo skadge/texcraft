@@ -83,6 +83,8 @@ pub(crate) struct Output {
 pub(crate) struct SourceEditor {
     pub doc: Doc,
     pub vim: Option<Vim>,
+    /// Typing an opening bracket adds its closing one, and `\begin{…}` its `\end{…}`.
+    pub auto_close: bool,
     composer: Composer,
     layout: Layout,
     /// Where a mouse drag started.
@@ -120,6 +122,7 @@ impl Default for SourceEditor {
             view: (0, 40),
             matches: Vec::new(),
             current_match: None,
+            auto_close: true,
         }
     }
 }
@@ -398,6 +401,9 @@ impl SourceEditor {
                     for c in text.chars() {
                         self.vim_key(Key::Char(c), now, indent, ctx, out);
                     }
+                } else if self.auto_close && text.chars().count() == 1 {
+                    let c = text.chars().next().unwrap_or(' ');
+                    self.type_char(c, now, indent);
                 } else {
                     self.replace_selection(&text, EditKind::Typing { at: now });
                 }
@@ -590,6 +596,9 @@ impl SourceEditor {
             K::Backspace | K::Delete => {
                 if !r.is_empty() {
                     self.replace_selection("", EditKind::Other);
+                } else if key == K::Backspace && pos > 0 && !word && self.auto_close && self.in_empty_pair(pos) {
+                    // Inside a pair the editor added: both go.
+                    self.replace_range(pos - 1, pos + 1, "", EditKind::Deleting { at: now });
                 } else if key == K::Backspace && pos > 0 {
                     let from = if word { self.word_left(pos) } else { pos - 1 };
                     self.replace_range(from, pos, "", EditKind::Deleting { at: now });
@@ -623,6 +632,121 @@ impl SourceEditor {
             self.want_x = None;
         }
         let _ = ctx;
+    }
+
+    fn in_empty_pair(&self, pos: usize) -> bool {
+        let b = &self.doc.buffer;
+        let (Some(before), Some(after)) = (b.char_at(pos - 1), b.char_at(pos)) else { return false };
+        closing(before) == Some(after) && !(pos >= 2 && b.char_at(pos - 2) == Some('\\'))
+    }
+
+    /// Types `c` with brackets closed: an opening bracket adds its closing one (or wraps the
+    /// selection), a closing bracket steps over the same one after the caret, and finishing
+    /// `\begin{name}` adds `\end{name}`.
+    fn type_char(&mut self, c: char, now: f64, indent: &str) {
+        let r = self.doc.selection.primary();
+        let b = &self.doc.buffer;
+        let pos = r.head;
+        let escaped = pos > 0 && b.char_at(pos - 1) == Some('\\');
+        if let Some(close) = closing(c).filter(|_| !escaped) {
+            if !r.is_empty() {
+                let inner = b.slice(r.start(), r.end());
+                let (start, n) = (r.start(), inner.chars().count());
+                self.replace_range(start, r.end(), &format!("{c}{inner}{close}"), EditKind::Other);
+                self.doc.selection = Selection::single(start + 1, start + 1 + n);
+                return;
+            }
+            let next = b.char_at(pos);
+            if next.is_none_or(|n| n.is_whitespace() || matches!(n, ')' | ']' | '}' | ',' | '.')) {
+                self.replace_range(pos, pos, &format!("{c}{close}"), EditKind::Typing { at: now });
+                self.doc.selection = Selection::point(pos + 1);
+                return;
+            }
+        }
+        if matches!(c, ')' | ']' | '}') && r.is_empty() && b.char_at(pos) == Some(c) {
+            self.doc.selection = Selection::point(pos + 1);
+        } else {
+            self.replace_selection(&c.to_string(), EditKind::Typing { at: now });
+        }
+        if c == '}' {
+            self.close_environment(indent);
+        }
+    }
+
+    /// After `\begin{name}` was typed at the caret: adds `\end{name}` on a line of its own, with
+    /// an indented line between for the caret, unless the environment is closed further on.
+    fn close_environment(&mut self, indent: &str) {
+        let b = &self.doc.buffer;
+        let pos = self.doc.selection.primary().head;
+        let line = b.char_to_line(pos);
+        let before = b.slice(b.line_to_char(line), pos);
+        let Some(at) = before.rfind("\\begin{") else { return };
+        let Some(name) = before[at + 7..].strip_suffix('}') else { return };
+        if name.is_empty() || name.contains(['{', '}', '\\']) {
+            return;
+        }
+        // Text right after the caret (an argument, a comment) is left alone.
+        if b.slice(pos, b.line_end(line)).trim().is_empty() {
+            let rest = b.slice(pos, b.len_chars());
+            let (begins, ends) = (rest.matches(&format!("\\begin{{{name}}}")).count(), rest.matches(&format!("\\end{{{name}}}")).count());
+            if ends > begins {
+                return;
+            }
+            let lead: String = before.chars().take_while(|c| *c == ' ' || *c == '\t').collect();
+            let inner = format!("\n{lead}{indent}");
+            let text = format!("{inner}\n{lead}\\end{{{name}}}");
+            let caret = pos + inner.chars().count();
+            self.replace_range(pos, pos, &text, EditKind::Other);
+            self.doc.selection = Selection::point(caret);
+        }
+    }
+
+    /// The bracket matching the one at `pos`, skipping escaped ones; none past a long way.
+    fn matching_bracket(&self, pos: usize) -> Option<usize> {
+        const LIMIT: usize = 20_000;
+        let b = &self.doc.buffer;
+        let c = b.char_at(pos)?;
+        let escaped = |p: usize| p > 0 && b.char_at(p - 1) == Some('\\');
+        if escaped(pos) {
+            return None;
+        }
+        let (open, close, forward) = if let Some(cl) = closing(c) { (c, cl, true) } else { (opening(c)?, c, false) };
+        let mut depth = 0usize;
+        let mut p = pos;
+        for _ in 0..LIMIT {
+            let ch = b.char_at(p)?;
+            if !escaped(p) {
+                if ch == open {
+                    if forward { depth += 1 } else { depth = depth.checked_sub(1)? }
+                } else if ch == close {
+                    if forward { depth = depth.checked_sub(1)? } else { depth += 1 }
+                }
+                if depth == 0 {
+                    return Some(p);
+                }
+            }
+            if forward {
+                p += 1;
+            } else {
+                p = p.checked_sub(1)?;
+            }
+        }
+        None
+    }
+
+    /// The bracket at the caret (or, outside Vim, just before it) and its match.
+    fn bracket_pair(&self) -> Option<(usize, usize)> {
+        let caret = self.caret();
+        let b = &self.doc.buffer;
+        let is_bracket = |p: usize| b.char_at(p).is_some_and(|c| closing(c).is_some() || opening(c).is_some());
+        let at = if is_bracket(caret) {
+            caret
+        } else if self.vim.is_none() && caret > 0 && is_bracket(caret - 1) {
+            caret - 1
+        } else {
+            return None;
+        };
+        Some((at, self.matching_bracket(at)?))
     }
 
     fn undo(&mut self, redo: bool) {
@@ -800,6 +924,19 @@ impl SourceEditor {
                 let _ = hover.on_hover_text(message.as_str());
             }
         }
+        // The bracket at the caret and its match, outlined.
+        if focused && let Some((a, z)) = self.bracket_pair() {
+            for p in [a, z] {
+                let r = self.rect_at(p).translate(origin.to_vec2());
+                let w = ui.fonts_mut(|f| f.glyph_width(&t.code_font(), b.char_at(p).unwrap_or(' ')));
+                painter.rect_stroke(
+                    Rect::from_min_size(r.min, vec2(w, r.height())),
+                    1.0,
+                    egui::Stroke::new(1.0, t.text_muted),
+                    egui::StrokeKind::Inside,
+                );
+            }
+        }
         // The caret, and the marked text of a composition.
         if focused {
             let c = self.rect_at(caret).translate(origin.to_vec2());
@@ -897,5 +1034,25 @@ fn paint_span(painter: &egui::Painter, galley: &Galley, at: Pos2, (s, e): (usize
             painter.rect_filled(r, 0.0, color);
         }
         row_start += n;
+    }
+}
+
+/// The closing bracket of an opening one.
+fn closing(c: char) -> Option<char> {
+    match c {
+        '(' => Some(')'),
+        '[' => Some(']'),
+        '{' => Some('}'),
+        _ => None,
+    }
+}
+
+/// The opening bracket of a closing one.
+fn opening(c: char) -> Option<char> {
+    match c {
+        ')' => Some('('),
+        ']' => Some('['),
+        '}' => Some('{'),
+        _ => None,
     }
 }

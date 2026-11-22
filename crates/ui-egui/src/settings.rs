@@ -135,6 +135,15 @@ fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         Some(r)
     });
     key_bindings(app, ui, t, "settings-keys-editor");
+    setting(ui, t, tl!("Close brackets and environments"), tl!("Typing ( [ { adds the closing bracket, and \\begin{…} its \\end{…}."), |ui| {
+        let mut on = app.prefs.auto_close;
+        let r = ui.checkbox(&mut on, "");
+        if r.changed() {
+            app.prefs.auto_close = on;
+            app.prefs_changed = true;
+        }
+        Some(r)
+    });
     let preview =
         egui::text::LayoutJob::simple_singleline("\\section{Introduction} % E = mc^2".to_owned(), app.tokens.code_font(), app.tokens.syntax_command);
     egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner()).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
