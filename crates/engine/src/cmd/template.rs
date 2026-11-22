@@ -1,12 +1,14 @@
 //! Templates (docs/plan.md, phase 1, item 2b): listing the catalogue, downloading a template, and
 //! starting a project from one.
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
 use serde_json::{Value, json};
 use texcraft_templates::Catalog;
 
 use super::{CommandSpec, no_params, string};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::file_access::Access;
 use crate::{Result, Session};
 
@@ -97,7 +99,13 @@ fn fetch(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"template": template.id, "kept": dir.display().to_string()}))
 }
 
+#[cfg(target_arch = "wasm32")]
+fn from_template(_: &mut Session, _: &Value) -> Result<Value> {
+    Err("Projects in the browser are not stored in folders.".to_owned())
+}
+
 /// Copies the template into a new or empty folder, with its licence note, and opens it.
+#[cfg(not(target_arch = "wasm32"))]
 fn from_template(s: &mut Session, p: &Value) -> Result<Value> {
     let catalog = catalog()?;
     let template = catalog.find(string(p, "template")?).map_err(|e| e.to_string())?;
