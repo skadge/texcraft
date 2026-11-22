@@ -219,6 +219,13 @@ fn vim_claims(mode: Mode, key: egui::Key) -> bool {
 /// An egui key as Vim's, when Vim has a use for it.
 fn vim_key(key: egui::Key, modifiers: egui::Modifiers) -> Option<Key> {
     use egui::Key as K;
+    match (key, modifiers.command || modifiers.ctrl, modifiers.shift) {
+        (K::ArrowLeft, true, _) => return Some(Key::CtrlLeft),
+        (K::ArrowRight, true, _) => return Some(Key::CtrlRight),
+        (K::ArrowLeft, false, true) => return Some(Key::ShiftLeft),
+        (K::ArrowRight, false, true) => return Some(Key::ShiftRight),
+        _ => {}
+    }
     if modifiers.command || modifiers.ctrl {
         let name = key.name();
         let c = match key {

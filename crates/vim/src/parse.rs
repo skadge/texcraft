@@ -184,6 +184,10 @@ fn motion(keys: &[Key], i: usize) -> Parse<(Motion, usize)> {
     match key {
         Key::Left => one(Motion::Left),
         Key::Right => one(Motion::Right),
+        Key::CtrlRight => one(Motion::WordStart(true)),
+        Key::CtrlLeft => one(Motion::WordBack(true)),
+        Key::ShiftRight => one(Motion::WordStart(false)),
+        Key::ShiftLeft => one(Motion::WordBack(false)),
         Key::Up => one(Motion::Up),
         Key::Down => one(Motion::Down),
         Key::Home => one(Motion::LineStart),

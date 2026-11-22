@@ -52,3 +52,24 @@ fn a_click_moves_vims_caret_at_once() {
     // Before any key: the caret shown (and the status bar's place) is where the click was.
     assert!(harness.query_by_label_contains("Ln 2,").is_some(), "Vim's caret stayed on line 1 after the click");
 }
+
+#[test]
+fn ctrl_arrows_move_vims_caret_by_words() {
+    let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    s.execute("file.write", &json!({"path": "main.tex", "text": "one two three"})).unwrap();
+    let app = App::with_prefs(s, Prefs { auto_compile: false, vim: true, ..Prefs::default() });
+    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    harness.run();
+    harness.get_by_label("main.tex source").focus();
+    harness.run();
+    harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::ArrowRight);
+    harness.run();
+    harness.get_by_label("main.tex source").type_text("x");
+    harness.run();
+    assert_eq!(text(&mut harness), "one wo three", "Ctrl+Right in Normal mode");
+    harness.get_by_label("main.tex source").type_text("i");
+    harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::ArrowRight);
+    harness.get_by_label("main.tex source").type_text("X");
+    harness.run();
+    assert_eq!(text(&mut harness), "one wo Xthree", "Ctrl+Right in Insert mode");
+}

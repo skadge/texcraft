@@ -38,6 +38,12 @@ pub enum Key {
     Tab,
     Left,
     Right,
+    /// Ctrl+Left and Ctrl+Right: WORDS back and forward (`B`, `W`); words in Insert mode.
+    CtrlLeft,
+    CtrlRight,
+    /// Shift+Left and Shift+Right: words back and forward (`b`, `w`).
+    ShiftLeft,
+    ShiftRight,
     Up,
     Down,
     Home,
@@ -1335,6 +1341,9 @@ impl Vim {
             }
             Key::Left => self.cursor = pos.saturating_sub(1).max(b.line_to_char(line)),
             Key::Right => self.cursor = (pos + 1).min(b.line_end(line)),
+            // As in Vim, a word (`w`, `b`) for both Ctrl and Shift.
+            Key::CtrlLeft | Key::ShiftLeft => self.cursor = motion::word_back(b, pos, false),
+            Key::CtrlRight | Key::ShiftRight => self.cursor = motion::word_start(b, pos, false).min(b.len_chars()),
             Key::Up | Key::Down => {
                 let target = if key == Key::Up { line.checked_sub(1) } else { Some(line + 1).filter(|l| *l < b.len_lines()) };
                 if let Some(target) = target {

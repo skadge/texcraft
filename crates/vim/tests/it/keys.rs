@@ -19,6 +19,10 @@ fn parse_keys(s: &str) -> Vec<Key> {
                 "BS" => Some(Key::Backspace),
                 "Del" => Some(Key::Delete),
                 "Tab" => Some(Key::Tab),
+                "C-Left" => Some(Key::CtrlLeft),
+                "C-Right" => Some(Key::CtrlRight),
+                "S-Left" => Some(Key::ShiftLeft),
+                "S-Right" => Some(Key::ShiftRight),
                 _ => name.strip_prefix("C-").and_then(|c| c.chars().next()).map(Key::Ctrl),
             };
             if let Some(key) = key {
@@ -95,6 +99,12 @@ fn the_keystroke_table() {
         ("x |9 y", "<C-a>", "x 1|0 y"),
         ("x |5 y", "3<C-x>", "x |2 y"),
         // Motions.
+        ("|a.b c", "<C-Right>", "a.b |c"),
+        ("a.b |c", "<C-Left>", "|a.b c"),
+        ("|a.b c", "<S-Right>", "a|.b c"),
+        ("a.b c|d", "d<C-Left>", "a.b |d"),
+        ("|\\section{Intro} text", "i<C-Right><C-Right>x<Esc>", "\\section|x{Intro} text"),
+        ("one two|", "A<C-Left>x<Esc>", "one |xtwo"),
         ("|(a [b] c)", "%", "(a [b] c|)"),
         ("|a\nb\n\nc", "}", "a\nb\n|\nc"),
         ("|a\n\nb", "w", "a\n|\nb"),
