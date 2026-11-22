@@ -282,30 +282,39 @@ impl Language {
             .unwrap_or_default()
     }
 
-    /// A build finished: the builds the server asked for take its `symbols` record (when the
-    /// engine made one) for `main`.
+    /// A build finished: its `symbols` record (when the engine made one) for `main` goes to the
+    /// server as a build of its own (`start_build`), and answers the builds the server asked for.
     pub fn build_finished(&mut self, main: Option<&ProjectPath>, symbols: Option<Value>) {
         let main_uri = main.map(|m| self.uri(m));
-        // The server takes a build's records only for a build it asked for: a build of our own
-        // (the automatic one, the Compile button) is announced as the main file being saved.
-        if self.requested.is_empty()
-            && symbols.is_some()
-            && let Some(uri) = &main_uri
-        {
-            self.send(json!({"jsonrpc": "2.0", "method": "textDocument/didSave", "params": {"textDocument": {"uri": uri}}}));
-        }
-        let requested = std::mem::take(&mut self.requested);
-        for id in requested {
-            if let (Some(main), Some(symbols)) = (&main_uri, &symbols) {
-                self.server.handle(Input::Started { id, main: main.clone(), dir: Some(self.root.clone()) });
-                self.server.handle(Input::Records(id, vec![symbols.clone()]));
+        let mut builds = std::mem::take(&mut self.requested);
+        if let (Some(uri), Some(symbols)) = (&main_uri, &symbols) {
+            for id in &builds {
+                // Paths in the records are relative to the main file's folder, where it is built.
+                self.server.handle(Input::Started { id: *id, main: uri.clone(), dir: None });
             }
-            for output in self.server.handle(Input::Finished(id)) {
-                if let Output::Message(m) = output
-                    && m.get("method").and_then(Value::as_str) == Some("textDocument/publishDiagnostics")
-                {
-                    self.take_diagnostics(&m);
-                }
+            if builds.is_empty() {
+                let (id, cancelled) = self.server.start_build(uri, None);
+                self.take_outputs(cancelled);
+                builds.push(id);
+            }
+            for id in &builds {
+                self.server.handle(Input::Records(*id, vec![symbols.clone()]));
+            }
+        }
+        for id in builds {
+            let outputs = self.server.handle(Input::Finished(id));
+            self.take_outputs(outputs);
+        }
+    }
+
+    /// Takes the diagnostics and build requests among the server's outputs.
+    fn take_outputs(&mut self, outputs: Vec<Output>) {
+        for output in outputs {
+            match output {
+                Output::Message(m) if m.get("method").and_then(Value::as_str) == Some("textDocument/publishDiagnostics") => self.take_diagnostics(&m),
+                Output::Build { id, .. } => self.requested.push(id),
+                Output::Cancel(id) => self.requested.retain(|r| *r != id),
+                Output::Message(_) | Output::Exit(_) => {}
             }
         }
     }

@@ -42,3 +42,37 @@ fn a_hint_has_a_fix_that_agents_can_apply() {
     let text = s.project().text(&texcraft_engine::project::ProjectPath::new("main.tex").unwrap()).unwrap().to_owned();
     assert!(!text.contains("\\bf "), "the fix did not change the text: {text}");
 }
+
+/// "Builds" by handing back a `symbols` record that knows one bibliography entry.
+struct WithSymbols;
+
+impl texcraft_compile::Backend for WithSymbols {
+    fn name(&self) -> String {
+        "test".to_owned()
+    }
+    fn compile(&mut self, job: &texcraft_compile::Job) -> texcraft_compile::Outcome {
+        let symbols = json!({"type": "symbols", "files": [], "commands": [], "environments": [], "labels": [],
+            "citations": [], "places": [],
+            "bibliography": [{"key": "knuth84", "type": "book", "title": "The TeXbook", "author": "Knuth, Donald", "year": "1984", "file": "refs.bib", "line": 1}]});
+        texcraft_compile::Outcome {
+            status: texcraft_compile::Status::Built,
+            symbols: Some(symbols),
+            ..texcraft_compile::Outcome::unavailable(job.id, "")
+        }
+    }
+}
+
+#[test]
+fn a_build_of_our_own_gives_completion_its_bibliography() {
+    let mut s = Session::with_backend(Box::new(WithSymbols));
+    s.execute("file.new", &json!({"path": "paper/main.tex"})).unwrap();
+    s.execute("file.write", &json!({"path": "paper/main.tex", "text": "\\documentclass{article}\n\\cite{kn"})).unwrap();
+    s.execute("file.set_main", &json!({"path": "paper/main.tex"})).unwrap();
+    let keys = |s: &mut Session| {
+        let r = s.execute("language.complete", &json!({"path": "paper/main.tex", "line": 2, "column": 9})).unwrap();
+        r["items"].as_array().unwrap().iter().filter_map(|i| i["label"].as_str().map(str::to_owned)).collect::<Vec<_>>()
+    };
+    assert!(!keys(&mut s).contains(&"knuth84".to_owned()), "the entry was offered before any build");
+    s.execute("build.compile", &json!({"wait": true})).unwrap();
+    assert!(keys(&mut s).contains(&"knuth84".to_owned()), "the build's entry is not offered: {:?}", keys(&mut s));
+}

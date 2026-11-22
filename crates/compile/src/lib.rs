@@ -77,6 +77,9 @@ pub struct DiagnosticFix {
     pub column: u32,
     pub end_column: u32,
     pub replacement: String,
+    /// What the fix does, in a few words ("Use \\textbf"), when retex says.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]

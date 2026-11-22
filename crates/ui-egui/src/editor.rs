@@ -578,7 +578,9 @@ fn problems(app: &mut App, path: &ProjectPath) -> Vec<crate::source::Problem> {
                 .iter()
                 .enumerate()
                 .map(|(i, f)| texcraft_engine::Fix {
-                    title: if f.replacement.is_empty() {
+                    title: if let Some(title) = &f.title {
+                        title.clone()
+                    } else if f.replacement.is_empty() {
                         tl!("Remove it").to_owned()
                     } else {
                         tl!("Change to “{text}”").replace("{text}", &f.replacement)

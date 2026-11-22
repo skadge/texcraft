@@ -276,7 +276,11 @@ fn convert(d: &retex::Diagnostic, src: &Path, main_dir: Option<&str>) -> Diagnos
         column: d.column,
         end_column: d.end_column,
         help: d.help.clone(),
-        fixes: d.fixes.iter().map(|f| DiagnosticFix { column: f.column, end_column: f.end_column, replacement: f.replacement.clone() }).collect(),
+        fixes: d
+            .fixes
+            .iter()
+            .map(|f| DiagnosticFix { column: f.column, end_column: f.end_column, replacement: f.replacement.clone(), title: f.title.clone() })
+            .collect(),
     }
 }
 
