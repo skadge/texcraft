@@ -1,0 +1,8 @@
+*~
+plan/
+/target
+/dist
+/corpus
+.DS_Store
+/craft-fonts
+.claude/settings.local.json
