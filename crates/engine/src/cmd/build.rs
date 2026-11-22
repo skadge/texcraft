@@ -67,7 +67,10 @@ fn wait_schema() -> Value {
 }
 
 fn on_schema() -> Value {
-    json!({"type": "object", "properties": {"on": {"type": "boolean"}}, "required": ["on"], "additionalProperties": false})
+    json!({"type": "object", "properties": {
+        "on": {"type": "boolean"},
+        "delay_ms": {"type": "integer", "minimum": 200, "maximum": 10000, "description": "How long typing must pause before a build."}
+    }, "required": ["on"], "additionalProperties": false})
 }
 
 fn path_schema() -> Value {
@@ -119,7 +122,11 @@ fn stop(_: &mut Session, _: &Value) -> Result<Value> {
 
 fn auto(s: &mut Session, p: &Value) -> Result<Value> {
     s.settings.auto_compile = p.get("on").and_then(Value::as_bool).ok_or("the parameter `on` (a boolean) is missing")?;
-    Ok(json!({"on": s.settings.auto_compile}))
+    if let Some(delay) = p.get("delay_ms") {
+        let delay = delay.as_u64().filter(|d| (200..=10_000).contains(d)).ok_or("`delay_ms` must be between 200 and 10000")?;
+        s.settings.auto_compile_delay_ms = delay;
+    }
+    Ok(json!({"on": s.settings.auto_compile, "delay_ms": s.settings.auto_compile_delay_ms}))
 }
 
 fn result(s: &mut Session, _: &Value) -> Result<Value> {
