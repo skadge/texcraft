@@ -38,14 +38,20 @@ The in-process backend stays for the CLI's one-shot `compile` and as the fallbac
 
 ## Open points for retex
 
-1. **Fragments in the browser.** R11's fragments are a `Worker` method, and the worker is a native process. TeXCraft's web build runs retex as a `wasm32-wasip1` module (plan phase 5). The formatted mode needs fragments there too. Possible shapes:
+1. **Fragments in the browser.** R11's fragments are a `Worker` method, and the worker is a native process. TeXCraft's web build runs retex as a `wasm32-wasip1` module (plan phase 6). The formatted mode needs fragments there too. Possible shapes:
    - a `fragments` request handled by the WASI module itself, run in the same Web Worker as builds;
    - or a `retex fragments` entry point that the module exposes next to `retex_resume`.
 
    Which one fits the snapshot design on WASI?
 2. **The worker protocol in the browser.** The JSON request and record protocol of `retex worker` would also suit the Web Worker that hosts the WASI module, with the same records on both platforms. Could the WASI build accept the same `build`, `cancel` and `fragments` requests on stdin (for example through `retex_resume` or a request file), so TeXCraft's host code is one protocol with two transports?
 3. **Overlay names.** `files` in a build request names files relative to `dir`. TeXCraft's project paths are the same (relative, `/`-separated), so they can be passed unchanged. Please confirm that overlay names may contain subfolders (`chapters/intro.tex`) and that an overlay file need not exist on disk (a new, unsaved file).
-4. **Windows.** Without fork, worker builds on Windows run every pass from the start. TeXCraft will say so in Settings rather than leave the difference unexplained.
+4. **PDF/X and preflight in the embedding API (R13).** `-output-format=pdf-x4` and `pdf-x1a`, `--bleed`, `--crop-marks` and the GWG 2022 checks are on the command line only; `Retex` has `accessible` but no PDF/X. TeXCraft's print support (plan phase 5) needs:
+   - options for the PDF/X flavour, the bleed and crop marks;
+   - the PDF/X file next to the screen PDF from one build, as the command line writes both;
+   - the preflight findings as data: kind, severity, page, the area on the page in PDF points, the measured value and the limit, and the image's file name when there is one. With these TeXCraft can list them, mark them on the page, and open their source line through SyncTeX.
+
+   The accessibility checks of `--accessible` as data, in the same shape, would serve the accessible-PDF findings.
+5. **Windows.** Without fork, worker builds on Windows run every pass from the start. TeXCraft will say so in Settings rather than leave the difference unexplained.
 
 ## TeXCraft's own part
 

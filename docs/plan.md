@@ -1,6 +1,6 @@
 # TeXCraft plan
 
-> **Last updated:** 2026-11-22 · **Change:** phase 1 progress; recent projects as a planned item of their own
+> **Last updated:** 2026-11-22 · **Change:** a phase for retex's output formats, PDF/X and preflight checks
 
 TeXCraft is a LaTeX editor for the desktop and the browser, written in Rust on egui and the Craft shared libraries, with [retex](https://gitlab.com/severin-lemaignan/retex) as its typesetting engine and language server. Its scope is that of the established online LaTeX editors: a project of files, a source editor, a PDF preview kept up to date while typing, a build log tied to the source, navigation between the source and the PDF, and later sharing, history and collaboration. Layout and conventions follow those editors where users expect them (clean-room standard, "Assets" rule 7). Code, wording, icons and artwork are our own.
 
@@ -46,7 +46,7 @@ Done items are marked **done** with the commit subject that brought them. The re
    - Asking before unsaved changes are lost, through `craft-quit` for the window (**done**).
    - **Recent projects** (**done**): File › Open Recent and the project menu list them by folder name with their location, mark the open one, show missing folders disabled with the reason, and can be cleared. Up to twelve, kept in the preferences.
    - Still to do:
-     - A start page when no project is open (**done**: new project, open folder, recent projects as cards with the first page of their last PDF, missing folders marked, removing an entry). Templates join it in phase 7.
+     - A start page when no project is open (**done**: new project, open folder, recent projects as cards with the first page of their last PDF, missing folders marked, removing an entry). Templates join it in phase 8.
      - Recent files of the open project in the Go to File palette (with phase 2's palette).
      - Recent projects in the operating system's own lists (the dock menu on macOS, jump lists on Windows, recently-used on Linux).
      - Pinning a project to the top of the list, and removing one entry.
@@ -188,9 +188,36 @@ A toggle at the top of the editor switches between **Source** and **Formatted**,
    - Links followed through `craft_pdf::safe_url`, and internal links.
    - Downloading or exporting the PDF.
    - Text selection later (craft-pdf text extraction).
-6. **Exports retex already offers.** Accessible PDF (PDF/UA-2), SVG, ODT, ODP, HTML and Markdown, each a command with a file dialog.
 
-### Phase 5: the browser
+### Phase 5: output formats and print
+
+retex writes more than a screen PDF, and TeXCraft offers it: one source, several outputs, each a command (so agents reach them too), each kept per project.
+
+1. **Output settings per project**, in the project's settings and the Build menu's Output submenu:
+   - The main output: screen PDF (default), accessible PDF, or PDF/X for print.
+   - Additional outputs written with each build or on demand: SVG, OpenDocument, HTML, Markdown, PNG pages.
+   - Where outputs go, which by default is the project folder under the main document's name.
+2. **Export commands** (File › Export), each with a file dialog and a progress line:
+   - **SVG**: the whole document as one SVG file (`Document::to_svg`).
+   - **OpenDocument**: an article as a Writer document (`.odt`), a beamer deck as an Impress presentation (`.odp`), marked experimental as retex marks them (`to_odt`, `to_odp`).
+   - **HTML** and **Markdown** with their images, as a folder or a zip (`to_html`, `to_markdown`).
+   - **PNG pages** at a chosen resolution (`Document::render`).
+   - TeXCraft says which output a document is suited to: Impress output from a non-beamer class is allowed, with a note that it is meant for slides.
+3. **Accessible PDF** (PDF/UA-2, `Retex::accessible`).
+   - A build option and an export.
+   - retex's accessibility findings shown in the log, in their own filter, each linked to the source: missing alternative text, reading order, unlabelled tables.
+4. **PDF/X for print** (PDF/X-4 and PDF/X-1a).
+   - Bleed (default 3 mm) and crop marks as project settings.
+   - The preview can show the trim, the bleed and the crop marks, as a view mode of the PDF pane.
+5. **Preflight checks** after GWG 2022, run on every PDF/X build and on demand:
+   - **Findings:** image resolution (with the effective ppi and the page), total ink coverage, text too small for its colours, objects missing the bleed.
+   - **Preflight panel:** a tab of the log listing each finding with its severity and where it is. Selecting one marks the area on the page and, through SyncTeX, opens the source line that placed it (the image's `\includegraphics`, the text's paragraph).
+   - **Report:** a summary at the top ("ready for print" or the number of problems), and a report export (text or PDF) for the printer.
+6. **Engine identity** in the project's settings: retex's choice, `lualatex`, or `pdflatex` (`Retex::identity`, retex 2.1). The pdflatex mode is described as newer.
+
+The in-process API has the ODT, ODP, SVG, HTML, Markdown, page images and accessibility pieces today. PDF/X and structured preflight findings are on retex's command line only, which is asked for as R13 in [docs/retex-changes.md](retex-changes.md). Finding a finding's source line needs the SyncTeX reader (R7).
+
+### Phase 6: the browser
 
 retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua it embeds through mlua rules out wasm32-unknown-unknown, and the engine needs `panic=unwind` with wasm exceptions. retex's own web page runs it through a JavaScript WASI host. TeXCraft can't use handwritten JavaScript, so:
 
@@ -207,7 +234,7 @@ retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua i
 4. **Projects in the browser** live in IndexedDB, through web-sys. Opening and saving to cloud storage goes through `craft-cloud` (RFC-0024), and embedding in a host page through `craft-web-host`.
 5. **Licences.** The LaTeX kernel and most packages are LPPL, which is not on the Craft licence allowlist. Hosting a TeX tree for the web build needs an RFC first (see §6). The desktop app reads an installed TeX Live or retex's own downloaded tree and bundles none.
 
-### Phase 6: sharing, history and working together
+### Phase 7: sharing, history and working together
 
 1. **History.** Snapshots on save and on each successful build, a list of versions with dates (`chrono`), a diff view, and restoring a file or the project.
 2. **Git.**
@@ -217,7 +244,7 @@ retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua i
 4. **Working together in real time** waits for the suite's concurrent-text contract (RFC-0020's `Texts` API behind a mature CRDT). The editor's transactions (phase 2) and stable marks are designed so that this layer can be added. Presence uses `craft_ui::presence`, and chat belongs to the host.
 5. **Review.** Comments anchored to text ranges and suggested edits shown in the margin, accepted or rejected one by one. They are designed on the same marks.
 
-### Phase 7: comfort
+### Phase 8: comfort
 
 - Templates for new projects (our own, CC0, generated in the repository), offered on the start page (phase 1).
 - Word count (`craft-latex`'s reader).
@@ -229,7 +256,7 @@ retex's design note `docs/design/embedding.md` (in the retex repository) answers
 - **2.1.0:** build options, progress, SyncTeX bytes, symbols and fixes in process (done in retex's `main`), and also the `retex worker` process per project (cancelling, preamble snapshots, unsaved buffers as an overlay, OS-level confinement for agent sessions), the SyncTeX reader and fragments for the formatted mode.
 - **2.2.0:** typed language-server queries.
 
-Phases 2 to 4 of this plan follow those releases. Where a phase needs a later release, its work starts on the TeXCraft side (interfaces, UI, tests against the in-process backend) and is finished when the release lands.
+Phases 2 to 5 of this plan follow those releases. Where a phase needs a later release, its work starts on the TeXCraft side (interfaces, UI, tests against the in-process backend) and is finished when the release lands.
 
 ## 5. Quality gates
 

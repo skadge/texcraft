@@ -101,7 +101,7 @@ Faces come from storytold/craft-fonts through the optional `CRAFT_FONTS_DIR`: In
   - On the left: the app mark and the menus.
   - In the centre: the project name, with its menu (rename, download source, copy) and an unsaved-changes dot.
   - On the right: the layout switch (editor and PDF, editor only, PDF only).
-  - Sharing and history buttons appear when those features exist (plan, phase 6).
+  - Sharing and history buttons appear when those features exist (plan, phase 7).
 - **Rail.** Files and Outline at the top; Settings and Help at the bottom.
   - The active section has an accent bar on its inner edge.
   - Clicking the active section hides the side panel.
