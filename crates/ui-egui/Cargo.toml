@@ -19,6 +19,7 @@ craft-ui = { workspace = true }
 egui_extras = { workspace = true, features = ["svg"] }
 egui = { workspace = true }
 serde_json = { workspace = true }
+serde = { workspace = true }
 log = { workspace = true }
 
 [build-dependencies]

@@ -5,7 +5,8 @@
 use serde_json::json;
 
 use crate::dialogs::{Dialog, Prompt};
-use crate::theme::{Scheme, Tokens};
+use crate::prefs::ThemePref;
+use crate::theme::Scheme;
 use crate::{App, Layout, Side};
 
 pub struct UiCommand {
@@ -53,8 +54,13 @@ pub fn run(app: &mut App, id: &str) {
         "view.side.hide" => app.view.side = None,
         "view.logs" => app.view.logs = !app.view.logs,
         "view.theme" => {
-            let next = if app.tokens.scheme == Scheme::Dark { Scheme::Light } else { Scheme::Dark };
-            app.tokens = Tokens::for_scheme(next);
+            let next = if app.tokens.scheme == Scheme::Dark { ThemePref::Light } else { ThemePref::Dark };
+            let ctx = app.ctx.clone();
+            app.set_theme(&ctx, next);
+        }
+        "project.clear_recent" => {
+            app.prefs.recent.clear();
+            app.prefs_changed = true;
         }
         "view.zoom_in" => app.pdf.zoom_by(1.25),
         "view.zoom_out" => app.pdf.zoom_by(0.8),

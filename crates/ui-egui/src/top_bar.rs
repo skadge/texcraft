@@ -87,6 +87,10 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
             chosen = Some(spec.id);
         }
     }
+    if menu == "File" {
+        ui.separator();
+        recent_menu(app, ui);
+    }
     let mut last_group = "";
     for c in UI_COMMANDS.iter().filter(|c| c.menu == menu) {
         if !last_group.is_empty() && c.group != last_group {
@@ -127,6 +131,8 @@ fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
     egui::Popup::menu(&response).align(egui::RectAlign::BOTTOM).show(|ui| {
         ui.set_min_width(220.0);
         let mut chosen = None;
+        recent_menu(app, ui);
+        ui.separator();
         for id in ["project.save", "project.save_as", "build.save_pdf", "project.open", "project.new"] {
             if let Some(spec) = cmd::find(id)
                 && item(ui, &t, icon_for(id), crate::i18n::t(spec.label), spec.shortcut, (spec.enabled)(&app.session))
@@ -152,5 +158,50 @@ fn layout_switch(app: &mut App, ui: &mut egui::Ui) {
         if widgets::icon_toggle(ui, &t, icon, label, app.view.layout == layout).clicked() {
             app.view.layout = layout;
         }
+    }
+}
+
+/// The recent projects, as a submenu: folder name, with where it is below in muted text. A folder
+/// that no longer exists is shown disabled, with the reason.
+pub(crate) fn recent_menu(app: &mut App, ui: &mut egui::Ui) {
+    let t = app.tokens;
+    let mut open = None;
+    let mut clear = false;
+    ui.menu_button(tl!("Open Recent"), |ui| {
+        ui.set_min_width(300.0);
+        if app.prefs.recent.is_empty() {
+            ui.add_enabled(false, egui::Button::new(tl!("No recent projects")));
+            return;
+        }
+        let current = app.session.dir().map(|d| d.display().to_string());
+        for path in &app.prefs.recent {
+            let p = std::path::Path::new(path);
+            let name = p.file_name().map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned());
+            let parent = p.parent().map(|d| d.display().to_string()).unwrap_or_default();
+            let exists = cfg!(target_arch = "wasm32") || p.is_dir();
+            let mut job = egui::text::LayoutJob::default();
+            let strong = egui::TextFormat { font_id: t.body(), color: t.text, ..Default::default() };
+            let muted = egui::TextFormat { font_id: t.small(), color: t.text_muted, ..Default::default() };
+            job.append(&name, 0.0, strong);
+            job.append(&format!("\n{parent}"), 0.0, muted);
+            let selected = current.as_deref() == Some(path.as_str());
+            let r = ui.add_enabled(exists, egui::Button::selectable(selected, job));
+            let r = r.on_disabled_hover_text(tl!("This folder no longer exists."));
+            if r.clicked() {
+                open = Some(path.clone());
+                ui.close();
+            }
+        }
+        ui.separator();
+        if ui.add(egui::Button::new(tl!("Clear Recent Projects")).frame_when_inactive(false)).clicked() {
+            clear = true;
+            ui.close();
+        }
+    });
+    if let Some(path) = open {
+        app.open_project(&path);
+    }
+    if clear {
+        ui_cmd::run(app, "project.clear_recent");
     }
 }

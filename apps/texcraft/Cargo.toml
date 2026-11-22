@@ -15,5 +15,6 @@ texcraft-engine = { workspace = true, features = ["retex"] }
 texcraft-ui-egui = { workspace = true }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
 log = { workspace = true }
+craft-settings = { workspace = true }
+serde = { workspace = true }
 egui = { workspace = true }
-serde_json = { workspace = true }

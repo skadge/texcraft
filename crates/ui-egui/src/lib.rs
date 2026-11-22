@@ -16,6 +16,7 @@ mod editor;
 pub mod fonts;
 pub mod icons;
 mod pdf_view;
+pub mod prefs;
 mod preview;
 mod rail;
 mod side;
@@ -73,17 +74,30 @@ pub struct App {
     pdf: pdf_view::PdfView,
     applied: Option<Scheme>,
     fonts_ready: bool,
+    prefs: prefs::Prefs,
+    /// The context of the last frame, for commands run outside one.
+    ctx: egui::Context,
+    /// The preferences changed since the shell last took them.
+    prefs_changed: bool,
 }
 
 impl App {
     pub fn new(session: Session) -> Self {
-        Self {
+        Self::with_prefs(session, prefs::Prefs::default())
+    }
+
+    /// An interface over `session`, with the preferences the shell stored.
+    pub fn with_prefs(mut session: Session, prefs: prefs::Prefs) -> Self {
+        session.settings.auto_compile = prefs.auto_compile;
+        session.settings.auto_compile_delay_ms = prefs.auto_compile_delay_ms.clamp(200, 10_000);
+        let (layout, side) = (prefs.layout(), prefs.side());
+        let mut app = Self {
             session,
             tokens: Tokens::dark(),
             // A project is built once when it opens, through the automatic build's timer.
             view: View {
-                side: Some(Side::Files),
-                layout: Layout::Split,
+                side,
+                layout,
                 logs: false,
                 dialog: None,
                 cursor: None,
@@ -97,7 +111,55 @@ impl App {
             pdf: pdf_view::PdfView::default(),
             applied: None,
             fonts_ready: false,
+            prefs,
+            ctx: egui::Context::default(),
+            prefs_changed: false,
+        };
+        app.remember_project();
+        app
+    }
+
+    /// The preferences, when they changed since the last call; the shell stores them.
+    pub fn take_changed_prefs(&mut self) -> Option<prefs::Prefs> {
+        let mut current = self.prefs.clone();
+        current.set_view(self.view.layout, self.view.side);
+        current.auto_compile = self.session.settings.auto_compile;
+        if current != self.prefs {
+            self.prefs = current;
+            self.prefs_changed = true;
         }
+        if std::mem::take(&mut self.prefs_changed) { Some(self.prefs.clone()) } else { None }
+    }
+
+    /// Opens the project in `folder` and remembers it among the recent projects.
+    pub fn open_project(&mut self, folder: &str) {
+        if self.run("project.open", json!({"path": folder})).is_some() {
+            self.remember_project();
+            self.pdf = pdf_view::PdfView::default();
+            self.view.last_edit = Some(0.0);
+        }
+    }
+
+    /// Puts the open project's folder first in the recent projects.
+    pub(crate) fn remember_project(&mut self) {
+        if let Some(dir) = self.session.dir() {
+            let path = dir.display().to_string();
+            self.prefs.recent.retain(|p| *p != path);
+            self.prefs.recent.insert(0, path);
+            self.prefs.recent.truncate(prefs::RECENT_MAX);
+            self.prefs_changed = true;
+        }
+    }
+
+    /// Applies a theme preference.
+    pub(crate) fn set_theme(&mut self, ctx: &egui::Context, theme: prefs::ThemePref) {
+        self.prefs.theme = theme;
+        self.prefs_changed = true;
+        self.tokens = match theme {
+            prefs::ThemePref::System => Tokens::system(ctx),
+            prefs::ThemePref::Light => Tokens::light(),
+            prefs::ThemePref::Dark => Tokens::dark(),
+        };
     }
 
     pub fn session(&self) -> &Session {
@@ -119,14 +181,16 @@ impl App {
     /// `eframe::App::ui`.
     pub fn frame(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
+        self.ctx = ctx.clone();
         if !self.fonts_ready {
             fonts::install(ctx);
             icons::install(ctx);
             self.fonts_ready = true;
         }
         if self.applied.is_none() {
-            // The first frame follows the system's theme; View › Switch Light and Dark changes it.
-            self.tokens = Tokens::system(ctx);
+            let theme = self.prefs.theme;
+            self.set_theme(ctx, theme);
+            self.prefs_changed = false;
         }
         if self.applied != Some(self.tokens.scheme) {
             self.tokens.apply(ctx);

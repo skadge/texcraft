@@ -5,7 +5,8 @@ use egui::{Align, Layout};
 use serde_json::json;
 
 use crate::dialogs::Dialog;
-use crate::theme::{Scheme, Tokens};
+use crate::prefs::ThemePref;
+use crate::theme::Tokens;
 use crate::{App, Side, widgets};
 
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
@@ -37,9 +38,11 @@ fn settings_menu(app: &mut App, ui: &mut egui::Ui) {
     let t: Tokens = app.tokens;
     ui.set_min_width(240.0);
     widgets::section_title(ui, &t, tl!("Appearance"));
-    let selected = usize::from(t.scheme == Scheme::Dark);
-    if let Some(i) = widgets::segmented(ui, &t, "theme", &[(tl!("Light"), None), (tl!("Dark"), None)], selected) {
-        app.tokens = Tokens::for_scheme(if i == 1 { Scheme::Dark } else { Scheme::Light });
+    let themes = [ThemePref::System, ThemePref::Light, ThemePref::Dark];
+    let selected = themes.iter().position(|th| *th == app.prefs.theme).unwrap_or(0);
+    if let Some(i) = widgets::segmented(ui, &t, "theme", &[(tl!("System"), None), (tl!("Light"), None), (tl!("Dark"), None)], selected) {
+        let ctx = ui.ctx().clone();
+        app.set_theme(&ctx, themes.get(i).copied().unwrap_or_default());
     }
     ui.add_space(t.unit * 2.0);
     widgets::section_title(ui, &t, tl!("Compiling"));
