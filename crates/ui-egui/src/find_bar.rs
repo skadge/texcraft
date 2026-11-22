@@ -208,6 +208,31 @@ fn toggle(ui: &mut egui::Ui, t: &Tokens, text: &str, name: &str, on: bool) -> bo
     clicked
 }
 
+/// Match Case, Regular Expression, Whole Word and In Selection.
+fn toggles(ui: &mut egui::Ui, t: &Tokens, bar: &mut FindBar, source: &SourceEditor) {
+    let mut changed = false;
+    if toggle(ui, t, "Aa", tl!("Match Case"), bar.query.case) {
+        bar.query.case = !bar.query.case;
+        changed = true;
+    }
+    if toggle(ui, t, ".*", tl!("Regular Expression"), bar.query.regex) {
+        bar.query.regex = !bar.query.regex;
+        changed = true;
+    }
+    if toggle(ui, t, "W", tl!("Whole Word"), bar.query.word) {
+        bar.query.word = !bar.query.word;
+        changed = true;
+    }
+    if toggle(ui, t, "[ ]", tl!("In Selection"), bar.within.is_some()) {
+        let r = source.doc.selection.primary();
+        bar.within = if bar.within.is_some() || r.is_empty() { None } else { Some((r.start(), r.end())) };
+        changed = true;
+    }
+    if changed {
+        bar.current = None;
+    }
+}
+
 /// The bar, when it is open.
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let Some(mut bar) = app.editor.find.take() else { return };
@@ -222,7 +247,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     // The fields take what the toggles, the count and the buttons leave.
     // (The pane may be wider than what is shown of it: measure what is visible.)
     let visible = ui.available_width().min(ui.clip_rect().right() - ui.cursor().left());
-    let field_width = (visible - 20.0 - 360.0).clamp(90.0, 360.0);
+    // Narrow, the toggles take a row of their own.
+    let narrow = visible < 520.0;
+    let field_width = (visible - 20.0 - if narrow { 220.0 } else { 360.0 }).clamp(90.0, 360.0);
     frame.show(ui, |ui| {
         ui.set_width(visible - 20.0);
         ui.spacing_mut().item_spacing = vec2(t.unit * 1.5, t.unit * 1.5);
@@ -266,26 +293,8 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             if r.lost_focus() && escape {
                 close = true;
             }
-            let mut changed = false;
-            if toggle(ui, &t, "Aa", tl!("Match Case"), bar.query.case) {
-                bar.query.case = !bar.query.case;
-                changed = true;
-            }
-            if toggle(ui, &t, ".*", tl!("Regular Expression"), bar.query.regex) {
-                bar.query.regex = !bar.query.regex;
-                changed = true;
-            }
-            if toggle(ui, &t, "W", tl!("Whole Word"), bar.query.word) {
-                bar.query.word = !bar.query.word;
-                changed = true;
-            }
-            if toggle(ui, &t, "[ ]", tl!("In Selection"), bar.within.is_some()) {
-                let r = source.doc.selection.primary();
-                bar.within = if bar.within.is_some() || r.is_empty() { None } else { Some((r.start(), r.end())) };
-                changed = true;
-            }
-            if changed {
-                bar.current = None;
+            if !narrow {
+                toggles(ui, &t, &mut bar, source);
             }
             let count = bar.count_text();
             let color = if bar.error.is_some() { t.error } else { t.text_muted };
@@ -309,6 +318,12 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 }
             });
         });
+        if narrow {
+            ui.horizontal(|ui| {
+                ui.add_space(24.0 + t.unit * 1.5);
+                toggles(ui, &t, &mut bar, source);
+            });
+        }
         if bar.replace {
             ui.horizontal(|ui| {
                 ui.add_space(24.0 + t.unit * 1.5);

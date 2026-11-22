@@ -307,76 +307,135 @@ fn menu_entry(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) -> bool {
     chosen
 }
 
+/// The toolbar's groups after the mode switch, in the order they give way to the More menu when the
+/// pane is narrow: each with its width and its entries for that menu.
+const GROUPS: [(f32, &[(&str, &str)]); 3] = [
+    (
+        100.0,
+        &[
+            ("Section", "edit.section"),
+            ("Subsection", "edit.subsection"),
+            ("Subsubsection", "edit.subsubsection"),
+            ("Paragraph", "edit.paragraph"),
+            ("Bold", "edit.bold"),
+            ("Italic", "edit.italic"),
+        ],
+    ),
+    (
+        130.0,
+        &[
+            ("Inline formula", "edit.math_inline"),
+            ("Displayed formula", "edit.math_display"),
+            ("Numbered equation", "edit.equation"),
+            ("Cross-reference", "edit.ref"),
+            ("Citation", "edit.cite"),
+            ("Link", "edit.link"),
+        ],
+    ),
+    (130.0, &[("Figure", "edit.figure"), ("Table", "edit.table"), ("Bulleted list", "edit.itemize"), ("Numbered list", "edit.enumerate")]),
+];
+
+/// A toolbar button that runs `id`.
+fn tool(ui: &mut egui::Ui, t: &Tokens, (icon, label, id): (&str, &str, &'static str), chosen: &mut Option<&'static str>) {
+    if widgets::icon_button(ui, t, icon, label, true).clicked() {
+        *chosen = Some(id);
+    }
+}
+
+fn group(ui: &mut egui::Ui, t: &Tokens, index: usize, chosen: &mut Option<&'static str>) {
+    divider(ui, t);
+    match index {
+        0 => {
+            let heading = widgets::icon_button(ui, t, "heading-1", tl!("Heading"), true);
+            egui::Popup::menu(&heading).show(|ui| {
+                ui.set_min_width(180.0);
+                for (label, id, size) in [
+                    (tl!("Section"), "edit.section", 16.0),
+                    (tl!("Subsection"), "edit.subsection", 14.5),
+                    (tl!("Subsubsection"), "edit.subsubsection", 13.5),
+                    (tl!("Paragraph"), "edit.paragraph", 13.0),
+                ] {
+                    if menu_entry(ui, egui::RichText::new(label).font(egui::FontId::new(size, crate::fonts::semibold()))) {
+                        *chosen = Some(id);
+                    }
+                }
+            });
+            if letter_button(ui, t, "B", tl!("Bold")).clicked() {
+                *chosen = Some("edit.bold");
+            }
+            tool(ui, t, ("italic", tl!("Italic"), "edit.italic"), chosen);
+        }
+        1 => {
+            let math = widgets::icon_button(ui, t, "sigma", tl!("Math"), true);
+            egui::Popup::menu(&math).show(|ui| {
+                ui.set_min_width(180.0);
+                for (label, id) in [
+                    (tl!("Inline formula"), "edit.math_inline"),
+                    (tl!("Displayed formula"), "edit.math_display"),
+                    (tl!("Numbered equation"), "edit.equation"),
+                ] {
+                    if menu_entry(ui, label) {
+                        *chosen = Some(id);
+                    }
+                }
+            });
+            tool(ui, t, ("tag", tl!("Cross-reference"), "edit.ref"), chosen);
+            tool(ui, t, ("book-open", tl!("Citation"), "edit.cite"), chosen);
+            tool(ui, t, ("link", tl!("Link"), "edit.link"), chosen);
+        }
+        _ => {
+            tool(ui, t, ("image", tl!("Figure"), "edit.figure"), chosen);
+            tool(ui, t, ("table", tl!("Table"), "edit.table"), chosen);
+            tool(ui, t, ("list", tl!("Bulleted list"), "edit.itemize"), chosen);
+            tool(ui, t, ("list-ordered", tl!("Numbered list"), "edit.enumerate"), chosen);
+        }
+    }
+}
+
 fn toolbar(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     let mut chosen: Option<&'static str> = None;
-    ui.allocate_ui_with_layout(vec2(ui.available_width(), t.toolbar_height), Layout::left_to_right(Align::Center), |ui| {
+    // The pane may be wider than what is shown of it: lay out for what is visible.
+    let visible = ui.available_width().min(ui.clip_rect().right() - ui.cursor().left());
+    ui.allocate_ui_with_layout(vec2(visible, t.toolbar_height), Layout::left_to_right(Align::Center), |ui| {
+        ui.set_max_width(visible);
         ui.painter().rect_filled(ui.max_rect(), 0.0, t.surface);
         ui.spacing_mut().item_spacing.x = 2.0;
         ui.add_space(t.unit * 2.0);
         let formatted = tl!("The formatted view comes with docs/plan.md phase 3.");
         widgets::segmented(ui, &t, "mode", &[(tl!("Source"), None), (tl!("Formatted"), Some(formatted))], 0);
-        divider(ui, &t);
-        let heading = widgets::icon_button(ui, &t, "heading-1", tl!("Heading"), true);
-        egui::Popup::menu(&heading).show(|ui| {
-            ui.set_min_width(180.0);
-            for (label, id, size) in [
-                (tl!("Section"), "edit.section", 16.0),
-                (tl!("Subsection"), "edit.subsection", 14.5),
-                (tl!("Subsubsection"), "edit.subsubsection", 13.5),
-                (tl!("Paragraph"), "edit.paragraph", 13.0),
-            ] {
-                if menu_entry(ui, egui::RichText::new(label).font(egui::FontId::new(size, crate::fonts::semibold()))) {
-                    chosen = Some(id);
-                }
+        // Room for Find and the More menu on the right.
+        let mut room = ui.max_rect().right() - ui.cursor().left() - 80.0;
+        let mut hidden: Vec<usize> = Vec::new();
+        for (i, (width, _)) in GROUPS.iter().enumerate() {
+            if hidden.is_empty() && *width <= room {
+                group(ui, &t, i, &mut chosen);
+                room -= width;
+            } else {
+                hidden.push(i);
             }
-        });
-        if letter_button(ui, &t, "B", tl!("Bold")).clicked() {
-            chosen = Some("edit.bold");
-        }
-        if widgets::icon_button(ui, &t, "italic", tl!("Italic"), true).clicked() {
-            chosen = Some("edit.italic");
-        }
-        divider(ui, &t);
-        let math = widgets::icon_button(ui, &t, "sigma", tl!("Math"), true);
-        egui::Popup::menu(&math).show(|ui| {
-            ui.set_min_width(180.0);
-            if menu_entry(ui, tl!("Inline formula")) {
-                chosen = Some("edit.math_inline");
-            }
-            if menu_entry(ui, tl!("Displayed formula")) {
-                chosen = Some("edit.math_display");
-            }
-            if menu_entry(ui, tl!("Numbered equation")) {
-                chosen = Some("edit.equation");
-            }
-        });
-        if widgets::icon_button(ui, &t, "tag", tl!("Cross-reference"), true).clicked() {
-            chosen = Some("edit.ref");
-        }
-        if widgets::icon_button(ui, &t, "book-open", tl!("Citation"), true).clicked() {
-            chosen = Some("edit.cite");
-        }
-        if widgets::icon_button(ui, &t, "link", tl!("Link"), true).clicked() {
-            chosen = Some("edit.link");
-        }
-        divider(ui, &t);
-        if widgets::icon_button(ui, &t, "image", tl!("Figure"), true).clicked() {
-            chosen = Some("edit.figure");
-        }
-        if widgets::icon_button(ui, &t, "table", tl!("Table"), true).clicked() {
-            chosen = Some("edit.table");
-        }
-        if widgets::icon_button(ui, &t, "list", tl!("Bulleted list"), true).clicked() {
-            chosen = Some("edit.itemize");
-        }
-        if widgets::icon_button(ui, &t, "list-ordered", tl!("Numbered list"), true).clicked() {
-            chosen = Some("edit.enumerate");
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.add_space(t.unit * 2.0);
-            let find = tl!("Find and replace comes with the new editor (docs/plan.md phase 2).");
-            widgets::icon_button(ui, &t, "search", tl!("Find and replace"), false).on_disabled_hover_text(find);
+            if widgets::icon_button(ui, &t, "search", tl!("Find and replace"), true).clicked() {
+                chosen = Some("edit.replace");
+            }
+            if !hidden.is_empty() {
+                let more = widgets::icon_button(ui, &t, "ellipsis", tl!("More formatting"), true);
+                egui::Popup::menu(&more).show(|ui| {
+                    ui.set_min_width(180.0);
+                    for (n, i) in hidden.iter().enumerate() {
+                        if n > 0 {
+                            ui.separator();
+                        }
+                        for (label, id) in GROUPS[*i].1 {
+                            if menu_entry(ui, crate::i18n::t(label)) {
+                                chosen = Some(id);
+                            }
+                        }
+                    }
+                });
+            }
         });
     });
     if let Some(id) = chosen {
