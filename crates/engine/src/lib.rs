@@ -7,6 +7,7 @@
 
 pub mod cmd;
 pub mod file_access;
+pub mod find;
 pub mod guard;
 
 use std::path::PathBuf;

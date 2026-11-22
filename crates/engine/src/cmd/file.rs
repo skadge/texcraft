@@ -60,6 +60,26 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "file.find",
+            label: "Find in File",
+            menu: &[],
+            shortcut: None,
+            params: find_schema,
+            enabled: always,
+            run: find,
+            changes: false,
+        },
+        CommandSpec {
+            id: "file.replace",
+            label: "Replace in File",
+            menu: &[],
+            shortcut: None,
+            params: replace_schema,
+            enabled: always,
+            run: replace,
+            changes: true,
+        },
+        CommandSpec {
             id: "file.edit",
             label: "Edit File Text",
             menu: &[],
@@ -147,6 +167,70 @@ fn edit_schema() -> Value {
         "end": {"type": "integer", "minimum": 0, "description": "Byte offset where it ends (excluded)."},
         "text": {"type": "string", "description": "The replacement."}
     }, "required": ["path", "start", "end", "text"], "additionalProperties": false})
+}
+
+fn query_properties() -> serde_json::Map<String, Value> {
+    let v = json!({
+        "path": {"type": "string"},
+        "pattern": {"type": "string", "description": "The text to find, or a regular expression with `regex`."},
+        "regex": {"type": "boolean", "description": "`pattern` is a regular expression (Rust regex syntax). Default false."},
+        "case": {"type": "boolean", "description": "Upper and lower case differ. Default false."},
+        "word": {"type": "boolean", "description": "Only whole words match. Default false."}
+    });
+    v.as_object().cloned().unwrap_or_default()
+}
+
+fn find_schema() -> Value {
+    json!({"type": "object", "properties": query_properties(), "required": ["path", "pattern"], "additionalProperties": false})
+}
+
+fn replace_schema() -> Value {
+    let mut props = query_properties();
+    props.insert("replacement".to_owned(), json!({"type": "string", "description": "The replacement; with `regex`, `$1` is the first group."}));
+    json!({"type": "object", "properties": props, "required": ["path", "pattern", "replacement"], "additionalProperties": false})
+}
+
+fn query(p: &Value) -> Result<crate::find::Query> {
+    let flag = |name: &str| p.get(name).and_then(Value::as_bool).unwrap_or(false);
+    Ok(crate::find::Query { pattern: string(p, "pattern")?.to_owned(), regex: flag("regex"), case: flag("case"), word: flag("word") })
+}
+
+/// Lists the matches with their line and column (from 1, in characters).
+fn find(s: &mut Session, p: &Value) -> Result<Value> {
+    let path = path_param(p, "path")?;
+    let q = query(p)?;
+    let text = s.project.text(&path).map_err(|e| e.to_string())?;
+    let ranges = q.matches(text)?;
+    let mut line = 1;
+    let mut line_start = 0;
+    let mut scanned = 0;
+    let matches: Vec<Value> = ranges
+        .iter()
+        .map(|r| {
+            for (i, c) in text[scanned..r.start].char_indices() {
+                if c == '\n' {
+                    line += 1;
+                    line_start = scanned + i + 1;
+                }
+            }
+            scanned = r.start;
+            let column = text[line_start..r.start].chars().count() + 1;
+            json!({"line": line, "column": column, "start": r.start, "end": r.end, "text": &text[r.clone()]})
+        })
+        .collect();
+    Ok(json!({"count": matches.len(), "matches": matches}))
+}
+
+fn replace(s: &mut Session, p: &Value) -> Result<Value> {
+    let path = path_param(p, "path")?;
+    let q = query(p)?;
+    let replacement = string(p, "replacement")?;
+    let text = s.project.text(&path).map_err(|e| e.to_string())?;
+    let (new, count) = q.replace_all(text, replacement, None)?;
+    if count > 0 {
+        s.write_text(&path, new)?;
+    }
+    Ok(json!({"replaced": count, "revision": s.revision}))
 }
 
 fn import_schema() -> Value {
