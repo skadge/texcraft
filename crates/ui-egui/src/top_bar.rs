@@ -72,6 +72,16 @@ fn icon_for(id: &str) -> Option<&'static str> {
         "view.zoom_out" => "zoom-out",
         "help.shortcuts" => "text-cursor-input",
         "help.about" => "info",
+        "edit.figure" => "image",
+        "edit.table" => "table",
+        "edit.math_inline" | "edit.math_display" | "edit.equation" => "sigma",
+        "edit.ref" => "tag",
+        "edit.cite" => "book-open",
+        "edit.link" => "link",
+        "edit.itemize" => "list",
+        "edit.enumerate" => "list-ordered",
+        "edit.italic" => "italic",
+        "edit.section" => "heading-1",
         _ => return None,
     })
 }

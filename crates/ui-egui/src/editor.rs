@@ -157,6 +157,42 @@ const fn wrap(before: &'static str, after: &'static str, placeholder: &'static s
     Wrap { before, after, placeholder }
 }
 
+/// The source edit of each `edit.*` command (Insert and Format menus, toolbar, shortcuts).
+fn wrap_for(id: &str) -> Option<Wrap> {
+    Some(match id {
+        "edit.section" => wrap("\\section{", "}", "Title"),
+        "edit.subsection" => wrap("\\subsection{", "}", "Title"),
+        "edit.subsubsection" => wrap("\\subsubsection{", "}", "Title"),
+        "edit.paragraph" => wrap("\\paragraph{", "}", "Title"),
+        "edit.bold" => wrap("\\textbf{", "}", "text"),
+        "edit.italic" => wrap("\\textit{", "}", "text"),
+        "edit.math_inline" => wrap("\\(", "\\)", "x"),
+        "edit.math_display" => wrap("\\[\n  ", "\n\\]", "x"),
+        "edit.equation" => wrap("\\begin{equation}\n  ", "\n  \\label{eq:label}\n\\end{equation}", "x"),
+        "edit.ref" => wrap("\\ref{", "}", "label"),
+        "edit.cite" => wrap("\\cite{", "}", "key"),
+        "edit.link" => wrap("\\href{https://}{", "}", "text"),
+        "edit.figure" => FIGURE,
+        "edit.table" => TABLE,
+        "edit.itemize" => wrap("\\begin{itemize}\n  \\item ", "\n\\end{itemize}", "Item"),
+        "edit.enumerate" => wrap("\\begin{enumerate}\n  \\item ", "\n\\end{enumerate}", "Item"),
+        _ => return None,
+    })
+}
+
+/// Runs an `edit.*` command on the shown file's selection; false when no text file is shown.
+pub(crate) fn edit(app: &mut App, id: &str) -> bool {
+    let shown_text = app.session.current().is_some_and(|p| matches!(app.session.project().get(p), Some(Contents::Text(_))));
+    match wrap_for(id) {
+        Some(w) if shown_text => {
+            let ctx = app.ctx.clone();
+            apply_wrap(app, &ctx, &w);
+            true
+        }
+        _ => false,
+    }
+}
+
 const FIGURE: Wrap = wrap(
     "\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{",
     "}\n  \\caption{Caption}\n  \\label{fig:label}\n\\end{figure}\n",
@@ -179,7 +215,7 @@ fn menu_entry(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) -> bool {
 
 fn toolbar(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
-    let mut chosen: Option<Wrap> = None;
+    let mut chosen: Option<&'static str> = None;
     ui.allocate_ui_with_layout(vec2(ui.available_width(), t.toolbar_height), Layout::left_to_right(Align::Center), |ui| {
         ui.painter().rect_filled(ui.max_rect(), 0.0, t.surface);
         ui.spacing_mut().item_spacing.x = 2.0;
@@ -190,58 +226,58 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         let heading = widgets::icon_button(ui, &t, "heading-1", tl!("Heading"), true);
         egui::Popup::menu(&heading).show(|ui| {
             ui.set_min_width(180.0);
-            for (label, cmd, size) in [
-                (tl!("Section"), "\\section{", 16.0),
-                (tl!("Subsection"), "\\subsection{", 14.5),
-                (tl!("Subsubsection"), "\\subsubsection{", 13.5),
-                (tl!("Paragraph"), "\\paragraph{", 13.0),
+            for (label, id, size) in [
+                (tl!("Section"), "edit.section", 16.0),
+                (tl!("Subsection"), "edit.subsection", 14.5),
+                (tl!("Subsubsection"), "edit.subsubsection", 13.5),
+                (tl!("Paragraph"), "edit.paragraph", 13.0),
             ] {
                 if menu_entry(ui, egui::RichText::new(label).font(egui::FontId::new(size, crate::fonts::semibold()))) {
-                    chosen = Some(Wrap { before: cmd, after: "}", placeholder: "Title" });
+                    chosen = Some(id);
                 }
             }
         });
         if letter_button(ui, &t, "B", tl!("Bold")).clicked() {
-            chosen = Some(wrap("\\textbf{", "}", "text"));
+            chosen = Some("edit.bold");
         }
         if widgets::icon_button(ui, &t, "italic", tl!("Italic"), true).clicked() {
-            chosen = Some(wrap("\\textit{", "}", "text"));
+            chosen = Some("edit.italic");
         }
         divider(ui, &t);
         let math = widgets::icon_button(ui, &t, "sigma", tl!("Math"), true);
         egui::Popup::menu(&math).show(|ui| {
             ui.set_min_width(180.0);
             if menu_entry(ui, tl!("Inline formula")) {
-                chosen = Some(wrap("\\(", "\\)", "x"));
+                chosen = Some("edit.math_inline");
             }
             if menu_entry(ui, tl!("Displayed formula")) {
-                chosen = Some(wrap("\\[\n  ", "\n\\]", "x"));
+                chosen = Some("edit.math_display");
             }
             if menu_entry(ui, tl!("Numbered equation")) {
-                chosen = Some(wrap("\\begin{equation}\n  ", "\n  \\label{eq:label}\n\\end{equation}", "x"));
+                chosen = Some("edit.equation");
             }
         });
         if widgets::icon_button(ui, &t, "tag", tl!("Cross-reference"), true).clicked() {
-            chosen = Some(wrap("\\ref{", "}", "label"));
+            chosen = Some("edit.ref");
         }
         if widgets::icon_button(ui, &t, "book-open", tl!("Citation"), true).clicked() {
-            chosen = Some(wrap("\\cite{", "}", "key"));
+            chosen = Some("edit.cite");
         }
         if widgets::icon_button(ui, &t, "link", tl!("Link"), true).clicked() {
-            chosen = Some(wrap("\\href{https://}{", "}", "text"));
+            chosen = Some("edit.link");
         }
         divider(ui, &t);
         if widgets::icon_button(ui, &t, "image", tl!("Figure"), true).clicked() {
-            chosen = Some(FIGURE);
+            chosen = Some("edit.figure");
         }
         if widgets::icon_button(ui, &t, "table", tl!("Table"), true).clicked() {
-            chosen = Some(TABLE);
+            chosen = Some("edit.table");
         }
         if widgets::icon_button(ui, &t, "list", tl!("Bulleted list"), true).clicked() {
-            chosen = Some(wrap("\\begin{itemize}\n  \\item ", "\n\\end{itemize}", "Item"));
+            chosen = Some("edit.itemize");
         }
         if widgets::icon_button(ui, &t, "list-ordered", tl!("Numbered list"), true).clicked() {
-            chosen = Some(wrap("\\begin{enumerate}\n  \\item ", "\n\\end{enumerate}", "Item"));
+            chosen = Some("edit.enumerate");
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.add_space(t.unit * 2.0);
@@ -249,8 +285,8 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
             widgets::icon_button(ui, &t, "search", tl!("Find and replace"), false).on_disabled_hover_text(find);
         });
     });
-    if let Some(w) = chosen {
-        apply_wrap(app, ui.ctx(), &w);
+    if let Some(id) = chosen {
+        crate::ui_cmd::run(app, id);
     }
 }
 

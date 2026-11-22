@@ -25,6 +25,22 @@ const fn ui(id: &'static str, label: &'static str, menu: &'static str, group: &'
 
 /// View commands, in menu order.
 pub const UI_COMMANDS: &[UiCommand] = &[
+    ui("edit.figure", "Figure", "Insert", "float", None),
+    ui("edit.table", "Table", "Insert", "float", None),
+    ui("edit.math_inline", "Inline Formula", "Insert", "math", Some("Cmd+Shift+M")),
+    ui("edit.math_display", "Displayed Formula", "Insert", "math", None),
+    ui("edit.equation", "Numbered Equation", "Insert", "math", None),
+    ui("edit.ref", "Cross-Reference", "Insert", "refs", None),
+    ui("edit.cite", "Citation", "Insert", "refs", None),
+    ui("edit.link", "Link", "Insert", "refs", None),
+    ui("edit.itemize", "Bulleted List", "Insert", "lists", None),
+    ui("edit.enumerate", "Numbered List", "Insert", "lists", None),
+    ui("edit.bold", "Bold", "Format", "style", Some("Cmd+B")),
+    ui("edit.italic", "Italic", "Format", "style", Some("Cmd+I")),
+    ui("edit.section", "Section", "Format", "headings", None),
+    ui("edit.subsection", "Subsection", "Format", "headings", None),
+    ui("edit.subsubsection", "Subsubsection", "Format", "headings", None),
+    ui("edit.paragraph", "Paragraph Heading", "Format", "headings", None),
     ui("view.layout.split", "Editor and PDF", "View", "layout", None),
     ui("view.layout.editor", "Editor Only", "View", "layout", None),
     ui("view.layout.preview", "PDF Only", "View", "layout", None),
@@ -41,7 +57,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
 ];
 
 /// The menus of the menu bar, in order.
-pub const MENUS: &[&str] = &["File", "Build", "View", "Help"];
+pub const MENUS: &[&str] = &["File", "Insert", "Format", "Build", "View", "Help"];
 
 /// Runs `id`: a view command, an engine command that first asks for input, or a plain engine
 /// command.
@@ -66,6 +82,11 @@ pub fn run(app: &mut App, id: &str) {
         "view.zoom_in" => app.pdf.zoom_by(1.25),
         "view.zoom_out" => app.pdf.zoom_by(0.8),
         "view.fit_width" => app.pdf.fit_width(),
+        id if id.starts_with("edit.") => {
+            if !crate::editor::edit(app, id) {
+                app.view.status = Some((tl!("Open a text file to insert into it.").to_owned(), true));
+            }
+        }
         "help.shortcuts" => app.view.dialog = Some(Dialog::Shortcuts),
         "help.about" => app.view.dialog = Some(Dialog::About),
         "project.open" => app.guard(Next::PickProject),

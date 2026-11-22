@@ -2,5 +2,6 @@
 
 mod contrast;
 mod frame;
+mod insert;
 mod recent;
 mod unsaved;
