@@ -2,6 +2,7 @@
 
 mod build_options;
 mod command_sweep;
+mod draft;
 mod edits;
 mod file_access;
 mod files;

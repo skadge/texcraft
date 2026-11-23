@@ -24,6 +24,8 @@ pub(crate) struct Building {
     pub ratio: Option<f32>,
     /// The session's first build of the project: it says why it takes longer.
     pub first: bool,
+    /// The pass whose draft PDF is shown, while the later passes run.
+    pub draft: Option<u32>,
 }
 
 /// How the zoom is chosen.
@@ -380,6 +382,9 @@ impl PdfView {
         if clicked.is_some() {
             self.clicked = clicked;
         }
+        if let Some(pass) = building.and_then(|b| b.draft) {
+            draft_badge(ui, t, rect, pass);
+        }
     }
 
     fn texture(&mut self, ctx: &egui::Context, index: usize, scale: f32) -> Option<egui::TextureHandle> {
@@ -438,4 +443,22 @@ impl PdfView {
             Err(e) => log::warn!("page {}: {e}", d.index + 1),
         }
     }
+}
+
+/// Marks the PDF shown as the running build's draft, in the pane's top right corner: the PDF of an
+/// earlier pass, whose references may not be resolved until the build ends.
+fn draft_badge(ui: &mut egui::Ui, t: &Tokens, pane: egui::Rect, pass: u32) {
+    let text = tl!("Draft · pass {n}").replace("{n}", &pass.to_string());
+    let strip = egui::Rect::from_min_max(pane.min, egui::pos2(pane.right(), pane.top() + t.unit * 12.0)).shrink(t.unit * 3.0);
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(strip).layout(egui::Layout::right_to_left(egui::Align::Min)));
+    egui::Frame::new()
+        .fill(t.raised)
+        .stroke(egui::Stroke::new(1.0, t.control_border))
+        .corner_radius(t.corner())
+        .inner_margin(egui::Margin::symmetric(8, 3))
+        .show(&mut child, |ui| {
+            let label = ui.add(egui::Label::new(egui::RichText::new(&text).font(t.small()).color(t.text)).sense(egui::Sense::hover()));
+            crate::status::announce(ui, &label, &text);
+            label.on_hover_text(tl!("The PDF of an earlier pass, shown while the build goes on: its references may not be resolved yet."));
+        });
 }

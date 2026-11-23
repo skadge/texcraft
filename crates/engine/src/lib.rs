@@ -26,7 +26,7 @@ use serde_json::Value;
 use texcraft_compile::{Job, Outcome};
 use texcraft_project::{Project, ProjectPath};
 
-pub use texcraft_compile::{Diagnostic, Engine, Options as BuildOptions, Progress, Severity, Status};
+pub use texcraft_compile::{Diagnostic, Draft, Engine, Options as BuildOptions, Progress, Severity, Status};
 pub use texcraft_project as project;
 
 /// What a command returns: a JSON value for automation, or a message for the user.
@@ -220,6 +220,18 @@ impl Session {
         match &mut self.builder {
             #[cfg(not(target_arch = "wasm32"))]
             Builder::Thread(w) => w.progress(),
+            #[cfg(target_arch = "wasm32")]
+            Builder::Inline(..) => None,
+        }
+    }
+
+    /// The running build's draft PDF: that of a pass that is not the last, written while the
+    /// next passes run (its references may be undefined). None once the build has ended: then
+    /// [`Session::pdf`] is the PDF to show.
+    pub fn draft_pdf(&mut self) -> Option<&Draft> {
+        match &mut self.builder {
+            #[cfg(not(target_arch = "wasm32"))]
+            Builder::Thread(w) => w.draft(),
             #[cfg(target_arch = "wasm32")]
             Builder::Inline(..) => None,
         }

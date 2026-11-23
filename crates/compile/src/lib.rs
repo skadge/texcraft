@@ -170,6 +170,22 @@ pub enum Event {
     File { name: String },
     /// A step between passes, such as `running biber`.
     Step { what: String },
+    /// The PDF of a pass that is not the last (retex 2.3.0), to show while the next passes run;
+    /// its references may be undefined.
+    Draft {
+        pass: u32,
+        #[serde(skip)]
+        pdf: Arc<Vec<u8>>,
+    },
+}
+
+/// The running build's draft: the PDF of its last pass so far that was not the last.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Draft {
+    pub job: u64,
+    /// The pass that wrote it, from 1.
+    pub pass: u32,
+    pub pdf: Arc<Vec<u8>>,
 }
 
 /// A running build's progress so far.
@@ -184,15 +200,18 @@ pub struct Progress {
     /// The file being read before the first page, or the step between passes.
     pub reading: Option<String>,
     pub step: Option<String>,
+    /// The pass whose PDF is the build's draft, when one was written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub draft: Option<u32>,
 }
 
 impl Progress {
     pub fn apply(&mut self, event: Event) {
         match event {
             Event::Pass { n, reason } => {
-                // The pass before tells how many pages to expect.
+                // The pass before tells how many pages to expect; its draft stays the draft.
                 let expected = Some(self.pages).filter(|p| *p > 0).or(self.expected);
-                *self = Progress { pass: n, reason, expected, ..Progress::default() };
+                *self = Progress { pass: n, reason, expected, draft: self.draft, ..Progress::default() };
             }
             Event::Pages { shipped, expected } => {
                 self.pages = shipped;
@@ -202,6 +221,7 @@ impl Progress {
             }
             Event::File { name } => self.reading = Some(name),
             Event::Step { what } => self.step = Some(what),
+            Event::Draft { pass, .. } => self.draft = Some(pass),
         }
     }
 }

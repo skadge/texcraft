@@ -187,8 +187,10 @@ fn auto(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn result(s: &mut Session, _: &Value) -> Result<Value> {
+    // The running build's draft PDF, while its later passes run.
+    let draft = s.draft_pdf().map(|d| json!({"job": d.job, "pass": d.pass, "pdfBytes": d.pdf.len()}));
     let Some(o) = s.last_outcome() else {
-        return Ok(json!({"status": "none", "building": s.is_building()}));
+        return Ok(json!({"status": "none", "building": s.is_building(), "draft": draft}));
     };
     Ok(json!({
         "job": o.job,
@@ -200,5 +202,6 @@ fn result(s: &mut Session, _: &Value) -> Result<Value> {
         "warnings": o.warnings(),
         "pdfBytes": o.pdf.as_ref().map(|p| p.len()),
         "diagnostics": o.diagnostics,
+        "draft": draft,
     }))
 }

@@ -23,6 +23,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             ratio: progress.and_then(|(p, _)| crate::status::progress_ratio(p)),
             // The project's first build of the session: say why it takes longer.
             first: app.session.last_outcome().is_none(),
+            draft: app.view.draft.as_ref().map(|d| d.pass),
         }
     });
     // A build over a PDF already shown: a thin bar along the pane's top, full as far as the pass
@@ -43,7 +44,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     if app.view.logs {
         logs(app, ui);
     } else {
-        app.pdf.sync(app.session.pdf());
+        // While a build's later passes run, its draft; otherwise the last PDF a build wrote, so a
+        // draft never outlives its build (finished, failed or stopped).
+        app.pdf.sync(app.view.draft.as_ref().map(|d| &d.pdf).or(app.session.pdf()));
         app.pdf.show(ui, &t, building.as_ref());
         if let Some((page, x, y)) = app.pdf.clicked.take() {
             go_to_source(app, page, x, y);

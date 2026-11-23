@@ -296,6 +296,7 @@ fn event(p: retex::Progress) -> Option<Event> {
         retex::Progress::Pages { shipped, expected } => Event::Pages { shipped, expected },
         retex::Progress::File { name } => Event::File { name },
         retex::Progress::Step { what } => Event::Step { what },
+        retex::Progress::Draft { pass, pdf } => Event::Draft { pass, pdf: Arc::new(pdf) },
         _ => return None,
     })
 }

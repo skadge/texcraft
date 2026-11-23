@@ -111,6 +111,8 @@ pub(crate) struct View {
     pub goto: Option<(ProjectPath, u32)>,
     /// The running build's progress and how long it has run, this frame.
     pub progress: Option<(texcraft_engine::Progress, f64)>,
+    /// The running build's draft PDF, this frame.
+    pub draft: Option<texcraft_engine::Draft>,
     /// The name typed in Settings › Review before a key is made.
     pub identity_draft: String,
 }
@@ -185,6 +187,7 @@ impl App {
                 last_edit: Some(0.0),
                 goto: None,
                 progress: None,
+                draft: None,
                 identity_draft: prefs::system_user_name(),
             },
             editor: editor::Editor::default(),
@@ -431,6 +434,7 @@ impl App {
             self.view.status = None;
         }
         self.view.progress = self.session.progress();
+        self.view.draft = self.session.draft_pdf().cloned();
         self.auto_compile(ctx);
         // Vim's own Ctrl keys go to the editor before the window's shortcuts see them.
         editor::claim_keys(self, ctx);

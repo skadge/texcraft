@@ -6,7 +6,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 
 use std::time::Instant;
 
-use crate::{Backend, Event, Job, Outcome, Progress};
+use crate::{Backend, Draft, Event, Job, Outcome, Progress};
 
 pub struct Worker {
     jobs: Sender<Job>,
@@ -14,6 +14,8 @@ pub struct Worker {
     events: Receiver<(u64, Event)>,
     /// The running job's progress, and when it started.
     progress: Progress,
+    /// The running job's draft PDF, when it wrote one.
+    draft: Option<Draft>,
     started: Option<Instant>,
     running: Option<u64>,
     waiting: Option<Job>,
@@ -54,6 +56,7 @@ impl Worker {
             outcomes,
             events,
             progress: Progress::default(),
+            draft: None,
             started: None,
             running: None,
             waiting: None,
@@ -87,6 +90,7 @@ impl Worker {
             Ok(()) => {
                 self.running = Some(id);
                 self.progress = Progress::default();
+                self.draft = None;
                 self.started = Some(Instant::now());
             }
             Err(_) => log::error!("the compile thread is gone; job {id} was not started"),
@@ -126,15 +130,33 @@ impl Worker {
         self.running
     }
 
+    /// Takes the running job's events that arrived.
+    fn receive(&mut self) {
+        let Some(running) = self.running else { return };
+        while let Ok((id, event)) = self.events.try_recv() {
+            if id != running {
+                continue;
+            }
+            if let Event::Draft { pass, pdf } = &event {
+                self.draft = Some(Draft { job: id, pass: *pass, pdf: pdf.clone() });
+            }
+            self.progress.apply(event);
+        }
+    }
+
     /// The running job's progress and how long it has run, in seconds.
     pub fn progress(&mut self) -> Option<(Progress, f64)> {
-        let running = self.running?;
-        while let Ok((id, event)) = self.events.try_recv() {
-            if id == running {
-                self.progress.apply(event);
-            }
-        }
+        self.running?;
+        self.receive();
         Some((self.progress.clone(), self.started.map_or(0.0, |s| s.elapsed().as_secs_f64())))
+    }
+
+    /// The running job's draft: the PDF of its last pass so far that was not the last. None once
+    /// the job has ended, whatever its outcome.
+    pub fn draft(&mut self) -> Option<&Draft> {
+        self.running?;
+        self.receive();
+        self.draft.as_ref()
     }
 
     /// A finished outcome, without blocking.
@@ -142,6 +164,7 @@ impl Worker {
         match self.outcomes.try_recv() {
             Ok(outcome) => {
                 self.running = None;
+                self.draft = None;
                 if let Some(next) = self.waiting.take() {
                     self.start(next);
                 }
@@ -149,6 +172,7 @@ impl Worker {
             }
             Err(TryRecvError::Empty) => None,
             Err(TryRecvError::Disconnected) => {
+                self.draft = None;
                 let id = self.running.take()?;
                 Some(Outcome::unavailable(id, "The typesetting engine is not running."))
             }
@@ -161,6 +185,7 @@ impl Worker {
         match self.outcomes.recv() {
             Ok(outcome) => {
                 self.running = None;
+                self.draft = None;
                 Some(outcome)
             }
             Err(_) => self.running.take().map(|id| Outcome::unavailable(id, "The typesetting engine is not running.")),
