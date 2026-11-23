@@ -28,7 +28,8 @@ impl Tools for TexTools {
     fn instructions(&self) -> String {
         "TeXCraft edits and builds LaTeX projects. Call `command_list` to see every command and its \
          parameters, then `command_run`. Open a project folder inside the write root with \
-         `project.open`; files are addressed by paths relative to the project."
+         `project.open`; files are addressed by paths relative to the project. Change text with \
+         `file.edit` (character offsets); comment on a passage with `review.comment`."
             .to_owned()
     }
 
@@ -81,6 +82,8 @@ pub fn serve(roots: AutomationRoots, templates: Option<std::path::PathBuf>) -> s
         session.set_template_store(dir);
     }
     session.confine(roots);
+    // Comments an agent writes carry this name (docs/collaboration-roadmap.md, R5 marks them further).
+    session.set_author(Some(texcraft_engine::review::Author::new("Agent", "")));
     let info = Info { name: "texcraft", title: "TeXCraft", version: env!("CARGO_PKG_VERSION"), max_line: 16 * 1024 * 1024 };
     let mut server = Server::new(info, TexTools::new(session));
     let stdin = std::io::stdin();

@@ -102,6 +102,64 @@ impl Transaction {
         Transaction { changes }
     }
 
+    /// The smallest single change that turns `old` into `new`: what is between their common
+    /// beginning and their common end. Empty when they are equal.
+    pub fn diff(old: &str, new: &str) -> Self {
+        let prefix: usize = old.chars().zip(new.chars()).take_while(|(a, b)| a == b).count();
+        let (old_len, new_len) = (old.chars().count(), new.chars().count());
+        let room = old_len.min(new_len) - prefix;
+        let suffix = old.chars().rev().zip(new.chars().rev()).take(room).take_while(|(a, b)| a == b).count();
+        if prefix == old_len && prefix == new_len {
+            return Self::default();
+        }
+        let text: String = new.chars().skip(prefix).take(new_len - prefix - suffix).collect();
+        Self::replace(prefix, old_len - suffix, &text)
+    }
+
+    /// This transaction made after `over` instead of before it: both apply to the same text, and
+    /// the result applies to the text `over` made. Text `over` inserted inside a range this one
+    /// replaces is kept out of it, so undoing a local edit after a peer's leaves the peer's text.
+    pub fn rebase(&self, over: &Transaction) -> Transaction {
+        // `over`'s inserted text, as ranges of the text after it.
+        let mut delta: isize = 0;
+        let inserted: Vec<(usize, usize)> = over
+            .changes
+            .iter()
+            .filter_map(|c| {
+                let start = c.start.saturating_add_signed(delta);
+                let len = c.text.chars().count();
+                delta += len as isize - (c.end - c.start) as isize;
+                (len > 0).then_some((start, start + len))
+            })
+            .collect();
+        let mut changes = Vec::with_capacity(self.changes.len());
+        for c in &self.changes {
+            if c.start == c.end {
+                let at = over.map(c.start, Bias::Left);
+                changes.push(Change { start: at, end: at, text: c.text.clone() });
+                continue;
+            }
+            let start = over.map(c.start, Bias::Right);
+            let end = over.map(c.end, Bias::Left).max(start);
+            let mut pieces = Vec::new();
+            let mut from = start;
+            for &(a, b) in inserted.iter().filter(|(a, b)| *a >= start && *b <= end) {
+                if a > from {
+                    pieces.push((from, a));
+                }
+                from = from.max(b);
+            }
+            if end > from || pieces.is_empty() {
+                pieces.push((from, end.max(from)));
+            }
+            for (i, (s, e)) in pieces.into_iter().enumerate() {
+                let text = if i == 0 { c.text.clone() } else { String::new() };
+                changes.push(Change { start: s, end: e, text });
+            }
+        }
+        Transaction { changes }
+    }
+
     /// Where `pos` (in the text before) is after the transaction. A position inside replaced
     /// text, or where text is inserted, goes to the new text's start (`Left`) or end (`Right`);
     /// the end of replaced text is after the new text.

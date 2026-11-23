@@ -16,6 +16,10 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     let frame = egui::Frame::new().fill(t.frame).inner_margin(egui::Margin { left: 4, right: 4, top: 0, bottom: 4 });
     egui::Panel::left("side").resizable(true).default_size(248.0).min_size(180.0).max_size(480.0).frame(frame).show(ui, |ui| {
+        if app.view.side == Some(Side::Review) {
+            crate::review::panel(app, ui);
+            return;
+        }
         let outline_first = app.view.side == Some(Side::Outline);
         egui::Panel::bottom("outline")
             .resizable(true)
@@ -165,6 +169,12 @@ fn folder(app: &App, ui: &mut egui::Ui, node: &Folder, prefix: &str, depth: usiz
             icon_color: is_main.then_some(t.accent),
         };
         let r = widgets::row(ui, &t, &row);
+        let comments = crate::review::open_in(app, path);
+        if comments > 0 {
+            widgets::badge(ui, &t, egui::pos2(r.rect.right() - 4.0 * t.unit, r.rect.center().y), comments, t.text_muted);
+            let said = crate::i18n::trn(comments, "{n} open comment", "{n} open comments");
+            ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(said));
+        }
         if r.clicked() {
             *action = Some(Action::Open(path.clone()));
         }

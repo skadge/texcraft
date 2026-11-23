@@ -1,6 +1,6 @@
 # Roadmap: review and working together
 
-> **Status:** plan, 2026-11-22. Nothing built yet. The design is in [`collaboration.md`](collaboration.md); this page orders the work. Each milestone ends with something a user can use. Each lists its deliverables, its tests, and how we know it is done.
+> **Status:** plan, 2026-11-22. F1 and R1 are done; the rest is to do. The design is in [`collaboration.md`](collaboration.md); this page orders the work. Each milestone ends with something a user can use. Each lists its deliverables, its tests, and how we know it is done.
 
 ## Decisions (operator, 2026-11-22)
 
@@ -48,6 +48,8 @@ Later, outside this roadmap: cloud backends and named-people sharing (`craft-clo
 
 ## F1: Edits, not texts
 
+**Status:** **done** (2026-11-22). `file.edit` takes several edits in character offsets of the text before the call, with an optional `origin`; the session's edit log (`Session::edits_since`) is what the editor and the review anchors follow. `texcraft-buffer` keeps each change with its origin (`Buffer::take_edits`) and takes others' edits through `Buffer::receive`, which rebases the undo and redo histories over them. Where a peer's text lands among redone letters, when both were typed at one place, is a guess (no tombstones until the CRDT).
+
 **Why.** Review anchors, suggestions and the CRDT all need to know what changed, not only the new text.
 
 **Deliverables:**
@@ -67,6 +69,8 @@ Later, outside this roadmap: cloud backends and named-people sharing (`craft-clo
 ---
 
 ## R1: Comments
+
+**Status:** **done** (2026-11-22), with these limits: anchors are ranges in the session's text that follow its edit log (not buffer marks, which live in the interface); on load a passage is found at its saved range or by its exact quote nearest its line, and context and fuzzy matching wait for R4; the editor has no context menu yet, so Comment is in the Edit menu, on Cmd+Alt+M and `:comment`; the key pair is not used to sign yet. Format: [`review-format.md`](review-format.md).
 
 **Deliverables:**
 - **`texcraft-review`:**

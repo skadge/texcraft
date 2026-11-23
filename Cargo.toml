@@ -50,6 +50,7 @@ texcraft-mcp = { path = "crates/mcp" }
 texcraft-buffer = { path = "crates/buffer" }
 texcraft-vim = { path = "crates/vim" }
 texcraft-templates = { path = "crates/templates", default-features = false }
+texcraft-review = { path = "crates/review" }
 
 # foundation
 serde = { version = "1", features = ["derive"] }
@@ -59,10 +60,14 @@ log = "0.4"
 toml = { version = "0.9", default-features = false, features = ["parse", "serde"] }
 tar = { version = "0.4", default-features = false }
 # The control channel's token (random bytes) and its folder.
-getrandom = "0.3"
+getrandom = "0.4"
 dirs = "6"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+# Review ids (MIT).
+ulid = { version = "3", default-features = false }
+# The per-person key review authors carry (BSD-3-Clause).
+ed25519-dalek = "2"
 
 # ui
 egui = "0.37"

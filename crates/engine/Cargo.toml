@@ -21,12 +21,22 @@ texcraft-project = { workspace = true }
 texcraft-latex = { workspace = true }
 texcraft-compile = { workspace = true, default-features = false }
 texcraft-templates = { workspace = true }
+texcraft-buffer = { workspace = true }
+texcraft-review = { workspace = true }
+chrono = { workspace = true }
+getrandom = { workspace = true }
+ed25519-dalek = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }
 retex-lsp = { workspace = true }
 retex-synctex = { workspace = true }
 log = { workspace = true }
+
+# The clock and the random source of new review ids, in the browser.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+chrono = { workspace = true, features = ["wasmbind"] }
+getrandom = { workspace = true, features = ["wasm_js"] }
 
 [dev-dependencies]
 texcraft-templates = { workspace = true }

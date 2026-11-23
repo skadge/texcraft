@@ -1,4 +1,4 @@
-use texcraft_buffer::{Bias, Buffer, Change, EditKind, Selection, Transaction};
+use texcraft_buffer::{Bias, Buffer, Change, EditKind, Origin, Selection, Transaction};
 
 /// Types `text` one character at a time at the caret, `step` seconds apart from `t`.
 fn type_text(b: &mut Buffer, caret: &mut usize, text: &str, t: &mut f64, step: f64) -> texcraft_buffer::Result<()> {
@@ -147,4 +147,70 @@ fn undoing_random_multi_change_edits_gives_back_every_earlier_text() {
         }
         assert_eq!(b.text(), expected);
     }
+}
+
+#[test]
+fn undo_after_a_remote_edit_takes_back_only_the_local_change() {
+    let mut b = Buffer::new("alpha omega");
+    let (mut caret, mut t) = (5, 0.0);
+    type_text(&mut b, &mut caret, " beta", &mut t, 0.1).unwrap();
+    // A peer writes before, inside and after the local text.
+    b.receive(Transaction::insert(0, ">> "), Origin::Remote).unwrap();
+    b.receive(Transaction::insert(11, "!"), Origin::Remote).unwrap();
+    b.receive(Transaction::insert(b.len_chars(), " end"), Origin::Remote).unwrap();
+    assert_eq!(b.text(), ">> alpha be!ta omega end");
+    while b.undo().is_some() {}
+    assert_eq!(b.text(), ">> alpha! omega end", "undo removed the peer's text or left the local one");
+    while b.redo().is_some() {}
+    // Where the peer's "!" lands among the redone letters is a guess; that nothing is lost is not.
+    assert_eq!(b.text().replace('!', ""), ">> alpha beta omega end");
+    assert_eq!(b.text().matches('!').count(), 1);
+}
+
+#[test]
+fn received_edits_are_not_undone_and_keep_their_origin() {
+    let mut b = Buffer::new("x");
+    b.receive(Transaction::insert(1, "y"), Origin::External).unwrap();
+    assert!(!b.can_undo());
+    let s = Selection::point(0);
+    b.edit(Transaction::insert(0, "w"), &s, &s, EditKind::Other).unwrap();
+    b.undo();
+    let origins: Vec<Origin> = b.take_edits().into_iter().map(|(_, o)| o).collect();
+    assert_eq!(origins, [Origin::External, Origin::Local, Origin::Undo]);
+    assert!(b.take_edits().is_empty(), "taking the edits did not empty the log");
+}
+
+#[test]
+fn undoing_random_local_edits_between_remote_ones_keeps_every_remote_character() {
+    let mut rng = Lcg(11);
+    for round in 0..50 {
+        let mut b = Buffer::new("some shared words\n");
+        let s = Selection::point(0);
+        for i in 0..20 {
+            let len = b.len_chars();
+            let at = rng.below(len + 1);
+            if i % 2 == 0 {
+                b.edit(Transaction::insert(at, "+"), &s, &s, EditKind::Other).unwrap();
+            } else {
+                b.receive(Transaction::insert(at, "R"), Origin::Remote).unwrap();
+            }
+        }
+        while b.undo().is_some() {}
+        let text = b.text();
+        assert_eq!(text.matches('R').count(), 10, "round {round}: {text}");
+        assert!(!text.contains('+'), "round {round}: a local edit survived undo: {text}");
+    }
+}
+
+#[test]
+fn the_diff_of_a_small_change_is_small() {
+    let old = "\\section{Intro}\nLe chat est là.\n\\end{document}\n";
+    let new = "\\section{Intro}\nLe chien est là.\n\\end{document}\n";
+    let tx = Transaction::diff(old, new);
+    let [c] = tx.changes() else { panic!("not one change: {tx:?}") };
+    assert!(c.end - c.start < 5 && c.text.chars().count() < 6, "{c:?}");
+    let mut b = Buffer::new(old);
+    b.edit(tx, &Selection::point(0), &Selection::point(0), EditKind::Other).unwrap();
+    assert_eq!(b.text(), new);
+    assert!(Transaction::diff(new, new).is_empty());
 }

@@ -11,6 +11,7 @@ mod gallery;
 mod insert;
 mod recent;
 mod regions;
+mod review;
 mod shortcuts;
 mod unsaved;
 mod vim;

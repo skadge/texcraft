@@ -6,13 +6,18 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 pub mod cmd;
+mod edits;
 pub mod file_access;
 pub mod find;
 mod language;
 mod sync;
+pub use edits::FileEdit;
 pub use language::{Completion, Fix, Lint, TextEdit};
 pub use sync::PageRect;
+pub use texcraft_buffer::{Change, Origin, Transaction};
 pub mod guard;
+mod review_store;
+pub use texcraft_review as review;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -79,6 +84,12 @@ pub struct Session {
     sync: Option<sync::Sync>,
     /// Where templates are kept; none without a data folder.
     templates: Option<texcraft_templates::Store>,
+    /// The latest edits of the files, for the editor and the review anchors.
+    edits: edits::Log,
+    /// The project's review threads.
+    review: review_store::State,
+    /// Who comments: set by the shell from the preferences (or for agents); none until then.
+    author: Option<review::Author>,
 }
 
 impl Session {
@@ -111,6 +122,9 @@ impl Session {
             language: language::Language::new(None),
             sync: None,
             templates: None,
+            edits: edits::Log::default(),
+            review: review_store::State::default(),
+            author: None,
         }
     }
 
@@ -255,11 +269,90 @@ impl Session {
         self.built_revision != Some(self.revision)
     }
 
-    /// Replaces the text of `path` (the editor calls this on every edit, through `file.write`).
-    fn write_text(&mut self, path: &ProjectPath, text: String) -> Result<()> {
-        self.project.set(path, texcraft_project::Contents::Text(text)).map_err(|e| e.to_string())?;
+    /// Replaces the text of `path` as the smallest edit that makes it (`file.write`).
+    fn write_text(&mut self, path: &ProjectPath, text: String, origin: Origin) -> Result<()> {
+        let old = self.project.text(path).map_err(|e| e.to_string())?;
+        let tx = Transaction::diff(old, &text);
+        self.apply_edit(path, &tx, origin)
+    }
+
+    /// Makes `tx` (character offsets in the text as it is) in the text file `path`, and records it
+    /// for [`Session::edits_since`]. Every change of a file's text goes through here.
+    pub(crate) fn apply_edit(&mut self, path: &ProjectPath, tx: &Transaction, origin: Origin) -> Result<()> {
+        let old = self.project.text(path).map_err(|e| e.to_string())?;
+        let new = edits::apply(old, tx).ok_or_else(|| format!("the edits do not fit in `{path}` ({} characters)", old.chars().count()))?;
+        if tx.is_empty() {
+            return Ok(());
+        }
+        self.project.set(path, texcraft_project::Contents::Text(new)).map_err(|e| e.to_string())?;
         self.touch();
+        let changes: Vec<(usize, usize, usize)> = tx.changes().iter().map(|c| (c.start, c.end, c.text.chars().count())).collect();
+        self.review.review.follow(path.as_str(), &changes);
+        self.edits.push(FileEdit { revision: self.revision, path: path.clone(), changes: tx.clone(), origin });
         Ok(())
+    }
+
+    /// The project's review threads, their anchors on the text as it is now.
+    pub fn review(&self) -> &review::Review {
+        &self.review.review
+    }
+
+    /// Goes up with every change of a thread (not with its anchor following an edit).
+    pub fn review_revision(&self) -> u64 {
+        self.review.revision
+    }
+
+    /// Review files of the project that could not be read, with why.
+    pub fn review_problems(&self) -> &[String] {
+        &self.review.problems
+    }
+
+    /// Who comments from now on (the preferences' name and key).
+    pub fn set_author(&mut self, author: Option<review::Author>) {
+        self.author = author;
+    }
+
+    pub fn author(&self) -> Option<&review::Author> {
+        self.author.as_ref()
+    }
+
+    fn author_or_refuse(&self) -> Result<review::Author> {
+        self.author.clone().ok_or_else(|| "Choose the name your comments carry first (Settings › Review).".to_owned())
+    }
+
+    fn now(&self) -> chrono::DateTime<chrono::Utc> {
+        chrono::Utc::now()
+    }
+
+    /// A new id for a thread or a message: the time and 80 random bits.
+    fn new_id(&self) -> Result<review::Id> {
+        let mut bytes = [0u8; 16];
+        getrandom::fill(&mut bytes).map_err(|e| format!("no random source for a new id: {e}"))?;
+        let millis = u64::try_from(self.now().timestamp_millis()).unwrap_or_default();
+        Ok(review::Id::new(millis, u128::from_le_bytes(bytes)))
+    }
+
+    /// Thread `id` changed: it is written to the project's folder, when there is one.
+    fn review_changed(&mut self, id: review::Id) -> Result<()> {
+        self.review.revision += 1;
+        let Some(dir) = self.dir.clone() else { return Ok(()) };
+        if let Some(roots) = &self.roots {
+            roots.check(&review_store::folder(&dir), file_access::Access::Write)?;
+        }
+        self.review.write(&dir, id).map_err(|e| format!("The review is changed but could not be saved: {e}"))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    /// Saves the review with the project into `dir`, its quotes renewed from the text.
+    pub(crate) fn save_review(&mut self, dir: &std::path::Path, new_folder: bool) -> Result<()> {
+        self.review.save(dir, &self.project, new_folder)
+    }
+
+    /// The edits made to `path` after `revision`, oldest first; `None` when some of them are no
+    /// longer kept (then compare the texts). Changes that are not edits (a file replaced by
+    /// `file.import`, a project opened) are not in it.
+    pub fn edits_since(&self, path: &ProjectPath, revision: u64) -> Option<Vec<&FileEdit>> {
+        self.edits.since(path, revision)
     }
 
     fn touch(&mut self) {
@@ -272,6 +365,7 @@ impl Session {
         self.open = self.current.iter().cloned().collect();
         self.project = project;
         self.language = language::Language::new(dir.as_deref());
+        self.review = review_store::State::load(dir.as_deref(), &self.project);
         self.sync = None;
         self.dir = dir;
         self.dirty = false;
@@ -386,6 +480,16 @@ impl Default for Session {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// A new review identity's key pair, as hex: the ed25519 public key (the [`review::Author`]'s
+/// `key`) and its secret key, which the shell keeps with the preferences.
+pub fn new_key_pair() -> Result<(String, String)> {
+    let mut secret = [0u8; 32];
+    getrandom::fill(&mut secret).map_err(|e| format!("no random source for a new key: {e}"))?;
+    let key = ed25519_dalek::SigningKey::from_bytes(&secret);
+    let hex = |bytes: &[u8]| bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
+    Ok((hex(key.verifying_key().as_bytes()), hex(&secret)))
 }
 
 /// `text` with `edits` made (lines and columns in characters, from 0; edits must not overlap).

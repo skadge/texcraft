@@ -35,11 +35,11 @@ fn an_edit_makes_the_last_build_stale() {
 }
 
 #[test]
-fn an_edit_replaces_exactly_its_range_and_refuses_split_characters() {
+fn an_edit_counts_characters_and_refuses_ranges_past_the_end() {
     let mut s = session();
     s.execute("file.write", &json!({"path": "main.tex", "text": "é and more"})).unwrap();
-    assert!(s.execute("file.edit", &json!({"path": "main.tex", "start": 1, "end": 2, "text": "x"})).is_err());
-    s.execute("file.edit", &json!({"path": "main.tex", "start": 3, "end": 6, "text": "\\textbf{and}"})).unwrap();
+    assert!(s.execute("file.edit", &json!({"path": "main.tex", "edits": [{"start": 9, "end": 12, "text": "x"}]})).is_err());
+    s.execute("file.edit", &json!({"path": "main.tex", "edits": [{"start": 2, "end": 5, "text": "\\textbf{and}"}]})).unwrap();
     let text = s.execute("file.read", &json!({"path": "main.tex"})).unwrap();
     assert_eq!(text["text"], "é \\textbf{and} more");
 }

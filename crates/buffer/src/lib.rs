@@ -8,6 +8,11 @@
 //!   stopped, within [`PAUSE`] seconds, and without starting a new word; a deletion by Backspace or
 //!   Delete joins earlier ones the same way. [`Buffer::begin_group`] and [`Buffer::end_group`] make
 //!   everything between them one group (Vim's insert session is one change).
+//! - **Origins.** Every change the buffer makes is kept with its [`Origin`] until its owner takes
+//!   it ([`Buffer::take_edits`]), so the session, review anchors and later the shared document
+//!   learn what changed, not only the new text. Edits made elsewhere (a peer, a file changed on
+//!   disk) come in through [`Buffer::receive`]: they are not in the undo history, which is rebased
+//!   over them, so undo takes back only one's own edits and leaves theirs.
 //! - **Marks** are positions that follow edits: diagnostics, bookmarks, Vim's marks, the build's
 //!   line map. Each has a [`Bias`] for text inserted exactly at it.
 //! - **Positions** are char indices (Unicode scalar values). [`Buffer::to_utf16`] and
@@ -51,6 +56,46 @@ pub enum EditKind {
     Deleting { at: f64 },
     /// Anything else: a paste, a command, an agent's edit. Always its own group.
     Other,
+}
+
+/// Where an edit came from (docs/collaboration-roadmap.md, F1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Origin {
+    /// Typed, pasted, or made by a command on this machine (an agent's edit included).
+    Local,
+    Undo,
+    Redo,
+    /// A peer's edit, in a shared session.
+    Remote,
+    /// Accepting a suggestion.
+    Review,
+    /// The file changed outside TeXCraft (another editor, a git pull).
+    External,
+}
+
+impl Origin {
+    pub const ALL: [Origin; 6] = [Origin::Local, Origin::Undo, Origin::Redo, Origin::Remote, Origin::Review, Origin::External];
+
+    /// The name automation uses (`file.edit`'s `origin`).
+    pub fn name(self) -> &'static str {
+        match self {
+            Origin::Local => "local",
+            Origin::Undo => "undo",
+            Origin::Redo => "redo",
+            Origin::Remote => "remote",
+            Origin::Review => "review",
+            Origin::External => "external",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|o| o.name() == name)
+    }
+
+    /// Made by someone else: such edits stay out of the undo history.
+    pub fn is_foreign(self) -> bool {
+        matches!(self, Origin::Remote | Origin::External)
+    }
 }
 
 /// A mark's handle.
@@ -97,6 +142,8 @@ pub struct Buffer {
     marks: BTreeMap<MarkId, (usize, Bias)>,
     next_mark: u64,
     version: u64,
+    /// The changes made since the owner last took them.
+    log: Vec<(Transaction, Origin)>,
 }
 
 impl Default for Buffer {
@@ -116,6 +163,7 @@ impl Buffer {
             marks: BTreeMap::new(),
             next_mark: 0,
             version: 0,
+            log: Vec::new(),
         }
     }
 
@@ -239,7 +287,7 @@ impl Buffer {
             GroupKind::Other => false,
         };
         let joins = self.open > 0 || (!self.sealed && self.undo.last().is_some_and(|g| g.kind == group_kind && at - g.last < PAUSE && continues(g)));
-        self.apply(&step.forward);
+        self.apply(&step.forward, Origin::Local);
         let end = after.primary().head;
         let after_space = typed.chars().last().is_some_and(char::is_whitespace);
         match self.undo.last_mut() {
@@ -295,7 +343,7 @@ impl Buffer {
         }
         let group = self.undo.pop()?;
         for step in group.steps.iter().rev() {
-            self.apply(&step.inverse);
+            self.apply(&step.inverse, Origin::Undo);
         }
         let before = group.steps.first().map(|s| s.before.clone());
         self.redo.push(group);
@@ -307,7 +355,7 @@ impl Buffer {
     pub fn redo(&mut self) -> Option<Selection> {
         let group = self.redo.pop()?;
         for step in &group.steps {
-            self.apply(&step.forward);
+            self.apply(&step.forward, Origin::Redo);
         }
         let after = group.steps.last().map(|s| s.after.clone());
         self.undo.push(group);
@@ -326,6 +374,43 @@ impl Buffer {
         self.edit(tx, before, &after, EditKind::Other)
     }
 
+    /// Applies an edit made elsewhere (`origin` is usually [`Origin::Remote`] or
+    /// [`Origin::External`]) without recording it for undo. The undo and redo histories are rebased
+    /// over it, so undoing afterwards takes back one's own changes where they now are and keeps
+    /// the other's text. The caller maps its selection with [`Selection::map`].
+    pub fn receive(&mut self, tx: Transaction, origin: Origin) -> Result<()> {
+        tx.check(self.len_chars())?;
+        if tx.is_empty() {
+            return Ok(());
+        }
+        // The undo history is a chain back from the current text: the top step's inverse applies
+        // to it, the next one's to what that gives, and so on. `over` is the received edit as
+        // it applies at each link.
+        let mut over = tx.clone();
+        for group in self.undo.iter_mut().rev() {
+            for step in group.steps.iter_mut().rev() {
+                over = rebase_step(&mut step.inverse, &mut step.forward, &mut step.after, &mut step.before, &over);
+            }
+        }
+        // The redo history is a chain forward from the current text.
+        let mut over = tx.clone();
+        for group in self.redo.iter_mut().rev() {
+            for step in group.steps.iter_mut() {
+                over = rebase_step(&mut step.forward, &mut step.inverse, &mut step.before, &mut step.after, &over);
+            }
+        }
+        if let Some(g) = self.undo.last_mut() {
+            g.end = tx.map(g.end, Bias::Right);
+        }
+        self.apply(&tx, origin);
+        Ok(())
+    }
+
+    /// The changes made since the last call, oldest first, each with its origin.
+    pub fn take_edits(&mut self) -> Vec<(Transaction, Origin)> {
+        std::mem::take(&mut self.log)
+    }
+
     /// A mark at `pos` (clamped to the text).
     pub fn add_mark(&mut self, pos: usize, bias: Bias) -> MarkId {
         let id = MarkId(self.next_mark);
@@ -342,7 +427,7 @@ impl Buffer {
         self.marks.remove(&id);
     }
 
-    fn apply(&mut self, tx: &Transaction) {
+    fn apply(&mut self, tx: &Transaction, origin: Origin) {
         for change in tx.changes().iter().rev() {
             if change.end > change.start {
                 self.rope.remove(change.start..change.end);
@@ -355,5 +440,17 @@ impl Buffer {
             *pos = tx.map(*pos, *bias);
         }
         self.version += 1;
+        self.log.push((tx.clone(), origin));
     }
+}
+
+/// Rebases one step of a history chain over `over`, an edit of the text `near` applies to
+/// (`far` undoes `near`). Returns `over` as it applies to the text `near` makes.
+fn rebase_step(near: &mut Transaction, far: &mut Transaction, near_sel: &mut Selection, far_sel: &mut Selection, over: &Transaction) -> Transaction {
+    let next = over.rebase(near);
+    *near = near.rebase(over);
+    *far = far.rebase(&next);
+    *near_sel = near_sel.map(over);
+    *far_sel = far_sel.map(&next);
+    next
 }

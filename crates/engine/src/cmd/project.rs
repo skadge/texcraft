@@ -106,6 +106,7 @@ fn save(s: &mut Session, _: &Value) -> Result<Value> {
         roots.check(&dir, crate::file_access::Access::Write)?;
     }
     s.project.save_dir(&dir).map_err(|e| e.to_string())?;
+    s.save_review(&dir, false)?;
     s.dirty = false;
     Ok(json!({"path": dir.display().to_string()}))
 }
@@ -114,6 +115,8 @@ fn save(s: &mut Session, _: &Value) -> Result<Value> {
 fn save_as(s: &mut Session, params: &Value) -> Result<Value> {
     let dir = folder(s, params, crate::file_access::Access::Write)?;
     s.project.save_dir(&dir).map_err(|e| e.to_string())?;
+    let new_folder = s.dir.as_ref() != Some(&dir);
+    s.save_review(&dir, new_folder)?;
     s.dir = Some(dir.clone());
     s.dirty = false;
     Ok(json!({"path": dir.display().to_string()}))

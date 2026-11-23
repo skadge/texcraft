@@ -107,6 +107,12 @@ pub enum Effect {
     Message(String),
     Error(String),
     Scroll(Scroll),
+    /// Comment on `start..end` (`:comment [text]`): the lines of the range, or the caret's line.
+    Comment {
+        start: usize,
+        end: usize,
+        text: String,
+    },
 }
 
 /// What a key works on.
@@ -1527,6 +1533,10 @@ impl Vim {
                 }
             }
             "s" | "su" | "substitute" => self.substitute(&line.args, first, last, ctx, out),
+            "comment" => {
+                let (start, end) = (b.line_to_char(first), b.line_end(last));
+                out.effects.push(Effect::Comment { start, end, text: line.args.trim().to_owned() });
+            }
             "noh" | "nohlsearch" => self.highlight = false,
             "d" | "de" | "del" | "delete" => {
                 let reg = line.args.chars().next().filter(char::is_ascii_alphabetic);

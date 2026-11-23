@@ -30,6 +30,7 @@ pub use start::{THUMBNAIL_WIDTH, Thumbnail};
 mod picks;
 mod preview;
 mod rail;
+mod review;
 mod settings;
 mod side;
 mod start;
@@ -52,6 +53,7 @@ pub(crate) enum Region {
     Rail,
     Side,
     Editor,
+    Review,
     Preview,
 }
 
@@ -62,6 +64,7 @@ impl Region {
             Region::Rail => tl!("Sections"),
             Region::Side => tl!("Project files and outline"),
             Region::Editor => tl!("Editor"),
+            Region::Review => tl!("Comments"),
             Region::Preview => tl!("PDF and build log"),
         }
     }
@@ -72,6 +75,8 @@ impl Region {
 pub enum Side {
     Files,
     Outline,
+    /// The review's threads (where the margin goes when the editor pane is narrow).
+    Review,
 }
 
 /// How the editor and the preview share the window.
@@ -106,6 +111,8 @@ pub(crate) struct View {
     pub goto: Option<(ProjectPath, u32)>,
     /// The running build's progress and how long it has run, this frame.
     pub progress: Option<(texcraft_engine::Progress, f64)>,
+    /// The name typed in Settings › Review before a key is made.
+    pub identity_draft: String,
 }
 
 pub struct App {
@@ -113,6 +120,7 @@ pub struct App {
     tokens: Tokens,
     view: View,
     editor: editor::Editor,
+    review: review::ReviewView,
     figure: figure_view::FigureView,
     pdf: pdf_view::PdfView,
     applied: Option<Scheme>,
@@ -153,6 +161,7 @@ impl App {
         session.settings.auto_compile = prefs.auto_compile;
         session.settings.auto_compile_delay_ms = prefs.auto_compile_delay_ms.clamp(200, 10_000);
         session.settings.build = prefs.build;
+        session.set_author(prefs.identity.as_ref().map(prefs::Identity::author));
         let (layout, side) = (prefs.layout(), prefs.side());
         let keys = keys::Keys::new(prefs.shortcuts.clone());
         i18n::set_language(&prefs.language);
@@ -174,8 +183,10 @@ impl App {
                 last_edit: Some(0.0),
                 goto: None,
                 progress: None,
+                identity_draft: prefs::system_user_name(),
             },
             editor: editor::Editor::default(),
+            review: review::ReviewView::default(),
             figure: figure_view::FigureView::default(),
             pdf: pdf_view::PdfView::default(),
             applied: None,
@@ -348,7 +359,7 @@ impl App {
     /// Moves the keyboard focus to the next region (or the previous one), and says which.
     pub(crate) fn cycle_region(&mut self, forward: bool) {
         let mut regions = self.view.regions.clone();
-        let order = [Region::TopBar, Region::Rail, Region::Side, Region::Editor, Region::Preview];
+        let order = [Region::TopBar, Region::Rail, Region::Side, Region::Editor, Region::Review, Region::Preview];
         regions.sort_by_key(|(r, _)| order.iter().position(|o| o == r));
         if regions.is_empty() {
             return;

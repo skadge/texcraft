@@ -1,0 +1,18 @@
+[package]
+name = "texcraft-review"
+description = "Review of a project's sources: comment threads, their anchors in the text, and the .texcraft/review file format"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+ulid = { workspace = true }

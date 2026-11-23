@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use texcraft_project::{Contents, ProjectPath};
 
 use super::{CommandSpec, always, path_param, string};
-use crate::{Result, Session};
+use crate::{Change, Origin, Result, Session, Transaction};
 
 pub(super) fn specs() -> Vec<CommandSpec> {
     vec![
@@ -153,20 +153,33 @@ fn new_schema() -> Value {
     }, "required": ["path"], "additionalProperties": false})
 }
 
+fn origin_schema() -> Value {
+    let names: Vec<&str> = Origin::ALL.iter().map(|o| o.name()).collect();
+    json!({"type": "string", "enum": names, "description": "Who made the change: `local` (default: typed, or made by a command or an agent here), `undo`, `redo`, `remote` (a peer), `review` (an accepted suggestion), `external` (changed outside TeXCraft)."})
+}
+
 fn write_schema() -> Value {
     json!({"type": "object", "properties": {
         "path": {"type": "string"},
-        "text": {"type": "string", "description": "The file's whole new text."}
+        "text": {"type": "string", "description": "The file's whole new text. The session records it as the smallest edit that makes it."},
+        "origin": origin_schema()
     }, "required": ["path", "text"], "additionalProperties": false})
 }
 
 fn edit_schema() -> Value {
     json!({"type": "object", "properties": {
         "path": {"type": "string"},
-        "start": {"type": "integer", "minimum": 0, "description": "Byte offset where the replaced range starts."},
-        "end": {"type": "integer", "minimum": 0, "description": "Byte offset where it ends (excluded)."},
-        "text": {"type": "string", "description": "The replacement."}
-    }, "required": ["path", "start", "end", "text"], "additionalProperties": false})
+        "edits": {
+            "type": "array",
+            "description": "Replacements made at once. Offsets are characters (Unicode scalar values, from 0) in the text as it is before this call, not in the text earlier edits of the list make; the edits may come in any order but must not overlap.",
+            "items": {"type": "object", "properties": {
+                "start": {"type": "integer", "minimum": 0, "description": "Where the replaced range starts (characters)."},
+                "end": {"type": "integer", "minimum": 0, "description": "Where it ends, excluded; equal to `start` to insert."},
+                "text": {"type": "string", "description": "The replacement; empty to delete."}
+            }, "required": ["start", "end", "text"], "additionalProperties": false}
+        },
+        "origin": origin_schema()
+    }, "required": ["path", "edits"], "additionalProperties": false})
 }
 
 fn query_properties() -> serde_json::Map<String, Value> {
@@ -221,15 +234,25 @@ fn find(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"count": matches.len(), "matches": matches}))
 }
 
+/// Replaces every match, as one edit with a change per match (so what is between them, and the
+/// comments on it, stays where it is).
 fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     let path = path_param(p, "path")?;
     let q = query(p)?;
     let replacement = string(p, "replacement")?;
     let text = s.project.text(&path).map_err(|e| e.to_string())?;
-    let (new, count) = q.replace_all(text, replacement, None)?;
-    if count > 0 {
-        s.write_text(&path, new)?;
+    let mut changes = Vec::new();
+    let (mut chars, mut scanned) = (0, 0);
+    for r in q.matches(text)? {
+        chars += text[scanned..r.start].chars().count();
+        let len = text[r.clone()].chars().count();
+        changes.push(Change { start: chars, end: chars + len, text: q.replacement_for(text, r.clone(), replacement)? });
+        chars += len;
+        scanned = r.end;
     }
+    let count = changes.len();
+    let tx = Transaction::new(changes).map_err(|e| e.to_string())?;
+    s.apply_edit(&path, &tx, Origin::Local)?;
     Ok(json!({"replaced": count, "revision": s.revision}))
 }
 
@@ -322,29 +345,35 @@ fn read(s: &mut Session, p: &Value) -> Result<Value> {
 fn write(s: &mut Session, p: &Value) -> Result<Value> {
     let path = path_param(p, "path")?;
     let text = string(p, "text")?.to_owned();
-    s.write_text(&path, text)?;
+    s.write_text(&path, text, origin(p)?)?;
     Ok(json!({"revision": s.revision}))
 }
 
-/// Replaces the bytes `start..end` of a text file. Both ends must fall on character boundaries.
+fn origin(p: &Value) -> Result<Origin> {
+    match p.get("origin").and_then(Value::as_str) {
+        None => Ok(Origin::Local),
+        Some(name) => Origin::from_name(name).ok_or_else(|| format!("`{name}` is not an origin")),
+    }
+}
+
+/// Makes several replacements at once (character offsets in the text before them).
 fn edit(s: &mut Session, p: &Value) -> Result<Value> {
     let path = path_param(p, "path")?;
-    let offset = |name: &str| -> Result<usize> {
-        let v = p.get(name).and_then(Value::as_u64).ok_or_else(|| format!("the parameter `{name}` (a byte offset) is missing"))?;
+    let list = p.get("edits").and_then(Value::as_array).ok_or("the parameter `edits` (a list) is missing")?;
+    let offset = |e: &Value, name: &str| -> Result<usize> {
+        let v = e.get(name).and_then(Value::as_u64).ok_or_else(|| format!("an edit has no `{name}` (a character offset)"))?;
         usize::try_from(v).map_err(|_| format!("`{name}` is too large"))
     };
-    let (start, end) = (offset("start")?, offset("end")?);
-    let replacement = string(p, "text")?;
-    let text = s.project.text(&path).map_err(|e| e.to_string())?;
-    if start > end || end > text.len() || !text.is_char_boundary(start) || !text.is_char_boundary(end) {
-        return Err(format!("{start}..{end} is not a range of whole characters in `{path}` ({} bytes)", text.len()));
-    }
-    let mut new = String::with_capacity(text.len() - (end - start) + replacement.len());
-    new.push_str(&text[..start]);
-    new.push_str(replacement);
-    new.push_str(&text[end..]);
-    s.write_text(&path, new)?;
-    Ok(json!({"revision": s.revision, "end": start + replacement.len()}))
+    let changes = list
+        .iter()
+        .map(|e| {
+            let text = e.get("text").and_then(Value::as_str).ok_or("an edit has no `text`")?;
+            Ok(Change { start: offset(e, "start")?, end: offset(e, "end")?, text: text.to_owned() })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let tx = Transaction::new(changes).map_err(|e| e.to_string())?;
+    s.apply_edit(&path, &tx, origin(p)?)?;
+    Ok(json!({"revision": s.revision}))
 }
 
 fn rename(s: &mut Session, p: &Value) -> Result<Value> {
@@ -355,9 +384,12 @@ fn rename(s: &mut Session, p: &Value) -> Result<Value> {
         *o = to.clone();
     }
     if s.current.as_ref() == Some(&from) {
-        s.current = Some(to);
+        s.current = Some(to.clone());
     }
     s.touch();
+    for id in s.review.review.rename(from.as_str(), to.as_str()) {
+        s.review_changed(id)?;
+    }
     Ok(json!({}))
 }
 
