@@ -4,7 +4,7 @@
 //! head craft-ui's font stack, which adds faces for other scripts and emoji behind them, and on the
 //! desktop the installed fonts last. Without the craft-fonts checkout, egui's bundled faces stand in.
 
-use craft_ui::fonts::{I18nScripts, UiFonts};
+use craft_ui::fonts::{Family, I18nScripts, UiFonts};
 use egui::{FontData, FontFamily};
 
 include!(concat!(env!("OUT_DIR"), "/ui_faces.rs"));
@@ -35,7 +35,14 @@ pub fn reading_semibold() -> FontFamily {
 }
 
 pub fn install(ctx: &egui::Context) {
-    let mut fonts = UiFonts::new(&I18nScripts);
+    // The named families are declared, so they exist with egui's faces when this build has none of
+    // craft-fonts' (CI, a checkout without them): craft-ui sets up only the families it is told of.
+    let mut fonts = UiFonts::new(&I18nScripts)
+        .family(Family::named("semibold").weight(600))
+        .family(Family::named("italic"))
+        .family(Family::named("reading"))
+        .family(Family::named("reading-italic"))
+        .family(Family::named("reading-semibold").weight(600));
     let all = [FontFamily::Proportional, semibold(), italic(), FontFamily::Monospace, reading(), reading_italic(), reading_semibold()];
     if UI_FACES.is_empty() {
         // egui's bundled faces stand in for craft-fonts' (docs/design.md, Type).
