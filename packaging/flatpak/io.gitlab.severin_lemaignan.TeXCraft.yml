@@ -60,8 +60,10 @@ modules:
       - install -Dm755 -t /app/bin target/release/texcraft target/release/texcraft-cli
       - install -Dm644 -t /app/share/applications packaging/linux/io.gitlab.severin_lemaignan.TeXCraft.desktop
       - install -Dm644 -t /app/share/metainfo packaging/linux/io.gitlab.severin_lemaignan.TeXCraft.metainfo.xml
+      # The sized PNGs only: appstreamcli compose cannot read the scalable master (a drawing
+      # embedded in an SVG with a filter) and drops the whole component over it.
       - |
-        for dir in assets/app-icon/hicolor/*/apps; do
+        for dir in assets/app-icon/hicolor/*x*/apps; do
           size="$(basename "$(dirname "$dir")")"
           install -Dm644 -t "/app/share/icons/hicolor/$size/apps" "$dir"/io.gitlab.severin_lemaignan.TeXCraft.*
         done
