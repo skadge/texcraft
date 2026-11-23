@@ -16,6 +16,7 @@ mod file;
 mod language;
 mod pdf;
 mod project;
+mod review;
 mod template;
 
 pub type Run = fn(&mut Session, &Value) -> Result<Value>;
@@ -72,6 +73,7 @@ pub fn all() -> &'static [CommandSpec] {
         v.extend(template::specs());
         v.extend(language::specs());
         v.extend(pdf::specs());
+        v.extend(review::specs());
         v
     })
 }

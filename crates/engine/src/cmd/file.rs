@@ -387,6 +387,9 @@ fn rename(s: &mut Session, p: &Value) -> Result<Value> {
         s.current = Some(to.clone());
     }
     s.touch();
+    for id in s.review.review.rename(from.as_str(), to.as_str()) {
+        s.review_changed(id)?;
+    }
     Ok(json!({}))
 }
 

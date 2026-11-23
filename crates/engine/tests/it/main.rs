@@ -7,5 +7,6 @@ mod file_access;
 mod files;
 mod find;
 mod language;
+mod review;
 mod sync;
 mod templates;
