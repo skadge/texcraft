@@ -23,18 +23,17 @@ variables:
   # fallback (no checkout). The packages embed them (CRAFT_FONTS_REQUIRED in their jobs).
   CRAFT_FONTS_DIR: ""
   # storytold/craft-fonts for the packages. Keep it equal to the commit in
-  # packaging/flatpak/ai.storyteller.texcraft.yml.
+  # packaging/flatpak/io.gitlab.severin_lemaignan.TeXCraft.yml.
   CRAFT_FONTS_REV: 26a79230872f9b2acd3dd68500677e294350ab94
   # The tools the package jobs download, each pinned by version and SHA-256. An empty SHA-256 stops
   # the job and prints the download's checksum, to be checked against the release page and pinned
   # here (packaging/ci/fetch-pinned.sh).
-  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-x86_64.AppImage
-  APPIMAGETOOL_SHA256: ""
-  # The runtime embedded in the AppImage (static, needs no libfuse2 on the user's system). The
-  # project publishes it as a rolling "continuous" release, so the SHA-256 is what pins it: when it
-  # moves, the job stops, and the new file is checked before its checksum is pinned.
-  APPIMAGE_RUNTIME_URL: https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64
-  APPIMAGE_RUNTIME_SHA256: ""
+  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+  APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+  # The runtime embedded in the AppImage (static, needs no libfuse2 on the user's system), from its
+  # dated release 20251108 rather than the rolling "continuous" one.
+  APPIMAGE_RUNTIME_URL: https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+  APPIMAGE_RUNTIME_SHA256: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
   # Trunk for the browser build, from crates.io (whose checksums Cargo checks), at the version
   # used locally. Trunk then fetches the wasm-bindgen matching Cargo.lock and binaryen's wasm-opt.
   TRUNK_VERSION: 0.22.0
@@ -146,8 +145,8 @@ flatpak:
   image: debian:trixie
   extends: .package-rules
   variables:
-    FLATPAK_ID: ai.storyteller.texcraft
-    MANIFEST: packaging/flatpak/ai.storyteller.texcraft.yml
+    FLATPAK_ID: io.gitlab.severin_lemaignan.TeXCraft
+    MANIFEST: packaging/flatpak/io.gitlab.severin_lemaignan.TeXCraft.yml
   before_script:
     - apt-get update -qq
     - apt-get install -y -qq --no-install-recommends flatpak flatpak-builder git ca-certificates elfutils debugedit appstream
