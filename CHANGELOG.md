@@ -110,5 +110,5 @@ source (README, Quick start).
 - The interface is in English only.
 - The Flatpak does not see a TeX Live installed on the host: it uses retex's own tree, downloaded
   into its sandbox as documents need it, so its first build needs the network.
-- The AppImage needs glibc 2.36 or newer (Debian 12, Ubuntu 23.04, Fedora 37 and later).
+- The AppImage needs glibc 2.36 or newer (Debian 12, Ubuntu 24.04, Fedora 37 and later; not Ubuntu 22.04).
 - Only x86_64 Linux packages are built; the packages are not signed.
