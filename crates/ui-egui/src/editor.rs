@@ -344,6 +344,14 @@ pub(crate) fn edit(app: &mut App, id: &str) -> bool {
             app.editor.focus = true;
             return true;
         }
+        "edit.comment" => {
+            crate::review::start(app);
+            return true;
+        }
+        "edit.next_comment" | "edit.previous_comment" => {
+            crate::review::step(app, id == "edit.next_comment");
+            return true;
+        }
         "edit.select_all" => {
             let len = source.doc.buffer.len_chars();
             source.select(0, len);
@@ -704,7 +712,8 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     app.editor.source.auto_close = app.prefs.auto_close;
     vim_line(app, ui);
     let name = format!("{} {}", path.file_name(), tl!("source"));
-    let out = app.editor.source.show(ui, &t, id, &markers, &name, "  ");
+    let out = crate::review::with_margin(app, ui, path, |app, ui| app.editor.source.show(ui, &t, id, &markers, &name, "  "));
+    crate::review::follow_caret(app, path);
     app.view.cursor = Some((out.caret.0 as u32 + 1, out.caret.1 as u32 + 1));
     // Typing, and edits made outside the widget (the toolbar, the Insert menu).
     if send_edits(app) {
@@ -764,6 +773,7 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             // Vim's messages show on its line, at the bottom of the editor.
             Effect::Message(m) => app.editor.vim_message = Some((m, false, ui.ctx().input(|i| i.time))),
             Effect::Error(m) => app.editor.vim_message = Some((m, true, ui.ctx().input(|i| i.time))),
+            Effect::Comment { start, end, text } => crate::review::from_vim(app, path, start, end, &text),
             Effect::Copy(_) | Effect::Scroll(_) => {}
         }
     }

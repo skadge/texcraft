@@ -12,7 +12,12 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     egui::Panel::left("rail").exact_size(t.rail_width).resizable(false).frame(frame).show(ui, |ui| {
         ui.with_layout(Layout::top_down(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.y = t.unit;
-            for (side, icon, label) in [(Side::Files, "folder", tl!("Project Files")), (Side::Outline, "list-tree", tl!("Outline"))] {
+            let sections = [
+                (Side::Files, "folder", tl!("Project Files")),
+                (Side::Outline, "list-tree", tl!("Outline")),
+                (Side::Review, "message-square-text", tl!("Review")),
+            ];
+            for (side, icon, label) in sections {
                 let active = app.view.side == Some(side);
                 let r = widgets::rail_button(ui, &t, icon, label, active);
                 app.region(crate::Region::Rail, r.id);

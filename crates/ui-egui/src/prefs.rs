@@ -30,7 +30,7 @@ pub struct Prefs {
     pub auto_compile_delay_ms: u64,
     /// `split`, `editor` or `preview`.
     pub layout: String,
-    /// `files`, `outline` or empty for a hidden side panel.
+    /// `files`, `outline`, `review` or empty for a hidden side panel.
     pub side: String,
     /// Project folders, most recent first.
     pub recent: Vec<String>,
@@ -45,6 +45,38 @@ pub struct Prefs {
     pub system_title_bar: bool,
     /// The engine, stopping at the first error, draft images.
     pub build: texcraft_engine::BuildOptions,
+    /// Who the user's comments are from; made on the first comment.
+    pub identity: Option<Identity>,
+}
+
+/// The name and key a person's comments carry (docs/collaboration-roadmap.md, R1). No accounts:
+/// the key pair is made on first use. The secret key is kept here, in the preferences file, until
+/// the system's key store is used (docs/review-format.md).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Identity {
+    pub name: String,
+    /// The ed25519 public key, in hex.
+    pub key: String,
+    /// The ed25519 secret key, in hex.
+    pub secret: String,
+}
+
+impl Identity {
+    /// A new identity named `name`, with a new key pair.
+    pub fn new(name: &str) -> Result<Self, String> {
+        let (key, secret) = texcraft_engine::new_key_pair()?;
+        Ok(Self { name: name.trim().to_owned(), key, secret })
+    }
+
+    pub fn author(&self) -> texcraft_engine::review::Author {
+        texcraft_engine::review::Author::new(self.name.clone(), self.key.clone())
+    }
+}
+
+/// The name the system knows the user by, to start the identity's name from.
+pub fn system_user_name() -> String {
+    ["USER", "USERNAME", "LOGNAME"].iter().find_map(|v| std::env::var(v).ok().filter(|n| !n.trim().is_empty())).unwrap_or_default()
 }
 
 impl Default for Prefs {
@@ -63,6 +95,7 @@ impl Default for Prefs {
             auto_close: true,
             system_title_bar: false,
             build: texcraft_engine::BuildOptions::default(),
+            identity: None,
         }
     }
 }
@@ -79,6 +112,7 @@ impl Prefs {
     pub(crate) fn side(&self) -> Option<Side> {
         match self.side.as_str() {
             "outline" => Some(Side::Outline),
+            "review" => Some(Side::Review),
             "" => None,
             _ => Some(Side::Files),
         }
@@ -94,6 +128,7 @@ impl Prefs {
         self.side = match side {
             Some(Side::Files) => "files",
             Some(Side::Outline) => "outline",
+            Some(Side::Review) => "review",
             None => "",
         }
         .to_owned();

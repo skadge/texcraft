@@ -292,6 +292,7 @@ retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua i
 3. **Cloud projects and sharing.** `craft-cloud` backends, `craft_ui::share`, accounts through `craft-suite-account` (desktop).
 4. **Working together in real time** waits for the suite's concurrent-text contract (RFC-0020's `Texts` API behind a mature CRDT). The editor's transactions (phase 2) and stable marks are designed so that this layer can be added. Presence uses `craft_ui::presence`, and chat belongs to the host.
 5. **Review.** Comments anchored to text ranges and suggested edits shown in the margin, accepted or rejected one by one. They are designed on the same marks.
+   - **Status:** comments (docs/collaboration-roadmap.md, R1) are **done**: threads in a margin beside their passages (a Review panel when the editor is narrow), replies, resolving, filters, F8, kept in `.texcraft/review/` (docs/review-format.md) and reachable by agents through `review.*`. Suggested changes (R2) are next.
 
 ### Phase 8: comfort
 

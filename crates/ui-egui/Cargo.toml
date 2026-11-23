@@ -25,6 +25,7 @@ egui = { workspace = true, features = ["monochrome_emoji_fonts"] }
 serde_json = { workspace = true }
 serde = { workspace = true }
 log = { workspace = true }
+chrono = { workspace = true }
 # Decodes the app icon for the top bar, the start page and About.
 png = "0.18"
 

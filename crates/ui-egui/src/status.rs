@@ -25,6 +25,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.spacing_mut().item_spacing.x = t.unit * 4.0;
                 let small = |s: String| egui::RichText::new(s).font(t.small()).color(t.text_muted);
                 ui.label(small(app.session.backend_name()));
+                crate::review::status(app, ui);
                 ui.label(small("LaTeX".to_owned()));
                 if let Some((line, col)) = app.view.cursor {
                     ui.label(small(tl!("Ln {line}, Col {col}").replace("{line}", &line.to_string()).replace("{col}", &col.to_string())));

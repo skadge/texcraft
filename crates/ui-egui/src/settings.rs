@@ -10,7 +10,13 @@ use crate::prefs::ThemePref;
 use crate::theme::Tokens;
 use crate::{App, widgets};
 
-const TABS: &[(&str, &str)] = &[("Appearance", "settings"), ("Editor", "file-code"), ("Building", "play"), ("Keyboard", "text-cursor-input")];
+const TABS: &[(&str, &str)] = &[
+    ("Appearance", "settings"),
+    ("Editor", "file-code"),
+    ("Building", "play"),
+    ("Keyboard", "text-cursor-input"),
+    ("Review", "message-square-text"),
+];
 
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let t = app.tokens;
@@ -52,7 +58,8 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                     0 => appearance(app, ui, &t),
                     1 => editor(app, ui, &t),
                     2 => building(app, ui, &t),
-                    _ => keyboard(app, ui, &t),
+                    3 => keyboard(app, ui, &t),
+                    _ => review(app, ui, &t),
                 }
             });
         });
@@ -241,6 +248,54 @@ fn key_bindings(app: &mut App, ui: &mut egui::Ui, t: &Tokens, salt: &str) {
         }
         None
     });
+}
+
+/// The name comments carry, and the key that tells this person's from others of the same name.
+fn review(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    let current = app.prefs.identity.clone();
+    let mut name = current.as_ref().map_or_else(|| app.view.identity_draft.clone(), |i| i.name.clone());
+    setting(ui, t, tl!("Your name"), tl!("Shown with your comments and replies."), |ui| {
+        let r = ui.add(egui::TextEdit::singleline(&mut name).desired_width(200.0));
+        Some(r)
+    });
+    match current {
+        Some(mut identity) => {
+            if name.trim() != identity.name && !name.trim().is_empty() {
+                identity.name = name.trim().to_owned();
+                app.session.set_author(Some(identity.author()));
+                app.prefs.identity = Some(identity.clone());
+                app.prefs_changed = true;
+            }
+            let fingerprint = identity.author().fingerprint();
+            setting(ui, t, tl!("Your key"), tl!("Made on this computer for your comments; others see this short form of it."), |ui| {
+                Some(ui.label(RichText::new(fingerprint).font(t.code_font()).color(t.text)))
+            });
+            ui.label(
+                RichText::new(tl!(
+                    "The key's secret half is kept in the preferences file. There are no accounts: the name and key are all a comment carries."
+                ))
+                .font(t.small())
+                .color(t.text_muted),
+            );
+        }
+        None => {
+            app.view.identity_draft = name.clone();
+            setting(ui, t, tl!("Your key"), tl!("None yet: it is made with your first comment, or now."), |ui| {
+                let r = ui.add_enabled(!name.trim().is_empty(), egui::Button::new(tl!("Make Key")));
+                if r.clicked() {
+                    match crate::prefs::Identity::new(&name) {
+                        Ok(identity) => {
+                            app.session.set_author(Some(identity.author()));
+                            app.prefs.identity = Some(identity);
+                            app.prefs_changed = true;
+                        }
+                        Err(e) => app.view.status = Some((e, true)),
+                    }
+                }
+                Some(r)
+            });
+        }
+    }
 }
 
 fn keyboard(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {

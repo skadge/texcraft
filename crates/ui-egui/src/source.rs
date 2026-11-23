@@ -114,6 +114,16 @@ pub(crate) struct ProblemPopup {
     selected: usize,
 }
 
+/// A commented passage (review): tinted under the text in its author's colour, more strongly
+/// when its thread is selected, and marked in the gutter.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Passage {
+    pub start: usize,
+    pub end: usize,
+    pub color: egui::Color32,
+    pub selected: bool,
+}
+
 /// Completions offered at the caret.
 pub(crate) struct CompletionList {
     pub items: Vec<texcraft_engine::Completion>,
@@ -170,6 +180,10 @@ pub(crate) struct SourceEditor {
     pub hover: Option<(usize, String)>,
     /// Go to the definition at this position at the end of the frame.
     wants_definition: Option<usize>,
+    /// The commented passages, in order.
+    pub passages: Vec<Passage>,
+    /// Where the text was drawn last: its top left, and the part of the editor shown, on screen.
+    shown: Option<(Pos2, Rect)>,
 }
 
 impl Default for SourceEditor {
@@ -200,6 +214,8 @@ impl Default for SourceEditor {
             hover: None,
             wants_definition: None,
             auto_close: true,
+            passages: Vec::new(),
+            shown: None,
         }
     }
 }
@@ -404,6 +420,17 @@ impl SourceEditor {
         }
     }
 
+    /// The on-screen rectangle of the caret at `pos`, as drawn this frame (after [`Self::show`]).
+    pub fn screen_rect(&self, pos: usize) -> Option<Rect> {
+        let (origin, _) = self.shown?;
+        Some(self.rect_at(pos).translate(origin.to_vec2()))
+    }
+
+    /// The part of the editor shown, on screen, and where its text starts (after [`Self::show`]).
+    pub fn shown(&self) -> Option<(Pos2, Rect)> {
+        self.shown
+    }
+
     /// Shows the editor; `id` is its focus and accessibility id.
     pub fn show(&mut self, ui: &mut egui::Ui, t: &Tokens, id: egui::Id, markers: &Markers, name: &str, indent: &str) -> Output {
         let mut out = Output::default();
@@ -472,6 +499,7 @@ impl SourceEditor {
             let last = self.line_at_y(viewport.max.y - margin.y);
             self.view = (first, last.saturating_sub(first).max(1));
             let area = Area { rect, origin, gutter, lines: (first, last), focused };
+            self.shown = Some((origin, ui.clip_rect()));
             self.paint(ui, t, &area, markers);
             let caret = self.rect_at(self.caret()).translate(origin.to_vec2());
             if std::mem::take(&mut self.reveal) {
@@ -1373,8 +1401,26 @@ impl SourceEditor {
                     ui.ctx().request_repaint();
                 }
             }
-            // The find bar's matches.
+            // Commented passages, under everything else; a removed one is a thin mark where it was.
             let line_end = line_start + line_len;
+            for p in self.passages.iter().filter(|p| p.end >= line_start && p.start <= line_end && (p.end > line_start || p.start == p.end)) {
+                let (s, e) = (p.start.saturating_sub(line_start).min(line_len), (p.end.saturating_sub(line_start)).min(line_len));
+                let at = origin + vec2(0.0, *top);
+                if p.start == p.end {
+                    let c = galley.pos_from_cursor(CCursor::new(s)).translate(at.to_vec2());
+                    painter.rect_filled(Rect::from_min_size(c.min - vec2(1.0, 0.0), vec2(2.0, c.height())), 1.0, p.color);
+                } else {
+                    let tint = p.color.gamma_multiply(if p.selected { 0.42 } else { 0.2 });
+                    paint_span(painter, galley, at, (s, e), tint, p.end > line_end);
+                    if p.selected {
+                        underline(painter, galley, at, (s, e), p.color, false);
+                    }
+                }
+                let bar =
+                    Rect::from_min_max(pos2(rect.left() + gutter - 1.5 * t.unit, y0), pos2(rect.left() + gutter - 0.75 * t.unit, origin.y + bottom));
+                painter.rect_filled(bar, 1.0, if p.selected { p.color } else { p.color.gamma_multiply(0.7) });
+            }
+            // The find bar's matches.
             let from = self.matches.partition_point(|(_, e)| *e <= line_start);
             for (ms, me) in self.matches[from..].iter().take_while(|(s, _)| *s <= line_end) {
                 let s = ms.saturating_sub(line_start).min(line_len);
