@@ -198,6 +198,9 @@ web:
   before_script:
     - *fetch-fonts
     - rustup target add wasm32-unknown-unknown
+    # cargo install puts trunk in $CARGO_HOME/bin, the project's .cargo-home (cached), not the
+    # image's own cargo folder that is on PATH.
+    - export PATH="$CARGO_HOME/bin:$PATH"
     - rustup toolchain install "$TRUNK_RUST" --profile minimal
     - cargo +"$TRUNK_RUST" install --locked trunk --version "$TRUNK_VERSION"
   script:
