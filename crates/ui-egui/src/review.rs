@@ -25,9 +25,9 @@ use crate::theme::{Tokens, blend, contrast};
 use crate::{App, icons, widgets};
 
 /// Below this pane width the threads are in the Review panel instead of a margin.
-pub(crate) const MARGIN_MIN_PANE: f32 = 900.0;
+pub(crate) const MARGIN_MIN_PANE: f32 = 760.0;
 /// The margin's width.
-const MARGIN_WIDTH: f32 = 336.0;
+const MARGIN_WIDTH: f32 = 288.0;
 /// The space between two cards.
 const GAP: f32 = 8.0;
 

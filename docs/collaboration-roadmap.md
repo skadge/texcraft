@@ -85,7 +85,7 @@ Later, outside this roadmap: cloud backends and named-people sharing (`craft-clo
   - Commands: `review.list {path?, state?, author?}`, `review.comment {path, start, end, text}`, `review.reply`, `review.edit`, `review.delete`, `review.resolve`, `review.reopen`.
 - **Interface:**
   - Comment (Cmd+Alt+M, the Edit menu, the editor's context menu, `:comment` in Vim) on a selection opens a composer in the margin.
-  - **The margin:** a column right of the editor with each thread aligned to its passage, shifted down to avoid overlaps, and a thin line to the highlight. Selecting either selects the other. It folds into a Review panel (a rail entry) when the pane is narrower than about 900 px.
+  - **The margin:** a column right of the editor with each thread aligned to its passage, shifted down to avoid overlaps, and a thin line to the highlight. Selecting either selects the other. It folds into a Review panel (a rail entry) when the pane is narrower than about 760 px.
   - Highlighted passages (a soft tint of the author's colour, a stronger tint for the selected thread), and a gutter marker per thread.
   - A thread shows the author's badge (the `craft_ui::presence` colour), name, relative time, text, Reply, Resolve, and a menu with Edit and Delete for one's own messages.
   - Next and previous thread (F8 and Shift+F8); the filter (open, resolved, mine).
