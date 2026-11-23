@@ -1,0 +1,1 @@
+- 2026-11-23: A second polish pass: the start page's rows end on one edge with a themed placeholder for projects without a PDF, comment lines no longer cross the text, and the README's screenshots show the current app, with the formatted view and comments in review. Builds without craft-fonts (CI) have their bold and italic faces again.

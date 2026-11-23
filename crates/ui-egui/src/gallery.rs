@@ -296,7 +296,7 @@ fn details(app: &mut App, ui: &mut egui::Ui, t: &Tokens, templates: &[Template],
     }
 }
 
-const CARD: egui::Vec2 = egui::vec2(160.0, 168.0);
+pub(crate) const CARD: egui::Vec2 = egui::vec2(160.0, 168.0);
 
 /// A template's card; returns whether it was clicked.
 pub(crate) fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected: bool, kept: bool) -> bool {

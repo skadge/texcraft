@@ -408,13 +408,18 @@ fn margin(app: &mut App, ui: &mut egui::Ui, rect: Rect, path: &ProjectPath) {
         };
         // The line from the passage to its card.
         if let Some(p) = passage {
-            let y = p.center().y;
+            // The line leaves the passage's line after its last character, never across its text.
+            let end = thread.map_or(at, |th| th.anchor.end);
+            let b = &app.editor.source.doc.buffer;
+            let line_end = b.line_end(b.char_to_line(end.min(b.len_chars())));
+            let after = app.editor.source.screen_rect(line_end);
+            let y = after.map_or(p.center().y, |r| r.center().y);
             let to = pos2(card.left(), card.top() + 16.0);
             let stroke = if selected { Stroke::new(1.25, colour) } else { Stroke::new(1.0, blend(t.frame, t.separator)) };
             let left = app.editor.source.shown().map_or(rect.left(), |(_, shown)| shown.left());
             let painter = ui.painter().with_clip_rect(Rect::from_min_max(pos2(left, area.top()), area.max));
             if selected && let Some((_, shown)) = app.editor.source.shown() {
-                let from = app.editor.source.screen_rect(thread.map_or(at, |th| th.anchor.end)).map_or(text_right, |r| r.right());
+                let from = after.map_or(text_right, |r| r.right() + t.unit);
                 if y > shown.top() && y < shown.bottom() {
                     painter.line_segment([pos2(from + 2.0, y), pos2(text_right, y)], Stroke::new(1.0, colour.gamma_multiply(0.6)));
                 }
@@ -453,7 +458,8 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
             let r = composer(app, &mut child, &mut actions);
             ui.allocate_space(vec2(width, r.height()));
         }
-        if list.is_empty() {
+        // "No comments" under a comment being written would contradict it.
+        if list.is_empty() && app.review.composer.is_none() {
             ui.add_space(t.unit * 4.0);
             ui.vertical_centered(|ui| {
                 ui.label(RichText::new(tl!("No comments")).font(t.strong()));

@@ -67,7 +67,11 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     egui::CentralPanel::default().frame(egui::Frame::new().fill(t.canvas)).show(ui, |ui| {
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            let width = (ui.available_width() - 96.0).clamp(320.0, 1040.0);
+            // As wide as a whole number of template cards, so the header, the recent projects and
+            // the templates all end on one edge.
+            let step = crate::gallery::CARD.x + 12.0;
+            let room = (ui.available_width() - 96.0).clamp(320.0, 1040.0);
+            let width = ((room + 12.0) / step).floor().max(2.0) * step - 12.0;
             ui.vertical_centered(|ui| {
                 ui.set_max_width(width);
                 ui.add_space(48.0);
@@ -215,13 +219,19 @@ fn card(app: &mut App, ui: &mut egui::Ui, t: &Tokens, path: &str) -> Option<Card
         Some(handle)
     });
     ui.painter().add(egui::Shadow { offset: [0, 1], blur: 6, spread: 0, color: t.shadow }.as_shape(page, 2));
-    ui.painter().rect_filled(page, 2, egui::Color32::WHITE);
     match texture {
         Some(tex) => {
+            // A page is white whatever the theme, as in the PDF pane.
+            ui.painter().rect_filled(page, 2, egui::Color32::WHITE);
             let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
             ui.painter().image(tex.id(), page, uv, egui::Color32::WHITE);
         }
-        None => icons::paint(ui, page, "file-text", 28.0, egui::Color32::from_gray(190)),
+        // No PDF yet: a page in the theme's colours, not a white block in the dark theme.
+        None => {
+            ui.painter().rect_filled(page, 2, t.surface);
+            ui.painter().rect_stroke(page, 2, t.hairline(), egui::StrokeKind::Inside);
+            icons::paint(ui, page, "file-text", 28.0, t.text_muted);
+        }
     }
     let text_top = page.bottom() + 10.0;
     let color = if exists { t.text } else { t.text_muted };

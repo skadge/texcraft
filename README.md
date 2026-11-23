@@ -54,6 +54,16 @@
 </td>
 </tr>
 <tr>
+<td width="50%" valign="top">
+  <img src="docs/images/formatted.png" alt="The formatted view of the example article: the preamble folded into a bar, the title, the abstract, headings in a serif face, formulas shown as their source in a pill and references as chips, beside the typeset PDF" width="100%">
+  <p align="center"><sub><b>Formatted view</b>: the same file as a document, headings, lists, references and formulas, beside its PDF</sub></p>
+</td>
+<td width="50%" valign="top">
+  <img src="docs/images/review.png" alt="Comments in review: a passage of the source highlighted, and beside it in the margin a thread where Ada asks for a citation and Ben answers, with Reply and Resolve" width="100%">
+  <p align="center"><sub><b>Review</b>: comments beside their passages, kept in the project and shared through git</sub></p>
+</td>
+</tr>
+<tr>
 <td colspan="2" valign="top">
   <img src="docs/images/start.png" alt="The start page: New Project and Open Folder, and three recent projects as cards with the first page of their last PDF" width="100%">
   <p align="center"><sub><b>Start page</b>: recent projects with the first page of their last PDF</sub></p>
