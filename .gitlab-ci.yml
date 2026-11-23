@@ -19,6 +19,9 @@ stages:
 variables:
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo-home"
   CARGO_TERM_COLOR: always
+  # Incremental builds help nothing in CI (each job starts from the cache, not the last edit) and
+  # make target/, and so every cache upload and download, much larger.
+  CARGO_INCREMENTAL: "0"
   # The interface faces come from craft-fonts; the build works without them, so `check` tests the
   # fallback (no checkout). The packages embed them (CRAFT_FONTS_REQUIRED in their jobs).
   CRAFT_FONTS_DIR: ""
@@ -63,6 +66,9 @@ variables:
       when: manual
       allow_failure: true
 
+# The caches (cargo's downloads and target/) are shared by every branch and tag, one per job:
+# a key per ref would give each release tag an empty cache and a build of every dependency.
+
 check:
   stage: check
   image: rust:1.95-bookworm
@@ -74,7 +80,7 @@ check:
   script:
     - cargo xtask ci
   cache:
-    key: "$CI_JOB_NAME-$CI_COMMIT_REF_SLUG"
+    key: check
     paths:
       - .cargo-home/registry
       - .cargo-home/git
@@ -130,7 +136,7 @@ appimage:
       - out/SHA256SUMS-appimage
     expire_in: 30 days
   cache:
-    key: "release-build-$CI_COMMIT_REF_SLUG"
+    key: release-build
     paths:
       - .cargo-home/registry
       - .cargo-home/git
@@ -207,7 +213,7 @@ web:
       - out/SHA256SUMS-web
     expire_in: 30 days
   cache:
-    key: "web-$CI_COMMIT_REF_SLUG"
+    key: web
     paths:
       - .cargo-home/registry
       - .cargo-home/git
