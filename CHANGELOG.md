@@ -4,7 +4,17 @@ What changed in each release of TeXCraft, for the people who use it. The day-by-
 progress log in [ROADMAP.md](ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
-## Unreleased
+## 0.2.0 (2026-11-23)
+
+The first release (0.1.0 was tagged but never published). TeXCraft is a LaTeX editor: a project
+of files, a source editor and the PDF side by side, rebuilt when typing pauses by [retex](https://gitlab.com/severin-lemaignan/retex),
+a TeX engine written in Rust. It is early software: expect rough edges, and keep your projects under
+version control.
+
+Linux packages: an AppImage and a Flatpak bundle (x86_64). On macOS and Windows, build it from
+source (README, Quick start).
+
+### Last additions
 
 - While a build runs more than one pass, the PDF pane shows the PDF of the pass before, marked
   "Draft · pass 1", instead of waiting for the last pass; its references may show as "??" until
@@ -14,16 +24,8 @@ progress log in [ROADMAP.md](ROADMAP.md); how a release is made is in
 - Double-clicking the last paragraph of a file included with `\input` opens that file, not the
   main document; Show in PDF from a line of the preamble no longer marks text further down that
   the line did not write.
-
-## 0.1.0 (2026-11-23)
-
-The first development release. TeXCraft is a LaTeX editor: a project of files, a source editor and
-the PDF side by side, rebuilt when typing pauses by [retex](https://gitlab.com/severin-lemaignan/retex),
-a TeX engine written in Rust. It is early software: expect rough edges, and keep your projects under
-version control.
-
-Linux packages: an AppImage and a Flatpak bundle (x86_64). On macOS and Windows, build it from
-source (README, Quick start).
+- In the dark theme, a recent project without a PDF has a dark placeholder; the start page lines up
+  its rows; the line from a comment to its passage no longer crosses the text.
 
 ### Projects and the window
 

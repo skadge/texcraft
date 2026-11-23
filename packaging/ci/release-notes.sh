@@ -2,7 +2,7 @@
 # Checks that a release tag matches the workspace version and the changelog, and prints that
 # version's section of CHANGELOG.md (without its heading), for the GitLab release's description.
 #
-#   packaging/ci/release-notes.sh v0.1.0 > release-notes.md
+#   packaging/ci/release-notes.sh v0.2.0 > release-notes.md
 set -eu
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 tag="$1"
