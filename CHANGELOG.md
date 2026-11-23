@@ -4,9 +4,9 @@ What changed in each release of TeXCraft, for the people who use it. The day-by-
 progress log in [ROADMAP.md](ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
-## 0.2.0 (2026-11-23)
+## 0.2.1 (2026-11-23)
 
-The first release (0.1.0 was tagged but never published). TeXCraft is a LaTeX editor: a project
+The first release (0.1.0 and 0.2.0 were tagged but never published). TeXCraft is a LaTeX editor: a project
 of files, a source editor and the PDF side by side, rebuilt when typing pauses by [retex](https://gitlab.com/severin-lemaignan/retex),
 a TeX engine written in Rust. It is early software: expect rough edges, and keep your projects under
 version control.
