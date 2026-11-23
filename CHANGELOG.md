@@ -4,6 +4,17 @@ What changed in each release of TeXCraft, for the people who use it. The day-by-
 progress log in [ROADMAP.md](ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## Unreleased
+
+- While a build runs more than one pass, the PDF pane shows the PDF of the pass before, marked
+  "Draft · pass 1", instead of waiting for the last pass; its references may show as "??" until
+  the build ends.
+- Stop Compiling no longer restarts the build helper: the next build after a Stop is as fast as
+  any other.
+- Double-clicking the last paragraph of a file included with `\input` opens that file, not the
+  main document; Show in PDF from a line of the preamble no longer marks text further down that
+  the line did not write.
+
 ## 0.1.0 (2026-11-23)
 
 The first development release. TeXCraft is a LaTeX editor: a project of files, a source editor and
