@@ -133,7 +133,7 @@ Agent and contributor rules are in [`AGENTS.md`](AGENTS.md), which also lists th
 
 ## Downloads
 
-There are no releases yet. Build it from source as shown in [Quick start](#quick-start).
+Releases are on the [releases page](https://gitlab.com/severin-lemaignan/texcraft/-/releases): an AppImage and a Flatpak bundle for Linux (x86_64), and the browser build. What changed is in [CHANGELOG.md](CHANGELOG.md). Elsewhere, build it from source as shown in [Quick start](#quick-start).
 
 ## License and credits
 
