@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-23 · **Change:** minor
 
-**Stage:** 0.2.1, the first release ([CHANGELOG.md](CHANGELOG.md)): phase 1 of [docs/plan.md](docs/plan.md), the window and the suite, is under way, with parts of phases 2 to 4 and 7 (TeXCraft's own editor with Vim bindings, a read-only formatted view, source and PDF navigation, comments). **Next:** finishing phase 1, suggested changes, and the engine in the browser (phase 6).
+**Stage:** 0.2.2, the first release ([CHANGELOG.md](CHANGELOG.md)): phase 1 of [docs/plan.md](docs/plan.md), the window and the suite, is under way, with parts of phases 2 to 4 and 7 (TeXCraft's own editor with Vim bindings, a read-only formatted view, source and PDF navigation, comments). **Next:** finishing phase 1, suggested changes, and the engine in the browser (phase 6).
 
 The plan, phase by phase, and the changes TeXCraft needs in retex are in [docs/plan.md](docs/plan.md). Review and working together have their own design and roadmap: [docs/collaboration.md](docs/collaboration.md) and [docs/collaboration-roadmap.md](docs/collaboration-roadmap.md).
 
