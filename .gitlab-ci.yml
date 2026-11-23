@@ -1,23 +1,72 @@
 # TeXCraft is on gitlab.com for now, so its CI is here rather than in craft-common-actions'
-# GitHub workflows. One job runs the same sequence as `cargo xtask ci` locally: fmt, clippy with
-# warnings as errors, the tests, the layering check and the wasm32 build.
+# GitHub workflows.
+#
+# Branches and merge requests: `check` runs the same sequence as `cargo xtask ci` locally (fmt,
+# clippy with warnings as errors, the tests, the layering check and the wasm32 build).
+#
+# Tags vX.Y.Z (docs/releasing.md): `check`, then the packages (AppImage, Flatpak bundle, browser
+# build), then `publish` uploads them to the project's generic package registry and `release`
+# makes the GitLab release from the version's CHANGELOG.md section. `pages` puts the browser build
+# on GitLab Pages, by hand only. Nothing publishes from a branch: on the default branch the package
+# jobs can be started by hand, and their files stay job artifacts.
 
 stages:
   - check
+  - package
+  - publish
+  - release
 
 variables:
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo-home"
   CARGO_TERM_COLOR: always
-  # The interface faces come from craft-fonts; the build works without them, so CI tests both the
-  # fallback (no checkout) and nothing more.
+  # The interface faces come from craft-fonts; the build works without them, so `check` tests the
+  # fallback (no checkout). The packages embed them (CRAFT_FONTS_REQUIRED in their jobs).
   CRAFT_FONTS_DIR: ""
+  # storytold/craft-fonts for the packages. Keep it equal to the commit in
+  # packaging/flatpak/ai.storyteller.texcraft.yml.
+  CRAFT_FONTS_REV: 26a79230872f9b2acd3dd68500677e294350ab94
+  # The tools the package jobs download, each pinned by version and SHA-256. An empty SHA-256 stops
+  # the job and prints the download's checksum, to be checked against the release page and pinned
+  # here (packaging/ci/fetch-pinned.sh).
+  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-x86_64.AppImage
+  APPIMAGETOOL_SHA256: ""
+  # The runtime embedded in the AppImage (static, needs no libfuse2 on the user's system). The
+  # project publishes it as a rolling "continuous" release, so the SHA-256 is what pins it: when it
+  # moves, the job stops, and the new file is checked before its checksum is pinned.
+  APPIMAGE_RUNTIME_URL: https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64
+  APPIMAGE_RUNTIME_SHA256: ""
+  # Trunk for the browser build, from crates.io (whose checksums Cargo checks), at the version
+  # used locally. Trunk then fetches the wasm-bindgen matching Cargo.lock and binaryen's wasm-opt.
+  TRUNK_VERSION: 0.22.0
+  # Where `publish` puts the files: the generic package registry, one package version per tag.
+  PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/texcraft"
+
+# The system libraries the desktop crates build against.
+.desktop-deps: &desktop-deps
+  - apt-get update -qq
+  - apt-get install -y -qq --no-install-recommends libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libfontconfig1-dev libgtk-3-dev
+
+# craft-fonts at CRAFT_FONTS_REV, for builds that embed the interface faces.
+.fetch-fonts: &fetch-fonts
+  - git init -q craft-fonts
+  - git -C craft-fonts fetch -q --depth 1 https://github.com/storytold/craft-fonts "$CRAFT_FONTS_REV"
+  - git -C craft-fonts checkout -q FETCH_HEAD
+
+# The package jobs: on a release tag, and by hand on the default branch (without blocking its
+# pipeline). They wait for `check` (stage order).
+.package-rules:
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true
 
 check:
   stage: check
   image: rust:1.95-bookworm
   before_script:
-    - apt-get update -qq
-    - apt-get install -y -qq --no-install-recommends libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libfontconfig1-dev libgtk-3-dev mesa-vulkan-drivers
+    - *desktop-deps
+    - apt-get install -y -qq --no-install-recommends mesa-vulkan-drivers
     - rustup component add clippy rustfmt
     - rustup target add wasm32-unknown-unknown
   script:
@@ -31,3 +80,204 @@ check:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+# A release tag must match Cargo.toml's version, the changelog and the metainfo; the release's
+# description is the changelog's section, kept for `release`.
+release-notes:
+  stage: check
+  image: alpine:3.22
+  script:
+    - packaging/ci/release-notes.sh "$CI_COMMIT_TAG" > release-notes.md
+    - echo "VERSION=${CI_COMMIT_TAG#v}" > release.env
+  artifacts:
+    paths:
+      - release-notes.md
+    reports:
+      dotenv: release.env
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+# The AppImage, built on Debian 12 so that it runs on glibc 2.36 and newer (the job prints the
+# oldest glibc the binaries need). The faces are embedded; translations are not (English only).
+appimage:
+  stage: package
+  image: rust:1.95-bookworm
+  extends: .package-rules
+  variables:
+    CRAFT_FONTS_DIR: "$CI_PROJECT_DIR/craft-fonts"
+    CRAFT_FONTS_REQUIRED: "1"
+  before_script:
+    - *desktop-deps
+    - apt-get install -y -qq --no-install-recommends desktop-file-utils binutils
+    - *fetch-fonts
+    - mkdir -p tools
+    - packaging/ci/fetch-pinned.sh "$APPIMAGETOOL_URL" "$APPIMAGETOOL_SHA256" tools/appimagetool.AppImage
+    - packaging/ci/fetch-pinned.sh "$APPIMAGE_RUNTIME_URL" "$APPIMAGE_RUNTIME_SHA256" tools/runtime-x86_64
+    # Extracted rather than mounted: the job's container has no FUSE.
+    - chmod +x tools/appimagetool.AppImage
+    - (cd tools && ./appimagetool.AppImage --appimage-extract >/dev/null)
+  script:
+    - cargo build --release --locked -p texcraft -p texcraft-cli
+    - VERSION="${CI_COMMIT_TAG#v}"
+    - APPIMAGETOOL="$CI_PROJECT_DIR/tools/squashfs-root/AppRun" RUNTIME_FILE="$CI_PROJECT_DIR/tools/runtime-x86_64" VERSION="${VERSION:-$(git describe --tags --always)}" packaging/appimage/build-appimage.sh "$CI_PROJECT_DIR/out"
+    - (cd out && sha256sum *.AppImage | tee SHA256SUMS-appimage)
+  artifacts:
+    paths:
+      - out/*.AppImage
+      - out/SHA256SUMS-appimage
+    expire_in: 30 days
+  cache:
+    key: "release-build-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cargo-home/registry
+      - .cargo-home/git
+      - target/
+
+# The Flatpak bundle. flatpak-builder needs user namespaces for bubblewrap, which a Docker
+# container has only when the runner runs it privileged: GitLab.com's hosted Linux runners do
+# (they also run Docker-in-Docker); a self-hosted runner needs `privileged = true`. rofiles-fuse
+# is turned off, there being no FUSE in the container. The build tools are Debian's
+# flatpak-builder; the cargo sources are generated by flatpak-cargo-generator from Flathub's
+# org.flatpak.Builder (signed through the Flathub remote), which also lints the manifest and the
+# built repository.
+flatpak:
+  stage: package
+  image: debian:trixie
+  extends: .package-rules
+  variables:
+    FLATPAK_ID: ai.storyteller.texcraft
+    MANIFEST: packaging/flatpak/ai.storyteller.texcraft.yml
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq --no-install-recommends flatpak flatpak-builder git ca-certificates elfutils debugedit appstream
+    - flatpak --user remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+    - flatpak --user install -y --noninteractive flathub org.flatpak.Builder
+    - flatpak --user info org.flatpak.Builder | sed -n 's/^ *\(Version\|Commit\):/\1:/p'
+  script:
+    - VERSION="${CI_COMMIT_TAG#v}"; VERSION="${VERSION:-$(git describe --tags --always)}"
+    - flatpak run --command=flatpak-cargo-generator --filesystem="$CI_PROJECT_DIR" org.flatpak.Builder "$CI_PROJECT_DIR/Cargo.lock" -o "$CI_PROJECT_DIR/packaging/flatpak/cargo-sources.json"
+    - flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean --repo=flatpak-repo flatpak-build "$MANIFEST"
+    # Lint findings are shown, not fatal: some (the app id's domain, the home folder) are decisions
+    # for the operator (docs/releasing.md).
+    - flatpak run --command=flatpak-builder-lint --filesystem="$CI_PROJECT_DIR" org.flatpak.Builder manifest "$CI_PROJECT_DIR/$MANIFEST" || true
+    - flatpak run --command=flatpak-builder-lint --filesystem="$CI_PROJECT_DIR" org.flatpak.Builder repo "$CI_PROJECT_DIR/flatpak-repo" || true
+    - mkdir -p out
+    - flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo flatpak-repo "out/TeXCraft-$VERSION-x86_64.flatpak" "$FLATPAK_ID"
+    - (cd out && sha256sum *.flatpak | tee SHA256SUMS-flatpak)
+  artifacts:
+    paths:
+      - out/*.flatpak
+      - out/SHA256SUMS-flatpak
+      # The generated sources, for a Flathub submission or to rebuild by hand.
+      - packaging/flatpak/cargo-sources.json
+    expire_in: 30 days
+  cache:
+    key: flatpak-builder
+    paths:
+      - .flatpak-builder/
+
+# The browser build (apps/texcraft-web) with Trunk, in the size-optimised `web` profile. Its
+# public_url is "./", so the files work from any folder, a Pages subpath included. It does not
+# build documents yet (no engine in the browser).
+web:
+  stage: package
+  image: rust:1.95-bookworm
+  extends: .package-rules
+  variables:
+    CRAFT_FONTS_DIR: "$CI_PROJECT_DIR/craft-fonts"
+    CRAFT_FONTS_REQUIRED: "1"
+  before_script:
+    - *fetch-fonts
+    - rustup target add wasm32-unknown-unknown
+    - cargo install --locked trunk --version "$TRUNK_VERSION"
+  script:
+    - VERSION="${CI_COMMIT_TAG#v}"; VERSION="${VERSION:-$(git describe --tags --always)}"
+    - (cd apps/texcraft-web && trunk build --release)
+    - mkdir -p out
+    - tar -C dist -czf "out/texcraft-web-$VERSION.tar.gz" web
+    - (cd out && sha256sum *.tar.gz | tee SHA256SUMS-web)
+  artifacts:
+    paths:
+      - dist/web/
+      - out/*.tar.gz
+      - out/SHA256SUMS-web
+    expire_in: 30 days
+  cache:
+    key: "web-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cargo-home/registry
+      - .cargo-home/git
+      - .cargo-home/bin
+      - target/
+
+# Uploads the packages and their checksums to the generic package registry, under the tag's
+# version. Only on a release tag.
+publish:
+  stage: publish
+  image: curlimages/curl:8.10.1
+  needs:
+    - job: release-notes
+    - job: appimage
+    - job: flatpak
+    - job: web
+  script:
+    # The image runs as an unprivileged user, so the joined list is written outside the checkout.
+    - cat out/SHA256SUMS-* > /tmp/SHA256SUMS
+    - |
+      for file in out/*.AppImage out/*.flatpak out/*.tar.gz /tmp/SHA256SUMS; do
+        echo "uploading $(basename "$file")"
+        curl --fail-with-body --silent --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+          --upload-file "$file" "$PACKAGE_REGISTRY_URL/$VERSION/$(basename "$file")"
+      done
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+# The GitLab release of the tag: the changelog's section as its description, and links to the
+# uploaded files. VERSION comes from release-notes' dotenv report.
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:v0.20.0
+  needs:
+    - job: release-notes
+    - job: publish
+  script:
+    - echo "Releasing TeXCraft $VERSION"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: "TeXCraft $VERSION"
+    description: release-notes.md
+    assets:
+      links:
+        - name: "TeXCraft-$VERSION-x86_64.AppImage"
+          url: "$PACKAGE_REGISTRY_URL/$VERSION/TeXCraft-$VERSION-x86_64.AppImage"
+          link_type: package
+        - name: "TeXCraft-$VERSION-x86_64.flatpak"
+          url: "$PACKAGE_REGISTRY_URL/$VERSION/TeXCraft-$VERSION-x86_64.flatpak"
+          link_type: package
+        - name: "texcraft-web-$VERSION.tar.gz (browser build)"
+          url: "$PACKAGE_REGISTRY_URL/$VERSION/texcraft-web-$VERSION.tar.gz"
+          link_type: package
+        - name: SHA256SUMS
+          url: "$PACKAGE_REGISTRY_URL/$VERSION/SHA256SUMS"
+          link_type: other
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+# GitLab Pages: the browser build at the project's Pages address. By hand on a release tag only,
+# since the browser build cannot build documents yet; the operator decides when it goes up.
+pages:
+  stage: release
+  image: alpine:3.22
+  needs:
+    - job: web
+  script:
+    - rm -rf public
+    - cp -r dist/web public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+      when: manual
+      allow_failure: true

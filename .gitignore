@@ -7,3 +7,10 @@ plan/
 /craft-fonts
 .claude/settings.local.json
 .cargo-home/
+# Packaging outputs (docs/releasing.md)
+/packaging/flatpak/cargo-sources.json
+/.flatpak-builder
+/flatpak-build
+/flatpak-repo
+/out
+/tools
