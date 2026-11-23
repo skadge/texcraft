@@ -8,6 +8,10 @@
 //! From retex 2.1.0 a build reports its progress, can be cancelled, and returns the language
 //! server's `symbols` record, the SyncTeX data, and its diagnostics' spans and fixes.
 //!
+//! From retex 2.3.0 both kinds of build below are a `retex::BuildHandle`, and Stop cancels the
+//! one running through its `BuildCanceller`: a worker build stops and the worker keeps its
+//! preamble snapshot.
+//!
 //! In the desktop app builds go to a `retex worker` process (this program, run again), which
 //! keeps the preamble snapshot between builds: a rebuild after a change in the body starts at
 //! `\begin{document}`. Elsewhere (the CLI, tests, a worker that does not start) they run in
@@ -21,34 +25,41 @@ use crate::{Backend, Canceller, Cleaner, Diagnostic, DiagnosticFix, Engine, Even
 
 pub struct Retex {
     dir: PathBuf,
-    /// The running in-process build's cancel token.
-    running: Arc<Mutex<Option<retex::CancelToken>>>,
+    /// The running build, in process or through the worker: Stop cancels it.
+    running: Arc<Mutex<Running>>,
     /// The worker, when builds go to one.
     worker: Option<WorkerSlot>,
     /// The files of the last job written to `<cache>/src/`, to remove those that leave it.
     written: std::collections::HashSet<String>,
 }
 
+/// What Stop reaches: the running build's canceller, or, before the build has one (while the
+/// sources are written or the worker starts), that it is to be cancelled as soon as it starts.
+#[derive(Default)]
+struct Running {
+    canceller: Option<retex::BuildCanceller>,
+    stop: bool,
+}
+
 /// A `retex worker` process run from this program (see [`crate::use_this_program_as_worker`]).
 struct WorkerSlot {
     program: PathBuf,
-    /// Started on the first build, again after a Stop.
+    /// Started on the first build; it and its preamble snapshot stay across builds, a stopped one
+    /// too.
     process: Arc<Mutex<Option<retex::Worker>>>,
-    /// Set by Stop: the build that ends with the worker gone was cancelled.
-    stopped: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Retex {
     /// Builds in `cache_dir`, or in a folder of the system's temporary directory.
     pub fn new(cache_dir: Option<PathBuf>) -> Self {
         let dir = cache_dir.unwrap_or_else(|| std::env::temp_dir().join(format!("texcraft-build-{}", std::process::id())));
-        Self { dir, running: Arc::new(Mutex::new(None)), worker: None, written: Default::default() }
+        Self { dir, running: Arc::default(), worker: None, written: Default::default() }
     }
 
     /// Builds through a worker process running `program` (this program, which called
     /// `retex::worker_entry` first in `main`): it keeps the preamble snapshot between builds.
     pub fn with_worker(mut self, program: PathBuf) -> Self {
-        self.worker = Some(WorkerSlot { program, process: Arc::new(Mutex::new(None)), stopped: Arc::default() });
+        self.worker = Some(WorkerSlot { program, process: Arc::new(Mutex::new(None)) });
         self
     }
 
@@ -76,42 +87,39 @@ impl Retex {
         Ok(src.join(job.main.as_str()))
     }
 
-    /// Builds in process, reporting its progress from retex's build thread.
-    fn in_process(&self, main: &Path, options: Options, report: &mut dyn FnMut(Event)) -> Option<retex::Outcome> {
-        let token = retex::CancelToken::new();
-        if let Ok(mut slot) = self.running.lock() {
-            *slot = Some(token.clone());
-        }
-        // retex calls back on its build thread; the events go to `report` here, on ours.
-        let (tx, rx) = std::sync::mpsc::channel();
-        let retex = engine_options(options).keep_files(self.dir.join("out")).cancel_token(token).on_progress(move |p| {
-            let _ = tx.send(p);
-        });
-        let handle = std::thread::scope(|scope| {
-            let build = scope.spawn(|| retex.compile_file_outcome(main));
-            while !build.is_finished() {
-                while let Ok(p) = rx.try_recv() {
-                    if let Some(e) = event(p) {
-                        report(e);
-                    }
-                }
-                std::thread::sleep(std::time::Duration::from_millis(30));
+    /// Waits for `build`, reporting its progress, while Stop can cancel it through its canceller.
+    fn wait(&self, build: retex::BuildHandle, report: &mut dyn FnMut(Event)) -> retex::Outcome {
+        let canceller = build.canceller();
+        if let Ok(mut running) = self.running.lock() {
+            if running.stop {
+                canceller.cancel();
             }
-            build.join()
-        });
-        if let Ok(mut slot) = self.running.lock() {
-            *slot = None;
+            running.canceller = Some(canceller);
         }
-        handle.ok()
+        let outcome = build.wait_with_progress(|p| {
+            if let Some(e) = event(p) {
+                report(e);
+            }
+        });
+        if let Ok(mut running) = self.running.lock() {
+            running.canceller = None;
+        }
+        outcome
+    }
+
+    /// Builds in process, on retex's own thread (`Retex::spawn_file`).
+    fn in_process(&self, main: &Path, options: Options, report: &mut dyn FnMut(Event)) -> retex::Outcome {
+        let build = engine_options(options).keep_files(self.dir.join("out")).spawn_file(main);
+        self.wait(build, report)
     }
 
     /// Builds through the worker; `None` when it cannot start or build (the caller builds in
     /// process instead).
-    fn through_worker(slot: &WorkerSlot, main: &Path, options: Options, report: &mut dyn FnMut(Event)) -> Option<(retex::Outcome, bool)> {
+    fn through_worker(&self, slot: &WorkerSlot, main: &Path, options: Options, report: &mut dyn FnMut(Event)) -> Option<retex::Outcome> {
         // From the main document's folder, as the in-process build runs.
         let dir = main.parent()?.to_path_buf();
         let name = main.file_name()?.to_string_lossy().into_owned();
-        let request = {
+        let build = {
             let mut process = slot.process.lock().ok()?;
             if process.is_none() {
                 let mut config = retex::WorkerConfig::new();
@@ -124,7 +132,6 @@ impl Retex {
                     }
                 }
             }
-            slot.stopped.store(false, std::sync::atomic::Ordering::SeqCst);
             let mut request = retex::BuildRequest::new(dir, name);
             request.options = engine_options(options);
             match process.as_ref()?.build(request) {
@@ -136,12 +143,7 @@ impl Retex {
                 }
             }
         };
-        let outcome = request.wait_with_progress(|p| {
-            if let Some(e) = event(p) {
-                report(e);
-            }
-        });
-        Some((outcome, slot.stopped.load(std::sync::atomic::Ordering::SeqCst)))
+        Some(self.wait(build, report))
     }
 }
 
@@ -160,20 +162,14 @@ impl Backend for Retex {
 
     fn canceller(&self) -> Option<Canceller> {
         let running = self.running.clone();
-        let worker = self.worker.as_ref().map(|w| (w.process.clone(), w.stopped.clone()));
         Some(Arc::new(move || {
-            if let Ok(slot) = running.lock()
-                && let Some(token) = slot.as_ref()
-            {
-                token.cancel();
-            }
-            // A build being waited on cannot be cancelled through its handle: the worker is
-            // ended instead (it stops its build), and the next build starts a new one.
-            if let Some((process, stopped)) = &worker
-                && let Some(w) = process.lock().ok().and_then(|mut p| p.take())
-            {
-                stopped.store(true, std::sync::atomic::Ordering::SeqCst);
-                let _ = std::thread::Builder::new().name("texcraft-stop-worker".to_owned()).spawn(move || drop(w));
+            if let Ok(mut running) = running.lock() {
+                // Through the worker, it sends the worker's `cancel`: the worker and its preamble
+                // snapshot stay for the next build.
+                if let Some(c) = &running.canceller {
+                    c.cancel();
+                }
+                running.stop = true;
             }
         }))
     }
@@ -195,6 +191,10 @@ impl Backend for Retex {
 
     fn compile_reporting(&mut self, job: &Job, report: &mut dyn FnMut(Event)) -> Outcome {
         let started = Instant::now();
+        // A Stop for an earlier build does not reach this one.
+        if let Ok(mut running) = self.running.lock() {
+            running.stop = false;
+        }
         let main = match self.write_sources(job) {
             Ok(m) => m,
             Err(e) => return Outcome { log: e.clone(), ..Outcome::unavailable(job.id, e) },
@@ -202,25 +202,16 @@ impl Backend for Retex {
         let main_dir = job.main.as_str().rsplit_once('/').map(|(d, _)| d.to_owned());
         let src = std::fs::canonicalize(self.dir.join("src")).unwrap_or_else(|_| self.dir.join("src"));
         let place = |d: &retex::Diagnostic| convert(d, &src, main_dir.as_deref());
-        let via_worker = self.worker.as_ref().and_then(|slot| Self::through_worker(slot, &main, job.options, report));
-        let (outcome, stopped) = match via_worker {
-            Some(found) => found,
-            None => match self.in_process(&main, job.options, report) {
-                Some(o) => (o, false),
-                None => {
-                    let seconds = started.elapsed().as_secs_f64();
-                    return Outcome {
-                        seconds,
-                        ..Outcome::unavailable(job.id, "The typesetting engine stopped unexpectedly; the build was abandoned.")
-                    };
-                }
-            },
+        let via_worker = self.worker.as_ref().and_then(|slot| self.through_worker(slot, &main, job.options, report));
+        let outcome = match via_worker {
+            Some(o) => o,
+            None => self.in_process(&main, job.options, report),
         };
         let seconds = started.elapsed().as_secs_f64();
         let symbols = outcome.outputs.symbols().cloned();
         let synctex = outcome.outputs.synctex().map(|s| Arc::new(s.to_vec()));
         let base = Outcome { symbols, synctex, seconds, ..Outcome::unavailable(job.id, "") };
-        if outcome.cancelled || stopped {
+        if outcome.cancelled {
             return Outcome { status: Status::Cancelled, log: "The build was stopped.".to_owned(), ..base };
         }
         match outcome.result {
