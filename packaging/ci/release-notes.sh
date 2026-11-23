@@ -20,7 +20,7 @@ if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
   echo "error: CHANGELOG.md has no section \"## $version\"" >&2
   exit 1
 fi
-if ! grep -q "<release version=\"$version\"" "$ROOT/packaging/linux/ai.storyteller.texcraft.metainfo.xml"; then
+if ! grep -q "<release version=\"$version\"" "$ROOT/packaging/linux/io.gitlab.severin_lemaignan.TeXCraft.metainfo.xml"; then
   echo "error: the metainfo has no <release version=\"$version\">" >&2
   exit 1
 fi

@@ -29,7 +29,7 @@ Edit `texcraft.svg`: the field's colour, the `<image>`'s position and size (the 
 | `texcraft-1024.png` | full tile, 1024 px | docs, store listings |
 | `texcraft-macos-512.png` | tile with Apple's margin, 512 px | the window and Dock icon on macOS |
 | `texcraft.ico` | Windows icon, 16 to 256 px | Windows packaging |
-| `hicolor/<size>/apps/ai.storyteller.texcraft.png` | Linux icon theme, 16 to 512 px | Linux packaging; the 256 is the window icon on Windows and Linux, the 64 the mark in the top bar |
-| `hicolor/scalable/apps/ai.storyteller.texcraft.svg` | the master with the drawing embedded | Linux icon theme |
+| `hicolor/<size>/apps/io.gitlab.severin_lemaignan.TeXCraft.png` | Linux icon theme, 16 to 512 px | Linux packaging; the 256 is the window icon on Windows and Linux, the 64 the mark in the top bar |
+| `hicolor/scalable/apps/io.gitlab.severin_lemaignan.TeXCraft.svg` | the master with the drawing embedded | Linux icon theme |
 
 A `.icns` for macOS needs Apple's `iconutil` and is made with the macOS packaging.

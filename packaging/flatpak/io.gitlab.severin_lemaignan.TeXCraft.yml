@@ -2,7 +2,7 @@
 # docs/releasing.md. The build is offline: every crate comes from cargo-sources.json, which
 # flatpak-cargo-generator makes from Cargo.lock (in CI, or by hand as docs/releasing.md shows) and
 # which is not committed, since it changes with every Cargo.lock change.
-id: ai.storyteller.texcraft
+id: io.gitlab.severin_lemaignan.TeXCraft
 runtime: org.freedesktop.Platform
 runtime-version: '26.08'
 sdk: org.freedesktop.Sdk
@@ -34,11 +34,11 @@ finish-args:
   # more.
   - --filesystem=home
   # Where things live inside the sandbox (no setting needed): XDG_CACHE_HOME is
-  # ~/.var/app/ai.storyteller.texcraft/cache, so retex keeps its formats and caches in
+  # ~/.var/app/io.gitlab.severin_lemaignan.TeXCraft/cache, so retex keeps its formats and caches in
   # cache/retex/<version>/ and its own TeX Live tree in cache/retex/texlive/ there. A TeX Live
   # installed on the host is not visible (the runtime's /usr replaces the host's), so retex uses
   # its own tree: the first build downloads its bootstrap packages. TeXCraft's own data (settings,
-  # kept templates, thumbnails, control tokens) is under ~/.var/app/ai.storyteller.texcraft/.
+  # kept templates, thumbnails, control tokens) is under ~/.var/app/io.gitlab.severin_lemaignan.TeXCraft/.
 
 modules:
   - name: texcraft
@@ -58,12 +58,12 @@ modules:
       - cargo --offline fetch --manifest-path Cargo.toml --verbose
       - cargo --offline build --release --locked -p texcraft -p texcraft-cli
       - install -Dm755 -t /app/bin target/release/texcraft target/release/texcraft-cli
-      - install -Dm644 -t /app/share/applications packaging/linux/ai.storyteller.texcraft.desktop
-      - install -Dm644 -t /app/share/metainfo packaging/linux/ai.storyteller.texcraft.metainfo.xml
+      - install -Dm644 -t /app/share/applications packaging/linux/io.gitlab.severin_lemaignan.TeXCraft.desktop
+      - install -Dm644 -t /app/share/metainfo packaging/linux/io.gitlab.severin_lemaignan.TeXCraft.metainfo.xml
       - |
         for dir in assets/app-icon/hicolor/*/apps; do
           size="$(basename "$(dirname "$dir")")"
-          install -Dm644 -t "/app/share/icons/hicolor/$size/apps" "$dir"/ai.storyteller.texcraft.*
+          install -Dm644 -t "/app/share/icons/hicolor/$size/apps" "$dir"/io.gitlab.severin_lemaignan.TeXCraft.*
         done
     sources:
       # This checkout. For Flathub, this becomes a git source at the release tag.

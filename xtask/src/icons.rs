@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use resvg::{tiny_skia, usvg};
 
-const ID: &str = "ai.storyteller.texcraft";
+const ID: &str = "io.gitlab.severin_lemaignan.TeXCraft";
 const TILE_VIEWBOX: &str = r#"viewBox="0 0 512 512""#;
 /// The tile at 824/1024 of the canvas: 512 / (824/1024) = 636.272, centred.
 const MAC_VIEWBOX: &str = r#"viewBox="-62.136 -62.136 636.272 636.272""#;

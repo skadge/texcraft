@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>ai.storyteller.texcraft</id>
+  <id>io.gitlab.severin_lemaignan.TeXCraft</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT OR Apache-2.0</project_license>
   <name>TeXCraft</name>
-  <developer id="org.gitlab.severin-lemaignan.texcraft">
+  <developer id="io.gitlab.severin_lemaignan">
     <name>The TeXCraft contributors</name>
   </developer>
   <summary>Write LaTeX and see the PDF as you type</summary>
@@ -22,7 +22,7 @@
       <li>A control channel and an MCP server for agents</li>
     </ul>
   </description>
-  <launchable type="desktop-id">ai.storyteller.texcraft.desktop</launchable>
+  <launchable type="desktop-id">io.gitlab.severin_lemaignan.TeXCraft.desktop</launchable>
   <url type="homepage">https://gitlab.com/severin-lemaignan/texcraft</url>
   <url type="bugtracker">https://gitlab.com/severin-lemaignan/texcraft/-/issues</url>
   <screenshots>

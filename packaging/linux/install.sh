@@ -8,12 +8,12 @@
 #   PREFIX=/usr/local sudo -E packaging/linux/install.sh
 #
 # GNOME Shell on Wayland takes a window's icon from the desktop entry named after its app id
-# (ai.storyteller.texcraft), not from the window: with --dev, the windows of `cargo run` get the
+# (io.gitlab.severin_lemaignan.TeXCraft), not from the window: with --dev, the windows of `cargo run` get the
 # icon too (the entry runs the debug build).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PREFIX="${PREFIX:-$HOME/.local}"
-ID="ai.storyteller.texcraft"
+ID="io.gitlab.severin_lemaignan.TeXCraft"
 
 if [ "${1:-}" = "--dev" ]; then
   mkdir -p "$PREFIX/share/applications"

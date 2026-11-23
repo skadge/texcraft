@@ -20,7 +20,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ID="ai.storyteller.texcraft"
+ID="io.gitlab.severin_lemaignan.TeXCraft"
 ARCH="${ARCH:-x86_64}"
 OUT_DIR="${1:-$ROOT/target/appimage}"
 TARGET_DIR="${TARGET_DIR:-$ROOT/target/release}"

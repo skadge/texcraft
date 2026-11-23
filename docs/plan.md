@@ -91,7 +91,7 @@ Done items are marked **done** with the commit subject that brought them. The re
    - `texcraft-cli mcp --connect` to drive the open window;
    - `craft-web-api` for the web build's `window.texcraft`.
 7. **Shell from craft-libs.**
-   - `craft-window`: the title bar policy, with the app id `ai.storyteller.texcraft`.
+   - `craft-window`: the title bar policy, with the app id `io.gitlab.severin_lemaignan.TeXCraft`.
    - `craft-ui`'s `panes::PaneHost` for dividers with collapse handles.
 8. **Accessibility.**
    - Build results are announced through a live region (**done**).

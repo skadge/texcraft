@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/app-icon/hicolor/256x256/apps/ai.storyteller.texcraft.png" width="128" height="128" alt="TeXCraft icon: an engraved blackbird on a gold tile">
+  <img src="assets/app-icon/hicolor/256x256/apps/io.gitlab.severin_lemaignan.TeXCraft.png" width="128" height="128" alt="TeXCraft icon: an engraved blackbird on a gold tile">
 </p>
 
 <h1 align="center">TeXCraft</h1>

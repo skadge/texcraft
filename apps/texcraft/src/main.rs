@@ -117,7 +117,7 @@ impl eframe::App for Shell {
 #[cfg(target_os = "macos")]
 const WINDOW_ICON: &[u8] = include_bytes!("../../../assets/app-icon/texcraft-macos-512.png");
 #[cfg(not(target_os = "macos"))]
-const WINDOW_ICON: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.texcraft.png");
+const WINDOW_ICON: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/io.gitlab.severin_lemaignan.TeXCraft.png");
 
 const USAGE: &str = "usage: texcraft [--control [PORT]] [FOLDER | FILE]
 
@@ -214,7 +214,7 @@ fn run() -> eframe::Result {
     app.set_desktop_window(true);
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("TeXCraft")
-        .with_app_id("ai.storyteller.texcraft")
+        .with_app_id("io.gitlab.severin_lemaignan.TeXCraft")
         .with_inner_size([1400.0, 900.0])
         .with_decorations(system_title_bar);
     match eframe::icon_data::from_png_bytes(WINDOW_ICON) {

@@ -4,7 +4,7 @@
 use std::io::Cursor;
 
 /// The 128 px icon; drawn at 24 to 64 points, so it stays sharp on high-density screens.
-const PNG: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/128x128/apps/ai.storyteller.texcraft.png");
+const PNG: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/128x128/apps/io.gitlab.severin_lemaignan.TeXCraft.png");
 
 fn decode() -> Option<egui::ColorImage> {
     let mut reader = png::Decoder::new(Cursor::new(PNG)).read_info().ok()?;
