@@ -1,0 +1,17 @@
+#!/bin/sh
+# The AppImage's entry point. It starts the desktop app, or the command-line tool when the AppImage
+# is run through a link whose name starts with `texcraft-cli` (for agents: link the AppImage as
+# texcraft-cli and run `texcraft-cli mcp ...`).
+#
+# Nothing is set in the environment: the binaries link only glibc and open the system's display and
+# graphics libraries themselves, so no LD_LIBRARY_PATH is needed, and programs they start (the
+# browser for a link, say) see the user's own environment.
+#
+# The build worker: the app starts itself again as retex's worker (RETEX_WORKER_PROCESS), through
+# std::env::current_exe(), which is usr/bin/texcraft inside the mounted AppImage. The mount lasts
+# as long as the app runs, so the worker never goes through this script.
+HERE="$(dirname "$(readlink -f "$0")")"
+case "$(basename "${ARGV0:-$0}")" in
+  texcraft-cli*) exec "$HERE/usr/bin/texcraft-cli" "$@" ;;
+esac
+exec "$HERE/usr/bin/texcraft" "$@"
