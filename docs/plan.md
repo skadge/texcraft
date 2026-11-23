@@ -302,6 +302,27 @@ retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua i
 - Word count (`craft-latex`'s reader).
 - Emacs key bindings.
 
+### Phase 9: AI assistance
+
+Help from a language model the user chooses, for writing and for LaTeX's chores. It is off until the user sets it up, and nothing leaves the machine without saying what and to whom.
+
+1. **The connection.**
+   - **Settings › AI:** an OpenAI-compatible endpoint (base URL), a token, and a model picked from the endpoint's model list. A local server (llama.cpp, Ollama, vLLM) is the same thing at a loopback address, with no token.
+   - **Built on the suite's AI layer** (craft-libs: `craft-ai-core`'s connections, models, roles, consent and request log; its OpenAI-compatible provider; the shared store and connection panel, where they have landed). TeXCraft adds no client of its own (rule 9), and registers its tasks as roles of that layer.
+   - **The token** goes to the system's secret store (`SecretString`), never into the preferences file or a log.
+   - **Disclosure:** the first use of each kind of request shows what will be sent (the selection, the paragraphs around it, the preamble, a build message) and to which endpoint, and asks once per connection. Each request is logged with its size and the endpoint. A project can turn AI off for itself (`.texcraft/` setting), for work under embargo.
+   - **The browser:** the same, if the endpoint answers cross-origin requests (many hosted APIs don't). The setup says so when the endpoint refuses.
+2. **What it does.** Every change it proposes arrives as a suggested change (`docs/collaboration-roadmap.md`, R2), so it is reviewed, accepted or rejected like a co-author's, and undone like any edit. It never writes to a file by itself.
+   - **Explain a build message:** on a card of the build log or in the problem popup, a plain-language explanation of the error with the source around it, and a proposed fix as a suggestion.
+   - **Rewrite the selection:** clearer, shorter, more formal, fix grammar and spelling, change the tense or voice, translate. LaTeX markup, labels, citations and maths are kept as they are, and the result is checked for it before it is offered.
+   - **Continue as you type:** an optional grey completion after the caret, accepted with Tab (also in Vim's Insert mode), after a pause, cancelled by typing on.
+   - **Make LaTeX from a description:** a table from pasted data or a sentence, an equation from words or a photo of a formula (when the model takes images), a TikZ figure, a `figure` environment. Each is typeset in the preview before it is inserted.
+   - **Bibliography help:** a BibTeX entry completed from a title or DOI, marked as model output, never added without review (models invent references).
+   - **Ask about the document:** a side panel to ask questions about the open file or the project (what a macro does, where a symbol is defined, what a reviewer might object to), with answers that link to the lines they mention.
+   - **Review:** "Review this section" leaves comments in the margin (R1), written by "AI (model name)", for the author to resolve.
+3. **For agents and automation:** the same tasks as commands (`ai.explain`, `ai.rewrite`, `ai.generate`…), which refuse plainly when no connection is set.
+4. **Tests:** against craft-ai-core's mock provider: what is sent for each task (no more than disclosed), suggestions that keep markup, refusals without a connection or consent, cancellation; nothing in tests reaches a network.
+
 ## 4. retex
 
 retex's design note `docs/design/embedding.md` (in the retex repository) answers TeXCraft's requests R1 to R12. [docs/retex-changes.md](retex-changes.md) says what TeXCraft does with each release and lists the points still open. In short:
