@@ -35,6 +35,14 @@ fn a_line_of_a_file_in_the_main_documents_folder_goes_to_the_pdf_and_back() {
     let back = s.execute("pdf.source", &json!({"page": 1, "x": x, "y": y})).unwrap();
     assert_eq!((back["path"].as_str(), back["line"].as_u64()), (Some("paper/sections/one.tex"), Some(1)), "{back}");
 
+    // The last paragraph of `one.tex` ends in `main.tex` (its line box is tagged with main.tex's
+    // line 6), but a click in it goes to its own file (retex-synctex 2.3.0).
+    let last = s.execute("pdf.locate", &json!({"path": "paper/sections/one.tex", "line": 3})).unwrap();
+    let rect = &last["rects"][0];
+    let (x, y) = (rect["x"].as_f64().unwrap() + 5.0, rect["y"].as_f64().unwrap() + 3.0);
+    let back = s.execute("pdf.source", &json!({"page": rect["page"], "x": x, "y": y})).unwrap();
+    assert_eq!(back["path"].as_str(), Some("paper/sections/one.tex"), "the last paragraph of an included file went elsewhere: {back}");
+
     let main = s.execute("pdf.locate", &json!({"path": "paper/main.tex", "line": 3})).unwrap();
     assert!(main["rects"].as_array().is_some_and(|r| !r.is_empty()), "the main file's line is not found: {main}");
     assert!(s.execute("pdf.source", &json!({"page": 9, "x": 1.0, "y": 1.0})).is_err(), "a page the PDF does not have gave a place");
