@@ -1,0 +1,91 @@
+# TeXCraft as a Flatpak. Built in CI by the `flatpak` job (.gitlab-ci.yml); to build it by hand, see
+# docs/releasing.md. The build is offline: every crate comes from cargo-sources.json, which
+# flatpak-cargo-generator makes from Cargo.lock (in CI, or by hand as docs/releasing.md shows) and
+# which is not committed, since it changes with every Cargo.lock change.
+id: ai.storyteller.texcraft
+runtime: org.freedesktop.Platform
+runtime-version: '26.08'
+sdk: org.freedesktop.Sdk
+# The SDK's Rust. rust-toolchain.toml (1.95) is not read here, there being no rustup: the extension
+# follows Rust's stable releases, which are newer than the workspace's rust-version.
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: texcraft
+
+finish-args:
+  # The window: Wayland, and X11 only where there is no Wayland. X11 shares memory with the
+  # server through IPC.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  # wgpu draws through Vulkan or GL on the GPU.
+  - --device=dri
+  # retex downloads TeX Live packages as documents need them (and, here, its whole tree: see
+  # below), and New Project downloads publishers' templates from TeX Live. The control channel
+  # (`texcraft --control`) listens on the loopback, which the host shares through this too.
+  - --share=network
+  # Project folders. A project is a folder of .tex files, figures and bibliographies, with the
+  # build's own files and the comments (.texcraft/) written beside them, opened again from the
+  # recent projects by path and from the command line (`texcraft %f`), and watched for edits made
+  # outside TeXCraft. The file chooser portal alone would give each project a document-portal path
+  # that changes how recent projects, \input of a neighbouring folder and outside edits behave, so
+  # the home folder is shared instead. Projects outside it (another disk) open through the portal.
+  # The build worker is this same binary started again inside this sandbox, so it needs nothing
+  # more.
+  - --filesystem=home
+  # Where things live inside the sandbox (no setting needed): XDG_CACHE_HOME is
+  # ~/.var/app/ai.storyteller.texcraft/cache, so retex keeps its formats and caches in
+  # cache/retex/<version>/ and its own TeX Live tree in cache/retex/texlive/ there. A TeX Live
+  # installed on the host is not visible (the runtime's /usr replaces the host's), so retex uses
+  # its own tree: the first build downloads its bootstrap packages. TeXCraft's own data (settings,
+  # kept templates, thumbnails, control tokens) is under ~/.var/app/ai.storyteller.texcraft/.
+
+modules:
+  - name: texcraft
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        # flatpak-cargo-generator's sources write their vendored crates and the cargo
+        # configuration that uses them here.
+        CARGO_HOME: /run/build/texcraft/cargo
+        CARGO_NET_OFFLINE: 'true'
+        # The interface faces (Inter, Liberation Mono, Source Serif 4) from craft-fonts, below;
+        # a missing or mismatched face fails the build instead of falling back to egui's.
+        CRAFT_FONTS_DIR: /run/build/texcraft/craft-fonts
+        CRAFT_FONTS_REQUIRED: '1'
+    build-commands:
+      - cargo --offline fetch --manifest-path Cargo.toml --verbose
+      - cargo --offline build --release --locked -p texcraft -p texcraft-cli
+      - install -Dm755 -t /app/bin target/release/texcraft target/release/texcraft-cli
+      - install -Dm644 -t /app/share/applications packaging/linux/ai.storyteller.texcraft.desktop
+      - install -Dm644 -t /app/share/metainfo packaging/linux/ai.storyteller.texcraft.metainfo.xml
+      - |
+        for dir in assets/app-icon/hicolor/*/apps; do
+          size="$(basename "$(dirname "$dir")")"
+          install -Dm644 -t "/app/share/icons/hicolor/$size/apps" "$dir"/ai.storyteller.texcraft.*
+        done
+    sources:
+      # This checkout. For Flathub, this becomes a git source at the release tag.
+      - type: dir
+        path: ../..
+        skip:
+          - .git
+          - target
+          - out
+          - tools
+          - craft-fonts
+          - dist
+          - plan
+          - corpus
+          - .cargo-home
+          - .flatpak-builder
+          - flatpak-build
+          - flatpak-repo
+      - cargo-sources.json
+      # storytold/craft-fonts at a pinned commit (OFL-1.1 faces, checked against its manifest's
+      # SHA-256 by crates/ui-egui/build.rs). Keep it equal to CRAFT_FONTS_REV in .gitlab-ci.yml.
+      - type: git
+        url: https://github.com/storytold/craft-fonts
+        commit: 26a79230872f9b2acd3dd68500677e294350ab94
+        dest: craft-fonts
