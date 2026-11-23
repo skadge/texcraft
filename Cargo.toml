@@ -104,6 +104,16 @@ debug = "line-tables-only"
 lto = "thin"
 codegen-units = 1
 
+# The browser build (apps/texcraft-web, `trunk build --release`): smaller code over speed, no debug
+# information, every crate optimised as one unit, so the first download is as small as it can be.
+[profile.web]
+inherits = "release"
+opt-level = "s"
+lto = "fat"
+strip = true
+debug = false
+panic = "abort"
+
 # The suite's egui and winit forks, and craft-libs' vendored hayro, at the revs craft-libs pins.
 [patch.crates-io]
 hayro = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }

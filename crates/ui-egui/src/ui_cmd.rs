@@ -31,10 +31,19 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("edit.find", "Find", "Edit", "find", Some("Cmd+F")),
     ui("edit.replace", "Replace", "Edit", "find", Some("Cmd+Alt+F")),
     ui("edit.goto_line", "Go to Line…", "Edit", "find", Some("Cmd+Alt+G")),
+    ui("view.show_in_pdf", "Show in PDF", "Edit", "find", Some("Cmd+Alt+J")),
     ui("edit.quick_fix", "Quick Fix", "Edit", "fix", Some("Cmd+.")),
     ui("edit.comment", "Comment", "Edit", "review", Some("Cmd+Alt+M")),
     ui("edit.next_comment", "Next Comment", "Edit", "review", Some("F8")),
     ui("edit.previous_comment", "Previous Comment", "Edit", "review", Some("Shift+F8")),
+    ui("app.settings", "Settings…", "Edit", "settings", Some("Cmd+,")),
+    // Insert holds what the editor's toolbar does, for the keyboard and when the toolbar is narrow.
+    ui("edit.section", "Section", "Insert", "headings", None),
+    ui("edit.subsection", "Subsection", "Insert", "headings", None),
+    ui("edit.subsubsection", "Subsubsection", "Insert", "headings", None),
+    ui("edit.paragraph", "Paragraph Heading", "Insert", "headings", None),
+    ui("edit.bold", "Bold", "Insert", "style", Some("Cmd+B")),
+    ui("edit.italic", "Italic", "Insert", "style", Some("Cmd+I")),
     ui("edit.figure", "Figure", "Insert", "float", None),
     ui("edit.table", "Table", "Insert", "float", None),
     ui("edit.math_inline", "Inline Formula", "Insert", "math", Some("Cmd+Shift+M")),
@@ -45,12 +54,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("edit.link", "Link", "Insert", "refs", None),
     ui("edit.itemize", "Bulleted List", "Insert", "lists", None),
     ui("edit.enumerate", "Numbered List", "Insert", "lists", None),
-    ui("edit.bold", "Bold", "Format", "style", Some("Cmd+B")),
-    ui("edit.italic", "Italic", "Format", "style", Some("Cmd+I")),
-    ui("edit.section", "Section", "Format", "headings", None),
-    ui("edit.subsection", "Subsection", "Format", "headings", None),
-    ui("edit.subsubsection", "Subsubsection", "Format", "headings", None),
-    ui("edit.paragraph", "Paragraph Heading", "Format", "headings", None),
+    // Not in the menu bar: each has its button in the window (the layout switch, the rail, the
+    // PDF pane's toolbar, the app mark), and its shortcut and command for the keyboard and agents.
     ui("view.layout.split", "Editor and PDF", "View", "layout", None),
     ui("view.layout.editor", "Editor Only", "View", "layout", None),
     ui("view.layout.preview", "PDF Only", "View", "layout", None),
@@ -59,7 +64,6 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.side.review", "Review", "View", "side", None),
     ui("view.side.hide", "Hide Side Panel", "View", "side", None),
     ui("view.logs", "Build Log", "View", "pdf", None),
-    ui("view.show_in_pdf", "Show in PDF", "View", "pdf", Some("Cmd+Alt+J")),
     ui("view.zoom_in", "Zoom In", "View", "pdf", Some("Cmd+=")),
     ui("view.zoom_out", "Zoom Out", "View", "pdf", Some("Cmd+-")),
     ui("view.fit_width", "Fit Width", "View", "pdf", None),
@@ -67,7 +71,6 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.previous_region", "Previous Region", "View", "regions", Some("Shift+F6")),
     ui("view.theme", "Switch Light and Dark", "View", "theme", None),
     ui("app.start", "Start Page", "View", "settings", None),
-    ui("app.settings", "Settings…", "View", "settings", Some("Cmd+,")),
     ui("help.shortcuts", "Keyboard Shortcuts", "Help", "help", None),
     ui("help.manual", "retex User Manual", "Help", "help", None),
     ui("help.about", "About TeXCraft", "Help", "about", None),
@@ -77,7 +80,9 @@ pub const UI_COMMANDS: &[UiCommand] = &[
 pub const RETEX_MANUAL: &str = "https://severin-lemaignan.gitlab.io/retex/retex-manual.pdf";
 
 /// The menus of the menu bar, in order.
-pub const MENUS: &[&str] = &["File", "Edit", "Insert", "Format", "Build", "View", "Help"];
+/// The menus of the menu bar, in order. Compiling and its options are on the Compile button, the
+/// view's switches on their buttons: the bar keeps what has no button of its own, or is text work.
+pub const MENUS: &[&str] = &["File", "Edit", "Insert", "Help"];
 
 /// Runs `id`: a view command, an engine command that first asks for input, or a plain engine
 /// command.

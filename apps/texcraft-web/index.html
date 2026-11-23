@@ -11,13 +11,37 @@
   <link rel="icon" type="image/svg+xml" href="icons/ai.storyteller.texcraft.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/32/ai.storyteller.texcraft.png">
   <link rel="apple-touch-icon" href="icons/256/ai.storyteller.texcraft.png">
-  <link data-trunk rel="rust" data-bin="texcraft-web" data-wasm-opt="z" data-weak-refs />
+  <link data-trunk rel="rust" data-bin="texcraft-web" data-cargo-profile="web" data-wasm-opt="z" data-wasm-opt-params="--enable-bulk-memory --enable-bulk-memory-opt --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals --enable-reference-types --enable-multivalue" data-weak-refs data-initializer="loader.js" />
   <style>
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1b1d21; }
+    :root { --bg: #f4f5f7; --text: #1f2328; --muted: #656d76; --track: #dde1e6; --accent: #2457d6; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #1b1d21; --text: #e6e8eb; --muted: #9aa1ab; --track: #2c3036; --accent: #6d9bff; } }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
     #texcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    /* Shown until the editor draws its first frame (the app removes it). */
+    #loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; z-index: 1; }
+    #loading img { width: 72px; height: 72px; border-radius: 16px; }
+    #loading .name { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+    #loading .bar { width: 240px; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; position: relative; }
+    #loading .bar::after { content: ""; position: absolute; top: 0; bottom: 0; width: 35%; border-radius: 2px; background: var(--accent);
+      animation: slide 1.3s ease-in-out infinite; }
+    @keyframes slide { from { left: -35%; } to { left: 100%; } }
+    /* Once the size is known, the bar shows the share downloaded (loader.js sets --done). */
+    #loading .bar.known::after { animation: none; left: 0; width: var(--done, 0%); transition: width 0.15s linear; }
+    @media (prefers-reduced-motion: reduce) { #loading .bar:not(.known)::after { animation: none; left: 0; width: 100%; opacity: 0.5; } }
+    #loading .status { font-variant-numeric: tabular-nums; }
+    #loading .note { color: var(--muted); font-size: 13px; max-width: 320px; text-align: center; }
   </style>
 </head>
 <body>
   <canvas id="texcraft_canvas"></canvas>
+  <div id="loading">
+    <img src="icons/256/ai.storyteller.texcraft.png" alt="">
+    <div class="name">TeXCraft</div>
+    <div class="bar" role="progressbar" aria-label="Loading the editor" aria-valuemin="0" aria-valuemax="100"></div>
+    <div class="status">Loading the editor…</div>
+    <div class="note">The first visit downloads the editor; later visits start from your browser's cache.</div>
+    <noscript>TeXCraft needs JavaScript and WebAssembly.</noscript>
+  </div>
 </body>
 </html>

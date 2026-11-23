@@ -77,6 +77,56 @@ impl App {
         }
     }
 
+    /// Files the user chose or dropped, by name and contents (the browser has no paths): each is
+    /// added to the project at the top level, replacing a file of the same name.
+    pub fn add_files(&mut self, files: Vec<(String, Vec<u8>)>) {
+        use base64::Engine as _;
+        let mut added = 0;
+        for (name, bytes) in files {
+            let name = name.rsplit(['/', '\\']).next().unwrap_or(&name).to_owned();
+            let data = base64::engine::general_purpose::STANDARD.encode(&bytes);
+            if self.run("file.import", json!({"path": name, "data": data})).is_some() {
+                added += 1;
+            }
+        }
+        if added > 0 {
+            self.view.last_edit = Some(0.0);
+            self.view.status = Some((tl!("Files added to the project: {n}").replace("{n}", &added.to_string()), false));
+        }
+    }
+
+    /// Files dropped on the window this frame: added to the project (from their path on the
+    /// desktop, their contents in the browser). While files are dragged over, says what a drop does.
+    pub(crate) fn dropped_files(&mut self, ctx: &egui::Context) {
+        let (dropped, hovering) = ctx.input(|i| (i.raw.dropped_files.clone(), !i.raw.hovered_files.is_empty()));
+        if self.start {
+            return;
+        }
+        if hovering {
+            let t = self.tokens;
+            let screen = ctx.content_rect();
+            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("drop-files")));
+            painter.rect_filled(screen, 0.0, t.canvas.gamma_multiply(0.85));
+            painter.rect_stroke(screen.shrink(12.0), t.corner(), egui::Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
+            painter.text(screen.center(), egui::Align2::CENTER_CENTER, tl!("Drop to add the files to the project"), t.title(), t.text);
+        }
+        for file in dropped {
+            // On the desktop a dropped file has its path on disk; in the browser only a name, and
+            // its contents are read asynchronously by the shell (`take_dropped_files`).
+            if cfg!(target_arch = "wasm32") {
+                self.dropped.push(file);
+            } else {
+                self.run("file.import", json!({"source": file.path().display().to_string()}));
+                self.view.last_edit = Some(0.0);
+            }
+        }
+    }
+
+    /// Files dropped in the browser, for the shell to read and give to [`App::add_files`].
+    pub fn take_dropped_files(&mut self) -> Vec<egui::DroppedFileHandle> {
+        std::mem::take(&mut self.dropped)
+    }
+
     /// A pick the shell could not show: its reason goes to the status line.
     pub fn pick_failed(&mut self, reason: String) {
         self.view.status = Some((reason, true));

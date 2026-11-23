@@ -19,14 +19,14 @@ Behaviour specifications from observing other editors are kept in the gitignored
 | Interface | Rail, project files with folders and a main-document mark, outline, tabs, highlighted source (`texcraft-latex` lexer), error lines, preview with zoom, fit width and page count, build log grouped by severity that jumps to the line, automatic build after typing stops and once on opening, light and dark themes from tokens with a contrast test. |
 | Agents | `texcraft-cli mcp` refuses to start without both automation roots. Paths are checked after resolution (symbolic links, hard links, `..`). Building is refused while confined (see R4). |
 | CLI | `texcraft-cli compile FOLDER [--output FILE]`. |
-| Web | `texcraft-web` builds for wasm32 (Trunk). Building says the engine is not available there yet (phase 4). |
+| Web | `texcraft-web` builds for wasm32 with Trunk, in the size-optimised `web` profile, with a loading screen; files come in through the browser's file picker or by dropping them. Building says the engine is not available there yet (phase 4). |
 | Tests | One integration binary per crate. A command sweep with hostile parameters, a path-escape table, lexer coverage invariants, theme contrast, and a kittest check that a build without an engine reports why. |
 
 Measured on the example project (`examples/article`): `texcraft-cli compile` writes a one-page PDF with 0.5 s in the engine, and the desktop app compiles it on opening and shows it in the preview.
 
 ## 2. Principles that shape the work
 
-- **Rust only** (rule 11). No handwritten JavaScript, no webview. In the browser, the engine host, the worker and storage are Rust through wasm-bindgen and web-sys.
+- **Rust only** (rule 11). No handwritten JavaScript, no webview. In the browser, the engine host, the worker and storage are Rust through wasm-bindgen and web-sys. One departure, decided by the operator (2026-11-22): `apps/texcraft-web/loader.js`, Trunk's initializer hooks that show the download's progress on the loading screen, since no Rust runs before the WebAssembly module has arrived.
 - **Commands first** (rule 14). Every panel action is a registered command, so the control channel, the page API and the agent tools can do everything the interface does. A UI change starts by adding or reusing a command.
 - **Shared library first** (rule 9). Widgets, parsers and protocols that another Craft app could use go to craft-libs: the code editor widget, the SyncTeX reader and the WASI host are candidates. Each move is its own PR.
 - **Honest results** (rule 15). An unsupported feature is disabled with its reason or answers with an error, in the interface and in automation.
@@ -232,7 +232,7 @@ A toggle at the top of the editor switches between **Source** and **Formatted**,
    - Double-click in the PDF moves the cursor to the source line.
    - A divider button and `Ctrl+Click` in the source move the PDF to the place and mark it.
    - This needs the SyncTeX data from builds (R1) and a reader (R7).
-   - **Status:** **done** with retex 2.1.0's `retex-synctex`: double-click or Ctrl+click in the PDF opens the source line; View › Show in PDF (Cmd+Alt+J, and Ctrl+click in the editor where nothing is defined) marks the caret's line in the PDF for a moment; agents have `pdf.source` and `pdf.locate`. A click in the last paragraph of an `\input` file goes to the including file (docs/retex-changes.md).
+   - **Status:** **done** with retex 2.1.0's `retex-synctex`: double-click or Ctrl+click in the PDF opens the source line; Edit › Show in PDF (Cmd+Alt+J, and Ctrl+click in the editor where nothing is defined) marks the caret's line in the PDF for a moment; agents have `pdf.source` and `pdf.locate`. A click in the last paragraph of an `\input` file goes to the including file (docs/retex-changes.md).
 5. **Preview.**
    - Page rendering on a background thread with a texture cache, and the scroll position kept across rebuilds.
    - Page navigation, zoom presets (fit width, fit page, 50–400 %), and a presentation mode.

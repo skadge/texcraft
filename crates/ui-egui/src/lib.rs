@@ -149,6 +149,8 @@ pub struct App {
     desktop_window: bool,
     /// Whether the system's frame was last asked for (`ViewportCommand::Decorations`).
     decorations: Option<bool>,
+    /// Files dropped in the browser, waiting for the shell to read them.
+    dropped: Vec<egui::DroppedFileHandle>,
 }
 
 impl App {
@@ -205,6 +207,7 @@ impl App {
             prefs_changed: false,
             desktop_window: false,
             decorations: None,
+            dropped: Vec::new(),
         };
         app.remember_project();
         app
@@ -441,6 +444,7 @@ impl App {
             self.decorations = Some(self.prefs.system_title_bar);
             ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(self.prefs.system_title_bar));
         }
+        self.dropped_files(ctx);
         self.view.regions.clear();
         top_bar::show(self, ui);
         status::show(self, ui);

@@ -18,6 +18,7 @@ templates-download = ["texcraft-templates/download"]
 
 [dependencies]
 texcraft-project = { workspace = true }
+base64 = "0.22"
 texcraft-latex = { workspace = true }
 texcraft-compile = { workspace = true, default-features = false }
 texcraft-templates = { workspace = true }
