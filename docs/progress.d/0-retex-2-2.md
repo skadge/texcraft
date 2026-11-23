@@ -1,1 +1,0 @@
-- 2026-11-22: retex 2.2.0. Quick fixes of build messages carry retex's own titles ("Use \textbf"); the language server learns of TeXCraft's builds directly; images in the editor pane decode through retex-image, JPEG included; `.bib` files get retex's bibliography hints.

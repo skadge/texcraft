@@ -41,8 +41,20 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.1.0" date="2026-11-22">
-      <description><p>First development version.</p></description>
+    <release version="0.1.0" date="2026-11-23" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.1.0</url>
+      <description>
+        <p>The first development release.</p>
+        <ul>
+          <li>Projects as folders, a start page with recent projects, and a gallery of publishers' templates</li>
+          <li>TeXCraft's own source editor, with find and replace, completions and optional Vim key bindings</li>
+          <li>Builds when typing pauses, through a worker that keeps the preamble, and a build log with retex's help and fixes</li>
+          <li>Navigation between the source and the PDF</li>
+          <li>A read-only formatted view of .tex files</li>
+          <li>Comments in a margin beside their passage, kept in the project</li>
+          <li>A control channel and an MCP server for agents</li>
+        </ul>
+      </description>
     </release>
   </releases>
 </component>

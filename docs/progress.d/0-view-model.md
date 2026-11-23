@@ -1,1 +1,0 @@
-- 2026-11-22: The formatted view's model: headings, styled text, lists, formulas, references, citations, footnotes, links and figure cards, each mapped to the source it stands for, with typographic quotes and dashes; anything else stays visible as its source.

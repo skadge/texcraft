@@ -1,1 +1,0 @@
-- 2026-11-23: Dialogs polished from screenshots: one frame with room around the content, button rows that no longer float down, a named field in prompts, wider setting descriptions, a gallery as wide as its cards, a centred About, and a review margin whose header fits.

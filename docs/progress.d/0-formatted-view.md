@@ -1,1 +1,0 @@
-- 2026-11-22: A formatted view of .tex files, read-only for now: the Source/Formatted switch above the editor shows the file as a document, with headings, styled text, lists, figure cards with their images, chips for references and citations, and formulas as their source. Double-click any part to edit its source there.

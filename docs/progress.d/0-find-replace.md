@@ -1,1 +1,0 @@
-- 2026-11-22: Find and replace. An Edit menu (Undo, Redo, Select All, Find, Replace, Go to Line) and a find bar with match case, regular expressions, whole words and in-selection; Replace All is one undoable step. Agents get `file.find` and `file.replace` with the same matching.

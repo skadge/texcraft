@@ -1,1 +1,0 @@
-- 2026-11-22: retex 2.1.0. Builds report their progress (the page being built, the pass), can be stopped, and give the language server their symbols, so completion and hover know the document's commands, environments and citations. Build errors are underlined on their exact span, with retex's own fixes. The SyncTeX data is kept for source and PDF navigation.

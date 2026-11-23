@@ -1,1 +1,0 @@
-- 2026-11-22: Faster rebuilds. The desktop app builds through retex's worker, which keeps the preamble between builds: on a document with a heavy preamble a rebuild after an edit takes under a second instead of about five. A line reached from the PDF, the log or the outline flashes in the editor. `packaging/linux/install.sh --dev` gives `cargo run` windows their icon in GNOME.

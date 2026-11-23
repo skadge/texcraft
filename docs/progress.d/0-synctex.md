@@ -1,1 +1,0 @@
-- 2026-11-22: Source and PDF navigation. A double-click or Ctrl+click in the PDF opens the line that made it; View › Show in PDF (Cmd+Alt+J) marks the caret's line in the PDF. Agents get the same with `pdf.source` and `pdf.locate`.

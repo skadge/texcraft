@@ -1,1 +1,0 @@
-- 2026-11-22: Scaffold. The workspace is laid out in layers (project, latex, compile, preview, engine, ui-egui, mcp) with a desktop app, a CLI and a web app. retex builds the project in process, and craft-pdf draws the preview. The editor highlights LaTeX, the build log jumps to lines, and the agent tools are confined to their roots.
