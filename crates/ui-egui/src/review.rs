@@ -372,9 +372,8 @@ fn margin(app: &mut App, ui: &mut egui::Ui, rect: Rect, path: &ProjectPath) {
     ui.painter().vline(rect.left(), rect.y_range(), Stroke::new(1.0, t.separator));
     let header = Rect::from_min_size(rect.min, vec2(rect.width(), t.toolbar_height));
     ui.scope_builder(UiBuilder::new().max_rect(header.shrink2(vec2(3.0 * t.unit, 0.0))).layout(Layout::left_to_right(Align::Center)), |ui| {
-        let all = app.session.review().threads().iter().filter(|th| th.anchor.path == path.as_str() && th.is_open()).count();
-        widgets::section_title(ui, &t, &crate::i18n::trn(all, "{n} comment", "{n} comments"));
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| filter_bar(app, ui, "review-margin-filter"));
+        // The counts are in the status bar and the file tree: the narrow margin keeps the filter.
+        filter_bar(app, ui, "review-margin-filter");
     });
     ui.painter().hline(rect.x_range(), header.bottom(), Stroke::new(1.0, t.separator));
     let area = Rect::from_min_max(pos2(rect.left(), header.bottom() + 1.0), rect.max);
@@ -621,7 +620,7 @@ fn card(app: &mut App, ui: &mut egui::Ui, th: &Thread, in_panel: bool, actions: 
                 ui.horizontal(|ui| {
                     let (bar, _) = ui.allocate_exact_size(vec2(3.0, 16.0), Sense::hover());
                     ui.painter().rect_filled(bar, 1.5, author_colour);
-                    ui.add(egui::Label::new(RichText::new(note).font(t.small()).italics().color(colour)).wrap());
+                    ui.add(egui::Label::new(RichText::new(note).font(egui::FontId::monospace(t.small_size)).color(colour)).wrap());
                 });
             }
             for (i, m) in th.messages.iter().enumerate() {
@@ -738,7 +737,7 @@ fn composer(app: &mut App, ui: &mut egui::Ui, actions: &mut Vec<Action>) -> Rect
                         ui.horizontal(|ui| {
                             let (bar, _) = ui.allocate_exact_size(vec2(3.0, 16.0), Sense::hover());
                             ui.painter().rect_filled(bar, 1.5, accent);
-                            ui.add(egui::Label::new(RichText::new(short(&c.quote, 90)).font(t.small()).italics().color(t.text_muted)).wrap());
+                            ui.add(egui::Label::new(RichText::new(short(&c.quote, 90)).font(egui::FontId::monospace(t.small_size)).color(t.text_muted)).wrap());
                         });
                     }
                     let id = ui.make_persistent_id("review-composer");

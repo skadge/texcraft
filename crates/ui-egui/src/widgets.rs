@@ -296,3 +296,9 @@ pub fn hairline(ui: &mut Ui, t: &Tokens) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
     ui.painter().rect_filled(rect, 0.0, t.separator);
 }
+
+/// The frame of every dialog: the system's popup look with room around its content, so titles,
+/// tabs and buttons sit on one inner edge.
+pub fn dialog_frame(ctx: &egui::Context) -> egui::Frame {
+    egui::Frame::popup(&ctx.global_style()).inner_margin(egui::Margin::same(20))
+}

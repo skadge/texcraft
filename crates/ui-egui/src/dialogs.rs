@@ -79,7 +79,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let t = app.tokens;
     let mut outcome = Outcome::Open;
     let width = 400.0;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-dialog")).show(ctx, |ui| {
+    let modal = egui::Modal::new(egui::Id::unique("texcraft-dialog")).frame(crate::widgets::dialog_frame(ctx)).show(ctx, |ui| {
         ui.set_width(width);
         match dialog {
             Dialog::Prompt(p) => outcome = prompt(ui, &t, p),
@@ -135,7 +135,7 @@ fn unsaved(ui: &mut egui::Ui, t: &Tokens, project: &str) -> Outcome {
     ui.label(tl!("Changes that are not saved are lost."));
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+    button_row(ui, |ui| {
         let save = egui::Button::new(RichText::new(tl!("Save")).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
         if ui.add(save.min_size(egui::vec2(88.0, 30.0))).clicked() {
             outcome = Outcome::Run;
@@ -161,7 +161,7 @@ fn title(ui: &mut egui::Ui, t: &Tokens, text: &str) {
 fn buttons(ui: &mut egui::Ui, t: &Tokens, action: &str, danger: bool, enabled: bool) -> Outcome {
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+    button_row(ui, |ui| {
         let fill = if danger { t.error } else { t.accent };
         let label = RichText::new(action).color(t.on_accent).font(t.strong());
         let primary = egui::Button::new(label).fill(fill).stroke(egui::Stroke::NONE).min_size(egui::vec2(88.0, 30.0));
@@ -177,8 +177,9 @@ fn buttons(ui: &mut egui::Ui, t: &Tokens, action: &str, danger: bool, enabled: b
 
 fn prompt(ui: &mut egui::Ui, t: &Tokens, p: &mut Prompt) -> Outcome {
     title(ui, t, p.title);
-    ui.label(RichText::new(p.label).color(t.text_muted));
-    let edit = ui.add(egui::TextEdit::singleline(&mut p.value).desired_width(f32::INFINITY).margin(egui::vec2(8.0, 6.0)));
+    let label = ui.label(RichText::new(p.label).color(t.text_muted));
+    // The field is named by the label above it (AGENTS.md rule 21).
+    let edit = ui.add(egui::TextEdit::singleline(&mut p.value).desired_width(f32::INFINITY).margin(egui::vec2(8.0, 6.0))).labelled_by(label.id);
     if p.focus {
         edit.request_focus();
         p.focus = false;
@@ -218,20 +219,30 @@ fn shortcuts(app: &mut App, ctx: &egui::Context) {
 }
 
 fn about(ui: &mut egui::Ui, t: &Tokens, engine: &str) -> Outcome {
-    let (icon, _) = ui.allocate_exact_size(egui::vec2(64.0, 64.0), egui::Sense::hover());
-    crate::app_icon::paint(ui, icon);
-    ui.add_space(t.unit * 2.0);
-    title(ui, t, "TeXCraft");
-    ui.label(format!("{} {}", tl!("Version"), env!("CARGO_PKG_VERSION")));
-    ui.label(RichText::new(format!("{} {engine}", tl!("Typesetting engine:"))).color(t.text_muted));
-    ui.add_space(t.unit * 2.0);
-    ui.label(RichText::new(tl!("Free software under the MIT or Apache 2.0 licence. Icons from Lucide (ISC).")).font(t.small()).color(t.text_muted));
+    ui.vertical_centered(|ui| {
+        let (icon, _) = ui.allocate_exact_size(egui::vec2(64.0, 64.0), egui::Sense::hover());
+        crate::app_icon::paint(ui, icon);
+        ui.add_space(t.unit * 2.0);
+        title(ui, t, "TeXCraft");
+        ui.label(format!("{} {}", tl!("Version"), env!("CARGO_PKG_VERSION")));
+        ui.label(RichText::new(format!("{} {engine}", tl!("Typesetting engine:"))).color(t.text_muted));
+        ui.add_space(t.unit * 2.0);
+        ui.label(
+            RichText::new(tl!("Free software under the MIT or Apache 2.0 licence. Icons from Lucide (ISC).")).font(t.small()).color(t.text_muted),
+        );
+    });
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+    button_row(ui, |ui| {
         if ui.add(egui::Button::new(tl!("Close")).min_size(egui::vec2(80.0, 30.0))).clicked() {
             outcome = Outcome::Cancel;
         }
     });
     outcome
+}
+
+/// A row of buttons from the right edge, as tall as a button: a layout from the right would
+/// otherwise take the dialog's whole height and push its buttons down.
+fn button_row(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 32.0), Layout::right_to_left(Align::Center), add);
 }

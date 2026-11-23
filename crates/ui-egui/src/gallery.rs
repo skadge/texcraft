@@ -161,8 +161,8 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let mut close = false;
     let mut create: Option<String> = None;
     let mut blank = false;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-gallery")).show(ctx, |ui| {
-        ui.set_width(920.0);
+    let modal = egui::Modal::new(egui::Id::unique("texcraft-gallery")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
+        ui.set_width(866.0); // four cards and their gaps beside the categories, with no leftover strip
         ui.horizontal(|ui| {
             ui.label(RichText::new(tl!("New Project")).font(t.title()));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {

@@ -21,8 +21,8 @@ const TABS: &[(&str, &str)] = &[
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let t = app.tokens;
     let mut close = false;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-settings")).show(ctx, |ui| {
-        ui.set_width(640.0);
+    let modal = egui::Modal::new(egui::Id::unique("texcraft-settings")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
+        ui.set_width(720.0);
         ui.horizontal(|ui| {
             ui.label(RichText::new(tl!("Settings")).font(t.title()));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -74,7 +74,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
 fn setting(ui: &mut egui::Ui, t: &Tokens, name: &str, help: &str, control: impl FnOnce(&mut egui::Ui) -> Option<egui::Response>) {
     ui.horizontal(|ui| {
         ui.vertical(|ui| {
-            ui.set_width(220.0);
+            ui.set_width(300.0);
             ui.spacing_mut().item_spacing.y = 2.0;
             ui.label(RichText::new(name).font(t.strong()));
             ui.label(RichText::new(help).font(t.small()).color(t.text_muted));
