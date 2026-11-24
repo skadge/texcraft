@@ -1,0 +1,1 @@
+- 2026-11-24: The comments beside the text can be hidden (a button on the margin, and View › Show or Hide the Comments Beside the Text), kept in the preferences; the Review panel still lists them (#1).

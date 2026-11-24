@@ -63,6 +63,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.side.outline", "Outline", "View", "side", None),
     ui("view.side.review", "Review", "View", "side", None),
     ui("view.side.hide", "Hide Side Panel", "View", "side", None),
+    ui("view.comments", "Show or Hide the Comments Beside the Text", "View", "side", None),
     ui("view.logs", "Build Log", "View", "pdf", None),
     ui("view.zoom_in", "Zoom In", "View", "pdf", Some("Cmd+=")),
     ui("view.zoom_out", "Zoom Out", "View", "pdf", Some("Cmd+-")),
@@ -95,6 +96,7 @@ pub fn run(app: &mut App, id: &str) {
         "view.side.outline" => app.view.side = Some(Side::Outline),
         "view.side.review" => app.view.side = Some(Side::Review),
         "view.side.hide" => app.view.side = None,
+        "view.comments" => crate::review::toggle_margin(app),
         "view.logs" => app.view.logs = !app.view.logs,
         "view.theme" => {
             let next = if app.tokens.scheme == Scheme::Dark { ThemePref::Light } else { ThemePref::Dark };

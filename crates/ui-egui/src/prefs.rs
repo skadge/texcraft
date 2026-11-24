@@ -39,6 +39,8 @@ pub struct Prefs {
     pub shortcuts: craft_keymap::Overrides,
     /// The editor's key bindings are Vim's.
     pub vim: bool,
+    /// A wide editor shows the open file's comments in a margin beside the text.
+    pub review_margin: bool,
     /// The editor closes brackets and environments as they are typed.
     pub auto_close: bool,
     /// The desktop window has the system's title bar, not the window controls in the top bar.
@@ -92,6 +94,7 @@ impl Default for Prefs {
             recent: Vec::new(),
             shortcuts: craft_keymap::Overrides::default(),
             vim: false,
+            review_margin: true,
             auto_close: true,
             system_title_bar: false,
             build: texcraft_engine::BuildOptions::default(),

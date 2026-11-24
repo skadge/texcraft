@@ -334,8 +334,21 @@ pub(crate) fn announce_changes(app: &mut App) {
     app.review.seen = Some((revision, now));
 }
 
+/// Shows or hides the margin of comments (the View command; the margin's own button hides it). The
+/// comments stay in the Review panel, and writing one shows the margin again.
+pub(crate) fn toggle_margin(app: &mut App) {
+    app.prefs.review_margin = !app.prefs.review_margin;
+    app.prefs_changed = true;
+    let message = if app.prefs.review_margin {
+        tl!("Comments are shown beside the text.")
+    } else {
+        tl!("Comments beside the text are hidden; the Review panel lists them.")
+    };
+    app.view.status = Some((message.to_owned(), false));
+}
+
 /// Shows the source editor, with the margin at its right when the pane is wide enough and the file
-/// has threads or a comment being written.
+/// has threads (unless the user hid the margin) or a comment being written.
 pub(crate) fn with_margin<T>(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, show: impl FnOnce(&mut App, &mut egui::Ui) -> T) -> T {
     announce_changes(app);
     app.editor.source.passages = passages(app, path);
@@ -343,7 +356,7 @@ pub(crate) fn with_margin<T>(app: &mut App, ui: &mut egui::Ui, path: &ProjectPat
     app.review.wide = full.width() >= MARGIN_MIN_PANE;
     let composing = app.review.composer.as_ref().is_some_and(|c| &c.path == path);
     let any = app.session.review().threads().iter().any(|t| t.anchor.path == path.as_str());
-    if !app.review.wide || !(composing || any) {
+    if !app.review.wide || !(composing || (any && app.prefs.review_margin)) {
         return show(app, ui);
     }
     let split = full.right() - MARGIN_WIDTH;
@@ -374,6 +387,13 @@ fn margin(app: &mut App, ui: &mut egui::Ui, rect: Rect, path: &ProjectPath) {
     ui.scope_builder(UiBuilder::new().max_rect(header.shrink2(vec2(3.0 * t.unit, 0.0))).layout(Layout::left_to_right(Align::Center)), |ui| {
         // The counts are in the status bar and the file tree: the narrow margin keeps the filter.
         filter_bar(app, ui, "review-margin-filter");
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            let hide = ui.add(egui::Button::image(icons::image("x", t.icon_size, t.text_muted)).frame_when_inactive(false));
+            hide.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Hide the comments beside the text")));
+            if hide.on_hover_text(tl!("Hide the comments beside the text (the Review panel still lists them)")).clicked() {
+                toggle_margin(app);
+            }
+        });
     });
     ui.painter().hline(rect.x_range(), header.bottom(), Stroke::new(1.0, t.separator));
     let area = Rect::from_min_max(pos2(rect.left(), header.bottom() + 1.0), rect.max);

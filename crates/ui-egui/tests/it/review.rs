@@ -60,3 +60,20 @@ fn a_narrow_editor_shows_the_threads_in_the_review_panel() {
     h.run();
     assert!(h.query_by_label_contains("Comment by Ada on “two”").is_some(), "the Review panel does not list the thread");
 }
+
+#[test]
+fn the_margin_of_comments_can_be_hidden_and_shown_again() {
+    let mut h = harness("one two three\n").unwrap();
+    let made = h
+        .state_mut()
+        .control("engine.execute", &json!({"command": "review.comment", "params": {"path": "main.tex", "start": 4, "end": 7, "text": "Two?"}}));
+    assert_eq!(made["ok"], true, "{made}");
+    h.run();
+    assert!(h.query_by_label_contains("Comment by Ada").is_some(), "no margin to hide");
+    h.get_by_role_and_label(Role::Button, "Hide the comments beside the text").click();
+    h.run();
+    assert!(h.query_by_label_contains("Comment by Ada").is_none(), "the margin is still shown");
+    ui_cmd::run(h.state_mut(), "view.comments");
+    h.run();
+    assert!(h.query_by_label_contains("Comment by Ada").is_some(), "the View command did not show it again");
+}
