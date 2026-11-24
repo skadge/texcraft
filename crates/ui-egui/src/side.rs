@@ -70,8 +70,12 @@ fn file_icon(path: &ProjectPath) -> &'static str {
     }
 }
 
+/// An image of the project being dragged from the file list, to the editor (`file.insert_image`).
+pub(crate) struct ImageDrag(pub ProjectPath);
+
 enum Action {
     Open(ProjectPath),
+    InsertImage(ProjectPath),
     SetMain(ProjectPath),
     Rename(ProjectPath),
     Delete(ProjectPath),
@@ -103,6 +107,7 @@ fn files(app: &mut App, ui: &mut egui::Ui) {
         Some(Action::Open(p)) => {
             app.run("file.open", json!({"path": p.as_str()}));
         }
+        Some(Action::InsertImage(p)) => crate::editor::insert_image(app, &p, None),
         Some(Action::SetMain(p)) => {
             app.run("file.set_main", json!({"path": p.as_str()}));
         }
@@ -168,7 +173,17 @@ fn folder(app: &App, ui: &mut egui::Ui, node: &Folder, prefix: &str, depth: usiz
             tag: is_main.then(|| tl!("main")),
             icon_color: is_main.then_some(t.accent),
         };
-        let r = widgets::row(ui, &t, &row);
+        let image = texcraft_engine::cmd::is_image(path);
+        let r = if image {
+            let r = widgets::row_sensing(ui, &t, &row, egui::Sense::click_and_drag());
+            r.dnd_set_drag_payload(ImageDrag(path.clone()));
+            if r.dragged() {
+                drag_label(ui, &t, path.file_name());
+            }
+            r
+        } else {
+            widgets::row(ui, &t, &row)
+        };
         let comments = crate::review::open_in(app, path);
         if comments > 0 {
             widgets::badge(ui, &t, egui::pos2(r.rect.right() - 4.0 * t.unit, r.rect.center().y), comments, t.text_muted);
@@ -178,7 +193,19 @@ fn folder(app: &App, ui: &mut egui::Ui, node: &Folder, prefix: &str, depth: usiz
         if r.clicked() {
             *action = Some(Action::Open(path.clone()));
         }
-        r.context_menu(|ui| {
+        // The menu opens from the keyboard too (Shift+F10, the Menu key), at the row.
+        let by_key = r.id.with("menu-by-key");
+        let mut menu = egui::Popup::context_menu(&r);
+        if r.has_focus()
+            && ui.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10) || i.consume_key(egui::Modifiers::NONE, egui::Key::Menu))
+        {
+            ui.data_mut(|d| d.insert_temp(by_key, true));
+            menu = menu.open_memory(egui::SetOpenCommand::Bool(true));
+        }
+        if ui.data(|d| d.get_temp::<bool>(by_key)).unwrap_or(false) {
+            menu = menu.at_position(r.rect.left_bottom());
+        }
+        let shown = menu.show(|ui| {
             ui.set_min_width(200.0);
             if crate::top_bar::item(ui, &t, Some("file-text"), tl!("Open"), None, Ok(())) {
                 *action = Some(Action::Open(path.clone()));
@@ -193,6 +220,9 @@ fn folder(app: &App, ui: &mut egui::Ui, node: &Folder, prefix: &str, depth: usiz
             if crate::top_bar::item(ui, &t, Some("star"), tl!("Set as Main Document"), None, can_main) {
                 *action = Some(Action::SetMain(path.clone()));
             }
+            if image && crate::top_bar::item(ui, &t, Some("image"), tl!("Insert in Document"), None, crate::editor::can_insert(app)) {
+                *action = Some(Action::InsertImage(path.clone()));
+            }
             ui.separator();
             if crate::top_bar::item(ui, &t, Some("pencil"), tl!("Rename…"), None, Ok(())) {
                 *action = Some(Action::Rename(path.clone()));
@@ -201,7 +231,27 @@ fn folder(app: &App, ui: &mut egui::Ui, node: &Folder, prefix: &str, depth: usiz
                 *action = Some(Action::Delete(path.clone()));
             }
         });
+        if shown.is_none() {
+            ui.data_mut(|d| d.remove::<bool>(by_key));
+        }
     }
+}
+
+/// The name of the file being dragged, by the pointer.
+fn drag_label(ui: &egui::Ui, t: &Tokens, name: &str) {
+    let Some(p) = ui.ctx().pointer_interact_pos() else { return };
+    egui::Area::new(egui::Id::unique("texcraft-file-drag"))
+        .order(egui::Order::Tooltip)
+        .fixed_pos(p + egui::vec2(12.0, 8.0))
+        .interactable(false)
+        .show(ui.ctx(), |ui| {
+            egui::Frame::popup(ui.style()).fill(t.raised).stroke(t.hairline()).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add(crate::icons::image("image", t.icon_size, t.text_muted));
+                    ui.label(egui::RichText::new(name).font(t.small()).color(t.text));
+                });
+            });
+        });
 }
 
 fn outline(app: &mut App, ui: &mut egui::Ui) {
