@@ -129,7 +129,6 @@ Off until the user connects a model (any OpenAI-compatible endpoint, a local one
 
 ## Open decisions
 
-- **Name:** "TeX" is a trademark of the American Mathematical Society; the name needs a trademark check before it ships widely.
 - **Licence:** `MIT OR Apache-2.0`, the suite's; retex is CC0, so either works.
 - **Home of the repository:** on gitlab.com, mirrored to GitHub; joining the Craft suite means an RFC in craft-contrib.
 
