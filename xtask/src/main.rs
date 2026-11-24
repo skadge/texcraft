@@ -5,10 +5,13 @@
 //! - `wasm`: the web app and the crates it uses build for wasm32-unknown-unknown.
 //! - `ci`: fmt, clippy, tests, layers, wasm, in that order.
 //! - `icons`: every app icon file, from the SVG master in `assets/app-icon/`.
+//! - `retex-wasm`: retex's engine for the browser, from the release `Cargo.lock` pins (needs
+//!   nightly and wasi-sdk; see `retex_wasm.rs`).
 //! - `templates [ID]`: fetches every template of the catalogue (or one) from its source, with its
 //!   checks, into a scratch store, and builds each with `texcraft-cli compile`. Needs the network.
 
 mod icons;
+mod retex_wasm;
 
 use std::process::{Command, ExitCode};
 
@@ -44,8 +47,12 @@ fn main() -> ExitCode {
         "wasm" => wasm(),
         "ci" => ci(),
         "icons" => icons::run(),
+        "retex-wasm" => std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .ok_or_else(|| "xtask is not in a workspace".to_owned())
+            .and_then(retex_wasm::run),
         "templates" => templates(std::env::args().nth(2).as_deref()),
-        _ => Err("usage: cargo xtask layers | wasm | ci | icons | templates [ID]".to_owned()),
+        _ => Err("usage: cargo xtask layers | wasm | ci | icons | retex-wasm | templates [ID]".to_owned()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
