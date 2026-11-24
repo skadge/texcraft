@@ -46,7 +46,7 @@ struct Folder {
     files: Vec<ProjectPath>,
 }
 
-fn tree(paths: impl Iterator<Item = ProjectPath>) -> Folder {
+fn tree<'a>(paths: impl Iterator<Item = &'a ProjectPath>, empty: impl Iterator<Item = &'a ProjectPath>) -> Folder {
     let mut root = Folder::default();
     for path in paths {
         let mut node = &mut root;
@@ -55,6 +55,12 @@ fn tree(paths: impl Iterator<Item = ProjectPath>) -> Folder {
             node = node.folders.entry((*part).to_owned()).or_default();
         }
         node.files.push(path.clone());
+    }
+    for folder in empty {
+        let mut node = &mut root;
+        for part in folder.as_str().split('/') {
+            node = node.folders.entry(part.to_owned()).or_default();
+        }
     }
     root
 }
@@ -70,14 +76,44 @@ fn file_icon(path: &ProjectPath) -> &'static str {
     }
 }
 
-/// An image of the project being dragged from the file list, to the editor (`file.insert_image`).
+/// An image of the project being dragged from the file list, to the editor (`file.insert_image`)
+/// or onto a folder (moved there).
 pub(crate) struct ImageDrag(pub ProjectPath);
+
+/// Another file being dragged from the file list, onto a folder (moved there).
+struct FileDrag(ProjectPath);
+
+/// The file dropped on a row this frame, of either kind of drag.
+fn dropped(r: &egui::Response) -> Option<ProjectPath> {
+    r.dnd_release_payload::<ImageDrag>().map(|d| d.0.clone()).or_else(|| r.dnd_release_payload::<FileDrag>().map(|d| d.0.clone()))
+}
+
+/// Outlines `r` while a file is dragged over it, to show where it would go.
+fn drop_target(ui: &egui::Ui, t: &Tokens, r: &egui::Response) {
+    if r.dnd_hover_payload::<ImageDrag>().is_some() || r.dnd_hover_payload::<FileDrag>().is_some() {
+        ui.painter().rect_stroke(r.rect, t.radius, ui.visuals().selection.stroke, egui::StrokeKind::Inside);
+    }
+}
+
+/// Where a file named like `path` goes in `folder` ("" is the project's top level).
+fn moved_to(path: &ProjectPath, folder: &str) -> String {
+    let folder = folder.trim().trim_matches('/');
+    if folder.is_empty() { path.file_name().to_owned() } else { format!("{folder}/{}", path.file_name()) }
+}
+
+/// The folder `path` is in ("" for the top level).
+fn folder_of(path: &ProjectPath) -> &str {
+    path.as_str().rsplit_once('/').map_or("", |(dir, _)| dir)
+}
 
 enum Action {
     Open(ProjectPath),
     InsertImage(ProjectPath),
     SetMain(ProjectPath),
     Rename(ProjectPath),
+    MoveTo(ProjectPath),
+    Move(ProjectPath, String),
+    NewIn(&'static str, String),
     Delete(ProjectPath),
     Toggle(String),
 }
@@ -93,15 +129,24 @@ fn files(app: &mut App, ui: &mut egui::Ui) {
         } else if add.clicked() {
             ui_cmd::run(app, "file.import");
         }
+        if widgets::icon_button(ui, &t, "folder-plus", tl!("New Folder…"), true).clicked() {
+            ui_cmd::run(app, "file.new_folder");
+        }
         if widgets::icon_button(ui, &t, "file-plus", tl!("New File…"), true).clicked() {
             ui_cmd::run(app, "file.new");
         }
     });
-    let root = tree(app.session.project().paths().cloned());
+    let root = tree(app.session.project().paths(), app.session.empty_folders());
     let mut action = None;
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 1.0;
         folder(app, ui, &root, "", 0, &mut action);
+        // Below the rows: the project's top level, where a dragged file can be dropped.
+        let rest = ui.allocate_response(ui.available_size().max(egui::vec2(0.0, t.row_height)), egui::Sense::hover());
+        drop_target(ui, &t, &rest);
+        if let Some(p) = dropped(&rest) {
+            action = Some(Action::Move(p, String::new()));
+        }
     });
     match action {
         Some(Action::Open(p)) => {
@@ -125,6 +170,30 @@ fn files(app: &mut App, ui: &mut egui::Ui) {
                 params: Box::new(move |to| json!({"from": from, "to": to})),
                 focus: true,
             }));
+        }
+        Some(Action::Move(p, folder)) => {
+            let to = moved_to(&p, &folder);
+            if to != p.as_str() {
+                app.run("file.rename", json!({"from": p.as_str(), "to": to}));
+            }
+        }
+        Some(Action::MoveTo(p)) => {
+            let from = p.as_str().to_owned();
+            app.view.dialog = Some(Dialog::Prompt(Prompt {
+                title: tl!("Move File"),
+                label: tl!("The folder to move it to (empty for the top level)"),
+                value: folder_of(&p).to_owned(),
+                action: tl!("Move"),
+                command: "file.rename",
+                params: Box::new(move |folder| json!({"from": from, "to": moved_to(&p, folder)})),
+                focus: true,
+            }));
+        }
+        Some(Action::NewIn(command, dir)) => {
+            ui_cmd::run(app, command);
+            if let Some(Dialog::Prompt(prompt)) = &mut app.view.dialog {
+                prompt.value = format!("{dir}/");
+            }
         }
         Some(Action::Delete(p)) => {
             app.view.dialog = Some(Dialog::Confirm(Confirm {
@@ -153,9 +222,22 @@ fn folder(app: &App, ui: &mut egui::Ui, node: &Folder, prefix: &str, depth: usiz
             tag: None,
             icon_color: None,
         };
-        if widgets::row(ui, &t, &row).clicked() {
+        let r = widgets::row(ui, &t, &row);
+        if r.clicked() {
             *action = Some(Action::Toggle(path.clone()));
         }
+        drop_target(ui, &t, &r);
+        if let Some(p) = dropped(&r) {
+            *action = Some(Action::Move(p, path.clone()));
+        }
+        context_menu(ui, &r, |ui| {
+            if crate::top_bar::item(ui, &t, Some("file-plus"), tl!("New File…"), None, Ok(())) {
+                *action = Some(Action::NewIn("file.new", path.clone()));
+            }
+            if crate::top_bar::item(ui, &t, Some("folder-plus"), tl!("New Folder…"), None, Ok(())) {
+                *action = Some(Action::NewIn("file.new_folder", path.clone()));
+            }
+        });
         if open {
             folder(app, ui, sub, &path, depth + 1, action);
         }
@@ -174,16 +256,15 @@ fn folder(app: &App, ui: &mut egui::Ui, node: &Folder, prefix: &str, depth: usiz
             icon_color: is_main.then_some(t.accent),
         };
         let image = texcraft_engine::cmd::is_image(path);
-        let r = if image {
-            let r = widgets::row_sensing(ui, &t, &row, egui::Sense::click_and_drag());
+        let r = widgets::row_sensing(ui, &t, &row, egui::Sense::click_and_drag());
+        if image {
             r.dnd_set_drag_payload(ImageDrag(path.clone()));
-            if r.dragged() {
-                drag_label(ui, &t, path.file_name());
-            }
-            r
         } else {
-            widgets::row(ui, &t, &row)
-        };
+            r.dnd_set_drag_payload(FileDrag(path.clone()));
+        }
+        if r.dragged() {
+            drag_label(ui, &t, row.icon, path.file_name());
+        }
         let comments = crate::review::open_in(app, path);
         if comments > 0 {
             widgets::badge(ui, &t, egui::pos2(r.rect.right() - 4.0 * t.unit, r.rect.center().y), comments, t.text_muted);
@@ -193,20 +274,7 @@ fn folder(app: &App, ui: &mut egui::Ui, node: &Folder, prefix: &str, depth: usiz
         if r.clicked() {
             *action = Some(Action::Open(path.clone()));
         }
-        // The menu opens from the keyboard too (Shift+F10, the Menu key), at the row.
-        let by_key = r.id.with("menu-by-key");
-        let mut menu = egui::Popup::context_menu(&r);
-        if r.has_focus()
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10) || i.consume_key(egui::Modifiers::NONE, egui::Key::Menu))
-        {
-            ui.data_mut(|d| d.insert_temp(by_key, true));
-            menu = menu.open_memory(egui::SetOpenCommand::Bool(true));
-        }
-        if ui.data(|d| d.get_temp::<bool>(by_key)).unwrap_or(false) {
-            menu = menu.at_position(r.rect.left_bottom());
-        }
-        let shown = menu.show(|ui| {
-            ui.set_min_width(200.0);
+        context_menu(ui, &r, |ui| {
             if crate::top_bar::item(ui, &t, Some("file-text"), tl!("Open"), None, Ok(())) {
                 *action = Some(Action::Open(path.clone()));
             }
@@ -227,18 +295,41 @@ fn folder(app: &App, ui: &mut egui::Ui, node: &Folder, prefix: &str, depth: usiz
             if crate::top_bar::item(ui, &t, Some("pencil"), tl!("Rename…"), None, Ok(())) {
                 *action = Some(Action::Rename(path.clone()));
             }
+            if crate::top_bar::item(ui, &t, Some("folder"), tl!("Move to…"), None, Ok(())) {
+                *action = Some(Action::MoveTo(path.clone()));
+            }
             if crate::top_bar::item(ui, &t, Some("trash"), tl!("Delete…"), None, Ok(())) {
                 *action = Some(Action::Delete(path.clone()));
             }
         });
-        if shown.is_none() {
-            ui.data_mut(|d| d.remove::<bool>(by_key));
-        }
+    }
+}
+
+/// The context menu of row `r`, which opens from the keyboard too (Shift+F10, the Menu key), at
+/// the row.
+fn context_menu(ui: &mut egui::Ui, r: &egui::Response, items: impl FnOnce(&mut egui::Ui)) {
+    let by_key = r.id.with("menu-by-key");
+    let mut menu = egui::Popup::context_menu(r);
+    if r.has_focus()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10) || i.consume_key(egui::Modifiers::NONE, egui::Key::Menu))
+    {
+        ui.data_mut(|d| d.insert_temp(by_key, true));
+        menu = menu.open_memory(egui::SetOpenCommand::Bool(true));
+    }
+    if ui.data(|d| d.get_temp::<bool>(by_key)).unwrap_or(false) {
+        menu = menu.at_position(r.rect.left_bottom());
+    }
+    let shown = menu.show(|ui| {
+        ui.set_min_width(200.0);
+        items(ui);
+    });
+    if shown.is_none() {
+        ui.data_mut(|d| d.remove::<bool>(by_key));
     }
 }
 
 /// The name of the file being dragged, by the pointer.
-fn drag_label(ui: &egui::Ui, t: &Tokens, name: &str) {
+fn drag_label(ui: &egui::Ui, t: &Tokens, icon: &str, name: &str) {
     let Some(p) = ui.ctx().pointer_interact_pos() else { return };
     egui::Area::new(egui::Id::unique("texcraft-file-drag"))
         .order(egui::Order::Tooltip)
@@ -247,7 +338,7 @@ fn drag_label(ui: &egui::Ui, t: &Tokens, name: &str) {
         .show(ui.ctx(), |ui| {
             egui::Frame::popup(ui.style()).fill(t.raised).stroke(t.hairline()).show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.add(crate::icons::image("image", t.icon_size, t.text_muted));
+                    ui.add(crate::icons::image(icon, t.icon_size, t.text_muted));
                     ui.label(egui::RichText::new(name).font(t.small()).color(t.text));
                 });
             });

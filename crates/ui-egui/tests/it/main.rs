@@ -5,6 +5,7 @@ mod completion;
 mod contrast;
 mod control;
 mod find;
+mod folders;
 mod formatted;
 mod frame;
 mod gallery;

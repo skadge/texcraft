@@ -165,6 +165,7 @@ pub fn run(app: &mut App, id: &str) {
         "build.save_pdf" => ask(app, tl!("Save PDF As"), tl!("The file to write the PDF to"), tl!("Save"), "build.save_pdf"),
         "project.save" if app.session.dir().is_none() => run(app, "project.save_as"),
         "file.new" => ask(app, tl!("New File"), tl!("Its path in the project, such as chapters/intro.tex"), tl!("Create"), "file.new"),
+        "file.new_folder" => ask(app, tl!("New Folder"), tl!("Its path in the project, such as chapters/figures"), tl!("Create"), "file.new_folder"),
         "build.auto" => {
             let on = !app.session.settings.auto_compile;
             app.run("build.auto", json!({"on": on}));
