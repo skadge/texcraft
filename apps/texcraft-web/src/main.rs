@@ -18,7 +18,7 @@ mod store;
 
 #[cfg(target_arch = "wasm32")]
 mod web {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::rc::Rc;
 
     use texcraft_engine::library::{Change, Library};
@@ -73,6 +73,8 @@ mod web {
         errors: Errors,
         fetched: Fetched,
         repaint: Repaint,
+        /// Whether the session has unsaved changes, for the page's `beforeunload` listener.
+        unsaved: Rc<Cell<bool>>,
     }
 
     impl Shell {
@@ -86,12 +88,18 @@ mod web {
                 for change in changes {
                     let (store, errors, ctx) = (store.clone(), self.errors.clone(), ctx.clone());
                     wasm_bindgen_futures::spawn_local(async move {
-                        let (name, result) = match &change {
-                            Change::Saved(name, project) => (name, store.put_project(name, project).await),
-                            Change::Deleted(name) => (name, store.delete_project(name).await),
+                        use texcraft_ui_egui::i18n::t;
+                        let project_failed = t("{project} could not be kept in this browser: {error}");
+                        let (name, result, what) = match &change {
+                            Change::Saved(name, project) => (name, store.put_project(name, project).await, project_failed),
+                            Change::Deleted(name) => (name, store.delete_project(name).await, project_failed),
+                            Change::Thread { project, file, text } => (
+                                project,
+                                store.put_thread(project, file, text.as_deref()).await,
+                                t("A comment of {project} could not be kept in this browser: {error}"),
+                            ),
                         };
                         if let Err(e) = result {
-                            let what = texcraft_ui_egui::i18n::t("{project} could not be kept in this browser: {error}");
                             errors.borrow_mut().push(what.replace("{project}", name).replace("{error}", &e));
                             ctx.request_repaint();
                         }
@@ -189,6 +197,7 @@ mod web {
                 hide_loading_screen();
             }
             self.app.frame(ui);
+            self.unsaved.set(self.app.session().is_dirty());
             let ctx = ui.ctx().clone();
             self.picks(&ctx);
             self.keep(&ctx);
@@ -253,6 +262,24 @@ mod web {
         ondrop.forget();
     }
 
+    /// Asks the browser to warn before the page is left or reloaded while `unsaved` is set (the
+    /// browser shows its own question; pages cannot word it).
+    fn warn_before_leaving(unsaved: Rc<Cell<bool>>) {
+        let Some(window) = web_sys::window() else { return };
+        let listener = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::BeforeUnloadEvent)>::new(move |event: web_sys::BeforeUnloadEvent| {
+            if unsaved.get() {
+                event.prevent_default();
+                // Older browsers warn only when `returnValue` is set.
+                event.set_return_value("unsaved");
+            }
+        });
+        if let Err(e) = window.add_event_listener_with_callback("beforeunload", listener.as_ref().unchecked_ref()) {
+            log::warn!("no warning before leaving the page: {e:?}");
+        }
+        // The listener lives as long as the page.
+        listener.forget();
+    }
+
     /// The engine worker's script, made by Trunk (`index.html`).
     const WORKER: &str = "engine-worker_loader.js";
 
@@ -304,7 +331,9 @@ mod web {
             let chosen = Chosen::default();
             let repaint = Repaint::default();
             watch_drops(&canvas, &chosen, &errors, &repaint);
-            let shell = Shell { app, chosen, started: false, store, errors, fetched: Fetched::default(), repaint };
+            let unsaved = Rc::new(Cell::new(false));
+            warn_before_leaving(unsaved.clone());
+            let shell = Shell { app, chosen, started: false, store, errors, fetched: Fetched::default(), repaint, unsaved };
             let started = eframe::WebRunner::new().start(canvas, eframe::WebOptions::default(), Box::new(|_cc| Ok(Box::new(shell)))).await;
             if let Err(e) = started {
                 log::error!("TeXCraft could not start: {e:?}");

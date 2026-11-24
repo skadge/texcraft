@@ -1,9 +1,17 @@
 //! What the browser keeps between visits, in IndexedDB (database `texcraft`): the projects of the
-//! session's library (store `projects`, by name), the preferences (store `app`, key `prefs`, as
-//! JSON) and the recent projects' thumbnails (store `thumbnails`, by project).
+//! session's library (store `projects`, by name), their review threads (store `reviews`, by
+//! `<project>/<thread file>`, each the text a project folder keeps in `.texcraft/review/`), the
+//! preferences (store `app`, key `prefs`, as JSON) and the recent projects' thumbnails (store
+//! `thumbnails`, by project).
+//!
+//! The threads have their own store, not a field of the project's value, so a comment stores one
+//! small value at once instead of rewriting the project's files. Version 1 had no `reviews`
+//! store: opening it makes the store, and its projects have no threads.
 //!
 //! IndexedDB's requests call back; each is wrapped in a Promise here and awaited. Writes are
 //! awaited to their transaction's end, so an error reaches the user.
+
+use std::collections::BTreeMap;
 
 use js_sys::{Array, Object, Promise, Reflect, Uint8Array};
 use texcraft_engine::library::Stored;
@@ -11,11 +19,12 @@ use texcraft_ui_egui::Thumbnail;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{IdbDatabase, IdbObjectStore, IdbOpenDbRequest, IdbRequest, IdbTransaction, IdbTransactionMode};
+use web_sys::{IdbDatabase, IdbKeyRange, IdbObjectStore, IdbOpenDbRequest, IdbRequest, IdbTransaction, IdbTransactionMode};
 
 const NAME: &str = "texcraft";
-const VERSION: u32 = 1;
+const VERSION: u32 = 2;
 const PROJECTS: &str = "projects";
+const REVIEWS: &str = "reviews";
 const APP: &str = "app";
 const THUMBNAILS: &str = "thumbnails";
 
@@ -92,7 +101,7 @@ impl Store {
         let upgrade = Closure::<dyn FnMut()>::new(move || {
             let Ok(db) = upgrading.result().and_then(|r| r.dyn_into::<IdbDatabase>()) else { return };
             let names = db.object_store_names();
-            for store in [PROJECTS, APP, THUMBNAILS] {
+            for store in [PROJECTS, REVIEWS, APP, THUMBNAILS] {
                 if !names.contains(store)
                     && let Err(e) = db.create_object_store(store)
                 {
@@ -128,17 +137,64 @@ impl Store {
         committed(&tx).await
     }
 
+    /// The projects, each with its review threads.
     pub async fn projects(&self) -> Result<Vec<(String, Stored)>, String> {
-        Ok(self.all(PROJECTS).await?.into_iter().filter_map(|(name, v)| Some((name, project_from(&v)?))).collect())
+        let mut reviews: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+        for (key, text) in self.all(REVIEWS).await? {
+            if let (Some((project, file)), Some(text)) = (key.split_once('/'), text.as_string()) {
+                reviews.entry(project.to_owned()).or_default().insert(file.to_owned(), text);
+            }
+        }
+        Ok(self
+            .all(PROJECTS)
+            .await?
+            .into_iter()
+            .filter_map(|(name, v)| {
+                let mut project = project_from(&v)?;
+                project.review = reviews.remove(&name).unwrap_or_default();
+                Some((name, project))
+            })
+            .collect())
     }
 
+    /// Both stores of a project, for one transaction.
+    fn project_stores(&self) -> Result<(IdbTransaction, IdbObjectStore, IdbObjectStore), String> {
+        let names = Array::of2(&JsValue::from_str(PROJECTS), &JsValue::from_str(REVIEWS));
+        let tx = self.db.transaction_with_str_sequence_and_mode(&names, IdbTransactionMode::Readwrite).map_err(why)?;
+        let projects = tx.object_store(PROJECTS).map_err(why)?;
+        let reviews = tx.object_store(REVIEWS).map_err(why)?;
+        Ok((tx, projects, reviews))
+    }
+
+    /// Replaces the project and all its threads, in one transaction.
     pub async fn put_project(&self, name: &str, project: &Stored) -> Result<(), String> {
-        self.put(PROJECTS, name, &project_to(project)).await
+        let (tx, projects, reviews) = self.project_stores()?;
+        projects.put_with_key(&project_to(project), &JsValue::from_str(name)).map_err(why)?;
+        let threads: JsValue = threads_of(name)?.into();
+        reviews.delete(&threads).map_err(why)?;
+        for (file, text) in &project.review {
+            reviews.put_with_key(&JsValue::from_str(text), &JsValue::from_str(&thread_key(name, file))).map_err(why)?;
+        }
+        committed(&tx).await
+    }
+
+    /// Stores thread `file` of project `name` with `text`, or deletes it (`None`).
+    pub async fn put_thread(&self, name: &str, file: &str, text: Option<&str>) -> Result<(), String> {
+        let (tx, store) = self.store(REVIEWS, IdbTransactionMode::Readwrite)?;
+        let key = JsValue::from_str(&thread_key(name, file));
+        match text {
+            Some(text) => store.put_with_key(&JsValue::from_str(text), &key).map(drop),
+            None => store.delete(&key).map(drop),
+        }
+        .map_err(why)?;
+        committed(&tx).await
     }
 
     pub async fn delete_project(&self, name: &str) -> Result<(), String> {
-        let (tx, store) = self.store(PROJECTS, IdbTransactionMode::Readwrite)?;
-        store.delete(&JsValue::from_str(name)).map_err(why)?;
+        let (tx, projects, reviews) = self.project_stores()?;
+        projects.delete(&JsValue::from_str(name)).map_err(why)?;
+        let threads: JsValue = threads_of(name)?.into();
+        reviews.delete(&threads).map_err(why)?;
         committed(&tx).await?;
         let (tx, store) = self.store(THUMBNAILS, IdbTransactionMode::Readwrite)?;
         store.delete(&JsValue::from_str(name)).map_err(why)?;
@@ -182,8 +238,20 @@ impl Store {
     }
 }
 
+/// The key of thread `file` of project `name` in the `reviews` store; a project's name has no `/`
+/// (`library::check_name`).
+fn thread_key(name: &str, file: &str) -> String {
+    format!("{name}/{file}")
+}
+
+/// Every key of project `name`'s threads: from `<name>/` up to `<name>0` (`0` follows `/`).
+fn threads_of(name: &str) -> Result<IdbKeyRange, String> {
+    IdbKeyRange::bound_with_lower_open_and_upper_open(&JsValue::from_str(&format!("{name}/")), &JsValue::from_str(&format!("{name}0")), false, true)
+        .map_err(why)
+}
+
 /// A project as IndexedDB keeps it: `{main, saved, names, contents}`, the files' paths and their
-/// bytes in two arrays.
+/// bytes in two arrays. Its threads are in the `reviews` store.
 fn project_to(project: &Stored) -> JsValue {
     let names = Array::new();
     let contents = Array::new();
@@ -204,5 +272,5 @@ fn project_from(v: &JsValue) -> Option<Stored> {
     let names: Array = get(v, "names").dyn_into().ok()?;
     let contents: Array = get(v, "contents").dyn_into().ok()?;
     let files = names.iter().zip(contents.iter()).filter_map(|(n, c)| Some((n.as_string()?, c.dyn_into::<Uint8Array>().ok()?.to_vec()))).collect();
-    Some(Stored { files, main: get(v, "main").as_string(), saved: get(v, "saved").as_f64().unwrap_or(0.0) as i64 })
+    Some(Stored { files, main: get(v, "main").as_string(), saved: get(v, "saved").as_f64().unwrap_or(0.0) as i64, review: BTreeMap::new() })
 }

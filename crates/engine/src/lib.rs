@@ -405,15 +405,21 @@ impl Session {
         Ok(review::Id::new(millis, u128::from_le_bytes(bytes)))
     }
 
-    /// Thread `id` changed: it is written to the project's folder, when there is one.
+    /// Thread `id` changed: it is written at once to the project's folder, or to the project's
+    /// entry in the library, when the project has one.
     fn review_changed(&mut self, id: review::Id) -> Result<()> {
         self.review.revision += 1;
-        // Review threads are kept in the project's folder; the library does not keep them yet.
-        let Some(dir) = self.dir.clone().filter(|_| self.library.is_none()) else { return Ok(()) };
-        if let Some(roots) = &self.roots {
-            roots.check(&review_store::folder(&dir), file_access::Access::Write)?;
-        }
-        self.review.write(&dir, id).map_err(|e| format!("The review is changed but could not be saved: {e}"))
+        let Some(dir) = self.dir.clone() else { return Ok(()) };
+        let written = match &mut self.library {
+            Some(library) => self.review.write_to_library(library, &dir.display().to_string(), id),
+            None => {
+                if let Some(roots) = &self.roots {
+                    roots.check(&review_store::folder(&dir), file_access::Access::Write)?;
+                }
+                self.review.write(&dir, id)
+            }
+        };
+        written.map_err(|e| format!("The review is changed but could not be saved: {e}"))
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -441,7 +447,10 @@ impl Session {
         // A project of the library has a name, not a folder on disk.
         let folder = dir.as_deref().filter(|_| self.library.is_none());
         self.language = language::Language::new(folder);
-        self.review = review_store::State::load(folder, &self.project);
+        self.review = match (&self.library, &dir) {
+            (Some(library), Some(name)) => review_store::State::load_from_library(library, &name.display().to_string(), &self.project),
+            _ => review_store::State::load(folder, &self.project),
+        };
         self.sync = None;
         self.dir = dir;
         self.dirty = false;

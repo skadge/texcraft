@@ -76,3 +76,64 @@ fn a_template_the_page_fetched_becomes_a_saved_project_of_the_library() {
     assert_eq!(s.library().unwrap().names(), ["Article"], "saved at once");
     assert!(s.execute("project.from_template", &params).is_err(), "the name is taken");
 }
+
+fn reviewer() -> Result<Session, String> {
+    let mut s = session();
+    s.set_author(Some(texcraft_engine::review::Author::new("Ada", "Ada-key".to_owned())));
+    s.execute("file.write", &json!({"path": "main.tex", "text": "The quick brown fox."}))?;
+    Ok(s)
+}
+
+fn first_thread_quote(s: &mut Session) -> Option<String> {
+    let list = s.execute("review.list", &json!({})).ok()?;
+    let anchor = &list["threads"].get(0)?["anchor"];
+    let (start, end) = (anchor["start"].as_u64()? as usize, anchor["end"].as_u64()? as usize);
+    let text = s.execute("file.read", &json!({"path": "main.tex"})).ok()?["text"].as_str()?.to_owned();
+    Some(text.chars().skip(start).take(end.checked_sub(start)?).collect())
+}
+
+#[test]
+fn a_comment_is_kept_with_a_library_project_at_once_and_comes_back_on_its_passage() {
+    let mut s = reviewer().unwrap();
+    s.execute("project.save_as", &json!({"path": "Essay"})).unwrap();
+    s.take_library_changes();
+    s.execute("review.comment", &json!({"path": "main.tex", "start": 4, "end": 9, "text": "Which fox?"})).unwrap();
+    let changes = s.take_library_changes();
+    let text = changes.iter().find_map(|c| match c {
+        Change::Thread { project, text: Some(text), .. } if project == "Essay" => Some(text.clone()),
+        _ => None,
+    });
+    assert!(text.is_some_and(|t| texcraft_engine::review::format::read(&t).is_ok()), "the thread is stored at once, as a thread file's text");
+
+    // Text typed before the passage, then saved: the comment follows it.
+    s.execute("file.edit", &json!({"path": "main.tex", "edits": [{"start": 0, "end": 0, "text": "Look: "}]})).unwrap();
+    s.execute("project.save", &json!({})).unwrap();
+    s.execute("project.new", &json!({})).unwrap();
+    assert!(s.review().threads().is_empty());
+    s.execute("project.open", &json!({"path": "Essay"})).unwrap();
+    assert_eq!(first_thread_quote(&mut s).as_deref(), Some("quick"));
+}
+
+#[test]
+fn a_comment_made_before_the_first_save_is_saved_with_the_project() {
+    let mut s = reviewer().unwrap();
+    s.execute("review.comment", &json!({"path": "main.tex", "start": 4, "end": 9, "text": "Which fox?"})).unwrap();
+    assert!(s.take_library_changes().is_empty(), "nowhere to keep it yet");
+    s.execute("project.save_as", &json!({"path": "Draft"})).unwrap();
+    assert!(matches!(&s.take_library_changes()[..], [Change::Saved(_, stored)] if stored.review.len() == 1));
+    s.execute("project.new", &json!({})).unwrap();
+    s.execute("project.open", &json!({"path": "Draft"})).unwrap();
+    assert_eq!(first_thread_quote(&mut s).as_deref(), Some("quick"));
+}
+
+#[test]
+fn a_deleted_comment_is_removed_from_the_library_project() {
+    let mut s = reviewer().unwrap();
+    s.execute("project.save_as", &json!({"path": "Memo"})).unwrap();
+    let id = s.execute("review.comment", &json!({"path": "main.tex", "start": 4, "end": 9, "text": "Which fox?"})).unwrap()["id"].clone();
+    s.take_library_changes();
+    s.execute("review.delete", &json!({"id": id})).unwrap();
+    assert!(matches!(&s.take_library_changes()[..], [Change::Thread { text: None, .. }]));
+    s.execute("project.open", &json!({"path": "Memo"})).unwrap();
+    assert!(s.review().threads().is_empty());
+}

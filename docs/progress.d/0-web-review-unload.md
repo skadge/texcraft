@@ -1,0 +1,1 @@
+- 2026-11-24: Browser projects keep their review threads (stored at once in IndexedDB, as the desktop writes each thread file at once), and the browser asks before leaving the page with unsaved changes.
