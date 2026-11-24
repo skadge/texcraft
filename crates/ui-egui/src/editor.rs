@@ -124,6 +124,36 @@ fn send_edits(app: &mut App) -> bool {
     sent
 }
 
+/// Whether an image can go into the shown file now ([`insert_image`]), or why not.
+pub(crate) fn can_insert(app: &App) -> Result<(), String> {
+    match app.editor.path.as_ref().filter(|p| app.session.current() == Some(*p)) {
+        Some(p) if app.session.project().text(p).is_ok() => Ok(()),
+        _ => Err(tl!("Open a text file in the editor to insert the image into.").to_owned()),
+    }
+}
+
+/// Puts `image` into the shown file at `at` (characters), or at the caret, with
+/// `file.insert_image`; says on the status line when the main document does not load graphicx.
+pub(crate) fn insert_image(app: &mut App, image: &ProjectPath, at: Option<usize>) {
+    if let Err(reason) = can_insert(app) {
+        app.view.status = Some((reason, true));
+        return;
+    }
+    let Some(path) = app.editor.path.clone() else { return };
+    // The text the position is in must be the session's.
+    send_edits(app);
+    let at = at.unwrap_or_else(|| app.editor.source.caret()).min(app.editor.source.doc.buffer.len_chars());
+    let params = json!({"path": path.as_str(), "image": image.as_str(), "at": at});
+    let Some(r) = app.run("file.insert_image", params) else { return };
+    let main = r.get("main").and_then(serde_json::Value::as_str).unwrap_or_default();
+    let (message, warn) = if r.get("graphicx").and_then(serde_json::Value::as_bool) == Some(false) {
+        (tl!("Inserted {image}, but {main} does not load graphicx: add \\usepackage{graphicx} to its preamble.").replace("{main}", main), true)
+    } else {
+        (tl!("Inserted {image} in {file}.").replace("{file}", path.file_name()), false)
+    };
+    app.view.status = Some((message.replace("{image}", image.file_name()), warn));
+}
+
 /// How long Vim's messages stay on its line, in seconds.
 const MESSAGE_SECONDS: f64 = 8.0;
 
@@ -741,6 +771,7 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     app.editor.source.auto_close = app.prefs.auto_close;
     vim_line(app, ui);
     let name = format!("{} {}", path.file_name(), tl!("source"));
+    app.editor.source.accept_drop = egui::DragAndDrop::has_payload_of_type::<crate::side::ImageDrag>(ui.ctx());
     let out = crate::review::with_margin(app, ui, path, |app, ui| app.editor.source.show(ui, &t, id, &markers, &name, "  "));
     crate::review::follow_caret(app, path);
     app.view.cursor = Some((out.caret.0 as u32 + 1, out.caret.1 as u32 + 1));
@@ -786,6 +817,12 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         if let Some(popup) = app.editor.source.popup.as_mut() {
             popup.fixes = Some(fixes);
         }
+    }
+    if let Some(at) = out.dropped_at
+        && let Some(image) = egui::DragAndDrop::take_payload::<crate::side::ImageDrag>(ui.ctx())
+    {
+        insert_image(app, &image.0, Some(at));
+        ui.memory_mut(|m| m.request_focus(id));
     }
     if let Some(fix) = out.apply_fix {
         app.editor.source.apply_fix(&fix);

@@ -258,8 +258,13 @@ pub struct Row<'a> {
 }
 
 pub fn row(ui: &mut Ui, t: &Tokens, row: &Row<'_>) -> Response {
+    row_sensing(ui, t, row, Sense::click())
+}
+
+/// A [`row`] that senses `sense`: also drags, for a row that can be dragged somewhere.
+pub fn row_sensing(ui: &mut Ui, t: &Tokens, row: &Row<'_>, sense: Sense) -> Response {
     let width = ui.available_width();
-    let (rect, r) = ui.allocate_exact_size(vec2(width, t.row_height), Sense::click());
+    let (rect, r) = ui.allocate_exact_size(vec2(width, t.row_height), sense);
     r.widget_info(|| WidgetInfo::selected(Role::TreeItem, true, row.selected, row.label));
     if !ui.is_rect_visible(rect) {
         return r;

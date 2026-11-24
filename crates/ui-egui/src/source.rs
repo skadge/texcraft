@@ -87,6 +87,8 @@ pub(crate) struct Output {
     pub fixes_for: Option<usize>,
     /// Apply this fix.
     pub apply_fix: Option<texcraft_engine::Fix>,
+    /// What was being dragged was let go over the text, at this position.
+    pub dropped_at: Option<usize>,
 }
 
 /// A problem in the text: a build's message or the language server's hint, on chars `start..end`.
@@ -184,6 +186,9 @@ pub(crate) struct SourceEditor {
     pub passages: Vec<Passage>,
     /// Where the text was drawn last: its top left, and the part of the editor shown, on screen.
     shown: Option<(Pos2, Rect)>,
+    /// Something the editor takes is being dragged: show where it would go, and say where it was
+    /// let go ([`Output::dropped_at`]).
+    pub accept_drop: bool,
 }
 
 impl Default for SourceEditor {
@@ -216,6 +221,7 @@ impl Default for SourceEditor {
             auto_close: true,
             passages: Vec::new(),
             shown: None,
+            accept_drop: false,
         }
     }
 }
@@ -501,6 +507,17 @@ impl SourceEditor {
             let area = Area { rect, origin, gutter, lines: (first, last), focused };
             self.shown = Some((origin, ui.clip_rect()));
             self.paint(ui, t, &area, markers);
+            if self.accept_drop
+                && response.contains_pointer()
+                && let Some(p) = ctx.pointer_interact_pos()
+            {
+                let at = self.pos_at(p - origin);
+                let line = self.rect_at(at).translate(origin.to_vec2());
+                ui.painter().rect_filled(Rect::from_min_size(line.min, vec2(2.0, line.height())), 0.0, t.accent);
+                if ctx.input(|i| i.pointer.any_released()) {
+                    out.dropped_at = Some(at);
+                }
+            }
             let caret = self.rect_at(self.caret()).translate(origin.to_vec2());
             if std::mem::take(&mut self.reveal) {
                 ui.scroll_to_rect(caret.expand2(vec2(0.0, t.code_line_height)), None);
