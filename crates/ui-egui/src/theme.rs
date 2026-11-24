@@ -317,7 +317,15 @@ impl Tokens {
         for wv in [&mut w.noninteractive, &mut w.inactive, &mut w.hovered, &mut w.active, &mut w.open] {
             wv.corner_radius = self.corner();
         }
-        ctx.set_visuals(v);
+        // egui keeps visuals per theme and follows the system's by default: pinned to this
+        // scheme, so that what egui draws itself (separators, menus) matches the tokens even when
+        // the system's theme is not known yet (the browser's first frames) or differs.
+        let theme = match self.scheme {
+            Scheme::Dark => egui::Theme::Dark,
+            Scheme::Light => egui::Theme::Light,
+        };
+        ctx.set_theme(theme);
+        ctx.set_visuals_of(theme, v);
 
         let (unit, size, small, title, code) = (self.unit, self.font_size, self.small_size, self.title_size, self.code_size);
         ctx.global_style_mut(|style| {

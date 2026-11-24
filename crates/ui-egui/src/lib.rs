@@ -496,6 +496,13 @@ impl App {
             self.set_theme(ctx, theme);
             self.prefs_changed = false;
         }
+        // Following the system: its theme may be known only after the first frames (the
+        // browser), or change while the app runs.
+        if self.prefs.theme == prefs::ThemePref::System && Tokens::system(ctx).scheme != self.tokens.scheme {
+            let changed = self.prefs_changed;
+            self.set_theme(ctx, prefs::ThemePref::System);
+            self.prefs_changed = changed;
+        }
         if self.applied != Some(self.tokens.scheme) {
             self.tokens.apply(ctx);
             self.applied = Some(self.tokens.scheme);
