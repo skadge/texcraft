@@ -124,7 +124,7 @@ fn header(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
 /// downloads that template only, if it is not kept yet.
 fn templates(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     let Ok(catalog) = texcraft_templates::Catalog::builtin() else { return };
-    let store = app.session.template_store().cloned();
+    let in_browser = app.session.library().is_some();
     ui.horizontal(|ui| widgets::section_title(ui, t, tl!("Start from a template")));
     ui.add_space(t.unit * 3.0);
     if let Some(job) = &app.gallery.job {
@@ -146,8 +146,8 @@ fn templates(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             blank = true;
         }
         for template in catalog.templates() {
-            let kept = store.as_ref().is_some_and(|s| s.kept(template).is_some());
-            if crate::gallery::card(ui, t, template, false, kept) {
+            let kept = app.template_kept(template);
+            if crate::gallery::card(ui, t, template, false, kept, in_browser) {
                 chosen = Some(template.id.clone());
             }
         }
@@ -157,15 +157,8 @@ fn templates(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         app.start = false;
     }
     if let Some(id) = chosen {
-        if store.is_some() {
+        if app.session.template_store().is_some() || in_browser {
             app.create_from_template(id);
-        } else if app.session.library().is_some() {
-            app.gallery.error = Some(
-                tl!(
-                    "Templates are not available in the browser yet: their files come from TeX Live's servers, which a web page cannot download from."
-                )
-                .to_owned(),
-            );
         } else {
             app.gallery.error = Some(tl!("This build of TeXCraft has no folder to keep templates in.").to_owned());
         }

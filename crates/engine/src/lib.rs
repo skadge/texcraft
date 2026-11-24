@@ -97,6 +97,9 @@ pub struct Session {
     /// Projects kept by name, where there are no folders (the browser): then `dir` is the open
     /// project's name in it.
     library: Option<library::Library>,
+    /// Templates' files (project path, bytes) by template id, fetched by the browser's page;
+    /// the desktop keeps them in `templates`' folder.
+    template_files: std::collections::BTreeMap<String, Vec<(String, Vec<u8>)>>,
 }
 
 impl Session {
@@ -133,6 +136,7 @@ impl Session {
             review: review_store::State::default(),
             author: None,
             library: None,
+            template_files: std::collections::BTreeMap::new(),
         }
     }
 
@@ -153,6 +157,17 @@ impl Session {
 
     pub fn library(&self) -> Option<&library::Library> {
         self.library.as_ref()
+    }
+
+    /// Keeps the files of template `id` (project paths and bytes, its `TEMPLATE-LICENSE` among
+    /// them), fetched by the shell, for `project.from_template`.
+    pub fn keep_template(&mut self, id: String, files: Vec<(String, Vec<u8>)>) {
+        self.template_files.insert(id, files);
+    }
+
+    /// Whether template `id`'s files were kept with [`Session::keep_template`].
+    pub fn has_template(&self, id: &str) -> bool {
+        self.template_files.contains_key(id)
     }
 
     /// The library's changes since the last call, for the shell to store.

@@ -106,10 +106,16 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             },
             Some(Dialog::Prompt(p)) => {
                 let params = (p.params)(p.value.trim());
-                if app.run(p.command, params).is_some() && p.command == "project.save_as" {
-                    app.remember_project();
-                    if let Some(next) = app.after_save.take() {
-                        app.proceed(next);
+                if app.run(p.command, params).is_some() {
+                    match p.command {
+                        "project.save_as" => {
+                            app.remember_project();
+                            if let Some(next) = app.after_save.take() {
+                                app.proceed(next);
+                            }
+                        }
+                        "project.from_template" => app.template_project_opened(),
+                        _ => {}
                     }
                 }
             }

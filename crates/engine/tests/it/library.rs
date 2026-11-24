@@ -59,3 +59,20 @@ fn a_library_project_writes_nothing_to_disk() {
     s.execute("project.open", &json!({"path": "Local"})).unwrap();
     assert!(!cwd.join("Local").exists(), "the name is not a folder");
 }
+
+#[test]
+fn a_template_the_page_fetched_becomes_a_saved_project_of_the_library() {
+    let mut s = session();
+    let catalog = texcraft_templates::Catalog::builtin().unwrap();
+    let template = &catalog.templates()[0];
+    let params = json!({"template": template.id, "folder": "Article"});
+    assert!(s.execute("project.from_template", &params).is_err(), "not fetched yet");
+    let mut files: Vec<(String, Vec<u8>)> = template.project_paths().into_iter().map(|(_, p)| (p, b"\\documentclass{article}".to_vec())).collect();
+    files.push(("TEMPLATE-LICENSE".into(), b"licence".to_vec()));
+    s.keep_template(template.id.clone(), files);
+    s.execute("project.from_template", &params).unwrap();
+    assert_eq!(s.project().main().map(|m| m.as_str()), Some(template.main.as_str()));
+    assert!(s.project().get(&ProjectPath::new("TEMPLATE-LICENSE").unwrap()).is_some(), "the licence note goes with the project");
+    assert_eq!(s.library().unwrap().names(), ["Article"], "saved at once");
+    assert!(s.execute("project.from_template", &params).is_err(), "the name is taken");
+}

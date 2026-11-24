@@ -52,7 +52,11 @@ fn main() -> ExitCode {
             .ok_or_else(|| "xtask is not in a workspace".to_owned())
             .and_then(retex_wasm::run),
         "templates" => templates(std::env::args().nth(2).as_deref()),
-        _ => Err("usage: cargo xtask layers | wasm | ci | icons | retex-wasm | templates [ID]".to_owned()),
+        "templates-site" => match std::env::args().nth(2) {
+            Some(out) => templates_site(std::path::Path::new(&out)),
+            None => Err("usage: cargo xtask templates-site OUT (the web build's folder)".to_owned()),
+        },
+        _ => Err("usage: cargo xtask layers | wasm | ci | icons | retex-wasm | templates [ID] | templates-site OUT".to_owned()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -157,4 +161,43 @@ fn templates(only: Option<&str>) -> Result<(), String> {
     }
     eprintln!("store: {}", scratch.display());
     if failed.is_empty() { Ok(()) } else { Err(format!("failed: {}", failed.join(", "))) }
+}
+
+/// The templates for the browser build, which cannot download from TeX Live's mirrors (no CORS):
+/// each template of the catalogue, fetched and checked as the desktop app does, is written to
+/// `<out>/templates/<id>/` at its project paths with its licence note (`TEMPLATE-LICENSE`), and
+/// `files.txt` lists them. The web app fetches them from its own site.
+fn templates_site(out: &std::path::Path) -> Result<(), String> {
+    let catalog = texcraft_templates::Catalog::builtin().map_err(|e| e.to_string())?;
+    let scratch = std::env::temp_dir().join(format!("texcraft-templates-site-{}", std::process::id()));
+    let store = texcraft_templates::Store::new(&scratch);
+    let site = out.join("templates");
+    if site.exists() {
+        std::fs::remove_dir_all(&site).map_err(|e| format!("{}: {e}", site.display()))?;
+    }
+    let mut failed = Vec::new();
+    for t in catalog.templates() {
+        let kept = match store.fetch(t) {
+            Ok(dir) => dir,
+            Err(e) => {
+                eprintln!("FETCH FAIL {}: {e}", t.id);
+                failed.push(t.id.clone());
+                continue;
+            }
+        };
+        let mut paths: Vec<String> = t.project_paths().into_iter().map(|(_, p)| p).collect();
+        paths.push("TEMPLATE-LICENSE".to_owned());
+        let dir = site.join(&t.id);
+        for rel in &paths {
+            let to = dir.join(rel);
+            if let Some(parent) = to.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+            }
+            std::fs::copy(kept.join(rel), &to).map_err(|e| format!("{}: {e}", to.display()))?;
+        }
+        std::fs::write(dir.join("files.txt"), paths.join("\n") + "\n").map_err(|e| format!("{}: {e}", dir.display()))?;
+        eprintln!("ok {} ({} files)", t.id, paths.len());
+    }
+    let _ = std::fs::remove_dir_all(&scratch);
+    if failed.is_empty() { Ok(()) } else { Err(format!("templates not fetched: {}", failed.join(", "))) }
 }

@@ -1,9 +1,11 @@
 //! The New Project gallery (docs/plan.md, phase 1, item 2b): a blank project, or one of the
 //! publishers' templates, by category and search, with each template's source and licence shown
 //! before it is used. A template that is not kept yet is downloaded on a background thread (the
-//! window never waits), then copied into the chosen folder by `project.from_template`.
+//! window never waits), then copied into the chosen folder by `project.from_template`. In the browser
+//! the shell fetches it from the web build's own site ([`App::take_template_requests`]), and the
+//! project is made in the browser's library under a name the user gives.
 
-use std::sync::mpsc::{Receiver, TryRecvError, channel};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 
 use egui::{Align, Layout, RichText, Sense, vec2};
 use serde_json::json;
@@ -44,6 +46,9 @@ pub(crate) struct Gallery {
     pub pending: Option<String>,
     /// Focus goes to the search box on the next frame (when the gallery opens).
     focus_search: bool,
+    /// In the browser: the templates the shell is asked to fetch, and where to say it did.
+    requests: Vec<String>,
+    fetched: Option<Sender<Result<String, String>>>,
 }
 
 fn icon_for(category: &str) -> &'static str {
@@ -58,8 +63,38 @@ impl App {
         self.gallery.focus_search = true;
     }
 
+    /// Whether template `t` can be used without downloading it.
+    pub(crate) fn template_kept(&self, t: &Template) -> bool {
+        self.session.has_template(&t.id) || self.session.template_store().is_some_and(|s| s.kept(t).is_some())
+    }
+
+    /// The templates to fetch for the browser's page (the shell's work), oldest first; each is
+    /// answered with [`App::template_fetched`].
+    pub fn take_template_requests(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.gallery.requests)
+    }
+
+    /// The files of template `id` (project paths and bytes), or why they could not be fetched.
+    pub fn template_fetched(&mut self, id: String, files: Result<Vec<(String, Vec<u8>)>, String>) {
+        let result = files.map(|files| {
+            self.session.keep_template(id.clone(), files);
+            id
+        });
+        if let Some(tx) = &self.gallery.fetched {
+            let _ = tx.send(result);
+        }
+    }
+
     /// Starts downloading `ids` on a thread; `then` creates a project from the first when done.
     pub(crate) fn start_download(&mut self, ids: Vec<String>, then: Option<(String, String)>, label: String) {
+        if self.session.library().is_some() {
+            // The browser: the shell fetches them.
+            let (tx, rx) = channel();
+            self.gallery.requests.extend(ids);
+            self.gallery.fetched = Some(tx);
+            self.gallery.job = Some(Job { rx, then, label });
+            return;
+        }
         let Some(store) = self.session.template_store().cloned() else {
             self.gallery.error = Some(tl!("This build of TeXCraft has no folder to keep templates in.").to_owned());
             return;
@@ -91,7 +126,16 @@ impl App {
             return;
         }
         self.gallery.error = None;
-        if self.native_pickers {
+        if self.session.library().is_some() {
+            // The browser: fetched first if it is not yet, then named.
+            let kept = Catalog::builtin().ok().and_then(|c| c.find(&id).ok().map(|t| self.template_kept(t))).unwrap_or(false);
+            if kept {
+                self.ask_template_project_name(id);
+            } else {
+                self.gallery.pending = Some(id.clone());
+                self.start_download(vec![id], None, tl!("Fetching the template…").to_owned());
+            }
+        } else if self.native_pickers {
             self.gallery.pending = Some(id);
             self.request_pick(Pick::TemplateFolder);
         } else {
@@ -109,6 +153,30 @@ impl App {
             self.gallery.open = false;
             self.view.dialog = Some(crate::dialogs::Dialog::Prompt(prompt));
         }
+    }
+
+    /// Asks for the name of the project of the browser's library made from template `id`.
+    fn ask_template_project_name(&mut self, id: String) {
+        let prompt = crate::dialogs::Prompt {
+            title: tl!("New Project from Template"),
+            label: tl!("A name for the project, kept in this browser"),
+            value: String::new(),
+            action: tl!("Create"),
+            command: "project.from_template",
+            params: Box::new(move |v| json!({"template": id, "folder": v})),
+            focus: true,
+        };
+        self.gallery.open = false;
+        self.view.dialog = Some(crate::dialogs::Dialog::Prompt(prompt));
+    }
+
+    /// A project made from a template was opened: the editor shows it.
+    pub(crate) fn template_project_opened(&mut self) {
+        self.gallery.open = false;
+        self.start = false;
+        self.remember_project();
+        self.pdf = crate::pdf_view::PdfView::default();
+        self.view.last_edit = Some(0.0);
     }
 
     /// The folder for `template`'s project was chosen.
@@ -135,16 +203,19 @@ impl App {
             }
             (Ok(_), Some((template, folder))) => {
                 if self.run("project.from_template", json!({"template": template, "folder": folder})).is_some() {
-                    self.gallery.open = false;
-                    self.start = false;
-                    self.remember_project();
-                    self.pdf = crate::pdf_view::PdfView::default();
-                    self.view.last_edit = Some(0.0);
+                    self.template_project_opened();
                 } else {
                     self.gallery.error = self.view.status.take().map(|(m, _)| m);
                 }
             }
-            (Ok(_), None) => {}
+            (Ok(_), None) => {
+                // The browser: the fetched template is named next.
+                if self.session.library().is_some()
+                    && let Some(id) = self.gallery.pending.take()
+                {
+                    self.ask_template_project_name(id);
+                }
+            }
         }
     }
 }
@@ -156,8 +227,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let t = app.tokens;
     let catalog = Catalog::builtin().ok();
     let templates: Vec<Template> = catalog.map(|c| c.templates().to_vec()).unwrap_or_default();
-    let store = app.session.template_store().cloned();
-    let kept = |t: &Template| store.as_ref().is_some_and(|s| s.kept(t).is_some());
+    let kept_ids: Vec<String> =
+        Catalog::builtin().map(|c| c.templates().iter().filter(|t| app.template_kept(t)).map(|t| t.id.clone()).collect()).unwrap_or_default();
+    let kept = |t: &Template| kept_ids.contains(&t.id);
+    let in_browser = app.session.library().is_some();
     let mut close = false;
     let mut create: Option<String> = None;
     let mut blank = false;
@@ -222,7 +295,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                         }
                         for template in &shown {
                             let selected = app.gallery.selected.as_deref() == Some(template.id.as_str());
-                            if card(ui, &t, template, selected, kept(template)) {
+                            if card(ui, &t, template, selected, kept(template), in_browser) {
                                 app.gallery.selected = Some(template.id.clone());
                             }
                         }
@@ -268,11 +341,7 @@ fn details(app: &mut App, ui: &mut egui::Ui, t: &Tokens, templates: &[Template],
                         .replace("{source}", &template.source_text())
                         .replace("{licence}", &template.licence);
                     ui.label(RichText::new(where_).font(t.small()).color(t.text_muted));
-                    let state = if kept(template) {
-                        tl!("Downloaded: available offline.")
-                    } else {
-                        tl!("Downloaded from TeX Live when you create the project.")
-                    };
+                    let state = state(kept(template), app.session.library().is_some());
                     ui.label(RichText::new(state).font(t.small()).color(t.text_muted));
                 });
             }
@@ -299,7 +368,17 @@ fn details(app: &mut App, ui: &mut egui::Ui, t: &Tokens, templates: &[Template],
 pub(crate) const CARD: egui::Vec2 = egui::vec2(160.0, 168.0);
 
 /// A template's card; returns whether it was clicked.
-pub(crate) fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected: bool, kept: bool) -> bool {
+/// Whether the template is ready, or where it comes from when the project is made.
+fn state(kept: bool, in_browser: bool) -> &'static str {
+    match (kept, in_browser) {
+        (true, false) => tl!("Downloaded: available offline."),
+        (true, true) => tl!("Fetched: ready to use."),
+        (false, false) => tl!("Downloaded from TeX Live when you create the project."),
+        (false, true) => tl!("Fetched from TeXCraft's site when you create the project."),
+    }
+}
+
+pub(crate) fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected: bool, kept: bool, in_browser: bool) -> bool {
     let (rect, r) = ui.allocate_exact_size(CARD, Sense::click());
     r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, selected, &template.title));
     let base = if selected { blend(t.surface, t.accent_soft) } else { t.surface };
@@ -324,7 +403,7 @@ pub(crate) fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected:
     }
     ui.painter().text(egui::pos2(rect.left() + 12.0, rect.bottom() - 12.0), egui::Align2::LEFT_BOTTOM, &template.licence, t.small(), t.text_muted);
     widgets::focus_ring(ui, t, &r, rect, t.corner_large());
-    let state = if kept { tl!("Downloaded: available offline.") } else { tl!("Downloaded from TeX Live when you create the project.") };
+    let state = state(kept, in_browser);
     let tip = tl!("{source} · licence {licence}").replace("{source}", &template.source_text()).replace("{licence}", &template.licence);
     let clicked = r.clicked();
     let _ = r.on_hover_text(format!("{}\n{tip}\n{state}", template.title));

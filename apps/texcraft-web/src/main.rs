@@ -31,6 +31,37 @@ mod web {
     type Chosen = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
     /// Errors of the browser's storage, for the status line.
     type Errors = Rc<RefCell<Vec<String>>>;
+    /// Templates fetched (their files, or why not), waiting for the next frame.
+    type Fetched = Rc<RefCell<Vec<(String, Result<Vec<(String, Vec<u8>)>, String>)>>>;
+
+    /// The bytes at `url`, relative to the page.
+    async fn fetch(url: &str) -> Result<Vec<u8>, String> {
+        use wasm_bindgen_futures::JsFuture;
+        let window = web_sys::window().ok_or("no window")?;
+        let response: web_sys::Response = JsFuture::from(window.fetch_with_str(url))
+            .await
+            .map_err(|e| format!("{url}: {e:?}"))?
+            .dyn_into()
+            .map_err(|_| format!("{url}: no response"))?;
+        if !response.ok() {
+            return Err(format!("{url}: HTTP {}", response.status()));
+        }
+        let buffer = JsFuture::from(response.array_buffer().map_err(|e| format!("{url}: {e:?}"))?).await.map_err(|e| format!("{url}: {e:?}"))?;
+        Ok(js_sys::Uint8Array::new(&buffer).to_vec())
+    }
+
+    /// Template `id`'s files, from the web build's own site: `templates/<id>/files.txt` lists
+    /// them (`cargo xtask templates-site`).
+    async fn fetch_template(id: &str) -> Result<Vec<(String, Vec<u8>)>, String> {
+        let list = fetch(&format!("templates/{id}/files.txt"))
+            .await
+            .map_err(|e| format!("{} ({e})", texcraft_ui_egui::i18n::t("This build of TeXCraft was published without its templates.")))?;
+        let mut files = Vec::new();
+        for path in String::from_utf8_lossy(&list).lines().filter(|l| !l.is_empty() && !l.split('/').any(|p| p == "..")) {
+            files.push((path.to_owned(), fetch(&format!("templates/{id}/{path}")).await?));
+        }
+        Ok(files)
+    }
 
     struct Shell {
         app: App,
@@ -38,6 +69,7 @@ mod web {
         started: bool,
         store: Option<Store>,
         errors: Errors,
+        fetched: Fetched,
     }
 
     impl Shell {
@@ -120,6 +152,18 @@ mod web {
                     ctx.request_repaint();
                 });
             }
+            for id in self.app.take_template_requests() {
+                let fetched = self.fetched.clone();
+                let ctx = ctx.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    let result = fetch_template(&id).await;
+                    fetched.borrow_mut().push((id, result));
+                    ctx.request_repaint();
+                });
+            }
+            for (id, result) in std::mem::take(&mut *self.fetched.borrow_mut()) {
+                self.app.template_fetched(id, result);
+            }
             let files = std::mem::take(&mut *self.chosen.borrow_mut());
             if !files.is_empty() {
                 self.app.add_files(files);
@@ -195,7 +239,7 @@ mod web {
             }
             app.set_native_pickers(true);
             app.show_start_page();
-            let shell = Shell { app, chosen: Chosen::default(), started: false, store, errors };
+            let shell = Shell { app, chosen: Chosen::default(), started: false, store, errors, fetched: Fetched::default() };
             let started = eframe::WebRunner::new().start(canvas, eframe::WebOptions::default(), Box::new(|_cc| Ok(Box::new(shell)))).await;
             if let Err(e) = started {
                 log::error!("TeXCraft could not start: {e:?}");

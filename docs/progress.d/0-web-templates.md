@@ -1,0 +1,1 @@
+- 2026-11-24: Templates in the browser: the web build carries the catalogue's templates (`cargo xtask templates-site`, checked as the desktop's downloads are), and a template makes a named project in the browser. Templates whose class is not in retex's TeX tree do not build there yet.
