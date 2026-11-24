@@ -6523,6 +6523,7 @@ version = "0.3.0"
 dependencies = [
  "resvg 0.48.1",
  "serde_json",
+ "texcraft-project",
  "texcraft-templates",
 ]
 

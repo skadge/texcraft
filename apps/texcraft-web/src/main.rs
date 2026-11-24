@@ -31,6 +31,8 @@ mod web {
     type Chosen = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
     /// Errors of the browser's storage, for the status line.
     type Errors = Rc<RefCell<Vec<String>>>;
+    /// The window's context once it draws, for work done outside a frame to ask for one.
+    type Repaint = Rc<RefCell<Option<egui::Context>>>;
     /// Templates fetched (their files, or why not), waiting for the next frame.
     type Fetched = Rc<RefCell<Vec<(String, Result<Vec<(String, Vec<u8>)>, String>)>>>;
 
@@ -70,6 +72,7 @@ mod web {
         store: Option<Store>,
         errors: Errors,
         fetched: Fetched,
+        repaint: Repaint,
     }
 
     impl Shell {
@@ -182,6 +185,7 @@ mod web {
         fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
             if !self.started {
                 self.started = true;
+                *self.repaint.borrow_mut() = Some(ui.ctx().clone());
                 hide_loading_screen();
             }
             self.app.frame(ui);
@@ -196,6 +200,57 @@ mod web {
         if let Some(e) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id("loading")) {
             e.remove();
         }
+    }
+
+    /// Drops that bring no file to eframe: its handler takes `dataTransfer.files` only, which some
+    /// drags leave empty (Firefox, from a file manager) while their items hold the file. Those
+    /// files are read from the items here; a drop with no file at all is said on the status line,
+    /// with what it carried. Listens before eframe (capture), and leaves drops with files to it.
+    fn watch_drops(canvas: &web_sys::HtmlCanvasElement, chosen: &Chosen, errors: &Errors, repaint: &Repaint) {
+        let (chosen, errors, repaint) = (chosen.clone(), errors.clone(), repaint.clone());
+        let ondrop = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::DragEvent)>::new(move |event: web_sys::DragEvent| {
+            let Some(transfer) = event.data_transfer() else { return };
+            if transfer.files().is_some_and(|f| f.length() > 0) {
+                return;
+            }
+            let items = transfer.items();
+            let files: Vec<web_sys::File> = (0..items.length())
+                .filter_map(|i| items.get(i))
+                .filter(|item| item.kind() == "file")
+                .filter_map(|item| item.get_as_file().ok().flatten())
+                .collect();
+            log::info!("a drop with no files: {} items, types {:?}", items.length(), transfer.types().to_vec());
+            if files.is_empty() {
+                let types: Vec<String> = transfer.types().iter().filter_map(|t| t.as_string()).collect();
+                let what = texcraft_ui_egui::i18n::t("The browser passed no file with this drop (it carried: {types}). Add Files can add it.");
+                errors.borrow_mut().push(what.replace("{types}", &types.join(", ")));
+                if let Some(ctx) = &*repaint.borrow() {
+                    ctx.request_repaint();
+                }
+                return;
+            }
+            for file in files {
+                let (chosen, errors, repaint) = (chosen.clone(), errors.clone(), repaint.clone());
+                wasm_bindgen_futures::spawn_local(async move {
+                    match wasm_bindgen_futures::JsFuture::from(file.array_buffer()).await {
+                        Ok(buffer) => chosen.borrow_mut().push((file.name(), js_sys::Uint8Array::new(&buffer).to_vec())),
+                        Err(e) => {
+                            let what = texcraft_ui_egui::i18n::t("The browser did not let TeXCraft read {file}: {error}");
+                            errors.borrow_mut().push(what.replace("{file}", &file.name()).replace("{error}", &format!("{e:?}")));
+                        }
+                    }
+                    if let Some(ctx) = &*repaint.borrow() {
+                        ctx.request_repaint();
+                    }
+                });
+            }
+        });
+        let options = web_sys::AddEventListenerOptions::new();
+        options.set_capture(true);
+        if let Err(e) = canvas.add_event_listener_with_callback_and_add_event_listener_options("drop", ondrop.as_ref().unchecked_ref(), &options) {
+            log::warn!("drops cannot be watched: {e:?}");
+        }
+        ondrop.forget();
     }
 
     /// The engine worker's script, made by Trunk (`index.html`).
@@ -246,7 +301,10 @@ mod web {
             }
             app.set_native_pickers(true);
             app.show_start_page();
-            let shell = Shell { app, chosen: Chosen::default(), started: false, store, errors, fetched: Fetched::default() };
+            let chosen = Chosen::default();
+            let repaint = Repaint::default();
+            watch_drops(&canvas, &chosen, &errors, &repaint);
+            let shell = Shell { app, chosen, started: false, store, errors, fetched: Fetched::default(), repaint };
             let started = eframe::WebRunner::new().start(canvas, eframe::WebOptions::default(), Box::new(|_cc| Ok(Box::new(shell)))).await;
             if let Err(e) = started {
                 log::error!("TeXCraft could not start: {e:?}");
