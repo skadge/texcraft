@@ -189,16 +189,24 @@ flatpak:
       - .flatpak-builder/
 
 # The browser build (apps/texcraft-web) with Trunk, in the size-optimised `web` profile. Its
-# public_url is "./", so the files work from any folder, a Pages subpath included.
+# public_url is "./", so the files work from any folder, a Pages subpath included. The site
+# carries its own TeX tree (`cargo xtask tree-site`), chosen with the TeX Live of the image, as
+# retex's Pages job does: Rust is installed into it (rust-toolchain.toml names the version).
 web:
   stage: package
-  image: rust:1.95-bookworm
+  image: texlive/texlive:latest
   extends: .package-rules
   variables:
     CRAFT_FONTS_DIR: "$CI_PROJECT_DIR/craft-fonts"
     CRAFT_FONTS_REQUIRED: "1"
+    RUSTUP_HOME: "$CI_PROJECT_DIR/.rustup-home"
   before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq --no-install-recommends curl ca-certificates gcc libc6-dev git xz-utils
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+    - export PATH="$CARGO_HOME/bin:$PATH"
     - *fetch-fonts
+    - rustup show active-toolchain || rustup toolchain install
     - rustup target add wasm32-unknown-unknown
     # cargo install puts trunk in $CARGO_HOME/bin, the project's .cargo-home (cached), not the
     # image's own cargo folder that is on PATH.
@@ -216,6 +224,10 @@ web:
     # The templates, which the page fetches from its own site (TeX Live's mirrors send no CORS
     # headers): after Trunk, which replaces dist/web.
     - cargo xtask templates-site dist/web
+    # The TeX tree and its seed (a native retex of the pinned version, built into
+    # target/retex-native and cached with target/).
+    - cargo xtask tree-site dist/web
+    - du -sh dist/web dist/web/tree
     - mkdir -p out
     - tar -C dist -czf "out/texcraft-web-$VERSION.tar.gz" web
     - (cd out && sha256sum *.tar.gz | tee SHA256SUMS-web)
@@ -231,6 +243,7 @@ web:
       - .cargo-home/registry
       - .cargo-home/git
       - .cargo-home/bin
+      - .rustup-home
       - target/
 
 # Uploads the packages and their checksums to the generic package registry, under the tag's
