@@ -28,7 +28,7 @@ const STACK: usize = 128 << 20;
 const EXCEPTIONS_C: &str = "-mllvm -wasm-enable-sjlj -mexception-handling -mllvm -wasm-use-legacy-eh=true";
 
 /// The version of the `retex` package in `Cargo.lock`.
-fn pinned_version(root: &Path) -> Result<String, String> {
+pub(crate) fn pinned_version(root: &Path) -> Result<String, String> {
     let lock = std::fs::read_to_string(root.join("Cargo.lock")).map_err(|e| format!("Cargo.lock: {e}"))?;
     let mut lines = lock.lines();
     while let Some(line) = lines.next() {

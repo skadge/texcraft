@@ -1,6 +1,6 @@
 //! The engine's side of the browser build, in a Web Worker: retex's WebAssembly module (built by
 //! `cargo xtask retex-wasm`, served beside the app) over `texcraft-wasi`'s in-memory files, with
-//! the TeX tree of retex's site loaded as retex reads it (plan, phase 6).
+//! the TeX tree of the web build's own site (`cargo xtask tree-site`) loaded as retex reads it (plan, phase 6).
 //!
 //! WASI's reads are synchronous. A file of the tree not fetched yet is fetched with a
 //! synchronous request where the browser serves one; where it does not (Chrome stops serving
@@ -27,9 +27,9 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Cache, DedicatedWorkerGlobalScope, MessageEvent, Request, Response, ResponseInit, XmlHttpRequest, XmlHttpRequestResponseType};
 
-/// retex's site, whose TeX tree the browser build reads (only the tree: the engine is
-/// TeXCraft's own build of the pinned release).
-pub const TREE_SITE: &str = "https://severin-lemaignan.gitlab.io/retex/";
+/// Where the TeX tree and its seed are: the web build's own site (`cargo xtask tree-site`), beside
+/// the worker's script, so relative to it.
+pub const TREE_SITE: &str = "";
 
 /// The environment retex runs in: the tree under `/texlive`, its caches (the format) under
 /// `/cache` (as retex's own page sets it).
@@ -444,10 +444,11 @@ impl Engine {
         self.fs.mkdirs("/home", now_ns());
         // The format and indexes this engine made on an earlier visit, before the site's indexes.
         self.kept.restore(&self.fs).await;
-        // The site's indexes of the tree (ls-R, font names): retex checks each against what it
-        // indexes (sizes and times, the same here as on the site), so it uses them only where
-        // they fit and remakes them otherwise. Without them, the first build reads every font of
-        // the tree (95 MB). Not the site's format: that depends on the engine's build.
+        // The site's indexes of the tree (ls-R, font names), made by a native retex over the same
+        // tree: retex checks each against what it indexes (sizes and times, the same here as
+        // there), so it uses them only where they fit and remakes them otherwise. Without them,
+        // the first build reads every font of the tree. Not a format: that depends on the
+        // engine's build, and this one makes its own.
         let mut seeds = Vec::new();
         if let Ok(list) = fetch_bytes(&format!("{TREE_SITE}seed/index.txt")).await {
             for line in String::from_utf8_lossy(&list).lines() {
@@ -459,9 +460,8 @@ impl Engine {
                 }
             }
         }
-        // What a plain article reads (retex's read list for its example), but retex's caches
-        // (`seed/`): those are made by retex's own engine, and this one makes its own.
-        if let Ok(list) = fetch_bytes(&format!("{TREE_SITE}seed/reads/article.txt")).await {
+        // What the blank project reads, fetched together before the first build.
+        if let Ok(list) = fetch_bytes(&format!("{TREE_SITE}seed/reads/blank.txt")).await {
             let mut paths: Vec<String> = String::from_utf8_lossy(&list).lines().filter(|l| l.starts_with("tree/")).map(str::to_owned).collect();
             paths.extend(seeds);
             self.fetch_all(id, paths).await?;

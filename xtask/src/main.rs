@@ -9,9 +9,13 @@
 //!   nightly and wasi-sdk; see `retex_wasm.rs`).
 //! - `templates [ID]`: fetches every template of the catalogue (or one) from its source, with its
 //!   checks, into a scratch store, and builds each with `texcraft-cli compile`. Needs the network.
+//! - `templates-site OUT`: the templates for the browser build, in `OUT/templates/`.
+//! - `tree-site OUT`: the TeX tree of the browser build and its seed, in `OUT/tree/` and
+//!   `OUT/seed/` (needs a TeX installation; see `tree_site.rs`).
 
 mod icons;
 mod retex_wasm;
+mod tree_site;
 
 use std::process::{Command, ExitCode};
 
@@ -52,11 +56,15 @@ fn main() -> ExitCode {
             .ok_or_else(|| "xtask is not in a workspace".to_owned())
             .and_then(retex_wasm::run),
         "templates" => templates(std::env::args().nth(2).as_deref()),
+        "tree-site" => match std::env::args().nth(2) {
+            Some(out) => tree_site::run(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".."), std::path::Path::new(&out)),
+            None => Err("usage: cargo xtask tree-site OUT (the web build's folder, its templates written first)".to_owned()),
+        },
         "templates-site" => match std::env::args().nth(2) {
             Some(out) => templates_site(std::path::Path::new(&out)),
             None => Err("usage: cargo xtask templates-site OUT (the web build's folder)".to_owned()),
         },
-        _ => Err("usage: cargo xtask layers | wasm | ci | icons | retex-wasm | templates [ID] | templates-site OUT".to_owned()),
+        _ => Err("usage: cargo xtask layers | wasm | ci | icons | retex-wasm | templates [ID] | templates-site OUT | tree-site OUT".to_owned()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -200,4 +208,9 @@ fn templates_site(out: &std::path::Path) -> Result<(), String> {
     }
     let _ = std::fs::remove_dir_all(&scratch);
     if failed.is_empty() { Ok(()) } else { Err(format!("templates not fetched: {}", failed.join(", "))) }
+}
+
+/// FNV-1a, 64 bits.
+fn fnv(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x100_0000_01b3))
 }

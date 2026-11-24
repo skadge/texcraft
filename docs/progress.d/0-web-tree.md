@@ -1,0 +1,1 @@
+- 2026-11-24: The browser build carries its own TeX tree (`cargo xtask tree-site`, ported from retex's site build): the packages of retex's list, the blank project's and every template's, with the indexes a first visit needs, so TeXCraft's site no longer needs retex's.

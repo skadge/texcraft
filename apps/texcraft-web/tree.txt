@@ -1,0 +1,65 @@
+# The TeX tree of the browser build (`cargo xtask tree-site`), from retex's
+# web/tree.txt (CC0): documents typeset natively with `-recorder`, whose
+# packages go in whole.
+#
+# `class NAME…` and `package NAME…`: a document loading each alone.
+# `blank`: the blank project TeXCraft starts with.
+# `templates`: every template of the catalogue (from `cargo xtask templates-site`).
+# `dir PATH`: a folder (or a file) of the TeX trees taken whole.
+# `read PATH`: as `dir`, and its files are in the first build's read list.
+
+blank
+templates
+
+# Files Lua opens itself (`require`, `io.open`), which `-recorder` does not
+# list: in the tree, and fetched before a first build.
+read tex/luatex/luaotfload
+read tex/luatex/lua-uni-algos
+read tex/generic/unicode-data/GraphemeBreakProperty.txt
+read tex/generic/unicode-data/WordBreakProperty.txt
+read fonts/map/pdftex/updmap/pdftex.map
+# The Latin Modern faces a plain article uses (luaotfload opens them itself).
+read fonts/opentype/public/lm/lmroman10-regular.otf
+read fonts/opentype/public/lm/lmroman10-bold.otf
+read fonts/opentype/public/lm/lmroman10-italic.otf
+read fonts/opentype/public/lm/lmroman12-regular.otf
+read fonts/opentype/public/lm/lmroman12-bold.otf
+read fonts/opentype/public/lm/lmroman17-regular.otf
+read fonts/opentype/public/lm/lmmono10-regular.otf
+
+# The classes of papers, theses and slides, and the packages papers use
+# most (retex's list, from its corpus of arXiv papers).
+class article report book letter amsart amsbook IEEEtran IEEEconf acmart
+class llncs revtex4-2 elsarticle scrartcl scrreprt scrbook memoir beamer
+class exam moderncv
+package amsmath graphicx amssymb hyperref amsfonts inputenc amsthm color
+package fontenc babel xcolor url tikz csquotes biblatex multirow booktabs
+package array geometry bm enumitem natbib mathtools float subcaption
+package algorithm cite microtype subfigure latexsym caption algorithmic
+package subfig verbatim epsfig mathrsfs enumerate multicol xspace
+package algpseudocode textcomp tabularx ragged2e times bbm amscd nicefrac
+package algorithm2e graphics longtable setspace listings fullpage ulem
+package epstopdf stfloats todonotes authblk appendix soul metalogo siunitx
+package dsfont adjustbox tikz-cd comment lineno footmisc colortbl balance
+package dcolumn threeparttable lipsum makecell underscore makeidx pgf
+package hologo fontspec cleveref pifont pgfpages rotating pdfpages
+package tcolorbox framed amsbsy fancyhdr pgfcalendar nameref paralist
+package thm-restate pgfplots gensymb stmaryrd accents xparse etoolbox
+package fontawesome5 epsf mathpazo arydshln titlesec scalerel fancyvrb
+package pdflscape sidecap amstext lmodern slashed eucal mathptmx
+package algorithmicx wrapfig chemfig tabularray calc thmtools parskip
+package placeins varioref doi ifthen cancel helvet courier bookmark a4wide
+package xpatch mdframed indentfirst lscape blindtext changes subfiles
+package optidef libertine fp imakeidx mhchem blkarray tocbibind hyphenat
+package overpic pict2e esint marginnote xr relsize titling chemarr pbox
+package capt-of glossaries newfloat bibentry soulutf8 eurosym newtxmath
+package newtxtext here nth xstring iftex bigdelim proof amsxtra hhline
+package breqn cuted morefloats tensor lastpage bbold fancybox xkeyval
+package catchfile chngcntr titletoc braket afterpage quantikz footnote
+package ifpdf mlmodern xifthen centernot multibib lettrine showkeys
+package euscript xargs inconsolata txfonts cases tabulary stackengine
+package marvosym unicode-math physics circuitikz forest tikzpagenodes
+package pgfgantt minted luacode emoji fontawesome qrcode upquote environ
+package tabu ltablex threeparttablex outlines dirtree svg standalone
+package animate media9 multimedia beamerposter acronym nomencl
+package glossaries-extra datetime2 fmtcount xfrac
