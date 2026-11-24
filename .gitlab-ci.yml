@@ -43,6 +43,9 @@ variables:
   # Trunk 0.22 needs a newer Rust than the workspace's (rust-toolchain.toml); it is installed with
   # this toolchain only, and the app is still built with the workspace's.
   TRUNK_RUST: 1.96.1
+  # retex's engine for the browser (cargo xtask retex-wasm): a dated nightly and wasi-sdk.
+  RETEX_WASM_TOOLCHAIN: nightly-2026-10-22
+  WASI_SDK: "34"
   # Where `publish` puts the files: the generic package registry, one package version per tag.
   PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/texcraft"
 
@@ -203,8 +206,13 @@ web:
     - export PATH="$CARGO_HOME/bin:$PATH"
     - rustup toolchain install "$TRUNK_RUST" --profile minimal
     - cargo +"$TRUNK_RUST" install --locked trunk --version "$TRUNK_VERSION"
+    - rustup toolchain install "$RETEX_WASM_TOOLCHAIN" --profile minimal --component rust-src --target wasm32-wasip1
+    - curl -sSfL "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$WASI_SDK/wasi-sdk-$WASI_SDK.0-x86_64-linux.tar.gz" | tar xz -C /opt
+    - export WASI_SDK_PATH=/opt/wasi-sdk-$WASI_SDK.0-x86_64-linux
   script:
     - VERSION="${CI_COMMIT_TAG#v}"; VERSION="${VERSION:-$(git describe --tags --always)}"
+    # The engine the web build runs (target/retex-wasm/retex.wasm, copied by Trunk).
+    - cargo xtask retex-wasm
     - (cd apps/texcraft-web && trunk build --release)
     - mkdir -p out
     - tar -C dist -czf "out/texcraft-web-$VERSION.tar.gz" web

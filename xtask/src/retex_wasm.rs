@@ -17,6 +17,8 @@
 //! * WASI has no threads, so the module's own stack is made large (the
 //!   engine's recursion).
 //! * No package downloads: retex's `download` feature is off.
+//!
+//! `RETEX_WASM_TOOLCHAIN` names the nightly toolchain (default `nightly`).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -59,8 +61,10 @@ pub fn run(root: &Path) -> Result<(), String> {
         sysroot.join("lib/wasm32-wasip1").display()
     );
     let install = out.join("install");
+    // A dated nightly makes the build repeatable (CI pins one).
+    let toolchain = format!("+{}", std::env::var("RETEX_WASM_TOOLCHAIN").unwrap_or_else(|_| "nightly".into()));
     let args = [
-        "+nightly",
+        &toolchain,
         "install",
         "--locked",
         "--force",
