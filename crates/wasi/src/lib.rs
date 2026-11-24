@@ -17,6 +17,8 @@
 //! paths from its own current directory, `/` at the start.
 
 mod fs;
+#[cfg(target_arch = "wasm32")]
+pub mod web;
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
