@@ -9,6 +9,7 @@ mod formatted;
 mod frame;
 mod gallery;
 mod insert;
+mod log_copy;
 mod recent;
 mod regions;
 mod review;
