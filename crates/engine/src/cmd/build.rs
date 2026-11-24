@@ -68,6 +68,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: false,
         },
         CommandSpec {
+            id: "build.export",
+            label: "Export…",
+            menu: &[],
+            shortcut: None,
+            params: export_schema,
+            enabled: can_export,
+            run: export,
+            changes: false,
+        },
+        CommandSpec {
             id: "build.result",
             label: "Build Result",
             menu: &[],
@@ -151,6 +161,60 @@ fn save_pdf(s: &mut Session, p: &Value) -> Result<Value> {
     let pdf = s.pdf.as_ref().ok_or("There is no PDF yet.")?;
     std::fs::write(&path, pdf.as_slice()).map_err(|e| format!("writing {}: {e}", path.display()))?;
     Ok(json!({"path": path.display().to_string(), "bytes": pdf.len()}))
+}
+
+fn export_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "format": {"enum": ["pdf", "odt", "docx", "odp", "pptx", "html", "markdown", "svg"], "description": "The format: PDF is the last build's; the others build the project again and convert it."},
+        "path": {"type": "string", "description": "Where to write the file. Markdown's pictures go to a folder beside it, named after it with `_media`."}
+    }, "required": ["format", "path"], "additionalProperties": false})
+}
+
+fn can_export(s: &Session) -> Result<()> {
+    if cfg!(target_arch = "wasm32") {
+        return Err("Exporting is not available in the browser yet.".to_owned());
+    }
+    has_main(s)?;
+    if s.exporter().is_none() && s.pdf.is_none() {
+        return Err("This typesetting engine cannot export: it has no converter to other formats.".to_owned());
+    }
+    Ok(())
+}
+
+/// Exports the project: the PDF is the last build's, any other format is a new build (in the
+/// engine's own folder, apart from the shown build) converted by retex. It blocks until done.
+fn export(s: &mut Session, p: &Value) -> Result<Value> {
+    can_export(s)?;
+    let name = p.get("format").and_then(Value::as_str).ok_or("the parameter `format` (a string) is missing")?;
+    let format =
+        texcraft_compile::Export::parse(name).ok_or_else(|| format!("unknown format `{name}`: pdf, odt, docx, odp, pptx, html, markdown or svg"))?;
+    if format == texcraft_compile::Export::Pdf {
+        let mut written = save_pdf(s, p)?;
+        written["format"] = json!("pdf");
+        return Ok(written);
+    }
+    let path = std::path::PathBuf::from(p.get("path").and_then(Value::as_str).ok_or("the parameter `path` (a string) is missing")?);
+    if s.roots.is_some() {
+        // As build.compile: retex cannot yet confine the files a document reads (RFC-0015).
+        return Err("Exporting is not available to agents yet: the engine cannot confine the files a document reads.".to_owned());
+    }
+    let exporter = s.exporter().ok_or("This typesetting engine cannot export to other formats than PDF.")?;
+    let job = s.export_job()?;
+    let stem = path.file_stem().map_or_else(|| "document".to_owned(), |s| s.to_string_lossy().into_owned());
+    let media = format!("{stem}_media");
+    let exported = exporter(&job, format, &media).map_err(|e| format!("Export to {} failed: {e}", format.extension()))?;
+    std::fs::write(&path, &exported.data).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    let dir = path.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+    let mut files = vec![path.display().to_string()];
+    for (rel, data) in &exported.media {
+        let target = dir.join(rel);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("creating {}: {e}", parent.display()))?;
+        }
+        std::fs::write(&target, data).map_err(|e| format!("writing {}: {e}", target.display()))?;
+        files.push(target.display().to_string());
+    }
+    Ok(json!({"format": format, "path": path.display().to_string(), "bytes": exported.data.len(), "files": files}))
 }
 
 fn has_main(s: &Session) -> Result<()> {

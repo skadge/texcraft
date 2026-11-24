@@ -27,7 +27,7 @@ use serde_json::Value;
 use texcraft_compile::{Job, Outcome};
 use texcraft_project::{Project, ProjectPath};
 
-pub use texcraft_compile::{Diagnostic, Draft, Engine, Options as BuildOptions, Progress, Severity, Status};
+pub use texcraft_compile::{Diagnostic, Draft, Engine, Export, Options as BuildOptions, Progress, Severity, Status};
 pub use texcraft_project as project;
 
 /// What a command returns: a JSON value for automation, or a message for the user.
@@ -323,6 +323,37 @@ impl Session {
         }
     }
 
+    /// The engine's exporter, when it can export to other formats than its PDF.
+    pub(crate) fn exporter(&self) -> Option<texcraft_compile::Exporter> {
+        match &self.builder {
+            #[cfg(not(target_arch = "wasm32"))]
+            Builder::Thread(w) => w.exporter(),
+            #[cfg(target_arch = "wasm32")]
+            Builder::Inline(b, _) => b.exporter(),
+            #[cfg(target_arch = "wasm32")]
+            Builder::Web(_) => None,
+        }
+    }
+
+    /// Whether the engine converts projects to other formats than its PDF (`build.export`).
+    pub fn can_convert(&self) -> bool {
+        self.exporter().is_some()
+    }
+
+    /// A job of the current sources and build options, for an export.
+    pub(crate) fn export_job(&self) -> Result<Job> {
+        let mut job = Job::from_project(&self.project, 0).ok_or("The project has no main document to export.")?;
+        job.options = self.settings.build;
+        Ok(job)
+    }
+
+    /// Whether the main document is a beamer presentation (`\documentclass[…]{beamer}`), so
+    /// presentation formats come first among the exports.
+    pub fn is_presentation(&self) -> bool {
+        let Some(main) = self.project.main() else { return false };
+        self.project.text(main).is_ok_and(class_is_beamer)
+    }
+
     /// Deletes the build files (not the PDF shown); the next build starts from scratch.
     pub(crate) fn clean_build(&mut self) -> Result<()> {
         match &mut self.builder {
@@ -608,4 +639,21 @@ pub fn apply_edits(text: &str, edits: &[TextEdit]) -> Result<String> {
     }
     out.push_str(&text[at..]);
     Ok(out)
+}
+
+/// Whether a LaTeX source's `\documentclass` (outside comments) is beamer.
+fn class_is_beamer(text: &str) -> bool {
+    for line in text.lines() {
+        let line = line.split('%').next().unwrap_or("");
+        let Some(at) = line.find("\\documentclass") else { continue };
+        let rest = &line[at + "\\documentclass".len()..];
+        let rest = rest.trim_start();
+        let rest = match rest.strip_prefix('[') {
+            Some(r) => r.split_once(']').map_or("", |(_, after)| after),
+            None => rest,
+        };
+        let class = rest.trim_start().strip_prefix('{').and_then(|r| r.split_once('}')).map(|(c, _)| c.trim());
+        return class == Some("beamer");
+    }
+    false
 }

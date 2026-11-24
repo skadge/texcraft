@@ -23,6 +23,7 @@ pub struct Worker {
     can_cancel: bool,
     canceller: Option<crate::Canceller>,
     cleaner: Option<crate::Cleaner>,
+    exporter: Option<crate::Exporter>,
 }
 
 impl Worker {
@@ -34,6 +35,7 @@ impl Worker {
         let can_cancel = backend.can_cancel();
         let canceller = backend.canceller();
         let cleaner = backend.cleaner();
+        let exporter = backend.exporter();
         let spawned = std::thread::Builder::new().name("texcraft-compile".to_owned()).spawn(move || {
             for job in job_rx {
                 let id = job.id;
@@ -64,6 +66,7 @@ impl Worker {
             can_cancel,
             canceller,
             cleaner,
+            exporter,
         }
     }
 
@@ -118,6 +121,11 @@ impl Worker {
             Some(clean) => clean(),
             None => Err("This typesetting engine keeps no build files.".to_owned()),
         }
+    }
+
+    /// The backend's exporter, for a backend that can export.
+    pub fn exporter(&self) -> Option<crate::Exporter> {
+        self.exporter.clone()
     }
 
     /// Whether the backend keeps build files that can be deleted.

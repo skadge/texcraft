@@ -189,6 +189,11 @@ impl Backend for Retex {
         }))
     }
 
+    fn exporter(&self) -> Option<crate::Exporter> {
+        let dir = self.dir.join("export");
+        Some(Arc::new(move |job: &Job, format: crate::Export, media: &str| export(&dir, job, format, media)))
+    }
+
     fn compile_reporting(&mut self, job: &Job, report: &mut dyn FnMut(Event)) -> Outcome {
         let started = Instant::now();
         // A Stop for an earlier build does not reach this one.
@@ -230,6 +235,69 @@ impl Backend for Retex {
                 Outcome { log: other.to_string(), symbols: base.symbols, synctex: base.synctex, seconds, ..failure(job.id, &other.to_string()) }
             }
         }
+    }
+}
+
+/// Builds `job` in process in `dir` (its own copy of the project, apart from the shown build's)
+/// and converts it to `format`.
+fn export(dir: &Path, job: &Job, format: crate::Export, media: &str) -> Result<crate::Exported, String> {
+    use crate::Export;
+    let src = dir.join("src");
+    // A fresh copy: files gone from the project are gone from it.
+    match std::fs::remove_dir_all(&src) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(format!("deleting {}: {e}", src.display())),
+        _ => {}
+    }
+    for (path, bytes) in &job.files {
+        let target = src.join(path.as_str());
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("creating {}: {e}", parent.display()))?;
+        }
+        std::fs::write(&target, bytes).map_err(|e| format!("writing {}: {e}", target.display()))?;
+    }
+    let main = src.join(job.main.as_str());
+    let options = job.options;
+    let identity = match options.engine {
+        Engine::Auto => retex::Identity::Auto,
+        Engine::LuaLatex => retex::Identity::LuaLatex,
+        Engine::PdfLatex => retex::Identity::PdfLatex,
+    };
+    let doc = retex::Retex::new()
+        .identity(identity)
+        .draft_images(options.draft_images)
+        .keep_files(dir.join("out"))
+        .compile_file(&main)
+        .map_err(|e| reason(&e))?;
+    let bytes = |r: Result<Vec<u8>, retex::Error>| r.map(|data| crate::Exported { data, media: Vec::new() }).map_err(|e| reason(&e));
+    match format {
+        Export::Pdf => Ok(crate::Exported { data: doc.pdf().to_vec(), media: Vec::new() }),
+        Export::Odt => bytes(doc.to_odt()),
+        Export::Docx => bytes(doc.to_docx()),
+        Export::Odp => bytes(doc.to_odp()),
+        Export::Pptx => bytes(doc.to_pptx()),
+        Export::Html => bytes(doc.to_html().map(String::into_bytes)),
+        Export::Svg => bytes(doc.to_svg().map(String::into_bytes)),
+        Export::Markdown => {
+            let md = doc.to_markdown(media).map_err(|e| reason(&e))?;
+            Ok(crate::Exported {
+                data: md.text.into_bytes(),
+                media: md.files.into_iter().map(|(name, data)| (format!("{media}/{name}"), data)).collect(),
+            })
+        }
+    }
+}
+
+/// Why retex failed, for the user: its first error when the build failed.
+fn reason(e: &retex::Error) -> String {
+    match e {
+        retex::Error::Failed { diagnostics, .. } => match diagnostics.iter().find(|d| d.severity == retex::Severity::Error) {
+            Some(d) => match (&d.file, d.line) {
+                (Some(f), Some(l)) => format!("the build failed: {f}:{l}: {}", d.message),
+                _ => format!("the build failed: {}", d.message),
+            },
+            None => "the build failed".to_owned(),
+        },
+        other => other.to_string(),
     }
 }
 
