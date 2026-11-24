@@ -280,13 +280,17 @@ retex's engine runs in the browser only as a `wasm32-wasip1` module. The C Lua i
    - It instantiates `retex.wasm` through `js_sys::WebAssembly` and implements the WASI preview-1 imports retex uses (about 29) over an in-memory file system, giving the same behaviour as retex's `web/wasi.js`.
    - It returns PDF, SyncTeX and JSON records to the main thread by message.
    - A pure-Rust interpreter (wasmi) was considered and rejected: it is far slower for a TeX engine and lacks the exception-handling proposal retex needs.
-2. **The TeX tree** is served from the site in the index-and-packs layout retex's `xtask wasm --site` produces, with the prebuilt format as a seed.
+2. **The TeX tree** comes in the layout retex's `xtask wasm --site` produces: `tree/index.txt` (a line per file), the files themselves, and the seed (`seed/index.txt`, the prebuilt `lualatex.fmt`, per-example read lists).
+   - **Where from (checked 2026-11-24).** retex's own site (`retex-ef747d.gitlab.io`, the target of `severin-lemaignan.gitlab.io/retex/`) serves `retex.wasm` (20 MB) and this tree with `Access-Control-Allow-Origin: *`. The web build can load the module and the tree from there, as a pair of the same retex release, with the address in Settings; TeXCraft then hosts no LPPL file (§6, question 4). Hosting its own copy instead needs the RFC.
    - WASI reads are synchronous, so the worker prefetches what a document needs before a build (the seed read lists, then the files the previous build recorded).
-   - It falls back to synchronous requests inside the worker.
-   - Cross-origin isolation (needed for `SharedArrayBuffer`) comes from the host's headers (`packaging/web/_headers`), not from a service worker script.
+   - It falls back to synchronous requests inside the worker. A synchronous `XMLHttpRequest` in a worker needs no cross-origin isolation; `SharedArrayBuffer` with `Atomics.wait` (faster) does, and GitLab Pages sends no such headers, which is why retex's page has a service worker. TeXCraft starts with the synchronous requests.
 3. **Rebuilds.** retex's memory-image snapshot (`snapshot_wasm.rs`) gives fast rebuilds after the preamble.
 4. **Projects in the browser** live in IndexedDB, through web-sys. Opening and saving to cloud storage goes through `craft-cloud` (RFC-0024), and embedding in a host page through `craft-web-host`.
 5. **Licences.** The LaTeX kernel and most packages are LPPL, which is not on the Craft licence allowlist. Hosting a TeX tree for the web build needs an RFC first (see §6). The desktop app reads an installed TeX Live or retex's own downloaded tree and bundles none.
+6. **Packages missing from the tree** (checked against retex 2.4.1, 2026-11-24). retex downloads a missing TeX Live package natively (`retex-texlive`'s `download`, through kpathsea's miss hook in retex-cli), but not in the browser, for three reasons:
+   - **No source.** TeX Live's mirrors send no CORS headers (`mirrors.ctan.org` and eight mirrors tried), so a browser can't fetch from them. A CORS-enabled copy of the year's tlnet archives (about 1.7 GB a year, over GitLab Pages' 1 GB) has to be hosted somewhere: open question 5 of retex's `docs/design/package-download.md`.
+   - **No miss reaches the host.** The WASI module is built without `download`, and no kpathsea miss hook calls out of the module: a missing file fails the build ("File `x.sty' not found"). A retex change (a hook that asks the host, through an import or a reserved path) lets the host fetch it during the run. Without it, the host can fetch after the failure and build again, once per missing package (the tlpdb's dependencies cut the rounds).
+   - **The host's side.** The parts of `retex-texlive` a host needs build for wasm32-unknown-unknown with `download` (tried with 2.4.1): the tlpdb index and file-to-package lookup, the OpenPGP check, xz, SHA-512. `Tree`, which installs into `std::fs`, does not run there, so the host installs into its in-memory files and keeps them in the origin private file system; retex's design proposes an I/O-injected package crate for this.
 
 ### Phase 7: sharing, history and working together
 
