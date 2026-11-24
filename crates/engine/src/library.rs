@@ -99,6 +99,18 @@ impl Library {
         self.changes.push(Change::Saved(name.to_owned(), stored));
     }
 
+    /// Keeps the project `from` as `to`, unchanged otherwise; refuses a name already taken.
+    pub fn rename(&mut self, from: &str, to: &str) -> Result<()> {
+        if self.projects.contains_key(to) {
+            return Err(format!("There is already a project named {to}: choose another name."));
+        }
+        let stored = self.projects.remove(from).ok_or_else(|| format!("There is no project named {from} in this browser."))?;
+        self.projects.insert(to.to_owned(), stored.clone());
+        self.changes.push(Change::Deleted(from.to_owned()));
+        self.changes.push(Change::Saved(to.to_owned(), stored));
+        Ok(())
+    }
+
     pub fn delete(&mut self, name: &str) -> Result<()> {
         self.projects.remove(name).ok_or_else(|| format!("There is no project named {name} in this browser."))?;
         self.changes.push(Change::Deleted(name.to_owned()));
