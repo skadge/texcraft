@@ -175,6 +175,27 @@ pub fn run(app: &mut App, id: &str) {
     }
 }
 
+/// Exports to `format`: asks where (a native picker, or a typed path), then runs `build.export`.
+/// The PDF is the last build's (`build.save_pdf`).
+pub(crate) fn export(app: &mut App, format: texcraft_engine::Export) {
+    if format == texcraft_engine::Export::Pdf {
+        return run(app, "build.save_pdf");
+    }
+    if app.native_pickers {
+        return app.request_pick(Pick::Export(format));
+    }
+    let prompt = Prompt {
+        title: tl!("Export As"),
+        label: tl!("The file to write the export to"),
+        value: String::new(),
+        action: tl!("Export"),
+        command: "build.export",
+        params: Box::new(move |v| json!({"format": format, "path": v})),
+        focus: true,
+    };
+    app.view.dialog = Some(Dialog::Prompt(prompt));
+}
+
 fn ask(app: &mut App, title: &'static str, label: &'static str, action: &'static str, command: &'static str) {
     let prompt = Prompt { title, label, value: String::new(), action, command, params: Box::new(|v| json!({"path": v})), focus: true };
     app.view.dialog = Some(Dialog::Prompt(prompt));

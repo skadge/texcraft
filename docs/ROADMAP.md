@@ -96,7 +96,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 
 | Code | | Feature | Description |
 |---|---|---|---|
-| O1 | ⬜ | Export | SVG, OpenDocument and Word, PowerPoint for beamer, HTML, Markdown, PNG pages (retex writes them). |
+| O1 | 🚧 | Export | SVG, OpenDocument and Word, PowerPoint for beamer, HTML, Markdown, PNG pages (retex writes them). |
 | O2 | ⬜ | Accessible PDF | PDF/UA output, with retex's accessibility findings linked to the source. |
 | O3 | ⬜ | Print | PDF/X with bleed and crop marks, and preflight checks placed on the page and in the source. |
 

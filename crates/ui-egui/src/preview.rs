@@ -3,6 +3,7 @@
 
 use egui::{Align, Layout, RichText, Sense, vec2};
 use serde_json::json;
+use texcraft_engine::Export;
 use texcraft_engine::project::ProjectPath;
 use texcraft_engine::{Diagnostic, Severity, Status};
 
@@ -79,12 +80,12 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         if log.clicked() {
             app.view.logs = !app.view.logs;
         }
-        let pdf_ready = (cmd_enabled(app, "build.save_pdf"), tl!("Save PDF As…"));
-        let save = widgets::icon_button(ui, &t, "download", pdf_ready.1, pdf_ready.0.is_ok());
-        if let Err(reason) = &pdf_ready.0 {
+        let ready = cmd_enabled(app, "build.save_pdf").or_else(|_| cmd_enabled(app, "build.export"));
+        let save = widgets::icon_button(ui, &t, "download", tl!("Export…"), ready.is_ok());
+        if let Err(reason) = &ready {
             let _ = save.on_disabled_hover_text(reason.as_str());
-        } else if save.clicked() {
-            ui_cmd::run(app, "build.save_pdf");
+        } else {
+            egui::Popup::menu(&save).show(|ui| export_menu(app, ui));
         }
         if app.view.logs || !app.pdf.has_pdf() {
             return;
@@ -141,6 +142,44 @@ fn compile_menu(app: &mut App, ui: &mut egui::Ui) {
     let stop = cmd_enabled(app, "build.stop");
     if top_bar::item(ui, &t, Some("x"), tl!("Stop Compiling"), None, stop) {
         app.run("build.stop", json!({}));
+    }
+}
+
+/// The formats the Export menu lists, in its order: PDF, then the presentation formats first for
+/// a beamer document and the text formats first otherwise, then HTML, Markdown and SVG.
+pub(crate) fn export_order(presentation: bool) -> [Export; 8] {
+    use Export::{Docx, Html, Markdown, Odp, Odt, Pdf, Pptx, Svg};
+    if presentation { [Pdf, Pptx, Odp, Docx, Odt, Html, Markdown, Svg] } else { [Pdf, Docx, Odt, Pptx, Odp, Html, Markdown, Svg] }
+}
+
+/// A format's name in the Export menu, translated.
+pub(crate) fn export_label(format: Export) -> &'static str {
+    match format {
+        Export::Pdf => tl!("PDF"),
+        Export::Odt => tl!("OpenDocument Text (.odt)"),
+        Export::Docx => tl!("Word Document (.docx)"),
+        Export::Odp => tl!("OpenDocument Presentation (.odp)"),
+        Export::Pptx => tl!("PowerPoint Presentation (.pptx)"),
+        Export::Html => tl!("Web Page (.html)"),
+        Export::Markdown => tl!("Markdown (.md)"),
+        Export::Svg => tl!("SVG Image (.svg)"),
+    }
+}
+
+fn export_menu(app: &mut App, ui: &mut egui::Ui) {
+    let t = app.tokens;
+    ui.set_min_width(260.0);
+    let convert = cmd_enabled(app, "build.export")
+        .and_then(|()| if app.session.can_convert() { Ok(()) } else { Err(tl!("This typesetting engine exports only the PDF.").to_owned()) });
+    for (i, format) in export_order(app.session.is_presentation()).into_iter().enumerate() {
+        if i == 1 || i == 5 {
+            ui.separator();
+        }
+        let enabled = if format == Export::Pdf { cmd_enabled(app, "build.save_pdf") } else { convert.clone() };
+        if top_bar::item(ui, &t, None, export_label(format), None, enabled) {
+            ui.close();
+            ui_cmd::export(app, format);
+        }
     }
 }
 
