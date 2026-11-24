@@ -141,7 +141,10 @@ fn save_as(s: &mut Session, params: &Value) -> Result<Value> {
 fn save_to(s: &mut Session, dir: &Path) -> Result<Value> {
     let now = s.now().timestamp_millis();
     match &mut s.library {
-        Some(library) => library.save(&dir.display().to_string(), &s.project, now),
+        Some(library) => {
+            let review = s.review.files(&s.project).map_err(|e| format!("The review could not be saved: {e}"))?;
+            library.save(&dir.display().to_string(), &s.project, review, now);
+        }
         None => save_dir(s, dir)?,
     }
     s.dir = Some(dir.to_path_buf());

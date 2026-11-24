@@ -23,13 +23,25 @@ pub struct Stored {
     pub main: Option<String>,
     /// When it was last saved, in milliseconds since 1970 (UTC).
     pub saved: i64,
+    /// The review's threads: each thread's file name and text, as a project folder keeps them in
+    /// `.texcraft/review/` (docs/review-format.md).
+    pub review: BTreeMap<String, String>,
 }
 
 /// A change the shell has to store.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
+    /// The project of this name, with its review, replacing what was stored of it.
     Saved(String, Stored),
     Deleted(String),
+    /// A review thread of a project changed: its file name and new text, or `None` when it was
+    /// deleted. It is stored at once, as a project folder's thread file is written at once,
+    /// whether or not the project's files are saved.
+    Thread {
+        project: String,
+        file: String,
+        text: Option<String>,
+    },
 }
 
 #[derive(Debug, Default)]
@@ -88,15 +100,41 @@ impl Library {
         Ok(project)
     }
 
-    /// Keeps `project` as `name`, replacing the project of that name.
-    pub fn save(&mut self, name: &str, project: &Project, saved: i64) {
+    /// The review threads kept with project `name` (file names and texts); none for a project
+    /// the library does not have.
+    pub fn review(&self, name: &str) -> &BTreeMap<String, String> {
+        static NONE: BTreeMap<String, String> = BTreeMap::new();
+        self.projects.get(name).map_or(&NONE, |p| &p.review)
+    }
+
+    /// Keeps `project` and its `review` (thread files by name) as `name`, replacing the project
+    /// of that name.
+    pub fn save(&mut self, name: &str, project: &Project, review: BTreeMap<String, String>, saved: i64) {
         let stored = Stored {
             files: project.files().map(|(p, c)| (p.as_str().to_owned(), c.as_bytes().to_vec())).collect(),
             main: project.main().map(|m| m.as_str().to_owned()),
             saved,
+            review,
         };
         self.projects.insert(name.to_owned(), stored.clone());
         self.changes.push(Change::Saved(name.to_owned(), stored));
+    }
+
+    /// Keeps review thread `file` of project `name` with `text`.
+    pub fn put_thread(&mut self, name: &str, file: &str, text: &str) -> Result<()> {
+        let project = self.projects.get_mut(name).ok_or_else(|| format!("There is no project named {name} in this browser."))?;
+        project.review.insert(file.to_owned(), text.to_owned());
+        self.changes.push(Change::Thread { project: name.to_owned(), file: file.to_owned(), text: Some(text.to_owned()) });
+        Ok(())
+    }
+
+    /// Removes review thread `file` of project `name`, if it has it.
+    pub fn remove_thread(&mut self, name: &str, file: &str) -> Result<()> {
+        let project = self.projects.get_mut(name).ok_or_else(|| format!("There is no project named {name} in this browser."))?;
+        if project.review.remove(file).is_some() {
+            self.changes.push(Change::Thread { project: name.to_owned(), file: file.to_owned(), text: None });
+        }
+        Ok(())
     }
 
     pub fn delete(&mut self, name: &str) -> Result<()> {

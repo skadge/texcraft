@@ -129,7 +129,7 @@ fn from_template_in_library(s: &mut Session, p: &Value) -> Result<Value> {
     project.set_main(&main).map_err(|e| e.to_string())?;
     let now = s.now().timestamp_millis();
     if let Some(library) = &mut s.library {
-        library.save(&name, &project, now);
+        library.save(&name, &project, Default::default(), now);
     }
     s.replace_project(project, Some(std::path::PathBuf::from(&name)));
     Ok(json!({"folder": name, "main": template.main}))

@@ -83,12 +83,18 @@ mod web {
                 for change in changes {
                     let (store, errors, ctx) = (store.clone(), self.errors.clone(), ctx.clone());
                     wasm_bindgen_futures::spawn_local(async move {
-                        let (name, result) = match &change {
-                            Change::Saved(name, project) => (name, store.put_project(name, project).await),
-                            Change::Deleted(name) => (name, store.delete_project(name).await),
+                        use texcraft_ui_egui::i18n::t;
+                        let project_failed = t("{project} could not be kept in this browser: {error}");
+                        let (name, result, what) = match &change {
+                            Change::Saved(name, project) => (name, store.put_project(name, project).await, project_failed),
+                            Change::Deleted(name) => (name, store.delete_project(name).await, project_failed),
+                            Change::Thread { project, file, text } => (
+                                project,
+                                store.put_thread(project, file, text.as_deref()).await,
+                                t("A comment of {project} could not be kept in this browser: {error}"),
+                            ),
                         };
                         if let Err(e) = result {
-                            let what = texcraft_ui_egui::i18n::t("{project} could not be kept in this browser: {error}");
                             errors.borrow_mut().push(what.replace("{project}", name).replace("{error}", &e));
                             ctx.request_repaint();
                         }
