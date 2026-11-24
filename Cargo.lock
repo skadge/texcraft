@@ -4982,11 +4982,16 @@ dependencies = [
 name = "texcraft-compile"
 version = "0.2.2"
 dependencies = [
+ "js-sys",
  "log",
  "retex",
  "serde",
  "serde_json",
  "texcraft-project",
+ "texcraft-wasi",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -5109,6 +5114,10 @@ dependencies = [
 [[package]]
 name = "texcraft-wasi"
 version = "0.2.2"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+]
 
 [[package]]
 name = "texcraft-web"
@@ -5118,6 +5127,7 @@ dependencies = [
  "egui",
  "log",
  "rfd",
+ "texcraft-compile",
  "texcraft-engine",
  "texcraft-ui-egui",
  "wasm-bindgen",

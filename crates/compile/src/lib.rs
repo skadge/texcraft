@@ -19,6 +19,10 @@ use texcraft_project::{Project, ProjectPath};
 pub mod records;
 #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
 pub mod retex_backend;
+#[cfg(target_arch = "wasm32")]
+pub mod web;
+#[cfg(target_arch = "wasm32")]
+pub mod web_engine;
 #[cfg(not(target_arch = "wasm32"))]
 mod worker;
 #[cfg(not(target_arch = "wasm32"))]

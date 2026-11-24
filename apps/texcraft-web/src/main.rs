@@ -1,7 +1,7 @@
 //! TeXCraft in the browser. Build with `trunk build --release` from this folder.
 //!
-//! The engine does not run in the browser yet: compiling says so (docs/plan.md, phase 3, the WASI
-//! engine host). Editing, the outline and the preview of a PDF already work.
+//! Builds run retex's WebAssembly module in a Web Worker (`engine-worker`, docs/plan.md, phase 6);
+//! the module is TeXCraft's own build of the pinned retex (`cargo xtask retex-wasm`).
 
 #[cfg(target_arch = "wasm32")]
 fn main() {
@@ -90,6 +90,9 @@ mod web {
         }
     }
 
+    /// The engine worker's script, made by Trunk (`index.html`).
+    const WORKER: &str = "engine-worker_loader.js";
+
     pub fn start() {
         eframe::WebLogger::init(log::LevelFilter::Info).ok();
         texcraft_ui_egui::i18n::use_system_language();
@@ -102,7 +105,7 @@ mod web {
                 log::error!("no #texcraft_canvas element");
                 return;
             };
-            let session = texcraft_engine::Session::new();
+            let session = texcraft_engine::Session::in_browser(WORKER);
             let mut app = App::new(session);
             app.set_native_pickers(true);
             let shell = Shell { app, chosen: Chosen::default(), started: false };

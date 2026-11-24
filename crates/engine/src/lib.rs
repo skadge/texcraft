@@ -56,6 +56,9 @@ enum Builder {
     /// Runs on the caller's thread (wasm32, until the engine runs in a worker).
     #[cfg(target_arch = "wasm32")]
     Inline(Box<dyn texcraft_compile::Backend>, Option<Outcome>),
+    /// retex's WebAssembly module in a Web Worker (the browser build).
+    #[cfg(target_arch = "wasm32")]
+    Web(texcraft_compile::web::WebWorker),
 }
 
 pub struct Session {
@@ -128,6 +131,15 @@ impl Session {
         }
     }
 
+    /// A session for the browser, building with retex's module in the Web Worker whose script
+    /// is at `worker_url`.
+    #[cfg(target_arch = "wasm32")]
+    pub fn in_browser(worker_url: &str) -> Self {
+        let mut s = Self::new();
+        s.builder = Builder::Web(texcraft_compile::web::WebWorker::new(worker_url));
+        s
+    }
+
     /// Keeps templates in `dir` (the shell's data folder).
     pub fn set_template_store(&mut self, dir: PathBuf) {
         self.templates = Some(texcraft_templates::Store::new(dir));
@@ -192,6 +204,8 @@ impl Session {
             Builder::Thread(w) => w.running().is_some(),
             #[cfg(target_arch = "wasm32")]
             Builder::Inline(..) => false,
+            #[cfg(target_arch = "wasm32")]
+            Builder::Web(w) => w.running().is_some(),
         }
     }
 
@@ -201,7 +215,7 @@ impl Session {
             #[cfg(not(target_arch = "wasm32"))]
             Builder::Thread(w) => w.can_cancel(),
             #[cfg(target_arch = "wasm32")]
-            Builder::Inline(..) => false,
+            Builder::Inline(..) | Builder::Web(_) => false,
         }
     }
 
@@ -212,6 +226,8 @@ impl Session {
             Builder::Thread(w) => w.cancel(),
             #[cfg(target_arch = "wasm32")]
             Builder::Inline(..) => false,
+            #[cfg(target_arch = "wasm32")]
+            Builder::Web(w) => w.cancel(),
         }
     }
 
@@ -222,6 +238,8 @@ impl Session {
             Builder::Thread(w) => w.progress(),
             #[cfg(target_arch = "wasm32")]
             Builder::Inline(..) => None,
+            #[cfg(target_arch = "wasm32")]
+            Builder::Web(w) => w.progress(),
         }
     }
 
@@ -234,6 +252,8 @@ impl Session {
             Builder::Thread(w) => w.draft(),
             #[cfg(target_arch = "wasm32")]
             Builder::Inline(..) => None,
+            #[cfg(target_arch = "wasm32")]
+            Builder::Web(w) => w.draft(),
         }
     }
 
@@ -243,6 +263,8 @@ impl Session {
             Builder::Thread(w) => w.backend_name().to_owned(),
             #[cfg(target_arch = "wasm32")]
             Builder::Inline(b, _) => b.name(),
+            #[cfg(target_arch = "wasm32")]
+            Builder::Web(w) => w.backend_name().to_owned(),
         }
     }
 
@@ -261,6 +283,8 @@ impl Session {
             Builder::Thread(w) => w.can_clean(),
             #[cfg(target_arch = "wasm32")]
             Builder::Inline(b, _) => b.cleaner().is_some(),
+            #[cfg(target_arch = "wasm32")]
+            Builder::Web(_) => false,
         }
     }
 
@@ -271,6 +295,8 @@ impl Session {
             Builder::Thread(w) => w.clean()?,
             #[cfg(target_arch = "wasm32")]
             Builder::Inline(b, _) => b.cleaner().ok_or("This typesetting engine keeps no build files.")?()?,
+            #[cfg(target_arch = "wasm32")]
+            Builder::Web(_) => return Err("This typesetting engine keeps no build files.".to_owned()),
         }
         self.built_revision = None;
         Ok(())
@@ -404,6 +430,8 @@ impl Session {
             Builder::Thread(w) => w.submit(job),
             #[cfg(target_arch = "wasm32")]
             Builder::Inline(backend, slot) => *slot = Some(backend.compile(&job)),
+            #[cfg(target_arch = "wasm32")]
+            Builder::Web(w) => w.submit(job),
         }
         Ok(id)
     }
@@ -415,6 +443,8 @@ impl Session {
             Builder::Thread(w) => w.poll(),
             #[cfg(target_arch = "wasm32")]
             Builder::Inline(_, slot) => slot.take(),
+            #[cfg(target_arch = "wasm32")]
+            Builder::Web(w) => w.poll(),
         }?;
         Some(self.accept(outcome))
     }
@@ -426,6 +456,9 @@ impl Session {
             Builder::Thread(w) => w.wait(),
             #[cfg(target_arch = "wasm32")]
             Builder::Inline(_, slot) => slot.take(),
+            // A browser can't block: the build's outcome arrives through `poll`.
+            #[cfg(target_arch = "wasm32")]
+            Builder::Web(_) => None,
         }?;
         Some(self.accept(outcome))
     }

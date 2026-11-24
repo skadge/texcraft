@@ -51,6 +51,7 @@ texcraft-buffer = { path = "crates/buffer" }
 texcraft-vim = { path = "crates/vim" }
 texcraft-templates = { path = "crates/templates", default-features = false }
 texcraft-review = { path = "crates/review" }
+texcraft-wasi = { path = "crates/wasi" }
 
 # foundation
 serde = { version = "1", features = ["derive"] }

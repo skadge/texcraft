@@ -13,7 +13,16 @@ workspace = true
 [dependencies]
 texcraft-engine = { workspace = true, default-features = false }
 texcraft-ui-egui = { workspace = true }
+texcraft-compile = { workspace = true }
 log = { workspace = true }
+
+[[bin]]
+name = "texcraft-web"
+path = "src/main.rs"
+
+[[bin]]
+name = "engine-worker"
+path = "src/bin/engine-worker.rs"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }

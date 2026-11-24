@@ -12,6 +12,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/32/io.gitlab.severin_lemaignan.TeXCraft.png">
   <link rel="apple-touch-icon" href="icons/256/io.gitlab.severin_lemaignan.TeXCraft.png">
   <link data-trunk rel="rust" data-bin="texcraft-web" data-cargo-profile="web" data-wasm-opt="z" data-wasm-opt-params="--enable-bulk-memory --enable-bulk-memory-opt --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals --enable-reference-types --enable-multivalue" data-weak-refs data-initializer="loader.js" />
+  <!-- The engine: its Web Worker, and retex's module (cargo xtask retex-wasm). -->
+  <link data-trunk rel="rust" data-bin="engine-worker" data-type="worker" data-loader-shim data-cargo-profile="web" data-wasm-opt="z" data-wasm-opt-params="--enable-bulk-memory --enable-bulk-memory-opt --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals --enable-reference-types --enable-multivalue" />
+  <link data-trunk rel="copy-file" href="../../target/retex-wasm/retex.wasm" />
   <style>
     :root { --bg: #f4f5f7; --text: #1f2328; --muted: #656d76; --track: #dde1e6; --accent: #2457d6; }
     @media (prefers-color-scheme: dark) { :root { --bg: #1b1d21; --text: #e6e8eb; --muted: #9aa1ab; --track: #2c3036; --accent: #6d9bff; } }
