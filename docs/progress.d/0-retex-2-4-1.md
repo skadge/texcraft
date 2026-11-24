@@ -1,0 +1,1 @@
+- 2026-11-24: retex 2.4.1: OpenType features defined from Lua (`addfeature`) substitute and ligate in builds, as with lualatex.
