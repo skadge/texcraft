@@ -143,11 +143,18 @@ mod web {
             }
             for file in self.app.take_dropped_files() {
                 let chosen = self.chosen.clone();
+                let errors = self.errors.clone();
                 let ctx = ctx.clone();
                 wasm_bindgen_futures::spawn_local(async move {
+                    let name = file.path().display().to_string();
+                    log::info!("dropped: {name}");
                     match file.bytes_async().await {
-                        Ok(bytes) => chosen.borrow_mut().push((file.path().display().to_string(), bytes)),
-                        Err(e) => log::warn!("a dropped file could not be read: {e}"),
+                        Ok(bytes) => chosen.borrow_mut().push((name, bytes)),
+                        Err(e) => {
+                            log::warn!("the dropped file {name} could not be read: {e}");
+                            let what = texcraft_ui_egui::i18n::t("The browser did not let TeXCraft read {file}: {error}");
+                            errors.borrow_mut().push(what.replace("{file}", &name).replace("{error}", &e));
+                        }
                     }
                     ctx.request_repaint();
                 });
