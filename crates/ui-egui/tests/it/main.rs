@@ -8,6 +8,7 @@ mod find;
 mod formatted;
 mod frame;
 mod gallery;
+mod goto_file;
 mod image_drop;
 mod insert;
 mod log_copy;

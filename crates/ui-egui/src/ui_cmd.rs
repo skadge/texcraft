@@ -31,6 +31,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("edit.find", "Find", "Edit", "find", Some("Cmd+F")),
     ui("edit.replace", "Replace", "Edit", "find", Some("Cmd+Alt+F")),
     ui("edit.goto_line", "Go to Line…", "Edit", "find", Some("Cmd+Alt+G")),
+    ui("view.go_to_file", "Go to File…", "Edit", "find", Some("Cmd+P")),
     ui("view.show_in_pdf", "Show in PDF", "Edit", "find", Some("Cmd+Alt+J")),
     ui("edit.quick_fix", "Quick Fix", "Edit", "fix", Some("Cmd+.")),
     ui("edit.comment", "Comment", "Edit", "review", Some("Cmd+Alt+M")),
@@ -129,6 +130,7 @@ pub fn run(app: &mut App, id: &str) {
                 app.run("file.close", json!({"path": path.as_str()}));
             }
         }
+        "view.go_to_file" => crate::goto_file::open(app),
         "help.shortcuts" => app.view.dialog = Some(Dialog::Shortcuts),
         "help.manual" => {
             app.ctx.open_url(egui::OpenUrl::new_tab(RETEX_MANUAL));

@@ -47,6 +47,7 @@ pub(crate) enum Dialog {
     Shortcuts,
     Settings,
     About,
+    GoToFile(crate::goto_file::Palette),
 }
 
 impl Dialog {
@@ -59,6 +60,7 @@ impl Dialog {
             Dialog::Shortcuts => "shortcuts",
             Dialog::Settings => "settings",
             Dialog::About => "about",
+            Dialog::GoToFile(_) => "go_to_file",
         }
     }
 }
@@ -73,6 +75,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         crate::settings::show(app, ctx);
         return;
     }
+    if matches!(app.view.dialog, Some(Dialog::GoToFile(_))) {
+        crate::goto_file::show(app, ctx);
+        return;
+    }
     let project = app.project_name();
     let engine = app.session.backend_name();
     let Some(dialog) = app.view.dialog.as_mut() else { return };
@@ -85,7 +91,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             Dialog::Prompt(p) => outcome = prompt(ui, &t, p),
             Dialog::Confirm(c) => outcome = confirm(ui, &t, c),
             Dialog::Unsaved(_) => outcome = unsaved(ui, &t, &project),
-            Dialog::Shortcuts | Dialog::Settings => {}
+            Dialog::Shortcuts | Dialog::Settings | Dialog::GoToFile(_) => {}
             Dialog::About => outcome = about(ui, &t, &engine),
         }
     });
