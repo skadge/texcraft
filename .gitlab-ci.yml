@@ -1,8 +1,16 @@
 # TeXCraft is on gitlab.com for now, so its CI is here rather than in craft-common-actions'
 # GitHub workflows.
 #
-# Branches and merge requests: `check` runs the same sequence as `cargo xtask ci` locally (fmt,
-# clippy with warnings as errors, the tests, the layering check and the wasm32 build).
+# Merge requests and branches other than the default: `check` runs the same sequence as `cargo
+# xtask ci` locally (fmt, clippy with warnings as errors, the tests, the layering check and the
+# wasm32 build). A push to the default branch runs only `mirror` (CI time is scarce); `check` and
+# the package jobs run there when a pipeline is started by hand (Build › Pipelines › Run
+# pipeline).
+#
+# Every push to the default branch and every release tag is mirrored to GitHub (`mirror`), and a
+# release is also made there (`github-release`), with the same notes and the same files. Both use
+# GITHUB_RELEASE_TOKEN, a fine-grained token with Contents read and write on skadge/texcraft,
+# kept in a masked and protected CI variable (so on protected refs only: main and v*).
 #
 # Tags vX.Y.Z (docs/releasing.md): `check`, then the packages (AppImage, Flatpak bundle, browser
 # build), then `publish` uploads them to the project's generic package registry and `release`
@@ -60,12 +68,12 @@ variables:
   - git -C craft-fonts fetch -q --depth 1 https://github.com/storytold/craft-fonts "$CRAFT_FONTS_REV"
   - git -C craft-fonts checkout -q FETCH_HEAD
 
-# The package jobs: on a release tag, and by hand on the default branch (without blocking its
-# pipeline). They wait for `check` (stage order).
+# The package jobs: on a release tag, and by hand in a pipeline started by hand on the default
+# branch (without blocking it). They wait for `check` (stage order).
 .package-rules:
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "web"
       when: manual
       allow_failure: true
 
@@ -90,8 +98,33 @@ check:
       - target/
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "web"
+      when: never
     - if: $CI_COMMIT_BRANCH
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+# The default branch and release tags, pushed to the GitHub mirror as they are pushed here. A full
+# clone: GitHub refuses pushes from a shallow one. Not forced: a push GitHub does not have the
+# history for fails, and says so.
+mirror:
+  stage: check
+  image: alpine:3.22
+  needs: []
+  variables:
+    GIT_DEPTH: 0
+  script:
+    - apk add --no-cache -q git
+    - test -n "$GITHUB_RELEASE_TOKEN" || { echo "GITHUB_RELEASE_TOKEN is not set (or this ref is not protected)"; exit 1; }
+    - REMOTE="https://x-access-token:${GITHUB_RELEASE_TOKEN}@github.com/skadge/texcraft.git"
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        git push "$REMOTE" "refs/tags/$CI_COMMIT_TAG:refs/tags/$CI_COMMIT_TAG"
+      else
+        git push "$REMOTE" "$CI_COMMIT_SHA:refs/heads/$CI_COMMIT_BRANCH"
+      fi
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
 
 # A release tag must match Cargo.toml's version, the changelog and the metainfo; the release's
 # description is the changelog's section, kept for `release`.
@@ -296,6 +329,47 @@ release:
         - name: SHA256SUMS
           url: "$PACKAGE_REGISTRY_URL/$VERSION/SHA256SUMS"
           link_type: other
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+# The same release on GitHub (skadge/texcraft): the changelog's section with links to this
+# release and its files here, and the files themselves attached. Run again, it replaces the files.
+github-release:
+  stage: release
+  image: alpine:3.22
+  needs:
+    - job: release-notes
+    - job: appimage
+    - job: flatpak
+    - job: web
+    - job: publish
+      artifacts: false
+    - job: mirror
+      artifacts: false
+  variables:
+    GH_REPO: skadge/texcraft
+  script:
+    - apk add --no-cache -q github-cli
+    - export GH_TOKEN="$GITHUB_RELEASE_TOKEN"
+    - cat out/SHA256SUMS-* > SHA256SUMS
+    - |
+      {
+        cat release-notes.md
+        echo
+        echo "Built and published on GitLab: ${CI_PROJECT_URL}/-/releases/${CI_COMMIT_TAG}"
+        echo
+        for file in out/*.AppImage out/*.flatpak out/*.tar.gz SHA256SUMS; do
+          echo "- [$(basename "$file")](${PACKAGE_REGISTRY_URL}/${VERSION}/$(basename "$file"))"
+        done
+      } > github-notes.md
+    - |
+      if gh release view "$CI_COMMIT_TAG" > /dev/null 2>&1; then
+        gh release edit "$CI_COMMIT_TAG" --title "TeXCraft $VERSION" --notes-file github-notes.md
+        gh release upload "$CI_COMMIT_TAG" --clobber out/*.AppImage out/*.flatpak out/*.tar.gz SHA256SUMS
+      else
+        gh release create "$CI_COMMIT_TAG" --verify-tag --title "TeXCraft $VERSION" --notes-file github-notes.md \
+          out/*.AppImage out/*.flatpak out/*.tar.gz SHA256SUMS
+      fi
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
 
