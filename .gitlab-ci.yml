@@ -189,8 +189,7 @@ flatpak:
       - .flatpak-builder/
 
 # The browser build (apps/texcraft-web) with Trunk, in the size-optimised `web` profile. Its
-# public_url is "./", so the files work from any folder, a Pages subpath included. It does not
-# build documents yet (no engine in the browser).
+# public_url is "./", so the files work from any folder, a Pages subpath included.
 web:
   stage: package
   image: rust:1.95-bookworm
@@ -214,6 +213,9 @@ web:
     # The engine the web build runs (target/retex-wasm/retex.wasm, copied by Trunk).
     - cargo xtask retex-wasm
     - (cd apps/texcraft-web && trunk build --release)
+    # The templates, which the page fetches from its own site (TeX Live's mirrors send no CORS
+    # headers): after Trunk, which replaces dist/web.
+    - cargo xtask templates-site dist/web
     - mkdir -p out
     - tar -C dist -czf "out/texcraft-web-$VERSION.tar.gz" web
     - (cd out && sha256sum *.tar.gz | tee SHA256SUMS-web)
