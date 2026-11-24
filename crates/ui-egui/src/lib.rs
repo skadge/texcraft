@@ -519,6 +519,18 @@ impl App {
             self.applied = Some(self.tokens.scheme);
         }
         self.poll_gallery();
+        match self.session.poll_export() {
+            Some(Ok(done)) => {
+                let path = done["path"].as_str().unwrap_or_default().to_owned();
+                self.view.status = Some((tl!("Exported to {path}").replace("{path}", &path), false));
+            }
+            Some(Err(e)) => self.view.status = Some((e, true)),
+            None => {}
+        }
+        if self.session.exporting() {
+            // Look again until it ends.
+            ctx.request_repaint_after(std::time::Duration::from_millis(200));
+        }
         let mut thumbnail = false;
         if let Some(outcome) = self.session.poll() {
             thumbnail = outcome.pdf.is_some();

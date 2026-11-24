@@ -104,6 +104,9 @@ pub struct Session {
     /// these live in the session: shown in the file tree until a file is put in them, and not
     /// saved (a folder is written when it has a file).
     folders: std::collections::BTreeSet<ProjectPath>,
+    /// The export running on its own thread (`build.export` with `background`).
+    #[cfg(not(target_arch = "wasm32"))]
+    export: Option<std::sync::mpsc::Receiver<Result<Value>>>,
 }
 
 impl Session {
@@ -142,6 +145,8 @@ impl Session {
             library: None,
             template_files: std::collections::BTreeMap::new(),
             folders: std::collections::BTreeSet::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            export: None,
         }
     }
 
@@ -343,6 +348,31 @@ impl Session {
             #[cfg(target_arch = "wasm32")]
             Builder::Web(_) => None,
         }
+    }
+
+    /// Whether an export runs on its thread.
+    pub fn exporting(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.export.is_some();
+        #[cfg(target_arch = "wasm32")]
+        false
+    }
+
+    /// The outcome of the export running on its thread, once it has ended (what was written, or
+    /// why it failed).
+    pub fn poll_export(&mut self) -> Option<Result<Value>> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let outcome = match self.export.as_ref()?.try_recv() {
+                Ok(outcome) => outcome,
+                Err(std::sync::mpsc::TryRecvError::Empty) => return None,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => Err("The export stopped unexpectedly.".to_owned()),
+            };
+            self.export = None;
+            Some(outcome)
+        }
+        #[cfg(target_arch = "wasm32")]
+        None
     }
 
     /// Whether the engine converts projects to other formats than its PDF (`build.export`).

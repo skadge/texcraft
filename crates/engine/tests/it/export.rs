@@ -82,3 +82,45 @@ fn a_beamer_main_document_is_a_presentation() {
     let article = session(Box::new(Converting(true)), "\\documentclass{article}\n% beamer\n");
     assert!(!article.is_presentation());
 }
+
+#[test]
+fn a_background_export_returns_at_once_and_reports_when_done() -> R {
+    let dir = temp("export-bg")?;
+    let mut s = session(Box::new(Converting(true)), "\\documentclass{article}");
+    let path = dir.join("paper.docx");
+    let started = s.execute("build.export", &json!({"format": "docx", "path": path.display().to_string(), "background": true}))?;
+    assert_eq!(started["started"], true);
+    let mut outcome = None;
+    for _ in 0..200 {
+        if let Some(o) = s.poll_export() {
+            outcome = Some(o);
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let done = outcome.ok_or("the export never ended")??;
+    assert_eq!(done["path"], path.display().to_string());
+    assert!(path.exists(), "the file was not written");
+    assert!(!s.exporting(), "still marked as running");
+    Ok(())
+}
+
+#[test]
+fn a_failed_background_export_reports_its_reason() -> R {
+    let dir = temp("export-bg-fail")?;
+    let mut s = session(Box::new(Converting(false)), "\\documentclass{article}");
+    let path = dir.join("paper.docx");
+    s.execute("build.export", &json!({"format": "docx", "path": path.display().to_string(), "background": true}))?;
+    let mut outcome = None;
+    for _ in 0..200 {
+        if let Some(o) = s.poll_export() {
+            outcome = Some(o);
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let err = outcome.ok_or("the export never ended")?.err().ok_or("a failed export was reported as done")?;
+    assert!(err.contains("Undefined control sequence"), "{err}");
+    assert!(!path.exists());
+    Ok(())
+}

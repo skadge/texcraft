@@ -156,9 +156,10 @@ impl App {
     /// Exports the project to `path` and says on the status line what was written. It blocks
     /// while retex builds and converts the document.
     pub(crate) fn export_to(&mut self, format: texcraft_engine::Export, path: &str) {
-        if let Some(done) = self.run("build.export", json!({"format": format, "path": path})) {
-            let path = done["path"].as_str().unwrap_or(path).to_owned();
-            self.view.status = Some((tl!("Exported to {path}").replace("{path}", &path), false));
+        // On its thread: the window stays usable; `poll_export` says when it is done.
+        if self.run("build.export", json!({"format": format, "path": path, "background": true})).is_some() {
+            let label = crate::preview::export_label(format);
+            self.view.status = Some((tl!("Exporting as {format}…").replace("{format}", label), false));
         }
     }
 

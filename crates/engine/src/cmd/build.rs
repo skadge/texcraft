@@ -166,7 +166,8 @@ fn save_pdf(s: &mut Session, p: &Value) -> Result<Value> {
 fn export_schema() -> Value {
     json!({"type": "object", "properties": {
         "format": {"enum": ["pdf", "odt", "docx", "odp", "pptx", "html", "markdown", "svg"], "description": "The format: PDF is the last build's; the others build the project again and convert it."},
-        "path": {"type": "string", "description": "Where to write the file. Markdown's pictures go to a folder beside it, named after it with `_media`."}
+        "path": {"type": "string", "description": "Where to write the file. Markdown's pictures go to a folder beside it, named after it with `_media`."},
+        "background": {"type": "boolean", "description": "Convert on a thread and return at once; the outcome comes from `Session::poll_export` (the window's status line). Default: wait for it."}
     }, "required": ["format", "path"], "additionalProperties": false})
 }
 
@@ -182,7 +183,8 @@ fn can_export(s: &Session) -> Result<()> {
 }
 
 /// Exports the project: the PDF is the last build's, any other format is a new build (in the
-/// engine's own folder, apart from the shown build) converted by retex. It blocks until done.
+/// engine's own folder, apart from the shown build) converted by retex. It blocks until done, or
+/// with `background` runs on a thread (the window stays responsive; `Session::poll_export`).
 fn export(s: &mut Session, p: &Value) -> Result<Value> {
     can_export(s)?;
     let name = p.get("format").and_then(Value::as_str).ok_or("the parameter `format` (a string) is missing")?;
@@ -202,8 +204,31 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let job = s.export_job()?;
     let stem = path.file_stem().map_or_else(|| "document".to_owned(), |s| s.to_string_lossy().into_owned());
     let media = format!("{stem}_media");
-    let exported = exporter(&job, format, &media).map_err(|e| format!("Export to {} failed: {e}", format.extension()))?;
-    std::fs::write(&path, &exported.data).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    let convert = move || -> Result<Value> {
+        let exported = exporter(&job, format, &media).map_err(|e| format!("Export to {} failed: {e}", format.extension()))?;
+        write_export(format, &path, &exported)
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    if p.get("background").and_then(Value::as_bool).unwrap_or(false) {
+        if s.exporting() {
+            return Err("An export is already running.".to_owned());
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::Builder::new()
+            .name("texcraft-export".to_owned())
+            .spawn(move || {
+                let _ = tx.send(crate::guard::catch_panic(convert).and_then(|r| r));
+            })
+            .map_err(|e| format!("The export could not start: {e}"))?;
+        s.export = Some(rx);
+        return Ok(json!({"format": format, "started": true}));
+    }
+    convert()
+}
+
+/// Writes an export's file and its media beside it; what was written, for the command's result.
+fn write_export(format: texcraft_compile::Export, path: &std::path::Path, exported: &texcraft_compile::Exported) -> Result<Value> {
+    std::fs::write(path, &exported.data).map_err(|e| format!("writing {}: {e}", path.display()))?;
     let dir = path.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
     let mut files = vec![path.display().to_string()];
     for (rel, data) in &exported.media {
