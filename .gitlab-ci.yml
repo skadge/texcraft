@@ -15,7 +15,7 @@
 # Tags vX.Y.Z (docs/releasing.md): `check`, then the packages (AppImage, Flatpak bundle, browser
 # build), then `publish` uploads them to the project's generic package registry and `release`
 # makes the GitLab release from the version's CHANGELOG.md section. `pages` puts the browser build
-# on GitLab Pages, by hand only. Nothing publishes from a branch: on the default branch the package
+# on GitLab Pages once `web` succeeds. Nothing publishes from a branch: on the default branch the package
 # jobs can be started by hand, and their files stay job artifacts.
 
 stages:
@@ -373,8 +373,8 @@ github-release:
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
 
-# GitLab Pages: the browser build at the project's Pages address. By hand on a release tag only,
-# since the browser build cannot build documents yet; the operator decides when it goes up.
+# GitLab Pages: the browser build at the project's Pages address, put up whenever `web` succeeds
+# (on a release tag, or in a pipeline started by hand on the default branch).
 pages:
   stage: release
   image: alpine:3.22
@@ -388,5 +388,4 @@ pages:
       - public
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
-      when: manual
-      allow_failure: true
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE =~ /^(web|api)$/
