@@ -55,7 +55,10 @@ fn database(store: &Store, year: u16) -> Result<(String, Repository)> {
         return Ok((text, Repository::new(base.trim())));
     }
     let keys = openpgp::texlive_keys();
-    let mut last = None;
+    // Each repository's failure, all said if none answers: the current year's historic archive is
+    // tried after `tlnet` and does not exist yet, so its "not found" alone would hide why `tlnet`
+    // (a mirror behind CTAN's redirector) failed.
+    let mut failures = Vec::new();
     for repo in &repos {
         match database_from(repo, &keys, year) {
             Ok(text) => {
@@ -67,10 +70,10 @@ fn database(store: &Store, year: u16) -> Result<(String, Repository)> {
                 }
                 return Ok((text, Repository::new(repo.base())));
             }
-            Err(e) => last = Some(e),
+            Err(e) => failures.push(e.to_string()),
         }
     }
-    Err(last.unwrap_or_else(|| Error::Download("no repository answered".to_owned())))
+    Err(Error::Download(if failures.is_empty() { "no repository answered".to_owned() } else { failures.join("; then ") }))
 }
 
 fn database_from(repo: &Repository, keys: &[openpgp::PublicKey], year: u16) -> Result<String> {
