@@ -204,26 +204,36 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
     let labels: Vec<String> =
         filters.iter().zip([tl!("All"), tl!("Errors"), tl!("Warnings"), tl!("Notes")]).map(|(f, name)| format!("{name} {}", count(*f))).collect();
     let mut goto = None;
+    // Text to put on the clipboard, and what the status line says then.
+    let mut copied: Option<(String, &str)> = None;
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         egui::Frame::new().inner_margin(egui::Margin::same(12)).show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(t.unit * 2.0, t.unit * 2.0);
+            let shown: Vec<&Diagnostic> = outcome.diagnostics.iter().filter(|d| app.view.log_filter.keeps(d.severity)).collect();
             ui.horizontal(|ui| {
                 let options: Vec<(&str, Option<&str>)> = labels.iter().map(|l| (l.as_str(), None)).collect();
                 let selected = filters.iter().position(|f| *f == app.view.log_filter).unwrap_or(0);
                 if let Some(i) = widgets::segmented(ui, &t, "log-filter", &options, selected) {
                     app.view.log_filter = filters.get(i).copied().unwrap_or_default();
                 }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if widgets::icon_button(ui, &t, "copy", tl!("Copy the messages shown"), !shown.is_empty()).clicked() {
+                        let text: Vec<String> = shown.iter().copied().map(diagnostic_text).collect();
+                        copied = Some((text.join("\n"), tl!("The messages are copied.")));
+                    }
+                });
             });
             if let Status::Unavailable(reason) = &outcome.status {
                 let c = Card { icon: "circle-exclamation-point", color: t.error, title: tl!("Not compiled"), message: reason, help: "" };
-                card(ui, &t, c, None);
+                if let CardAction::Copy = card(ui, &t, c, None) {
+                    copied = Some((reason.clone(), tl!("The message is copied.")));
+                }
             }
-            let shown: Vec<&Diagnostic> = outcome.diagnostics.iter().filter(|d| app.view.log_filter.keeps(d.severity)).collect();
             if shown.is_empty() && !matches!(outcome.status, Status::Unavailable(_)) {
                 let message = tl!("The last build reported no messages of this kind.");
                 card(ui, &t, Card { icon: "circle-check", color: t.success, title: tl!("Nothing to report"), message, help: "" }, None);
             }
-            for d in shown {
+            for d in shown.iter().copied() {
                 let (icon, color, word) = match d.severity {
                     Severity::Error => ("circle-exclamation-point", t.error, tl!("Error")),
                     Severity::Warning => ("triangle-exclamation-point", t.warning, tl!("Warning")),
@@ -236,20 +246,30 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                     Some(o) => format!("{word} · {o}"),
                     None => word.to_owned(),
                 };
-                if let Some(target) = card(ui, &t, Card { icon, color, title: &title, message: &d.message, help: &help }, place.as_ref()) {
-                    goto = Some(target);
+                match card(ui, &t, Card { icon, color, title: &title, message: &d.message, help: &help }, place.as_ref()) {
+                    CardAction::Open(target) => goto = Some(target),
+                    CardAction::Copy => copied = Some((diagnostic_text(d), tl!("The message is copied."))),
+                    CardAction::None => {}
                 }
             }
             egui::CollapsingHeader::new(RichText::new(tl!("Raw log")).font(t.strong())).show(ui, |ui| {
+                let has_log = !outcome.log.is_empty();
+                if widgets::text_button(ui, &t, tl!("Copy the Raw Log"), has_log).clicked() {
+                    copied = Some((outcome.log.clone(), tl!("The raw log is copied.")));
+                }
                 egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner_large()).inner_margin(egui::Margin::same(10)).show(
                     ui,
                     |ui| {
-                        ui.add(egui::Label::new(RichText::new(outcome.log.as_str()).monospace().size(t.small_size)).wrap());
+                        ui.add(egui::Label::new(RichText::new(outcome.log.as_str()).monospace().size(t.small_size)).wrap().selectable(true));
                     },
                 );
             });
         });
     });
+    if let Some((text, said)) = copied {
+        ui.ctx().copy_text(text);
+        app.view.status = Some((said.to_owned(), false));
+    }
     if let Some((file, line)) = goto
         && let Ok(path) = ProjectPath::new(&file)
     {
@@ -270,10 +290,19 @@ struct Card<'a> {
     help: &'a str,
 }
 
-/// One message as a card. Returns the place to open when its link was clicked.
-fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Option<u32>)>) -> Option<(String, Option<u32>)> {
+/// What was done with a log card.
+enum CardAction {
+    None,
+    /// Its place was clicked: open it in the editor.
+    Open((String, Option<u32>)),
+    /// Its copy button was clicked.
+    Copy,
+}
+
+/// One message as a card: its text can be selected, and its button copies it.
+fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Option<u32>)>) -> CardAction {
     let Card { icon, color, title, message, help } = c;
-    let mut clicked = None;
+    let mut action = CardAction::None;
     egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner_large()).inner_margin(egui::Margin::same(12)).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal_top(|ui| {
@@ -281,9 +310,12 @@ fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Opti
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = t.unit;
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(title).font(t.strong()).color(color));
-                    if let Some((file, line)) = place {
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.add(egui::Label::new(RichText::new(title).font(t.strong()).color(color)).selectable(true));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if widgets::icon_button(ui, t, "copy", tl!("Copy the message"), true).clicked() {
+                            action = CardAction::Copy;
+                        }
+                        if let Some((file, line)) = place {
                             let text = match line {
                                 Some(l) => format!("{file}:{l}"),
                                 None => file.clone(),
@@ -294,19 +326,42 @@ fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Opti
                                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                             }
                             if link.clicked() {
-                                clicked = Some((file.clone(), *line));
+                                action = CardAction::Open((file.clone(), *line));
                             }
-                        });
-                    }
+                        }
+                    });
                 });
-                ui.label(RichText::new(message).color(t.text));
+                ui.add(egui::Label::new(RichText::new(message).color(t.text)).selectable(true));
                 if !help.is_empty() {
-                    ui.label(RichText::new(help).font(t.small()).color(t.text_muted));
+                    ui.add(egui::Label::new(RichText::new(help).font(t.small()).color(t.text_muted)).selectable(true));
                 }
             });
         });
     });
-    clicked
+    action
+}
+
+/// A diagnostic as one copies it, as compilers print them: `file:line: severity: message`, then
+/// its help indented. The words are not translated, so tools and searches can read them.
+fn diagnostic_text(d: &Diagnostic) -> String {
+    let severity = match d.severity {
+        Severity::Error => "error",
+        Severity::Warning => "warning",
+        Severity::Note => "note",
+        Severity::Hint => "hint",
+    };
+    let place = match (&d.file, d.line) {
+        (Some(f), Some(l)) => format!("{f}:{l}: "),
+        (Some(f), None) => format!("{f}: "),
+        (None, _) => String::new(),
+    };
+    let origin = d.origin.as_ref().map(|o| format!("{o}: ")).unwrap_or_default();
+    let mut text = format!("{place}{severity}: {origin}{}", d.message);
+    for h in &d.help {
+        text.push_str("\n    ");
+        text.push_str(h);
+    }
+    text
 }
 
 /// A point of the PDF double-clicked or Ctrl+clicked: its source line, shown in the editor.

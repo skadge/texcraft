@@ -9,6 +9,7 @@ mod files;
 mod find;
 mod language;
 mod library;
+mod rename;
 mod review;
 mod sync;
 mod templates;

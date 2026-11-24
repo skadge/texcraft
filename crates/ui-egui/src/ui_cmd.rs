@@ -178,6 +178,14 @@ fn ask(app: &mut App, title: &'static str, label: &'static str, action: &'static
     app.view.dialog = Some(Dialog::Prompt(prompt));
 }
 
+/// The typed Save As (no native picker on the desktop), its path started with `value`.
+pub(crate) fn ask_save_as(app: &mut App, value: String) {
+    ask(app, tl!("Save Project As"), tl!("The folder to write the project's files to"), tl!("Save"), "project.save_as");
+    if let Some(Dialog::Prompt(p)) = &mut app.view.dialog {
+        p.value = value;
+    }
+}
+
 /// Asks for a project folder: with a native picker, or a typed path.
 pub(crate) fn pick_project(app: &mut App) {
     if app.session.library().is_some() {

@@ -52,6 +52,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "project.rename",
+            label: "Rename Project",
+            menu: &[],
+            shortcut: None,
+            params: name_schema,
+            enabled: has_dir,
+            run: rename,
+            changes: true,
+        },
+        CommandSpec {
             id: "project.delete",
             label: "Delete Project",
             menu: &[],
@@ -79,7 +89,7 @@ fn path_schema() -> Value {
 }
 
 fn name_schema() -> Value {
-    json!({"type": "object", "properties": {"name": {"type": "string", "description": "A project's name in the browser."}}, "required": ["name"], "additionalProperties": false})
+    json!({"type": "object", "properties": {"name": {"type": "string", "description": "A project's name: in the browser, the name it is kept by; on disk, its folder's name."}}, "required": ["name"], "additionalProperties": false})
 }
 
 /// Projects are opened and saved: from folders, or from the browser's library.
@@ -152,6 +162,34 @@ fn save_to(s: &mut Session, dir: &Path) -> Result<Value> {
     Ok(json!({"path": dir.display().to_string()}))
 }
 
+/// Renames the open project: its entry in the library, or its folder on disk (in the same
+/// parent folder). Unsaved changes stay unsaved.
+fn rename(s: &mut Session, params: &Value) -> Result<Value> {
+    let name = crate::library::check_name(string(params, "name")?)?;
+    if name == "." || name == ".." {
+        return Err("A project's name cannot be a dot or two.".to_owned());
+    }
+    let old = s.dir.clone().ok_or("The project has no name yet: use Save Project As.")?;
+    let new = match &mut s.library {
+        Some(library) => {
+            let from = old.display().to_string();
+            if from != name {
+                library.rename(&from, &name)?;
+            }
+            PathBuf::from(&name)
+        }
+        None => {
+            let new = old.parent().map_or_else(|| PathBuf::from(&name), |p| p.join(&name));
+            if new != old {
+                rename_dir(s, &old, &new)?;
+            }
+            new
+        }
+    };
+    s.dir = Some(new.clone());
+    Ok(json!({"path": new.display().to_string(), "previous": old.display().to_string()}))
+}
+
 fn delete(s: &mut Session, params: &Value) -> Result<Value> {
     let name = string(params, "name")?;
     s.library.as_mut().ok_or("no library")?.delete(name)?;
@@ -187,6 +225,27 @@ fn save_dir(s: &mut Session, dir: &Path) -> Result<()> {
     s.project.save_dir(dir).map_err(|e| e.to_string())?;
     let new_folder = s.dir.as_deref() != Some(dir);
     s.save_review(dir, new_folder)
+}
+
+/// Renames the project's folder `old` to `new`, a sibling that must not exist yet.
+#[cfg(not(target_arch = "wasm32"))]
+fn rename_dir(s: &mut Session, old: &Path, new: &Path) -> Result<()> {
+    if let Some(roots) = &s.roots {
+        roots.check(old, Access::Write)?;
+        roots.check(new, Access::Write)?;
+    }
+    if new.exists() {
+        return Err(format!("There is already a file or folder at {}: choose another name.", new.display()));
+    }
+    std::fs::rename(old, new).map_err(|e| format!("The project's folder {} could not be renamed: {e}", old.display()))?;
+    // The language server names files by their place on disk.
+    s.language = crate::language::Language::new(Some(new));
+    Ok(())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn rename_dir(_: &mut Session, _: &Path, _: &Path) -> Result<()> {
+    Err(NO_FOLDERS.to_owned())
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -50,6 +50,18 @@ impl App {
         std::mem::take(&mut self.thumbs.new)
     }
 
+    /// The thumbnail of the project at `old` is now that of `new`, for the shell to store too.
+    pub(crate) fn move_thumbnail(&mut self, old: &str, new: &str) {
+        self.thumbs.textures.remove(old);
+        let Some(image) = self.thumbs.images.remove(old) else { return };
+        let [width, height] = image.size;
+        let rgba = image.pixels.iter().flat_map(|c| c.to_array()).collect();
+        let (Ok(width), Ok(height)) = (u32::try_from(width), u32::try_from(height)) else { return };
+        let thumbnail = Thumbnail { project: new.to_owned(), width, height, rgba };
+        self.set_thumbnail(thumbnail.clone());
+        self.thumbs.new.push(thumbnail);
+    }
+
     /// Makes the open project's thumbnail from the PDF a build just wrote.
     pub(crate) fn update_thumbnail(&mut self) {
         let (Some(dir), Some(pdf)) = (self.session.dir(), self.session.pdf()) else { return };

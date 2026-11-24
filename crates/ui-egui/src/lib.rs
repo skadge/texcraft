@@ -115,6 +115,8 @@ pub(crate) struct View {
     pub draft: Option<texcraft_engine::Draft>,
     /// The name typed in Settings › Review before a key is made.
     pub identity_draft: String,
+    /// The project's name being edited in the top bar.
+    pub rename: Option<top_bar::Rename>,
 }
 
 pub struct App {
@@ -153,6 +155,9 @@ pub struct App {
     decorations: Option<bool>,
     /// Files dropped in the browser, waiting for the shell to read them.
     dropped: Vec<egui::DroppedFileHandle>,
+    /// The name given to an untitled project on the desktop, while the user chooses the folder
+    /// to make its folder in.
+    pending_name: Option<String>,
 }
 
 impl App {
@@ -189,6 +194,7 @@ impl App {
                 progress: None,
                 draft: None,
                 identity_draft: prefs::system_user_name(),
+                rename: None,
             },
             editor: editor::Editor::default(),
             review: review::ReviewView::default(),
@@ -211,6 +217,7 @@ impl App {
             desktop_window: false,
             decorations: None,
             dropped: Vec::new(),
+            pending_name: None,
         };
         app.remember_project();
         app
@@ -243,6 +250,52 @@ impl App {
     /// The project's name: its folder's, or "Untitled project".
     pub(crate) fn project_name(&self) -> String {
         self.session.dir().and_then(|d| d.file_name()).map_or_else(|| tl!("Untitled project").to_owned(), |n| n.to_string_lossy().into_owned())
+    }
+
+    /// Gives the project the name `name` typed in the top bar. An untitled project is saved under
+    /// it: in the browser at once, on the desktop in a new folder of that name, once the user has
+    /// chosen where. A saved project is renamed: in the browser, its stored copy; on the desktop,
+    /// its folder.
+    pub(crate) fn rename_project(&mut self, name: &str) {
+        let name = name.trim();
+        if name.is_empty() || (self.session.dir().is_some() && name == self.project_name()) {
+            return;
+        }
+        let Some(old) = self.session.dir().map(|d| d.display().to_string()) else {
+            if self.session.library().is_some() {
+                if self.run("project.save_as", json!({"path": name})).is_some() {
+                    self.remember_project();
+                    self.view.status = Some((tl!("The project is saved as {name}.").replace("{name}", name), false));
+                }
+            } else if let Err(e) = texcraft_engine::library::check_name(name) {
+                self.view.status = Some((e, true));
+            } else if self.native_pickers {
+                self.pending_name = Some(name.to_owned());
+                self.request_pick(picks::Pick::SaveProjectIn);
+            } else {
+                ui_cmd::ask_save_as(self, name.to_owned());
+            }
+            return;
+        };
+        let Some(result) = self.run("project.rename", json!({"name": name})) else { return };
+        let new = result["path"].as_str().unwrap_or(name).to_owned();
+        self.project_renamed(&old, &new);
+        let said =
+            if self.session.library().is_some() { tl!("The project is renamed {name}.") } else { tl!("The project's folder is renamed {name}.") };
+        self.view.status = Some((said.replace("{name}", name), false));
+    }
+
+    /// The open project moved from `old` to `new`: its place among the recent projects and its
+    /// thumbnail follow it.
+    fn project_renamed(&mut self, old: &str, new: &str) {
+        for path in &mut self.prefs.recent {
+            if path == old {
+                new.clone_into(path);
+            }
+        }
+        self.prefs_changed = true;
+        self.move_thumbnail(old, new);
+        self.remember_project();
     }
 
     /// Does `next` now, or first asks what to do with unsaved changes.
