@@ -52,6 +52,9 @@ const MAX_FETCH_STOPS: u32 = 2000;
 const SYNC_WINDOW_MS: f64 = 1500.0;
 /// A synchronous request that takes longer fails (the run then stops for the file).
 const SYNC_TIMEOUT_MS: u32 = 3000;
+/// When a run stops for a file, the other files of its folder are fetched with it, up to this
+/// many bytes in all: a scan of a folder (retex's font index) then stops once, not once per file.
+const SIBLINGS_BYTES: u64 = 4 << 20;
 /// Files fetched at once.
 const FETCH_BATCH: usize = 24;
 
@@ -215,6 +218,9 @@ struct Engine {
     written: HashSet<String>,
     /// The memory image of the last build's preamble, for the arguments it was taken with.
     snapshot: Option<(String, Image)>,
+    /// The site's files of the tree by folder (site paths and sizes), for fetching a file's
+    /// neighbours with it.
+    folders: HashMap<String, Vec<(String, u64)>>,
 }
 
 async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
@@ -236,7 +242,7 @@ impl Engine {
     fn new() -> Engine {
         let fs = FileSystem::new();
         let web = Web { fetched: Rc::default(), out: Rc::default(), fs: fs.clone() };
-        Engine { module: None, fs, web, written: HashSet::new(), snapshot: None }
+        Engine { module: None, fs, web, written: HashSet::new(), snapshot: None, folders: HashMap::new() }
     }
 
     /// Fetches the site's files at `paths` not fetched yet, a batch at a time, saying so.
@@ -276,16 +282,38 @@ impl Engine {
             let (Some(size), Some(path)) = (parts.next().and_then(|s| s.parse::<u64>().ok()), parts.next()) else { continue };
             let source: Rc<str> = match (parts.next(), parts.next()) {
                 (Some(pack), Some(offset)) => format!("pack:{pack}:{offset}").into(),
-                _ => format!("file:tree{path}").into(),
+                _ => {
+                    let site = format!("tree{path}");
+                    if let Some((folder, _)) = site.rsplit_once('/') {
+                        self.folders.entry(folder.to_owned()).or_default().push((site.clone(), size));
+                    }
+                    format!("file:{site}").into()
+                }
             };
             self.fs.add_lazy(path, size, source);
         }
         self.fs.mkdirs("/cache", now_ns());
         self.fs.mkdirs("/home", now_ns());
+        // The site's indexes of the tree (ls-R, font names): retex checks each against what it
+        // indexes (sizes and times, the same here as on the site), so it uses them only where
+        // they fit and remakes them otherwise. Without them, the first build reads every font of
+        // the tree (95 MB). Not the site's format: that depends on the engine's build.
+        let mut seeds = Vec::new();
+        if let Ok(list) = fetch_bytes(&format!("{TREE_SITE}seed/index.txt")).await {
+            for line in String::from_utf8_lossy(&list).lines() {
+                let Some((size, path)) = line.split_once(' ') else { continue };
+                let Ok(size) = size.parse::<u64>() else { continue };
+                if path.starts_with("/cache/kpse/") && !self.fs.exists(path) {
+                    self.fs.add_lazy(path, size, format!("file:seed{path}").into());
+                    seeds.push(format!("seed{path}"));
+                }
+            }
+        }
         // What a plain article reads (retex's read list for its example), but retex's caches
         // (`seed/`): those are made by retex's own engine, and this one makes its own.
         if let Ok(list) = fetch_bytes(&format!("{TREE_SITE}seed/reads/article.txt")).await {
-            let paths = String::from_utf8_lossy(&list).lines().filter(|l| l.starts_with("tree/")).map(str::to_owned).collect();
+            let mut paths: Vec<String> = String::from_utf8_lossy(&list).lines().filter(|l| l.starts_with("tree/")).map(str::to_owned).collect();
+            paths.extend(seeds);
             self.fetch_all(id, paths).await?;
         }
         log::info!("engine ready: {} files fetched", self.web.fetched.borrow().urls.len());
@@ -355,7 +383,17 @@ impl Engine {
                     }
                     let Some((path, _)) = locate(&source) else { return Err(format!("unknown source {source}")) };
                     log::info!("build {id}: run {stops} stopped to fetch {path}");
-                    self.fetch_all(id, vec![path]).await?;
+                    let mut paths = vec![path.clone()];
+                    if let Some((folder, _)) = path.rsplit_once('/') {
+                        let mut budget = SIBLINGS_BYTES;
+                        for (p, size) in self.folders.get(folder).into_iter().flatten() {
+                            if *p != path && *size <= budget && !self.web.fetched.borrow().urls.contains_key(p) {
+                                budget -= size;
+                                paths.push(p.clone());
+                            }
+                        }
+                    }
+                    self.fetch_all(id, paths).await?;
                 }
                 Ended::Crashed(why) => return Err(format!("the typesetting engine stopped: {why}")),
             }
