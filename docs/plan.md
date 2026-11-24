@@ -120,6 +120,7 @@ The interim editor is egui's multi-line text field with a highlighting layouter.
    - Gutter: line numbers, error and warning markers with tooltips, fold markers for environments and sections.
    - Bracket matching, closing brackets and `\begin`/`\end` pairs, comment toggle, indent and outdent, go to line.
    - Soft wrap, current-line highlight, selection of words and lines.
+   - **To do (operator, 2026-11-24):** a context menu on right-click in the text, with Add a Comment when text is selected (beside Cut, Copy and Paste), opened from the keyboard too (the Menu key, Shift+F10).
    - IME through `craft_ui::ime::Composer`.
    - AccessKit: an editable multi-line text node with value, caret and selection (RFC-0014; not a read-only document).
 3b. **Vim mode** (essential, part of the widget from the start, not an add-on). A setting (Settings › Editor and Settings › Keyboard: Editor key bindings, Standard or Vim), kept per user, with the mode shown on Vim's line at the bottom of the editor, with the command line and messages (`NORMAL`, `INSERT`, `VISUAL`, `V-LINE`, `REPLACE`, and the pending command).
@@ -133,6 +134,7 @@ The interim editor is egui's multi-line text field with a highlighting layouter.
    - Undo groups follow Vim's: one per change, an insert session is one change.
    - Shortcuts: in Normal mode, command chords of the keymap (Ctrl+S, Ctrl+Enter, F6) still run; plain keys belong to Vim. In Insert mode, the editor's text-editing chords apply as usual.
    - **Accessibility:** the mode is announced on change, and the caret's shape (block, bar, underline) is never the only signal of the mode.
+   - **To do (operator, 2026-11-24):** selecting text in Vim mode (with the mouse, and Visual mode's selection) for the commands that act on a selection, such as Edit › Comment: today a passage cannot be selected for a comment in Vim mode.
    - Tests: a table of keystroke sequences and the text and caret they must give, written from Vim's documentation (`:help`), as the clean-room standard allows. Vim's code is not read, and its documentation is not copied.
 
 4. **Find and replace.** Match case, regular expression (`regex`, MIT/Apache-2.0), whole word, within selection, replace all. Then project-wide search with results grouped by file.
@@ -224,6 +226,7 @@ A toggle at the top of the editor switches between **Source** and **Formatted**,
    - Delete build files.
    - Stop the build (needs R2).
 2. **Progress** (**done**: page of pages, the pass and why, the time; the first build says why it is slower). Pass and page counts while building (needs R3). A draft PDF after the first pass of a first build, as retex's own web editor does.
+   - **To do (operator, 2026-11-24):** the page being built also in the PDF pane's header, in a dim tone so that it adds little noise, beside the PDF it is about; today it is only in the status bar, far from the PDF.
 3. **Build log.**
    - Groups with counts, entries that open the file at the line and column, help and notes.
    - The raw log with search, and the list of output files with download.
