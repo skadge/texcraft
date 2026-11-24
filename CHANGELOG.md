@@ -4,6 +4,40 @@ What changed in each release of TeXCraft, for the people who use it. The day-by-
 progress log in [ROADMAP.md](ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.4.0 (2026-11-24)
+
+The browser version is now self-contained and keeps your work: projects, templates and the TeX
+files all come from TeXCraft's own site, and stay in the browser between visits.
+
+### In the browser
+
+- Projects are kept in the browser: save a project under a name, and the start page lists the
+  projects of this browser to open or delete. Comments are kept with them, and the page asks before
+  you leave it with unsaved changes.
+- Templates work in the browser: they are served with the browser version, and a template makes a
+  named project.
+- The TeX files come from TeXCraft's own site: the common classes and packages, and those of every
+  template. What a visit downloads, and the engine's format, are kept for the next visit: a later
+  first build takes a few seconds instead of 10 to 20.
+- The dark theme applies to the whole window (only the borders turned dark before).
+- A file dropped on the window from Firefox is added (Firefox could leave the drop empty); a drop
+  that brings no file says so.
+
+### Everywhere
+
+- Click the project's name in the top bar to rename it (or to name and save an untitled project).
+- Drag an image from the project's files onto the source to insert `\includegraphics` there, or use
+  Insert in Document from the image's menu (the file list's menu now opens from the keyboard too).
+- The build log's messages can be selected and copied, one by one or all at once.
+- The comments beside the text can be hidden, from the margin or the View commands.
+
+Known limits in the browser:
+
+- A document that needs a package outside the site's tree fails to build; the desktop app
+  downloads it.
+- Only the main document's folder is built, and draft images are not available; the log says so.
+- Tried in Chrome; the TeX tree and templates of this release not yet in Firefox.
+
 ## 0.3.0 (2026-11-24)
 
 The browser version builds PDFs. TeXCraft's own build of retex's engine runs in the browser, with

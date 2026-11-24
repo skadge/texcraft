@@ -1,1 +1,0 @@
-- 2026-11-24: Projects in the browser: saved by name and kept in IndexedDB with the preferences and thumbnails, listed on the start page (open, delete), so a project survives a reload. Templates are not offered there yet: their files come from TeX Live's mirrors, which a web page cannot read.

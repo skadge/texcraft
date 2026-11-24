@@ -1,1 +1,0 @@
-- 2026-11-24: The browser build keeps the TeX files it fetched and the engine's format and indexes between visits (Cache Storage, renewed when the tree or the engine changes): a blank project's first build on a later visit takes under a second.

@@ -41,6 +41,19 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.0" date="2026-11-24" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.4.0</url>
+      <description>
+        <p>Projects, templates and comments kept in the browser version, and editing comforts.</p>
+        <ul>
+          <li>The browser version keeps projects, comments and the downloaded TeX files between visits</li>
+          <li>Templates work in the browser version</li>
+          <li>The project's name is edited in place</li>
+          <li>An image dragged onto the source is inserted with includegraphics</li>
+          <li>Build messages can be copied, and the comments beside the text can be hidden</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-11-24" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.3.0</url>
       <description>
