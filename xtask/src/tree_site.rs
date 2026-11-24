@@ -483,7 +483,10 @@ fn seed(contents: &BTreeMap<String, Vec<u8>>, index: &Index, read: &[String], re
     let root = is_root();
     // The system's root as root (CI); a folder bubblewrap mounts as `/texlive` and `/cache`.
     let stage_root = if root { PathBuf::from("/") } else { work.join("stage") };
-    let cache = stage_root.join("cache");
+    // The cache: where the browser has it in the sandbox; as root, a folder of the work, since
+    // `/cache` may be taken (GitLab's runners mount their cache there). The indexes do not depend
+    // on where the cache is (they are keyed by the tree's paths).
+    let cache = if root { work.join("cache") } else { stage_root.join("cache") };
     let job = work.join("seed-job");
     for dir in [stage_root.join("texlive"), cache.clone()] {
         if root && dir.exists() {
@@ -496,7 +499,7 @@ fn seed(contents: &BTreeMap<String, Vec<u8>>, index: &Index, read: &[String], re
     let in_tree = |dir: &Path, args: &[&str]| -> Result<bool> {
         let mut cmd = if root {
             let mut c = Command::new(retex);
-            c.current_dir(dir).env_clear().envs(ENV);
+            c.current_dir(dir).env_clear().envs(ENV).env("RETEX_CACHE", &cache);
             c
         } else {
             let mut c = Command::new("bwrap");
