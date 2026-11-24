@@ -121,7 +121,7 @@ The interim editor is egui's multi-line text field with a highlighting layouter.
    - Bracket matching, closing brackets and `\begin`/`\end` pairs, comment toggle, indent and outdent, go to line.
    - Soft wrap, current-line highlight, selection of words and lines.
    - **To do (operator, 2026-11-24):** a context menu on right-click in the text, with Add a Comment when text is selected (beside Cut, Copy and Paste), opened from the keyboard too (the Menu key, Shift+F10).
-   - **To do (operator, 2026-11-24):** dragging an image from the file list onto the text inserts its `\includegraphics` (with the path relative to the main document's folder, and `graphicx` loaded if it is not), at the place it is dropped.
+   - **Done (operator's request, 2026-11-24):** dragging an image from the file list onto the text inserts its `\includegraphics` (the path relative to the main document's folder), at the place it is dropped; when `graphicx` is not loaded, the status line says so.
    - IME through `craft_ui::ime::Composer`.
    - AccessKit: an editable multi-line text node with value, caret and selection (RFC-0014; not a read-only document).
 3b. **Vim mode** (essential, part of the widget from the start, not an add-on). A setting (Settings › Editor and Settings › Keyboard: Editor key bindings, Standard or Vim), kept per user, with the mode shown on Vim's line at the bottom of the editor, with the command line and messages (`NORMAL`, `INSERT`, `VISUAL`, `V-LINE`, `REPLACE`, and the pending command).

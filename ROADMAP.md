@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-24 · **Change:** release
 
-**Stage:** 0.4.0 ([CHANGELOG.md](CHANGELOG.md)), with a self-contained browser build (its own TeX tree, projects and templates kept in the browser): phase 1 of [docs/plan.md](docs/plan.md), the window and the suite, is under way, with parts of phases 2 to 4 and 7 (TeXCraft's own editor with Vim bindings, a read-only formatted view, source and PDF navigation, comments). **Next:** finishing phase 1, suggested changes, retex 2.5.0's hooks for the browser build (missing packages, draft images), and a read list per project.
+**Stage:** 0.4.0 ([CHANGELOG.md](CHANGELOG.md)), with a self-contained browser build (its own TeX tree, projects and templates kept in the browser): phase 1 of [docs/plan.md](docs/plan.md), the window and the suite, is under way, with parts of phases 2 to 4 and 7 (TeXCraft's own editor with Vim bindings, a read-only formatted view, source and PDF navigation, comments). **Next:** finishing phase 1, suggested changes, missing packages in the browser (retex 2.5.0's downloads, from a CORS-enabled TeX Live repository still to be hosted), and a read list per project.
 
 The plan, phase by phase, and the changes TeXCraft needs in retex are in [docs/plan.md](docs/plan.md). Review and working together have their own design and roadmap: [docs/collaboration.md](docs/collaboration.md) and [docs/collaboration-roadmap.md](docs/collaboration-roadmap.md).
 
@@ -10,6 +10,8 @@ The plan, phase by phase, and the changes TeXCraft needs in retex are in [docs/p
 
 Each change adds a fragment `docs/progress.d/<issue>-<branch-slug>.md` instead of editing this file (RFC-0017). Fragments are joined here at release time.
 
+- 2026-11-24: retex 2.5.0. In the browser, the whole project goes to the engine (under `/project`, started in the main document's folder through `PWD`), so files outside that folder are found, and draft images work (`--draft-images`).
+- 2026-11-24: The browser's TeX tree is cut to what LaTeX documents read: ConTeXt's folder file by file, the pdfTeX font map cut to the tree's fonts. 174 MB instead of 234, and a first visit's build in 6 s instead of 18.
 - 2026-11-24: The comments beside the text can be hidden (a button on the margin, and View › Show or Hide the Comments Beside the Text), kept in the preferences; the Review panel still lists them (#1).
 - 2026-11-24: An image dragged from the project's files onto the source is placed there as `\includegraphics[width=\linewidth]{…}` on a line of its own, its path written from the main document's folder; the image's context menu has Insert in Document, at the caret, and the file list's context menu now opens from the keyboard (Shift+F10 or the Menu key). Both go through `file.insert_image`, which agents can run too. When the main document's preamble does not load graphicx, the status line says so; the preamble is not changed.
 - 2026-11-24: The browser build carries its own TeX tree (`cargo xtask tree-site`, ported from retex's site build): the packages of retex's list, the blank project's and every template's, with the indexes a first visit needs, so TeXCraft's site no longer needs retex's.

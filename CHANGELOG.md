@@ -30,12 +30,15 @@ files all come from TeXCraft's own site, and stay in the browser between visits.
   Insert in Document from the image's menu (the file list's menu now opens from the keyboard too).
 - The build log's messages can be selected and copied, one by one or all at once.
 - The comments beside the text can be hidden, from the margin or the View commands.
+- retex 2.5.0: a quick fix adds the `\usepackage` a command needs, and hints about `.bib` files
+  are more precise (capitals in titles only for styles that lowercase them, malformed ISBNs). In
+  the browser, the whole project is built (files outside the main document's folder are found) and
+  draft images work.
 
 Known limits in the browser:
 
 - A document that needs a package outside the site's tree fails to build; the desktop app
   downloads it.
-- Only the main document's folder is built, and draft images are not available; the log says so.
 - Tried in Chrome; the TeX tree and templates of this release not yet in Firefox.
 
 ## 0.3.0 (2026-11-24)

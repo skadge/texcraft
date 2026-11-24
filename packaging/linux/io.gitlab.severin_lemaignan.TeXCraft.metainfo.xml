@@ -51,6 +51,7 @@
           <li>The project's name is edited in place</li>
           <li>An image dragged onto the source is inserted with includegraphics</li>
           <li>Build messages can be copied, and the comments beside the text can be hidden</li>
+          <li>retex 2.5.0, with a quick fix that adds a missing package</li>
         </ul>
       </description>
     </release>

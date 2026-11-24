@@ -43,6 +43,9 @@ const ENV: [(&str, &str); 7] = [
     ("SELFAUTOGRANDPARENT", "/"),
 ];
 
+/// Where the project's files are in the module's file system.
+const PROJECT: &str = "/project";
+
 /// The exit status of a resumed run whose snapshot no longer fits the files (`snapshot_wasm.rs`).
 const STALE: u32 = 75;
 /// The exit status of a resumed pass that calls for another.
@@ -476,12 +479,19 @@ impl Engine {
         self.init(id).await?;
         let Some(module) = self.module.clone() else { return Err("the engine did not load".into()) };
         let main = get(msg, "main").as_string().ok_or("no main document")?;
+        // The project's files are under `/project`, at their paths in the project; retex starts in
+        // the main document's folder (`PWD`, retex 2.5).
+        let dir = get(msg, "dir").as_string().filter(|d| !d.is_empty());
+        let cwd = match &dir {
+            Some(d) => format!("{PROJECT}/{d}"),
+            None => PROJECT.to_owned(),
+        };
         let names: Array = get(msg, "names").unchecked_into();
         let contents: Array = get(msg, "contents").unchecked_into();
         let flags: Array = get(msg, "args").unchecked_into();
         let mut now = HashSet::new();
         for (name, bytes) in names.iter().zip(contents.iter()) {
-            let name = format!("/{}", name.as_string().unwrap_or_default());
+            let name = format!("{PROJECT}/{}", name.as_string().unwrap_or_default());
             self.fs.add(&name, Uint8Array::new(&bytes).to_vec(), now_ns());
             now.insert(name);
         }
@@ -490,16 +500,17 @@ impl Engine {
         }
         self.written = now;
         let job = main.strip_suffix(".tex").unwrap_or(&main).to_owned();
-        let pdf = format!("/{job}.pdf");
-        let synctex = format!("/{job}.synctex");
+        let pdf = format!("{cwd}/{job}.pdf");
+        let synctex = format!("{cwd}/{job}.synctex");
         self.fs.remove(&pdf);
         self.fs.remove(&synctex);
         let mut args: Vec<String> =
             vec!["retex".into(), "--color=never".into(), "--message-format=json".into(), "--symbols".into(), "-synctex=-1".into()];
         args.extend(flags.iter().filter_map(|a| a.as_string()));
         args.push(main.clone());
-        let key = args.join("\u{0}");
-        let env: Vec<(String, String)> = ENV.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect();
+        let key = format!("{}\u{0}{cwd}", args.join("\u{0}"));
+        let mut env: Vec<(String, String)> = ENV.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect();
+        env.push(("PWD".to_owned(), cwd.clone()));
         let started = js_sys::Date::now();
         let mut stops = 0;
         let mut reruns = 0;

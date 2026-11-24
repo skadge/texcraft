@@ -39,17 +39,30 @@ fn texts(v: &Value, key: &str) -> Vec<String> {
     v.get(key).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_owned).collect()
 }
 
-/// The project path of a file retex names relative to the main document's folder; files with
-/// an absolute path (the TeX tree, `/texlive/...`) have none.
+/// Where the browser build puts the project's files (crates/compile/src/web_engine.rs).
+const PROJECT_ROOT: &str = "/project/";
+
+/// The project path of a file retex names relative to the main document's folder (`../shared/x.tex`
+/// too) or under the browser's project folder; other absolute paths (the TeX tree,
+/// `/texlive/...`) and paths above the project have none.
 fn project_file(file: &str, main_dir: Option<&str>) -> Option<String> {
-    let file = file.strip_prefix("./").unwrap_or(file);
-    if file.starts_with('/') {
-        return None;
+    let joined = match (file.strip_prefix(PROJECT_ROOT), file.starts_with('/'), main_dir) {
+        (Some(inside), _, _) => inside.to_owned(),
+        (None, true, _) => return None,
+        (None, false, Some(dir)) => format!("{dir}/{file}"),
+        (None, false, None) => file.to_owned(),
+    };
+    let mut parts: Vec<&str> = Vec::new();
+    for part in joined.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            p => parts.push(p),
+        }
     }
-    Some(match main_dir {
-        Some(dir) => format!("{dir}/{file}"),
-        None => file.to_owned(),
-    })
+    (!parts.is_empty()).then(|| parts.join("/"))
 }
 
 fn diagnostic(v: &Value, main_dir: Option<&str>) -> Option<Diagnostic> {
@@ -176,6 +189,15 @@ mod tests {
         assert_eq!(o.diagnostics[1].file, None, "a file of the TeX tree is not in the project");
         assert!(o.symbols.is_some());
         assert!(o.log.contains("This is retex") && !o.log.contains("\"type\""), "the log keeps the text, not the records");
+    }
+
+    #[test]
+    fn files_outside_the_main_folder_keep_their_project_path() {
+        assert_eq!(project_file("../shared/macros.tex", Some("paper")).as_deref(), Some("shared/macros.tex"));
+        assert_eq!(project_file("./doc.tex", Some("paper")).as_deref(), Some("paper/doc.tex"));
+        assert_eq!(project_file("/project/shared/macros.tex", Some("paper")).as_deref(), Some("shared/macros.tex"));
+        assert_eq!(project_file("../../outside.tex", Some("paper")), None, "above the project");
+        assert_eq!(project_file("/texlive/texmf-dist/tex/latex/base/article.cls", None), None);
     }
 
     #[test]

@@ -50,14 +50,14 @@ The editor pane's image preview decodes with `retex_image::decode_rgba8` (PNG, J
 
 ## Open points for retex
 
-### From the browser build (2.4.1, 2026-11-24)
+### From the browser build (asked with 2.4.1, answered by 2.5.0, 2026-11-24)
 
-The web build runs TeXCraft's own build of retex's WebAssembly module (`cargo xtask retex-wasm`, the release `Cargo.lock` pins) through `texcraft-wasi`, a WASI host in Rust, with the TeX tree of retex's site (plan, phase 6). It works: a first build fetches what it needs (about 18 s, the format made in 5 s), and later builds resume from the preamble's snapshot (0.3 to 0.5 s). Four changes would help:
+The web build runs TeXCraft's own build of retex's WebAssembly module (`cargo xtask retex-wasm`) through `texcraft-wasi`, with TeXCraft's own TeX tree (plan, phase 6). retex 2.5.0 answered the four requests:
 
-- **R14. A missing file asks the host** (for auto-download in the browser). In the module, a file kpathsea does not find fails the build; natively, the miss hook downloads its TeX Live package. A host import called on a miss, say `retex.missing(name, format, dist_path) -> found`, after which kpathsea looks again, would let the browser's host fetch the package (from a CORS-enabled archive host, still to be found: retex's `package-download.md`, question 5) and the build go on. Without it, TeXCraft can only fetch after the failure and build again.
-- **R15. Draft images on the command line.** `Retex::draft_images` has no command-line option, and the browser build runs the command line: it tells the user that the setting is ignored there. A `--draft-images` flag would do.
-- **R16. The main document in a subfolder.** The module's current directory is `/`, and a WASI host cannot change it, so the browser build puts the main document's folder at `/` and leaves the project's other files out (it says so). Honouring `PWD` (or a `--cwd DIR` option) at startup in the WASI build would let a project keep its layout, `../shared/macros.tex` included.
-- **R17. Which retex made the site's caches.** The site's `seed/` (the format, the font-name and `ls-R` indexes) is made by the site's own module, so TeXCraft's module, a build of the same release, makes its own on a first visit instead. A `seed/version.txt` naming the release would let a host of the same release use them, and a first build start in about 3 s.
+- **R14. Missing packages downloaded in the module** (**in 2.5.0, not used yet**). With the cargo feature `download` and `RETEX_REPOSITORY` naming a folder the host serves in the layout of a TeX Live repository, the module reads the package database and archives from it, checks signatures and checksums, and installs into `$RETEX_CACHE/texlive/<year>/`; the host only fetches each file it is asked for. TeXCraft needs a CORS-enabled copy of a TeX Live repository to point it at (the open hosting question of plan phase 6, item 6), and the module built with `download`.
+- **R15. `--draft-images`** (**used**, 0.4.0): the browser build passes it when draft images are on.
+- **R16. `PWD` as the starting folder** (**used**, 0.4.0): the browser build gives the module the whole project under `/project` and starts it in the main document's folder, so `../shared/macros.tex` is found and messages about it name its place in the project.
+- **R17. `seed/version.txt`** (**not needed**): TeXCraft makes its own seed with its tree (`cargo xtask tree-site`), with a native retex of the same release.
 
 ### From the 2.1.0 integration
 

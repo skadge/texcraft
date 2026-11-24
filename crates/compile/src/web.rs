@@ -2,9 +2,9 @@
 //! [`WebWorker`] has the desktop [`Worker`](crate)'s interface: one build at a time, a newer
 //! submission replacing a waiting one, progress and drafts while it runs, polled each frame.
 //!
-//! Messages to the worker: `{type: "build", id, main, names, contents, args}` (the project's
-//! files as paths relative to the main document's folder and their bytes, retex's extra
-//! arguments). From it: `{type: "line", id, text}` (a progress record), `{type: "draft", id,
+//! Messages to the worker: `{type: "build", id, main, dir, names, contents, args}` (the main
+//! document's name and folder, the project's files as their paths in the project and their
+//! bytes, retex's extra arguments). From it: `{type: "line", id, text}` (a progress record), `{type: "draft", id,
 //! pass, pdf}`, `{type: "done", id, code, output, pdf?, synctex?, seconds}` or `{type: "done",
 //! id, error}`.
 
@@ -48,8 +48,6 @@ pub struct WebWorker {
     /// Whether the worker said it takes messages; until then the build to send waits here.
     ready: bool,
     unsent: Option<JsValue>,
-    /// Notes for the log about options the browser build ignores.
-    notes: Vec<String>,
     _onmessage: Option<Closure<dyn FnMut(MessageEvent)>>,
 }
 
@@ -77,7 +75,6 @@ impl WebWorker {
             started: 0.0,
             ready: false,
             unsent: None,
-            notes: Vec::new(),
             _onmessage: Some(onmessage),
         }
     }
@@ -111,24 +108,12 @@ impl WebWorker {
             return;
         };
         let dir = main_dir(&job);
-        let prefix = dir.as_ref().map(|d| format!("{d}/"));
         let names = Array::new();
         let contents = Array::new();
-        let mut skipped = 0;
         for (path, data) in &job.files {
-            // The module's files are those of the main document's folder: retex resolves
-            // names from its current directory, `/`.
-            let name = match &prefix {
-                Some(p) => match path.as_str().strip_prefix(p.as_str()) {
-                    Some(rest) => rest.to_owned(),
-                    None => {
-                        skipped += 1;
-                        continue;
-                    }
-                },
-                None => path.as_str().to_owned(),
-            };
-            names.push(&name.into());
+            // The whole project: retex starts in the main document's folder (its `PWD`), so
+            // `../shared/macros.tex` is found as on the desktop.
+            names.push(&path.as_str().into());
             contents.push(&Uint8Array::from(&data[..]).into());
         }
         let main = job.main.as_str().rsplit('/').next().unwrap_or(job.main.as_str()).to_owned();
@@ -145,18 +130,15 @@ impl WebWorker {
         if job.options.halt_on_error {
             args.push(&"--halt-on-error".into());
         }
-        self.notes.clear();
         if job.options.draft_images {
-            self.notes.push("Draft images are not available in the browser yet: images are drawn in full.".into());
-        }
-        if skipped > 0 {
-            self.notes.push(format!("{skipped} file(s) outside the main document's folder were left out: the browser build only sees that folder."));
+            args.push(&"--draft-images".into());
         }
         let msg = Object::new();
         for (k, v) in [
             ("type", JsValue::from("build")),
             ("id", JsValue::from(job.id as f64)),
             ("main", main.into()),
+            ("dir", dir.clone().unwrap_or_default().into()),
             ("names", names.into()),
             ("contents", contents.into()),
             ("args", args.into()),
@@ -232,11 +214,7 @@ impl WebWorker {
                     }
                     let output = get(&msg, "output").as_string().unwrap_or_default();
                     let seconds = get(&msg, "seconds").as_f64().unwrap_or(0.0);
-                    let mut outcome = records::outcome(id, &output, dir.as_deref(), bytes(get(&msg, "pdf")), bytes(get(&msg, "synctex")), seconds);
-                    for note in &self.notes {
-                        outcome.log = format!("{note}\n{}", outcome.log);
-                    }
-                    return Some(outcome);
+                    return Some(records::outcome(id, &output, dir.as_deref(), bytes(get(&msg, "pdf")), bytes(get(&msg, "synctex")), seconds));
                 }
                 _ => {}
             }
