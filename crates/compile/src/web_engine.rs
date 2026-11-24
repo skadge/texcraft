@@ -9,6 +9,10 @@
 //! fetches the files a plain article reads (retex's read list), so that a first build mostly
 //! runs through.
 //!
+//! What it fetched and what the engine made (its format, the indexes of the tree's files and
+//! fonts: `/cache`) is kept in the browser's Cache Storage, so a later visit neither fetches nor
+//! makes them again ([`Kept`]).
+//!
 //! The messages, both ways, are plain objects: see [`crate::web`].
 
 use std::cell::RefCell;
@@ -21,7 +25,7 @@ use texcraft_wasi::{FileSystem, Platform, Wasi};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{DedicatedWorkerGlobalScope, MessageEvent, Response, XmlHttpRequest, XmlHttpRequestResponseType};
+use web_sys::{Cache, DedicatedWorkerGlobalScope, MessageEvent, Request, Response, ResponseInit, XmlHttpRequest, XmlHttpRequestResponseType};
 
 /// retex's site, whose TeX tree the browser build reads (only the tree: the engine is
 /// TeXCraft's own build of the pinned release).
@@ -209,6 +213,134 @@ impl Platform for Web {
     }
 }
 
+/// A 64-bit FNV-1a hash, to name the caches after what they depend on.
+fn fnv(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x100_0000_01b3))
+}
+
+/// Where the engine's own files are kept in the cache: a URL of this page's site that is never
+/// fetched, with the file's path.
+const ENGINE_FILES: &str = "retex-cache";
+
+/// The browser's Cache Storage: the site's files fetched (cache `texcraft-tree-<index>`, by their
+/// URL), and the files the engine made in `/cache` (cache `texcraft-engine-<module>-<index>`).
+/// A cache's name holds a hash of what its files depend on: the tree's index, and for the
+/// engine's files the module too. Caches with other names are from earlier versions, and are
+/// deleted. Keeping is best effort: where the browser has no Cache Storage (or refuses it), each
+/// visit fetches again.
+#[derive(Default)]
+struct Kept {
+    tree: Option<Cache>,
+    engine: Option<Cache>,
+    /// The site's files in the cache.
+    files: HashSet<String>,
+    /// The engine's files in the cache, with their time.
+    made: HashMap<String, u64>,
+}
+
+async fn promise(p: Result<js_sys::Promise, JsValue>) -> Result<JsValue, String> {
+    JsFuture::from(p.map_err(|e| format!("{e:?}"))?).await.map_err(|e| format!("{e:?}"))
+}
+
+impl Kept {
+    /// Opens the caches for this module and tree, and deletes the others.
+    async fn open(module: u64, index: u64) -> Kept {
+        let Ok(storage) = scope().caches() else { return Kept::default() };
+        let tree = format!("texcraft-tree-{index:016x}");
+        let engine = format!("texcraft-engine-{module:016x}-{index:016x}");
+        if let Ok(names) = promise(Ok(storage.keys())).await {
+            for name in Array::from(&names).iter().filter_map(|n| n.as_string()) {
+                if name.starts_with("texcraft-") && name != tree && name != engine {
+                    log::info!("deleting the old cache {name}");
+                    let _ = promise(Ok(storage.delete(&name))).await;
+                }
+            }
+        }
+        let open = |name: String| {
+            let storage = storage.clone();
+            async move { promise(Ok(storage.open(&name))).await.ok().and_then(|c| c.dyn_into::<Cache>().ok()) }
+        };
+        Kept { tree: open(tree).await, engine: open(engine).await, ..Kept::default() }
+    }
+
+    /// The bytes and the time (header `x-mtime`) of a cached response.
+    async fn body(resp: JsValue) -> Option<(Vec<u8>, u64)> {
+        let resp: Response = resp.dyn_into().ok()?;
+        let mtime = resp.headers().get("x-mtime").ok().flatten().and_then(|t| t.parse().ok()).unwrap_or(0);
+        let buf = promise(resp.array_buffer()).await.ok()?;
+        Some((Uint8Array::new(&buf).to_vec(), mtime))
+    }
+
+    async fn put(cache: &Cache, url: &str, bytes: &[u8], mtime: u64) -> Result<(), String> {
+        let init = ResponseInit::new();
+        let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
+        let _ = headers.set("x-mtime", &mtime.to_string());
+        init.set_headers(&headers);
+        let mut body = bytes.to_vec();
+        let resp = Response::new_with_opt_u8_array_and_init(Some(&mut body), &init).map_err(|e| format!("{e:?}"))?;
+        promise(Ok(cache.put_with_str(url, &resp))).await.map(|_| ())
+    }
+
+    /// The site's file at `path`, if it is kept.
+    async fn file(&self, path: &str) -> Option<Vec<u8>> {
+        let resp = promise(Ok(self.tree.as_ref()?.match_with_str(&format!("{TREE_SITE}{path}")))).await.ok()?;
+        if resp.is_undefined() {
+            return None;
+        }
+        Kept::body(resp).await.map(|(b, _)| b)
+    }
+
+    async fn keep_file(&mut self, path: &str, bytes: &[u8]) {
+        let Some(tree) = &self.tree else { return };
+        match Kept::put(tree, &format!("{TREE_SITE}{path}"), bytes, 0).await {
+            Ok(()) => {
+                self.files.insert(path.to_owned());
+            }
+            Err(e) => {
+                log::warn!("the browser did not keep {path} ({e}): not keeping the TeX files from now on");
+                self.tree = None;
+            }
+        }
+    }
+
+    /// Puts the engine's kept files in `fs`.
+    async fn restore(&mut self, fs: &FileSystem) {
+        let Some(engine) = &self.engine else { return };
+        let Ok(requests) = promise(Ok(engine.keys())).await else { return };
+        let prefix = format!("/{ENGINE_FILES}/");
+        for request in Array::from(&requests).iter().filter_map(|r| r.dyn_into::<Request>().ok()) {
+            let url = request.url();
+            let Some(path) = url.find(&prefix).map(|at| url[at + prefix.len() - 1..].to_owned()) else { continue };
+            let Ok(resp) = promise(Ok(engine.match_with_request(&request))).await else { continue };
+            if let Some((bytes, mtime)) = Kept::body(resp).await {
+                fs.add(&path, bytes, mtime);
+                self.made.insert(path, mtime);
+            }
+        }
+        log::info!("{} of the engine's files restored from an earlier visit", self.made.len());
+    }
+
+    /// Keeps the engine's files in `/cache` that are new or changed.
+    async fn keep_made(&mut self, fs: &FileSystem) {
+        let Some(engine) = self.engine.clone() else { return };
+        for (path, mtime) in fs.files("/cache") {
+            if self.made.get(&path) == Some(&mtime) {
+                continue;
+            }
+            let Some(bytes) = fs.read(&path) else { continue };
+            match Kept::put(&engine, &format!("{ENGINE_FILES}{path}"), &bytes, mtime).await {
+                Ok(()) => {
+                    self.made.insert(path, mtime);
+                }
+                Err(e) => {
+                    log::warn!("the browser did not keep {path} ({e})");
+                    return;
+                }
+            }
+        }
+    }
+}
+
 /// The worker's state from build to build.
 struct Engine {
     module: Option<WebAssembly::Module>,
@@ -221,6 +353,7 @@ struct Engine {
     /// The site's files of the tree by folder (site paths and sizes), for fetching a file's
     /// neighbours with it.
     folders: HashMap<String, Vec<(String, u64)>>,
+    kept: Kept,
 }
 
 async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
@@ -242,12 +375,25 @@ impl Engine {
     fn new() -> Engine {
         let fs = FileSystem::new();
         let web = Web { fetched: Rc::default(), out: Rc::default(), fs: fs.clone() };
-        Engine { module: None, fs, web, written: HashSet::new(), snapshot: None, folders: HashMap::new() }
+        Engine { module: None, fs, web, written: HashSet::new(), snapshot: None, folders: HashMap::new(), kept: Kept::default() }
     }
 
-    /// Fetches the site's files at `paths` not fetched yet, a batch at a time, saying so.
-    async fn fetch_all(&self, id: f64, paths: Vec<String>) -> Result<(), String> {
-        let todo: Vec<String> = paths.into_iter().filter(|p| !self.web.fetched.borrow().urls.contains_key(p)).collect();
+    /// Fetches the site's files at `paths` not fetched yet, a batch at a time, saying so: from
+    /// the browser's cache when they are kept there.
+    async fn fetch_all(&mut self, id: f64, paths: Vec<String>) -> Result<(), String> {
+        let mut todo = Vec::new();
+        for p in paths {
+            if self.web.fetched.borrow().urls.contains_key(&p) {
+                continue;
+            }
+            match self.kept.file(&p).await {
+                Some(bytes) => {
+                    self.kept.files.insert(p.clone());
+                    self.web.fetched.borrow_mut().urls.insert(p, Rc::new(bytes));
+                }
+                None => todo.push(p),
+            }
+        }
         let total = todo.len();
         for (n, batch) in todo.chunks(FETCH_BATCH).enumerate() {
             post(
@@ -260,6 +406,7 @@ impl Engine {
             let requests: Vec<js_sys::Promise> = batch.iter().map(|p| scope().fetch_with_str(&format!("{TREE_SITE}{p}"))).collect();
             for (p, request) in batch.iter().zip(requests) {
                 let bytes = response_bytes(p, request).await?;
+                self.kept.keep_file(p, &bytes).await;
                 self.web.fetched.borrow_mut().urls.insert(p.clone(), Rc::new(bytes));
             }
         }
@@ -277,6 +424,7 @@ impl Engine {
         let module =
             JsFuture::from(WebAssembly::compile(&Uint8Array::from(wasm.as_slice()).into())).await.map_err(|e| format!("retex.wasm: {e:?}"))?;
         let index = String::from_utf8(fetch_bytes(&format!("{TREE_SITE}tree/index.txt")).await?).map_err(|_| "tree/index.txt is not UTF-8")?;
+        self.kept = Kept::open(fnv(&wasm), fnv(index.as_bytes())).await;
         for line in index.lines() {
             let mut parts = line.split(' ');
             let (Some(size), Some(path)) = (parts.next().and_then(|s| s.parse::<u64>().ok()), parts.next()) else { continue };
@@ -294,6 +442,8 @@ impl Engine {
         }
         self.fs.mkdirs("/cache", now_ns());
         self.fs.mkdirs("/home", now_ns());
+        // The format and indexes this engine made on an earlier visit, before the site's indexes.
+        self.kept.restore(&self.fs).await;
         // The site's indexes of the tree (ls-R, font names): retex checks each against what it
         // indexes (sizes and times, the same here as on the site), so it uses them only where
         // they fit and remakes them otherwise. Without them, the first build reads every font of
@@ -411,7 +561,21 @@ impl Engine {
             }
         }
         post("done", id, &fields, &transfer);
+        self.keep().await;
         Ok(())
+    }
+
+    /// Keeps what this build fetched while it ran and what the engine made, for later visits.
+    async fn keep(&mut self) {
+        let new: Vec<(String, Rc<Vec<u8>>)> =
+            self.web.fetched.borrow().urls.iter().filter(|(p, _)| !self.kept.files.contains(*p)).map(|(p, b)| (p.clone(), b.clone())).collect();
+        for (path, bytes) in new {
+            self.kept.keep_file(&path, &bytes).await;
+            if self.kept.tree.is_none() {
+                break;
+            }
+        }
+        self.kept.keep_made(&self.fs).await;
     }
 }
 
