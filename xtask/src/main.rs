@@ -185,7 +185,19 @@ fn templates_site(out: &std::path::Path) -> Result<(), String> {
     }
     let mut failed = Vec::new();
     for t in catalog.templates() {
-        let kept = match store.fetch(t) {
+        // TeX Live's mirrors are sometimes mid-update: a failed download is tried twice more.
+        let mut fetched = store.fetch(t);
+        for _ in 0..2 {
+            match &fetched {
+                Err(e) => {
+                    eprintln!("retrying {} ({e})", t.id);
+                    std::thread::sleep(std::time::Duration::from_secs(10));
+                    fetched = store.fetch(t);
+                }
+                Ok(_) => break,
+            }
+        }
+        let kept = match fetched {
             Ok(dir) => dir,
             Err(e) => {
                 eprintln!("FETCH FAIL {}: {e}", t.id);
