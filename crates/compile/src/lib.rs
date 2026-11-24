@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use texcraft_project::{Project, ProjectPath};
 
+pub mod records;
 #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
 pub mod retex_backend;
 #[cfg(not(target_arch = "wasm32"))]
