@@ -20,6 +20,7 @@ mod find_bar;
 pub mod fonts;
 mod formatted;
 mod gallery;
+mod goto_file;
 pub mod icons;
 mod keys;
 mod pdf_view;
@@ -158,6 +159,8 @@ pub struct App {
     /// The name given to an untitled project on the desktop, while the user chooses the folder
     /// to make its folder in.
     pending_name: Option<String>,
+    /// The files opened in this session, the latest first, for Go to File.
+    recent_files: Vec<ProjectPath>,
 }
 
 impl App {
@@ -218,6 +221,7 @@ impl App {
             decorations: None,
             dropped: Vec::new(),
             pending_name: None,
+            recent_files: Vec::new(),
         };
         app.remember_project();
         app
@@ -473,7 +477,14 @@ impl App {
     /// Runs an engine command and puts its error, if any, on the status line.
     pub(crate) fn run(&mut self, id: &str, params: Value) -> Option<Value> {
         match self.session.execute(id, &params) {
-            Ok(v) => Some(v),
+            Ok(v) => {
+                if id == "file.open"
+                    && let Some(path) = params["path"].as_str().and_then(|p| ProjectPath::new(p).ok())
+                {
+                    goto_file::opened(&mut self.recent_files, path);
+                }
+                Some(v)
+            }
             Err(e) => {
                 self.view.status = Some((e, true));
                 None
