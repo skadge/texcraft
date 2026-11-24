@@ -28,6 +28,11 @@ path = "src/bin/engine-worker.rs"
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElement", "Element"] }
+web-sys = { version = "0.3", features = [
+    "Window", "Document", "HtmlCanvasElement", "Element", "Event",
+    "IdbFactory", "IdbOpenDbRequest", "IdbRequest", "IdbDatabase", "IdbObjectStore", "IdbTransaction", "IdbTransactionMode", "DomException", "DomStringList",
+] }
+js-sys = "0.3"
+serde_json = { workspace = true }
 rfd = { version = "0.17.2", default-features = false }
 egui = { workspace = true }

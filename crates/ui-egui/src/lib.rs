@@ -332,6 +332,27 @@ impl App {
         }
     }
 
+    /// Whether the project at `path` is there to open: its folder, or its name in the browser's
+    /// library.
+    pub(crate) fn project_exists(&self, path: &str) -> bool {
+        match self.session.library() {
+            Some(library) => library.contains(path),
+            None => std::path::Path::new(path).is_dir(),
+        }
+    }
+
+    /// The library's changes since the last call (the browser's projects), for the shell to
+    /// store.
+    pub fn take_library_changes(&mut self) -> Vec<texcraft_engine::library::Change> {
+        self.session.take_library_changes()
+    }
+
+    /// Shows `message` on the status line, as an error or not: for the shell's own work, such
+    /// as storing the projects.
+    pub fn report(&mut self, message: String, error: bool) {
+        self.view.status = Some((message, error));
+    }
+
     /// Puts the open project's folder first in the recent projects.
     pub(crate) fn remember_project(&mut self) {
         if let Some(dir) = self.session.dir() {

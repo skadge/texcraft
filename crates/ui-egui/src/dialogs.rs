@@ -106,10 +106,21 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             },
             Some(Dialog::Prompt(p)) => {
                 let params = (p.params)(p.value.trim());
-                app.run(p.command, params);
+                if app.run(p.command, params).is_some() && p.command == "project.save_as" {
+                    app.remember_project();
+                    if let Some(next) = app.after_save.take() {
+                        app.proceed(next);
+                    }
+                }
             }
             Some(Dialog::Confirm(c)) => {
-                app.run(c.command, c.params);
+                if app.run(c.command, c.params.clone()).is_some()
+                    && c.command == "project.delete"
+                    && let Some(name) = c.params["name"].as_str()
+                {
+                    app.prefs.recent.retain(|p| p != name);
+                    app.prefs_changed = true;
+                }
             }
             Some(Dialog::Unsaved(next)) => app.save_then(next),
             _ => {}

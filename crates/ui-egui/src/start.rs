@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use egui::{Align, Layout, RichText, Sense, vec2};
 
-use crate::dialogs::Next;
+use crate::dialogs::{Confirm, Dialog, Next};
 use crate::theme::{Tokens, blend};
 use crate::{App, icons, widgets};
 
@@ -97,9 +97,13 @@ fn header(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         });
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = t.unit * 2.0;
-            let open = egui::Button::image_and_text(icons::image("folder-open", t.icon_size, t.text), tl!("Open Folder…")).min_size(vec2(0.0, 34.0));
-            if ui.add(open).clicked() {
-                crate::ui_cmd::run(app, "project.open");
+            // In the browser the projects are listed below: there are no folders to open.
+            if app.session.library().is_none() {
+                let open =
+                    egui::Button::image_and_text(icons::image("folder-open", t.icon_size, t.text), tl!("Open Folder…")).min_size(vec2(0.0, 34.0));
+                if ui.add(open).clicked() {
+                    crate::ui_cmd::run(app, "project.open");
+                }
             }
             let new = egui::Button::image_and_text(
                 icons::image("file-plus", t.icon_size, t.on_accent),
@@ -155,21 +159,32 @@ fn templates(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     if let Some(id) = chosen {
         if store.is_some() {
             app.create_from_template(id);
+        } else if app.session.library().is_some() {
+            app.gallery.error = Some(
+                tl!(
+                    "Templates are not available in the browser yet: their files come from TeX Live's servers, which a web page cannot download from."
+                )
+                .to_owned(),
+            );
         } else {
             app.gallery.error = Some(tl!("This build of TeXCraft has no folder to keep templates in.").to_owned());
         }
     }
 }
 
+/// The recent projects; in the browser, every project it keeps, the last saved first.
 fn recent(app: &mut App, ui: &mut egui::Ui, t: &Tokens, width: f32) {
-    ui.horizontal(|ui| widgets::section_title(ui, t, tl!("Recent projects")));
+    let library = app.session.library().map(|l| l.names());
+    let title = if library.is_some() { tl!("Projects in this browser") } else { tl!("Recent projects") };
+    ui.horizontal(|ui| widgets::section_title(ui, t, title));
     ui.add_space(t.unit * 3.0);
-    if app.prefs.recent.is_empty() {
-        ui.horizontal(|ui| ui.label(RichText::new(tl!("Projects you open appear here.")).color(t.text_muted)));
+    let recent = library.clone().unwrap_or_else(|| app.prefs.recent.clone());
+    if recent.is_empty() {
+        let empty = if library.is_some() { tl!("Projects you save appear here.") } else { tl!("Projects you open appear here.") };
+        ui.horizontal(|ui| ui.label(RichText::new(empty).color(t.text_muted)));
         return;
     }
     let columns = ((width + 16.0) / (CARD.x + 16.0)).floor().max(1.0) as usize;
-    let recent = app.prefs.recent.clone();
     let mut open = None;
     let mut forget = None;
     for row in recent.chunks(columns) {
@@ -186,8 +201,18 @@ fn recent(app: &mut App, ui: &mut egui::Ui, t: &Tokens, width: f32) {
         ui.add_space(16.0);
     }
     if let Some(path) = forget {
-        app.prefs.recent.retain(|p| *p != path);
-        app.prefs_changed = true;
+        if library.is_some() {
+            app.view.dialog = Some(Dialog::Confirm(Confirm {
+                title: tl!("Delete {project}?").replace("{project}", &path),
+                message: tl!("The project and its files are removed from this browser. This cannot be undone.").to_owned(),
+                action: tl!("Delete"),
+                command: "project.delete",
+                params: serde_json::json!({"name": path}),
+            }));
+        } else {
+            app.prefs.recent.retain(|p| *p != path);
+            app.prefs_changed = true;
+        }
     }
     if let Some(path) = open {
         app.guard(Next::OpenProject(path));
@@ -202,7 +227,8 @@ enum CardAction {
 fn card(app: &mut App, ui: &mut egui::Ui, t: &Tokens, path: &str) -> Option<CardAction> {
     let p = std::path::Path::new(path);
     let name = p.file_name().map_or_else(|| path.to_owned(), |n| n.to_string_lossy().into_owned());
-    let exists = cfg!(target_arch = "wasm32") || p.is_dir();
+    let in_browser = app.session.library().is_some();
+    let exists = app.project_exists(path);
     let (rect, r) = ui.allocate_exact_size(CARD, if exists { Sense::click() } else { Sense::hover() });
     let label = if exists { name.clone() } else { format!("{name} ({})", tl!("folder not found")) };
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, exists, &label));
@@ -237,7 +263,11 @@ fn card(app: &mut App, ui: &mut egui::Ui, t: &Tokens, path: &str) -> Option<Card
     let color = if exists { t.text } else { t.text_muted };
     let name_galley = ui.painter().layout(name, t.strong(), color, CARD.x - 24.0);
     ui.painter().galley(egui::pos2(rect.left() + 12.0, text_top), name_galley, color);
-    let below = if exists { home_parent(p) } else { tl!("Folder not found").to_owned() };
+    let below = match (exists, in_browser) {
+        (true, true) => tl!("In this browser").to_owned(),
+        (true, false) => home_parent(p),
+        (false, _) => tl!("Folder not found").to_owned(),
+    };
     let below_color = if exists { t.text_muted } else { t.error };
     let mut job = egui::text::LayoutJob::simple_singleline(below, t.small(), below_color);
     job.wrap = egui::text::TextWrapping::truncate_at_width(CARD.x - 24.0);
@@ -247,13 +277,18 @@ fn card(app: &mut App, ui: &mut egui::Ui, t: &Tokens, path: &str) -> Option<Card
     // Remove from the list: a small button on the card's corner, shown on hover.
     let close = egui::Rect::from_center_size(rect.right_top() + vec2(-16.0, 16.0), vec2(22.0, 22.0));
     let c = ui.interact(close, ui.scope_id().with(("forget", path)), Sense::click());
-    c.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{} {label}", tl!("Remove from recent projects:"))));
+    let (forget, forget_label) = if in_browser {
+        (tl!("Delete project"), tl!("Delete project:"))
+    } else {
+        (tl!("Remove from recent projects"), tl!("Remove from recent projects:"))
+    };
+    c.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{forget_label} {label}")));
     if hovered || c.hovered() || !exists {
         ui.painter().circle_filled(close.center(), 11.0, if c.hovered() { blend(t.raised, t.pressed) } else { t.raised });
         ui.painter().circle_stroke(close.center(), 11.0, t.hairline());
         icons::paint(ui, close, "x", 13.0, t.text_muted);
     }
-    let c = c.on_hover_text(tl!("Remove from recent projects"));
+    let c = c.on_hover_text(forget);
     let r = r.on_hover_text(path);
     if c.clicked() {
         return Some(CardAction::Forget);

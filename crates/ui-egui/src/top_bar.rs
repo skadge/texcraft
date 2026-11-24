@@ -226,7 +226,7 @@ pub(crate) fn recent_menu(app: &mut App, ui: &mut egui::Ui) {
             let p = std::path::Path::new(path);
             let name = p.file_name().map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned());
             let parent = p.parent().map(|d| home_relative(&d.display().to_string())).unwrap_or_default();
-            let exists = cfg!(target_arch = "wasm32") || p.is_dir();
+            let exists = app.project_exists(path);
             let mut job = egui::text::LayoutJob::default();
             let strong = egui::TextFormat { font_id: t.body(), color: t.text, ..Default::default() };
             let muted = egui::TextFormat { font_id: t.small(), color: t.text_muted, ..Default::default() };

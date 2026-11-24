@@ -16,6 +16,7 @@ pub use language::{Completion, Fix, Lint, TextEdit};
 pub use sync::PageRect;
 pub use texcraft_buffer::{Change, Origin, Transaction};
 pub mod guard;
+pub mod library;
 mod review_store;
 pub use texcraft_review as review;
 
@@ -93,6 +94,9 @@ pub struct Session {
     review: review_store::State,
     /// Who comments: set by the shell from the preferences (or for agents); none until then.
     author: Option<review::Author>,
+    /// Projects kept by name, where there are no folders (the browser): then `dir` is the open
+    /// project's name in it.
+    library: Option<library::Library>,
 }
 
 impl Session {
@@ -128,6 +132,7 @@ impl Session {
             edits: edits::Log::default(),
             review: review_store::State::default(),
             author: None,
+            library: None,
         }
     }
 
@@ -137,7 +142,22 @@ impl Session {
     pub fn in_browser(worker_url: &str) -> Self {
         let mut s = Self::new();
         s.builder = Builder::Web(texcraft_compile::web::WebWorker::new(worker_url));
+        s.library = Some(library::Library::default());
         s
+    }
+
+    /// Keeps projects by name in `library` instead of folders (the browser; tests).
+    pub fn use_library(&mut self, library: library::Library) {
+        self.library = Some(library);
+    }
+
+    pub fn library(&self) -> Option<&library::Library> {
+        self.library.as_ref()
+    }
+
+    /// The library's changes since the last call, for the shell to store.
+    pub fn take_library_changes(&mut self) -> Vec<library::Change> {
+        self.library.as_mut().map(library::Library::take_changes).unwrap_or_default()
     }
 
     /// Keeps templates in `dir` (the shell's data folder).
@@ -373,7 +393,8 @@ impl Session {
     /// Thread `id` changed: it is written to the project's folder, when there is one.
     fn review_changed(&mut self, id: review::Id) -> Result<()> {
         self.review.revision += 1;
-        let Some(dir) = self.dir.clone() else { return Ok(()) };
+        // Review threads are kept in the project's folder; the library does not keep them yet.
+        let Some(dir) = self.dir.clone().filter(|_| self.library.is_none()) else { return Ok(()) };
         if let Some(roots) = &self.roots {
             roots.check(&review_store::folder(&dir), file_access::Access::Write)?;
         }
@@ -402,8 +423,10 @@ impl Session {
         self.current = project.main().cloned();
         self.open = self.current.iter().cloned().collect();
         self.project = project;
-        self.language = language::Language::new(dir.as_deref());
-        self.review = review_store::State::load(dir.as_deref(), &self.project);
+        // A project of the library has a name, not a folder on disk.
+        let folder = dir.as_deref().filter(|_| self.library.is_none());
+        self.language = language::Language::new(folder);
+        self.review = review_store::State::load(folder, &self.project);
         self.sync = None;
         self.dir = dir;
         self.dirty = false;

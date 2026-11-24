@@ -14,23 +14,79 @@ fn main() {
 }
 
 #[cfg(target_arch = "wasm32")]
+mod store;
+
+#[cfg(target_arch = "wasm32")]
 mod web {
     use std::cell::RefCell;
     use std::rc::Rc;
 
+    use texcraft_engine::library::{Change, Library};
     use texcraft_ui_egui::{App, Pick};
     use wasm_bindgen::JsCast;
 
+    use crate::store::Store;
+
     /// Files chosen in the browser's file picker, waiting for the next frame.
     type Chosen = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
+    /// Errors of the browser's storage, for the status line.
+    type Errors = Rc<RefCell<Vec<String>>>;
 
     struct Shell {
         app: App,
         chosen: Chosen,
         started: bool,
+        store: Option<Store>,
+        errors: Errors,
     }
 
     impl Shell {
+        /// Stores what changed this frame: the projects saved or deleted, the preferences and the
+        /// thumbnails. Each write runs on its own; a failed one is said on the status line.
+        fn keep(&mut self, ctx: &egui::Context) {
+            let changes = self.app.take_library_changes();
+            let prefs = self.app.take_changed_prefs();
+            let thumbnails = self.app.take_thumbnails();
+            if let Some(store) = &self.store {
+                for change in changes {
+                    let (store, errors, ctx) = (store.clone(), self.errors.clone(), ctx.clone());
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let (name, result) = match &change {
+                            Change::Saved(name, project) => (name, store.put_project(name, project).await),
+                            Change::Deleted(name) => (name, store.delete_project(name).await),
+                        };
+                        if let Err(e) = result {
+                            let what = texcraft_ui_egui::i18n::t("{project} could not be kept in this browser: {error}");
+                            errors.borrow_mut().push(what.replace("{project}", name).replace("{error}", &e));
+                            ctx.request_repaint();
+                        }
+                    });
+                }
+                if let Some(json) = prefs.and_then(|p| serde_json::to_string(&p).ok()) {
+                    let (store, errors) = (store.clone(), self.errors.clone());
+                    wasm_bindgen_futures::spawn_local(async move {
+                        if let Err(e) = store.put_prefs(&json).await {
+                            errors
+                                .borrow_mut()
+                                .push(format!("{} {e}", texcraft_ui_egui::i18n::t("The preferences could not be kept in this browser:")));
+                        }
+                    });
+                }
+                for thumbnail in thumbnails {
+                    let store = store.clone();
+                    wasm_bindgen_futures::spawn_local(async move {
+                        if let Err(e) = store.put_thumbnail(&thumbnail).await {
+                            log::warn!("a thumbnail could not be kept: {e}");
+                        }
+                    });
+                }
+            }
+            let errors = std::mem::take(&mut *self.errors.borrow_mut());
+            if let Some(last) = errors.into_iter().last() {
+                self.app.report(last, true);
+            }
+        }
+
         /// The browser's file picker for Add Files; the other picks name folders and paths, which
         /// the browser does not have.
         fn picks(&mut self, ctx: &egui::Context) {
@@ -80,6 +136,7 @@ mod web {
             self.app.frame(ui);
             let ctx = ui.ctx().clone();
             self.picks(&ctx);
+            self.keep(&ctx);
         }
     }
 
@@ -105,10 +162,40 @@ mod web {
                 log::error!("no #texcraft_canvas element");
                 return;
             };
-            let session = texcraft_engine::Session::in_browser(WORKER);
-            let mut app = App::new(session);
+            let mut session = texcraft_engine::Session::in_browser(WORKER);
+            let errors = Errors::default();
+            let store = match Store::open().await {
+                Ok(store) => Some(store),
+                Err(e) => {
+                    let what = texcraft_ui_egui::i18n::t("Projects cannot be kept in this browser:");
+                    errors.borrow_mut().push(format!("{what} {e}"));
+                    None
+                }
+            };
+            let mut prefs = None;
+            let mut thumbnails = Vec::new();
+            if let Some(store) = &store {
+                let mut library = Library::default();
+                match store.projects().await {
+                    Ok(projects) => projects.into_iter().for_each(|(name, project)| library.insert(name, project)),
+                    Err(e) => {
+                        errors.borrow_mut().push(format!("{} {e}", texcraft_ui_egui::i18n::t("The projects kept in this browser could not be read:")))
+                    }
+                }
+                session.use_library(library);
+                prefs = store.prefs().await.ok().flatten().and_then(|json| serde_json::from_str(&json).ok());
+                thumbnails = store.thumbnails().await.unwrap_or_default();
+            }
+            let mut app = match prefs {
+                Some(prefs) => App::with_prefs(session, prefs),
+                None => App::new(session),
+            };
+            for thumbnail in thumbnails {
+                app.set_thumbnail(thumbnail);
+            }
             app.set_native_pickers(true);
-            let shell = Shell { app, chosen: Chosen::default(), started: false };
+            app.show_start_page();
+            let shell = Shell { app, chosen: Chosen::default(), started: false, store, errors };
             let started = eframe::WebRunner::new().start(canvas, eframe::WebOptions::default(), Box::new(|_cc| Ok(Box::new(shell)))).await;
             if let Err(e) = started {
                 log::error!("TeXCraft could not start: {e:?}");

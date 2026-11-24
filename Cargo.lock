@@ -5125,8 +5125,10 @@ version = "0.3.0"
 dependencies = [
  "eframe",
  "egui",
+ "js-sys",
  "log",
  "rfd",
+ "serde_json",
  "texcraft-compile",
  "texcraft-engine",
  "texcraft-ui-egui",

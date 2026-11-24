@@ -140,6 +140,9 @@ pub fn run(app: &mut App, id: &str) {
         "project.open" => app.guard(Next::PickProject),
         "project.new" => app.guard(Next::NewProject),
         "project.from_template" => app.open_gallery(),
+        "project.save_as" if app.session.library().is_some() => {
+            ask(app, tl!("Save Project As"), tl!("A name for the project, kept in this browser"), tl!("Save"), "project.save_as")
+        }
         "project.save_as" if app.native_pickers => app.request_pick(Pick::SaveProjectAs),
         "build.save_pdf" if app.native_pickers => app.request_pick(Pick::SavePdf),
         "file.import" if app.native_pickers => app.request_pick(Pick::AddFiles),
@@ -177,7 +180,10 @@ fn ask(app: &mut App, title: &'static str, label: &'static str, action: &'static
 
 /// Asks for a project folder: with a native picker, or a typed path.
 pub(crate) fn pick_project(app: &mut App) {
-    if app.native_pickers {
+    if app.session.library().is_some() {
+        // The start page lists the browser's projects.
+        app.start = true;
+    } else if app.native_pickers {
         app.request_pick(Pick::OpenProject);
     } else {
         ask(app, tl!("Open Project Folder"), tl!("The folder that holds the project's files"), tl!("Open"), "project.open");
