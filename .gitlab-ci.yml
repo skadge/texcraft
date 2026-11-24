@@ -245,7 +245,9 @@ web:
     # image's own cargo folder that is on PATH.
     - export PATH="$CARGO_HOME/bin:$PATH"
     - rustup toolchain install "$TRUNK_RUST" --profile minimal
-    - cargo +"$TRUNK_RUST" install --locked trunk --version "$TRUNK_VERSION"
+    # The cache keeps trunk's binary but not cargo's record of it: installed only when the cached
+    # one is not the pinned version.
+    - trunk --version 2>/dev/null | grep -qF "$TRUNK_VERSION" || cargo +"$TRUNK_RUST" install --locked --force trunk --version "$TRUNK_VERSION"
     - rustup toolchain install "$RETEX_WASM_TOOLCHAIN" --profile minimal --component rust-src --target wasm32-wasip1
     - curl -sSfL "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$WASI_SDK/wasi-sdk-$WASI_SDK.0-x86_64-linux.tar.gz" | tar xz -C /opt
     - export WASI_SDK_PATH=/opt/wasi-sdk-$WASI_SDK.0-x86_64-linux
