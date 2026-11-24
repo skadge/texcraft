@@ -18,7 +18,7 @@ fn harness(files: &[&str]) -> Result<Harness<'static, App>, String> {
     let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
     let mut h =
         Harness::builder().with_size(egui::vec2(1200.0, 800.0)).with_step_dt(1.0 / 60.0).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
-    h.run();
+    h.run_steps(10);
     Ok(h)
 }
 
@@ -30,11 +30,11 @@ fn has(h: &mut Harness<'_, App>, path: &str) -> bool {
 fn a_folder_made_from_the_files_header_is_shown_in_the_tree() -> Result<(), String> {
     let mut h = harness(&[])?;
     h.get_by_label("New Folder…").click();
-    h.run();
+    h.run_steps(10);
     h.get_by_label("Its path in the project, such as chapters/figures").type_text("chapters");
-    h.run();
+    h.run_steps(10);
     h.key_press(egui::Key::Enter);
-    h.run();
+    h.run_steps(10);
     assert!(h.query_by_role_and_label(Role::TreeItem, "chapters").is_some(), "the empty folder is not in the tree");
     let folders: Vec<String> = h.state_mut().session().empty_folders().map(|f| f.as_str().to_owned()).collect();
     assert_eq!(folders, ["chapters"]);
@@ -45,22 +45,22 @@ fn a_folder_made_from_the_files_header_is_shown_in_the_tree() -> Result<(), Stri
 fn the_keyboard_moves_a_file_into_a_folder_from_its_menu() -> Result<(), String> {
     let mut h = harness(&["plot.png", "figures/old.png"])?;
     h.get_by_role_and_label(Role::TreeItem, "plot.png").focus();
-    h.run();
+    h.run_steps(10);
     h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F10);
-    h.run();
+    h.run_steps(10);
     for _ in 0..10 {
         if h.query_by_label("Move to…").is_some_and(|n| n.is_focused()) {
             break;
         }
         h.key_press(egui::Key::Tab);
-        h.run();
+        h.run_steps(10);
     }
     h.key_press(egui::Key::Enter);
-    h.run();
+    h.run_steps(10);
     h.get_by_label("The folder to move it to (empty for the top level)").type_text("figures");
-    h.run();
+    h.run_steps(10);
     h.key_press(egui::Key::Enter);
-    h.run();
+    h.run_steps(10);
     assert!(has(&mut h, "figures/plot.png") && !has(&mut h, "plot.png"), "the file was not moved");
     Ok(())
 }
