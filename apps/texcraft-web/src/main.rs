@@ -18,7 +18,7 @@ mod store;
 
 #[cfg(target_arch = "wasm32")]
 mod web {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::rc::Rc;
 
     use texcraft_engine::library::{Change, Library};
@@ -70,6 +70,8 @@ mod web {
         store: Option<Store>,
         errors: Errors,
         fetched: Fetched,
+        /// Whether the session has unsaved changes, for the page's `beforeunload` listener.
+        unsaved: Rc<Cell<bool>>,
     }
 
     impl Shell {
@@ -191,6 +193,7 @@ mod web {
                 hide_loading_screen();
             }
             self.app.frame(ui);
+            self.unsaved.set(self.app.session().is_dirty());
             let ctx = ui.ctx().clone();
             self.picks(&ctx);
             self.keep(&ctx);
@@ -202,6 +205,24 @@ mod web {
         if let Some(e) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id("loading")) {
             e.remove();
         }
+    }
+
+    /// Asks the browser to warn before the page is left or reloaded while `unsaved` is set (the
+    /// browser shows its own question; pages cannot word it).
+    fn warn_before_leaving(unsaved: Rc<Cell<bool>>) {
+        let Some(window) = web_sys::window() else { return };
+        let listener = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::BeforeUnloadEvent)>::new(move |event: web_sys::BeforeUnloadEvent| {
+            if unsaved.get() {
+                event.prevent_default();
+                // Older browsers warn only when `returnValue` is set.
+                event.set_return_value("unsaved");
+            }
+        });
+        if let Err(e) = window.add_event_listener_with_callback("beforeunload", listener.as_ref().unchecked_ref()) {
+            log::warn!("no warning before leaving the page: {e:?}");
+        }
+        // The listener lives as long as the page.
+        listener.forget();
     }
 
     /// The engine worker's script, made by Trunk (`index.html`).
@@ -252,7 +273,9 @@ mod web {
             }
             app.set_native_pickers(true);
             app.show_start_page();
-            let shell = Shell { app, chosen: Chosen::default(), started: false, store, errors, fetched: Fetched::default() };
+            let unsaved = Rc::new(Cell::new(false));
+            warn_before_leaving(unsaved.clone());
+            let shell = Shell { app, chosen: Chosen::default(), started: false, store, errors, fetched: Fetched::default(), unsaved };
             let started = eframe::WebRunner::new().start(canvas, eframe::WebOptions::default(), Box::new(|_cc| Ok(Box::new(shell)))).await;
             if let Err(e) = started {
                 log::error!("TeXCraft could not start: {e:?}");

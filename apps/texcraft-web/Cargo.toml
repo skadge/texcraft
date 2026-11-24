@@ -29,7 +29,7 @@ eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [
-    "Window", "Document", "HtmlCanvasElement", "Element", "Event", "Response",
+    "Window", "Document", "HtmlCanvasElement", "Element", "Event", "EventTarget", "BeforeUnloadEvent", "Response",
     "IdbFactory", "IdbOpenDbRequest", "IdbRequest", "IdbDatabase", "IdbObjectStore", "IdbTransaction", "IdbTransactionMode", "IdbKeyRange", "DomException", "DomStringList",
 ] }
 js-sys = "0.3"
