@@ -2,7 +2,7 @@
 
 > **Last updated:** 2026-11-24 · **Change:** retex 2.4.1 in use
 
-TeXCraft asked retex for twelve changes, R1 to R12, and a thirteenth since (R13). retex answered with a design note, `docs/design/embedding.md` in the retex repository. That note is the reference: it lists each change's interface, phase and status. This page records what TeXCraft does with each retex release, and the points still open on TeXCraft's side.
+TeXCraft asked retex for twelve changes, R1 to R12, a thirteenth since (R13), and four for the browser build (R14 to R17, below). retex answered with a design note, `docs/design/embedding.md` in the retex repository. That note is the reference: it lists each change's interface, phase and status. This page records what TeXCraft does with each retex release, and the points still open on TeXCraft's side.
 
 ## What arrives when
 
@@ -49,6 +49,15 @@ The editor pane's image preview decodes with `retex_image::decode_rgba8` (PNG, J
 3. **From 2.3.0 and 2.4.0, not used yet:** a PDF/X for the press beside the PDF (`Retex::pdfx`, `bleed_mm`, `crop_marks`, `output_intent`), its print checks as a list placed on the page and in the source (`Document::print_checks`, `pdfx_rules`), and export to DOCX, PPTX (beamer) and ODT (`Document::to_docx`, `to_pptx`; experimental).
 
 ## Open points for retex
+
+### From the browser build (2.4.1, 2026-11-24)
+
+The web build runs TeXCraft's own build of retex's WebAssembly module (`cargo xtask retex-wasm`, the release `Cargo.lock` pins) through `texcraft-wasi`, a WASI host in Rust, with the TeX tree of retex's site (plan, phase 6). It works: a first build fetches what it needs (about 18 s, the format made in 5 s), and later builds resume from the preamble's snapshot (0.3 to 0.5 s). Four changes would help:
+
+- **R14. A missing file asks the host** (for auto-download in the browser). In the module, a file kpathsea does not find fails the build; natively, the miss hook downloads its TeX Live package. A host import called on a miss, say `retex.missing(name, format, dist_path) -> found`, after which kpathsea looks again, would let the browser's host fetch the package (from a CORS-enabled archive host, still to be found: retex's `package-download.md`, question 5) and the build go on. Without it, TeXCraft can only fetch after the failure and build again.
+- **R15. Draft images on the command line.** `Retex::draft_images` has no command-line option, and the browser build runs the command line: it tells the user that the setting is ignored there. A `--draft-images` flag would do.
+- **R16. The main document in a subfolder.** The module's current directory is `/`, and a WASI host cannot change it, so the browser build puts the main document's folder at `/` and leaves the project's other files out (it says so). Honouring `PWD` (or a `--cwd DIR` option) at startup in the WASI build would let a project keep its layout, `../shared/macros.tex` included.
+- **R17. Which retex made the site's caches.** The site's `seed/` (the format, the font-name and `ls-R` indexes) is made by the site's own module, so TeXCraft's module, a build of the same release, makes its own on a first visit instead. A `seed/version.txt` naming the release would let a host of the same release use them, and a first build start in about 3 s.
 
 ### From the 2.1.0 integration
 
