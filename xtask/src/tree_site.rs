@@ -76,6 +76,9 @@ fn io(path: &Path) -> impl Fn(std::io::Error) -> String + '_ {
 }
 
 pub fn run(root: &Path, out: &Path) -> Result<()> {
+    // Absolute: paths under it are handed to retex runs in other folders (`RETEX_CACHE`).
+    fs::create_dir_all(out).map_err(io(out))?;
+    let out = &out.canonicalize().map_err(io(out))?;
     let retex = native_retex(root)?;
     let work = out.join(".tree-work");
     if work.exists() {
