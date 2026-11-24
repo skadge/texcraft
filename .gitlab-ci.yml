@@ -4,7 +4,7 @@
 # Merge requests and branches other than the default: `check` runs the same sequence as `cargo
 # xtask ci` locally (fmt, clippy with warnings as errors, the tests, the layering check and the
 # wasm32 build). A push to the default branch runs only `mirror` (CI time is scarce); `check` and
-# the package jobs run there when a pipeline is started by hand (Build › Pipelines › Run
+# the package jobs run there when a pipeline is started by hand (Build › Pipelines › Run pipeline, or the API)
 # pipeline).
 #
 # Every push to the default branch and every release tag is mirrored to GitHub (`mirror`), and a
@@ -73,7 +73,7 @@ variables:
 .package-rules:
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE =~ /^(web|api)$/
       when: manual
       allow_failure: true
 
@@ -98,7 +98,7 @@ check:
       - target/
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "web"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE !~ /^(web|api)$/
       when: never
     - if: $CI_COMMIT_BRANCH
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
