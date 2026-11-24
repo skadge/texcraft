@@ -1,6 +1,6 @@
 # retex for TeXCraft
 
-> **Last updated:** 2026-11-23 · **Change:** retex 2.3.0 in use: Stop keeps the worker, both backends are one `BuildHandle`, the draft PDF in the preview, SyncTeX's fixes; the last two open points closed
+> **Last updated:** 2026-11-24 · **Change:** retex 2.4.0 in use: completion, hover, definitions and fixes through the language server's typed queries
 
 TeXCraft asked retex for twelve changes, R1 to R12, and a thirteenth since (R13). retex answered with a design note, `docs/design/embedding.md` in the retex repository. That note is the reference: it lists each change's interface, phase and status. This page records what TeXCraft does with each retex release, and the points still open on TeXCraft's side.
 
@@ -12,7 +12,7 @@ TeXCraft asked retex for twelve changes, R1 to R12, and a thirteenth since (R13)
 | 2.1.0 (done, in use) | `Retex::synctex`, `symbols`, `on_progress`, `cancel_token`; `compile_file_outcome`, whose `Outcome` keeps a failed build's `Outputs`; `Diagnostic::end_column` and `fixes`; `retex::Worker` and its preamble snapshot; `retex-synctex` (R1 to R3, R6, R7, R9, R12) | **In use:** see "The build backend" below. **Not used yet:** `retex::clean` (below), the worker's `Sandbox` (R4, R5), fragments (R11). |
 | 2.2.0 (done, in use) | `Server::start_build`; a `title` for each fix; `retex_image::decode_rgba8`, `retex::render_pdf`; `Retex::spawn` and `spawn_file`; hints for `.bib` files | **In use:** `start_build`, fix titles, `decode_rgba8`, the `.bib` hints (below); `Retex::spawn_file` from 2.3.0. **Not used:** `render_pdf`, as TeXCraft draws PDF figures with its own page renderer (craft-pdf, as the preview does). |
 | 2.3.0 (done, in use) | `BuildHandle::canceller`; `Progress::Draft`; SyncTeX: the last paragraph of an included file, preamble lines; PDF/X (`Retex::pdfx`, `bleed_mm`, `crop_marks`, `output_intent`) with its print checks and rules as data (R13); DOCX output (experimental) | **In use:** the canceller (Stop keeps the worker; the in-process backend is `Retex::spawn_file`), the draft PDF in the preview, SyncTeX's fixes (below). **Available, not used yet:** PDF/X, bleed and crop marks, the print checks (`Document::print_checks`, `pdfx_rules`), the accessibility checks as a list (`Document::accessibility_checks`; they already arrive as diagnostics of origin `accessibility`), DOCX export (`Document::to_docx`). |
-| After 2.3.0 (retex's `main`) | Typed language-server queries (R8); `retex-fragments`, the fragments' document without I/O, for the browser (R11) | Completion, hover and definitions through the typed queries. Until then, `Server::handle` with JSON values. |
+| 2.4.0 (done, in use) | Typed language-server queries (R8); `retex-fragments`, the fragments' document without I/O, for the browser (R11); the worker's sandbox on macOS and Windows (untried there); PPTX output and better ODT and DOCX output (experimental) | **In use:** completion, hover, definitions and fixes through `Server::completion`, `hover`, `definition` and `code_actions` (below). **Available, not used yet:** `retex-fragments` (the formatted mode's formulas, and in the browser), the sandbox on macOS and Windows, DOCX, PPTX and ODT export. |
 
 ## The build backend (2.1.0)
 
@@ -45,7 +45,7 @@ The editor pane's image preview decodes with `retex_image::decode_rgba8` (PNG, J
    - **In place.** Building a project in its folder with unsaved files as `overlay` (names with subfolders and files only in the overlay are fine, the note confirms) would save the copy, at the price of build files in the user's folder; for now the copy stays.
    - **Agent sessions** spawn their worker with a `Sandbox` (`Sandbox::new` with the session's write root as a project, its read root in `read`). Building is refused to agents until then. Linux only: elsewhere agents still cannot build.
 2. **Fragments** for the formatted mode (plan phase 3), through the worker.
-3. **From 2.3.0, not used yet:** a PDF/X for the press beside the PDF (`Retex::pdfx`, `bleed_mm`, `crop_marks`, `output_intent`), its print checks as a list placed on the page and in the source (`Document::print_checks`, `pdfx_rules`), and DOCX export (`Document::to_docx`, experimental).
+3. **From 2.3.0 and 2.4.0, not used yet:** a PDF/X for the press beside the PDF (`Retex::pdfx`, `bleed_mm`, `crop_marks`, `output_intent`), its print checks as a list placed on the page and in the source (`Document::print_checks`, `pdfx_rules`), and export to DOCX, PPTX (beamer) and ODT (`Document::to_docx`, `to_pptx`; experimental).
 
 ## Open points for retex
 
@@ -66,12 +66,12 @@ As they were raised:
 The note's "TeXCraft's open points after 2.1.0" settles these; they are left here only as what TeXCraft waits for:
 - `retex-synctex` is in 2.1.0 (in use). A worker stops a cancelled build within 4 s by itself.
 - Overlay names may have subfolders, a file may exist only in the overlay, the main file may be overlaid; overlays are text only.
-- **For a later release:** the draft PDF of a first build's first pass (in 2.3.0, as the draft of every pass that is not the last; in use); fragments in the browser, from a crate shared by `Worker::fragments` and a web host (no new entry point in the WASI module; `retex-fragments`, in retex's `main` after 2.3.0); PDF/X, bleed and crop marks in the embedding API with the print and accessibility checks as data (R13; in 2.3.0, not used yet).
+- **For a later release:** the draft PDF of a first build's first pass (in 2.3.0, as the draft of every pass that is not the last; in use); fragments in the browser, from a crate shared by `Worker::fragments` and a web host (no new entry point in the WASI module; `retex-fragments`, in 2.4.0, not used yet); PDF/X, bleed and crop marks in the embedding API with the print and accessibility checks as data (R13; in 2.3.0, not used yet).
 - **The protocol in the browser** stays on TeXCraft's side: a host library maps `build` to an instantiation of the WASI module and `cancel` to ending its Web Worker.
-- **Windows and macOS:** worker builds run every pass from the start on Windows (no fork), and the sandbox is Linux only. TeXCraft will say so in Settings.
+- **Windows and macOS:** worker builds run every pass from the start on Windows (no fork). From 2.4.0 the sandbox exists on macOS (Seatbelt) and Windows (AppContainer) too, not yet tried on those systems; with downloads allowed, the Windows one is `FilesOnly`. TeXCraft will say so in Settings.
 
 ## TeXCraft's own part
 
 Some features need no retex change, and TeXCraft builds them itself:
 - **Fixes.** A build fix is an edit on the diagnostic's line, from `column` to `end_column` (characters, from 1); a language-server fix is a code action's edits. Both are applied to the editor's buffer as one undoable edit, and agents get `language.fixes` and `language.fix`.
-- **The language server.** Until the typed queries, TeXCraft drives `retex_lsp::Server::handle` with JSON values in process, in UTF-32 positions (the editor's character columns).
+- **The language server.** TeXCraft runs `retex_lsp::Server` in process, in UTF-32 positions (the editor's character columns). Documents are opened, changed and closed with `Server::handle` (JSON-RPC notifications), and the lint arrives in its `publishDiagnostics`; completion, hover, definitions and fixes are typed queries (2.4.0). A fix names its problem by the lint's message at the same range, which carries the help lines that the typed diagnostic's bare `message` lacks, since the editor matches a fix to the problem it shows by that message.

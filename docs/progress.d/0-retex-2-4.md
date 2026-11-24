@@ -1,0 +1,1 @@
+- 2026-11-24: retex 2.4.0: completion, hover, definitions and fixes go through the language server's typed queries (`Server::completion`, `hover`, `definition`, `code_actions`) instead of JSON requests; documents are still synced, and the lint still arrives, through JSON-RPC notifications.

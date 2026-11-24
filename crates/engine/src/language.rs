@@ -1,6 +1,7 @@
 //! The language server (docs/plan.md, phase 2, item 5): retex-lsp's `Server`, in process, with no
-//! JSON-RPC transport. It sees the project's text files as they change and answers completion,
-//! hover and definition requests; its lint reports problems as the text is typed, before a build.
+//! JSON-RPC transport. It sees the project's text files as they change (JSON-RPC notifications) and
+//! answers completion, hover, definition and fix queries through its typed calls (retex 2.4); its
+//! lint reports problems as the text is typed, before a build.
 //!
 //! Positions are lines and columns in characters (the LSP's UTF-32 encoding), the editor's own
 //! units. Files are named by URIs under the project's folder, or under a fixed root for a project
@@ -13,6 +14,7 @@
 use std::collections::{HashMap, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
 
+use retex_lsp::types::{Position, Range};
 use retex_lsp::{BuildId, Input, Output, Server, uri};
 use serde_json::{Value, json};
 use texcraft_compile::Severity;
@@ -68,7 +70,6 @@ pub(crate) struct Language {
     lint: HashMap<ProjectPath, Vec<Lint>>,
     /// Builds the server asked for, answered by the next build that finishes.
     requested: Vec<BuildId>,
-    next_request: i64,
 }
 
 fn hash(text: &str) -> u64 {
@@ -83,15 +84,7 @@ impl Language {
             Some(d) => format!("{}/", uri::from_path(&d.to_string_lossy()).trim_end_matches('/')),
             None => "file:///texcraft-project/".to_owned(),
         };
-        let mut language = Self {
-            server: Server::new(),
-            root,
-            synced: HashMap::new(),
-            revision: None,
-            lint: HashMap::new(),
-            requested: Vec::new(),
-            next_request: 1,
-        };
+        let mut language = Self { server: Server::new(), root, synced: HashMap::new(), revision: None, lint: HashMap::new(), requested: Vec::new() };
         let init = json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
             "capabilities": {"general": {"positionEncodings": ["utf-32"]}}
         }});
@@ -121,16 +114,6 @@ impl Language {
             }
         }
         responses
-    }
-
-    fn request(&mut self, method: &str, params: Value) -> Value {
-        let id = self.next_request;
-        self.next_request += 1;
-        self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}))
-            .into_iter()
-            .find(|r| r.get("id").and_then(Value::as_i64) == Some(id))
-            .and_then(|r| r.get("result").cloned())
-            .unwrap_or(Value::Null)
     }
 
     fn take_diagnostics(&mut self, m: &Value) {
@@ -207,79 +190,72 @@ impl Language {
         self.lint.get(path).map_or(&[], Vec::as_slice)
     }
 
-    fn position(&self, path: &ProjectPath, line: usize, column: usize) -> Value {
-        json!({"textDocument": {"uri": self.uri(path)}, "position": {"line": line, "character": column}})
+    fn position(line: usize, column: usize) -> Position {
+        let n = |v: usize| u32::try_from(v).unwrap_or(u32::MAX);
+        Position::new(n(line), n(column))
     }
 
     /// Completions at a line and column (characters, from 0).
     pub fn complete(&mut self, path: &ProjectPath, line: usize, column: usize) -> Vec<Completion> {
-        let result = self.request("textDocument/completion", self.position(path, line, column));
-        let items = result.get("items").and_then(Value::as_array).cloned().or_else(|| result.as_array().cloned()).unwrap_or_default();
-        items
-            .iter()
-            .filter_map(|item| {
-                let label = item.get("label")?.as_str()?.to_owned();
-                let edit = item.get("textEdit");
-                let text = edit.and_then(|e| e.get("newText")).and_then(Value::as_str).unwrap_or(&label).to_owned();
-                let from = edit.and_then(|e| e.pointer("/range/start/character")).and_then(Value::as_u64).map_or(column, |c| c as usize);
-                let detail = item.get("detail").and_then(Value::as_str).unwrap_or_default().to_owned();
-                Some(Completion { label, detail, text, from })
-            })
+        self.server
+            .completion(&self.uri(path), Self::position(line, column))
+            .into_iter()
+            .map(|item| Completion { from: item.range.start.character as usize, label: item.label, detail: item.detail, text: item.insert_text })
             .collect()
     }
 
     /// What the server says about the thing at a line and column, as Markdown.
     pub fn hover(&mut self, path: &ProjectPath, line: usize, column: usize) -> Option<String> {
-        let result = self.request("textDocument/hover", self.position(path, line, column));
-        let contents = result.get("contents")?;
-        contents.get("value").and_then(Value::as_str).or_else(|| contents.as_str()).map(str::to_owned)
+        self.server.hover(&self.uri(path), Self::position(line, column)).map(|h| h.markdown)
     }
 
     /// Where the thing at a line and column is defined: a file and a line and column.
     pub fn definition(&mut self, path: &ProjectPath, line: usize, column: usize) -> Option<(ProjectPath, usize, usize)> {
-        let result = self.request("textDocument/definition", self.position(path, line, column));
-        let location = if result.is_array() { result.get(0)?.clone() } else { result };
-        let file = self.path(location.get("uri")?.as_str()?)?;
-        let start = location.pointer("/range/start")?;
-        Some((file, start.get("line")?.as_u64()? as usize, start.get("character")?.as_u64()? as usize))
+        self.server
+            .definition(&self.uri(path), Self::position(line, column))
+            .into_iter()
+            .find_map(|l| Some((self.path(&l.uri)?, l.range.start.line as usize, l.range.start.character as usize)))
+    }
+
+    /// A problem's message as [`Language::lint`] has it: the typed diagnostic's message is bare,
+    /// while the lint's (from the server's notifications) carries its help lines too, and the
+    /// editor matches a fix to the problem it shows by that message.
+    fn problem(&self, path: &ProjectPath, d: &retex_lsp::types::Diagnostic) -> String {
+        let (start, end) = (d.range.start, d.range.end);
+        self.lint(path)
+            .iter()
+            .find(|l| {
+                (l.line, l.column, l.end_line, l.end_column)
+                    == (start.line as usize, start.character as usize, end.line as usize, end.character as usize)
+                    && l.message.starts_with(&d.message)
+            })
+            .map_or_else(|| d.message.clone(), |l| l.message.clone())
     }
 
     /// The fixes for the problems on `line` (from 0), and the one that fixes every hint of the
     /// file, if any (last, its `problem` none).
     pub fn fixes(&mut self, path: &ProjectPath, line: usize) -> Vec<Fix> {
-        let uri = self.uri(path);
-        let params = json!({"textDocument": {"uri": uri}, "range": {"start": {"line": line, "character": 0}, "end": {"line": line, "character": 0}}, "context": {"diagnostics": []}});
-        let result = self.request("textDocument/codeAction", params);
-        let canonical = uri::canonical(&uri);
-        let at = |v: &Value, p: &str| v.pointer(p).and_then(Value::as_u64).map_or(0, |n| n as usize);
-        result
-            .as_array()
-            .map(|actions| {
-                actions
-                    .iter()
-                    .filter_map(|a| {
-                        let changes = a.pointer("/edit/changes")?.as_object()?;
-                        let edits = changes.iter().find(|(u, _)| uri::canonical(u) == canonical)?.1.as_array()?;
-                        let edits = edits
-                            .iter()
-                            .map(|e| TextEdit {
-                                line: at(e, "/range/start/line"),
-                                column: at(e, "/range/start/character"),
-                                end_line: at(e, "/range/end/line"),
-                                end_column: at(e, "/range/end/character"),
-                                text: e.get("newText").and_then(Value::as_str).unwrap_or_default().to_owned(),
-                            })
-                            .collect();
-                        Some(Fix {
-                            title: a.get("title")?.as_str()?.to_owned(),
-                            edits,
-                            preferred: a.get("isPreferred").and_then(Value::as_bool).unwrap_or(false),
-                            problem: a.pointer("/diagnostics/0/message").and_then(Value::as_str).map(str::to_owned),
-                        })
+        let at = Self::position(line, 0);
+        self.server
+            .code_actions(&self.uri(path), Range::new(at, at))
+            .into_iter()
+            .map(|a| Fix {
+                title: a.title,
+                edits: a
+                    .edits
+                    .into_iter()
+                    .map(|e| TextEdit {
+                        line: e.range.start.line as usize,
+                        column: e.range.start.character as usize,
+                        end_line: e.range.end.line as usize,
+                        end_column: e.range.end.character as usize,
+                        text: e.new_text,
                     })
-                    .collect()
+                    .collect(),
+                preferred: a.preferred,
+                problem: a.diagnostic.map(|d| self.problem(path, &d)),
             })
-            .unwrap_or_default()
+            .collect()
     }
 
     /// A build finished: its `symbols` record (when the engine made one) for `main` goes to the

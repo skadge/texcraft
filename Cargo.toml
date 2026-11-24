@@ -25,16 +25,16 @@ craft-mcp-server = { git = "https://github.com/storytold/craft-libs", rev = "f8c
 
 # The typesetting engine and language server (CC0-1.0), from crates.io. What later releases add for
 # TeXCraft is in retex's docs/design/embedding.md (and docs/retex-changes.md here).
-retex = "2.3"
-retex-lsp = "2.3"
+retex = "2.4"
+retex-lsp = "2.4"
 # Only LF ends a line, as for TeX; CR stays in the line.
 regex = { version = "1", default-features = false, features = ["std", "unicode", "perf"] }
 ropey = { version = "1.6", default-features = false, features = ["simd"] }
-retex-texlive = "2.3"
-retex-kpath = "2.3"
-retex-synctex = "2.3"
+retex-texlive = "2.4"
+retex-kpath = "2.4"
+retex-synctex = "2.4"
 # Figures for the editor pane: retex's own decoders (already built for retex), JPEG included.
-retex-image = { version = "2.3", features = ["jxl"] }
+retex-image = { version = "2.4", features = ["jxl"] }
 png = "0.18"
 # SVG figures: rendered with their images (from the project) and the system's fonts.
 resvg = { version = "0.48", default-features = false, features = ["raster-images", "text", "system-fonts", "memmap-fonts"] }
