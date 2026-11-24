@@ -100,6 +100,10 @@ pub struct Session {
     /// Templates' files (project path, bytes) by template id, fetched by the browser's page;
     /// the desktop keeps them in `templates`' folder.
     template_files: std::collections::BTreeMap<String, Vec<(String, Vec<u8>)>>,
+    /// Folders made with `file.new_folder` that hold no file yet. A project stores files only, so
+    /// these live in the session: shown in the file tree until a file is put in them, and not
+    /// saved (a folder is written when it has a file).
+    folders: std::collections::BTreeSet<ProjectPath>,
 }
 
 impl Session {
@@ -137,6 +141,7 @@ impl Session {
             author: None,
             library: None,
             template_files: std::collections::BTreeMap::new(),
+            folders: std::collections::BTreeSet::new(),
         }
     }
 
@@ -203,6 +208,11 @@ impl Session {
 
     pub fn project(&self) -> &Project {
         &self.project
+    }
+
+    /// The folders made in this session that no file is in yet (`file.new_folder`).
+    pub fn empty_folders(&self) -> impl Iterator<Item = &ProjectPath> {
+        self.folders.iter().filter(|f| !self.project.paths().any(|p| p.as_str().starts_with(&format!("{}/", f.as_str()))))
     }
 
     pub fn dir(&self) -> Option<&PathBuf> {
@@ -444,6 +454,7 @@ impl Session {
         self.current = project.main().cloned();
         self.open = self.current.iter().cloned().collect();
         self.project = project;
+        self.folders.clear();
         // A project of the library has a name, not a folder on disk.
         let folder = dir.as_deref().filter(|_| self.library.is_none());
         self.language = language::Language::new(folder);
