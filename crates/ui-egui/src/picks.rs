@@ -17,6 +17,8 @@ pub enum Pick {
     /// The folder to make a folder named as the untitled project in, and save it there.
     SaveProjectIn,
     SavePdf,
+    /// Where to write an export of the project.
+    Export(texcraft_engine::Export),
     AddFiles,
     /// A new or empty folder for a project made from a template.
     TemplateFolder,
@@ -80,6 +82,7 @@ impl App {
             Pick::SavePdf => {
                 self.run("build.save_pdf", json!({"path": first}));
             }
+            Pick::Export(format) => self.export_to(format, &first),
             Pick::TemplateFolder => self.template_folder_chosen(first),
             Pick::AddFiles => {
                 for path in paths {
@@ -145,6 +148,20 @@ impl App {
         self.view.status = Some((reason, true));
     }
 
+    /// The main document's name without its extension, for a suggested file name.
+    fn main_stem(&self) -> String {
+        self.session.project().main().map_or("document".to_owned(), |m| m.file_name().rsplit_once('.').map_or(m.file_name(), |(s, _)| s).to_owned())
+    }
+
+    /// Exports the project to `path` and says on the status line what was written. It blocks
+    /// while retex builds and converts the document.
+    pub(crate) fn export_to(&mut self, format: texcraft_engine::Export, path: &str) {
+        if let Some(done) = self.run("build.export", json!({"format": format, "path": path})) {
+            let path = done["path"].as_str().unwrap_or(path).to_owned();
+            self.view.status = Some((tl!("Exported to {path}").replace("{path}", &path), false));
+        }
+    }
+
     /// Queues `pick` with the project's folder as the starting place.
     pub(crate) fn request_pick(&mut self, pick: Pick) {
         let directory = self.session.dir().cloned();
@@ -153,12 +170,17 @@ impl App {
             Pick::SaveProjectAs => (PickKind::Folder, tl!("Save Project to Folder"), None, None),
             Pick::SaveProjectIn => (PickKind::Folder, tl!("Choose Where to Make the Project's Folder"), self.pending_name.clone(), None),
             Pick::SavePdf => {
-                let stem = self
-                    .session
-                    .project()
-                    .main()
-                    .map_or("document".to_owned(), |m| m.file_name().rsplit_once('.').map_or(m.file_name(), |(s, _)| s).to_owned());
+                let stem = self.main_stem();
                 (PickKind::SaveFile, tl!("Save PDF As"), Some(format!("{stem}.pdf")), Some((tl!("PDF documents").to_owned(), vec!["pdf"])))
+            }
+            Pick::Export(format) => {
+                let (stem, ext) = (self.main_stem(), format.extension());
+                (
+                    PickKind::SaveFile,
+                    tl!("Export As"),
+                    Some(format!("{stem}.{ext}")),
+                    Some((crate::preview::export_label(format).to_owned(), vec![ext])),
+                )
             }
             Pick::AddFiles => (PickKind::OpenFiles, tl!("Add Files to the Project"), None, None),
             Pick::TemplateFolder => (PickKind::Folder, tl!("Choose a New or Empty Folder for the Project"), None, None),

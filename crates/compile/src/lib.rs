@@ -238,6 +238,63 @@ pub type Canceller = Arc<dyn Fn() + Send + Sync>;
 /// scratch.
 pub type Cleaner = Arc<dyn Fn() -> Result<(), String> + Send + Sync>;
 
+/// A format a project can be exported to, besides the build's own PDF.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Export {
+    Pdf,
+    Odt,
+    Docx,
+    Odp,
+    Pptx,
+    Html,
+    Markdown,
+    Svg,
+}
+
+impl Export {
+    pub const ALL: [Export; 8] = [Export::Pdf, Export::Odt, Export::Docx, Export::Odp, Export::Pptx, Export::Html, Export::Markdown, Export::Svg];
+
+    /// The file extension, without the dot.
+    pub fn extension(self) -> &'static str {
+        match self {
+            Export::Pdf => "pdf",
+            Export::Odt => "odt",
+            Export::Docx => "docx",
+            Export::Odp => "odp",
+            Export::Pptx => "pptx",
+            Export::Html => "html",
+            Export::Markdown => "md",
+            Export::Svg => "svg",
+        }
+    }
+
+    /// Whether it is a presentation format (a slide per page or frame).
+    pub fn is_presentation(self) -> bool {
+        matches!(self, Export::Odp | Export::Pptx)
+    }
+
+    /// The format of a name or extension (`docx`, `md`, `markdown`).
+    pub fn parse(name: &str) -> Option<Export> {
+        let name = name.to_ascii_lowercase();
+        Export::ALL
+            .into_iter()
+            .find(|f| f.extension() == name || serde_json::to_value(f).ok().and_then(|v| v.as_str().map(|s| s == name)).unwrap_or(false))
+    }
+}
+
+/// An exported document: its file, and the files it refers to (Markdown's pictures, by their
+/// path relative to the document's folder).
+#[derive(Debug, Clone, Default)]
+pub struct Exported {
+    pub data: Vec<u8>,
+    pub media: Vec<(String, Vec<u8>)>,
+}
+
+/// Builds a job again and converts it to a format (from any thread; it blocks until done). The
+/// `&str` is the folder Markdown's pictures go to, relative to the document.
+pub type Exporter = Arc<dyn Fn(&Job, Export, &str) -> Result<Exported, String> + Send + Sync>;
+
 /// Something that can build a job.
 pub trait Backend: Send {
     /// For the log and the settings, such as `retex 2.0.0`.
@@ -260,6 +317,10 @@ pub trait Backend: Send {
     }
     /// Deletes the build files, for a backend that keeps some.
     fn cleaner(&self) -> Option<Cleaner> {
+        None
+    }
+    /// Exports a job to other formats, for a backend that can.
+    fn exporter(&self) -> Option<Exporter> {
         None
     }
 }

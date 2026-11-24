@@ -4,6 +4,7 @@ mod closing;
 mod completion;
 mod contrast;
 mod control;
+mod export_menu;
 mod find;
 mod folders;
 mod formatted;
