@@ -20,6 +20,7 @@ const LAYERS: &[(&str, Option<u8>)] = &[
     ("texcraft-latex", Some(0)),
     ("texcraft-buffer", Some(0)),
     ("texcraft-review", Some(0)),
+    ("texcraft-wasi", Some(0)),
     ("texcraft-vim", Some(1)),
     ("texcraft-templates", Some(0)),
     ("texcraft-compile", Some(1)),

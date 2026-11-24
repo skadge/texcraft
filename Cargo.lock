@@ -5107,6 +5107,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "texcraft-wasi"
+version = "0.2.2"
+
+[[package]]
 name = "texcraft-web"
 version = "0.2.2"
 dependencies = [
