@@ -4,6 +4,35 @@ What changed in each release of TeXCraft, for the people who use it. The day-by-
 progress log in [ROADMAP.md](ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.3.0 (2026-11-24)
+
+The browser version builds PDFs. TeXCraft's own build of retex's engine runs in the browser, with
+no server, and the PDF appears beside the source as on the desktop.
+
+### In the browser
+
+- Compiling works: the engine runs in the background of the page, and the TeX files a document
+  needs are downloaded from retex's site as it reads them. The first build after opening the page
+  takes 10 to 20 seconds; later builds take well under a second.
+
+Known limits in the browser:
+
+- Each visit downloads the TeX files and makes the engine's format again: nothing is kept between
+  visits yet.
+- Projects are not kept in the browser yet: the start page cannot create a project, start one from a
+  template or list recent ones. Work in the untitled project, add files with Add Files or by
+  dropping them, and keep copies of your files.
+- Only the TeX files retex's site carries are available (the common classes and packages); a
+  document that needs another package fails to build.
+- Only the main document's folder is built: files outside it are left out, and the log says so.
+- Draft images are not available: images are drawn in full, and the log says so.
+- Tried in Chrome and Firefox.
+
+### Everywhere
+
+- retex 2.4.1: OpenType features defined from Lua (`addfeature`) now substitute and ligate as with
+  lualatex; completion, hover, definitions and fixes come from retex 2.4's language server.
+
 ## 0.2.2 (2026-11-23)
 
 The first release (0.1.0, 0.2.0 and 0.2.1 were tagged but never published). TeXCraft is a LaTeX editor: a project

@@ -41,6 +41,16 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.3.0" date="2026-11-24" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.3.0</url>
+      <description>
+        <p>Builds in the browser version, and retex 2.4.1.</p>
+        <ul>
+          <li>The browser version compiles documents with retex running in the page</li>
+          <li>OpenType features defined from Lua apply as with lualatex</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.2" date="2026-11-23" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.2.2</url>
       <description>

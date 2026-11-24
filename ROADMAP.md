@@ -1,8 +1,8 @@
 # TeXCraft roadmap
 
-**Last updated:** 2026-11-23 · **Change:** minor
+**Last updated:** 2026-11-24 · **Change:** release
 
-**Stage:** 0.2.2, the first release ([CHANGELOG.md](CHANGELOG.md)): phase 1 of [docs/plan.md](docs/plan.md), the window and the suite, is under way, with parts of phases 2 to 4 and 7 (TeXCraft's own editor with Vim bindings, a read-only formatted view, source and PDF navigation, comments). **Next:** finishing phase 1, suggested changes, and the rest of the browser build (phase 6: projects kept in the browser, the fetched TeX files and the engine's caches kept between visits).
+**Stage:** 0.3.0 ([CHANGELOG.md](CHANGELOG.md)), with builds in the browser: phase 1 of [docs/plan.md](docs/plan.md), the window and the suite, is under way, with parts of phases 2 to 4 and 7 (TeXCraft's own editor with Vim bindings, a read-only formatted view, source and PDF navigation, comments). **Next:** finishing phase 1, suggested changes, and the rest of the browser build (phase 6: projects kept in the browser, the fetched TeX files and the engine's caches kept between visits).
 
 The plan, phase by phase, and the changes TeXCraft needs in retex are in [docs/plan.md](docs/plan.md). Review and working together have their own design and roadmap: [docs/collaboration.md](docs/collaboration.md) and [docs/collaboration-roadmap.md](docs/collaboration-roadmap.md).
 
@@ -10,6 +10,9 @@ The plan, phase by phase, and the changes TeXCraft needs in retex are in [docs/p
 
 Each change adds a fragment `docs/progress.d/<issue>-<branch-slug>.md` instead of editing this file (RFC-0017). Fragments are joined here at release time.
 
+- 2026-11-24: Builds in the browser: TeXCraft's own build of retex's WebAssembly module (`cargo xtask retex-wasm`, the pinned release) runs in a Web Worker through `texcraft-wasi`, a WASI host in Rust, with the TeX tree of retex's site and its indexes. A first build takes 10 to 16 s (Chrome and Firefox), later ones 0.3 to 0.5 s from the preamble's snapshot. A file the run needs late stops it, and it runs again once the file and its folder are fetched.
+- 2026-11-24: retex 2.4.1: OpenType features defined from Lua (`addfeature`) substitute and ligate in builds, as with lualatex.
+- 2026-11-24: retex 2.4.0: completion, hover, definitions and fixes go through the language server's typed queries (`Server::completion`, `hover`, `definition`, `code_actions`) instead of JSON requests; documents are still synced, and the lint still arrives, through JSON-RPC notifications.
 - 2026-11-23: A second polish pass: the start page's rows end on one edge with a themed placeholder for projects without a PDF, comment lines no longer cross the text, and the README's screenshots show the current app, with the formatted view and comments in review. Builds without craft-fonts (CI) have their bold and italic faces again.
 - 2026-11-23: retex 2.3.0: Stop cancels through `BuildHandle::canceller` and keeps the worker and its preamble snapshot; the in-process backend is `Retex::spawn_file`, so both backends are one `BuildHandle`; the preview shows a build's draft PDF (a pass that is not the last) with a "Draft · pass N" badge while the later passes run, and agents see it in `build.result`; SyncTeX sends a click in an included file's last paragraph to that file.
 - 2026-11-23: Dialogs polished from screenshots: one frame with room around the content, button rows that no longer float down, a named field in prompts, wider setting descriptions, a gallery as wide as its cards, a centred About, and a review margin whose header fits.
