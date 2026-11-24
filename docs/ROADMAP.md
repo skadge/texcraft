@@ -20,7 +20,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | P3 | ✅ 0.2.2 | Publishers' templates | 15 journal, conference, CV and poster templates, downloaded from TeX Live and checked against its signed package database, kept for offline use. |
 | P4 | ✅ 0.2.2 | Files of a project | Folders, a main-document mark, new, rename, delete, add files by picker or by dropping them; images shown in the editor pane. |
 | P5 | ✅ 0.4.0 | Renaming a project | Click its name in the top bar; an untitled project is saved under the name typed. |
-| P6 | ⬜ | New folders and moving files | New folder in the file tree, and dragging files between folders. |
+| P6 | ✅ 0.5.0 | New folders and moving files | New folder in the file tree, and dragging files between folders (Move to… from the keyboard). |
 | P7 | ✅ 0.5.0 | Go to File | A palette of the project's files, the recent ones first. |
 | P8 | ⬜ | Recent projects in the system | The dock menu on macOS, jump lists on Windows, recently used on Linux; pinning a project. |
 | P9 | ⬜ | More templates | TeXCraft's own templates (CC0), thumbnails in the gallery, saving a project as a template. |

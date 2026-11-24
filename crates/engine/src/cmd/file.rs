@@ -20,6 +20,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "file.new_folder",
+            label: "New Folder…",
+            menu: &["File"],
+            shortcut: None,
+            params: path_schema,
+            enabled: always,
+            run: new_folder,
+            changes: true,
+        },
+        CommandSpec {
             id: "file.open",
             label: "Open File",
             menu: &[],
@@ -317,9 +327,32 @@ fn rename_schema() -> Value {
 fn new(s: &mut Session, p: &Value) -> Result<Value> {
     let path = path_param(p, "path")?;
     let text = p.get("text").and_then(Value::as_str).unwrap_or_default().to_owned();
+    if s.folders.contains(&path) {
+        return Err(format!("a folder `{path}` already exists"));
+    }
     s.project.add(path.clone(), Contents::Text(text)).map_err(|e| e.to_string())?;
     s.touch();
     show(s, &path);
+    Ok(json!({"path": path.as_str()}))
+}
+
+/// Adds an empty folder to the file tree. A project holds files only, so the folder is kept by
+/// the session until a file is created in it or moved to it (`file.new`, `file.rename`); one that
+/// is still empty is not saved.
+fn new_folder(s: &mut Session, p: &Value) -> Result<Value> {
+    let path = path_param(p, "path")?;
+    if s.project.get(&path).is_some() {
+        return Err(format!("a file `{path}` already exists"));
+    }
+    let inside = format!("{}/", path.as_str());
+    if s.folders.contains(&path) || s.project.paths().any(|f| f.as_str().starts_with(&inside)) {
+        return Err(format!("a folder `{path}` already exists"));
+    }
+    if s.project.paths().any(|f| path.as_str().starts_with(&format!("{}/", f.as_str()))) {
+        return Err(format!("`{path}` is inside a file"));
+    }
+    // Nothing to save until a file is in it, so the project does not become unsaved.
+    s.folders.insert(path.clone());
     Ok(json!({"path": path.as_str()}))
 }
 
@@ -394,6 +427,12 @@ fn edit(s: &mut Session, p: &Value) -> Result<Value> {
 fn rename(s: &mut Session, p: &Value) -> Result<Value> {
     let from = path_param(p, "from")?;
     let to = path_param(p, "to")?;
+    if from == to {
+        return Ok(json!({}));
+    }
+    if s.folders.contains(&to) {
+        return Err(format!("a folder `{to}` already exists"));
+    }
     s.project.rename(&from, to.clone()).map_err(|e| e.to_string())?;
     for o in s.open.iter_mut().filter(|o| **o == from) {
         *o = to.clone();
