@@ -10,16 +10,16 @@ use texcraft_engine::Session;
 use texcraft_ui_egui::App;
 use texcraft_ui_egui::prefs::Prefs;
 
-fn harness(files: &[&str]) -> Harness<'static, App> {
+fn harness(files: &[&str]) -> Result<Harness<'static, App>, String> {
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
     for f in files {
-        s.execute("file.import", &json!({"path": f, "data": "iVBORw0KGgo="})).unwrap();
+        s.execute("file.import", &json!({"path": f, "data": "iVBORw0KGgo="}))?;
     }
     let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
     let mut h =
         Harness::builder().with_size(egui::vec2(1200.0, 800.0)).with_step_dt(1.0 / 60.0).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
     h.run();
-    h
+    Ok(h)
 }
 
 fn has(h: &mut Harness<'_, App>, path: &str) -> bool {
@@ -27,8 +27,8 @@ fn has(h: &mut Harness<'_, App>, path: &str) -> bool {
 }
 
 #[test]
-fn a_folder_made_from_the_files_header_is_shown_in_the_tree() {
-    let mut h = harness(&[]);
+fn a_folder_made_from_the_files_header_is_shown_in_the_tree() -> Result<(), String> {
+    let mut h = harness(&[])?;
     h.get_by_label("New Folder…").click();
     h.run();
     h.get_by_label("Its path in the project, such as chapters/figures").type_text("chapters");
@@ -38,11 +38,12 @@ fn a_folder_made_from_the_files_header_is_shown_in_the_tree() {
     assert!(h.query_by_role_and_label(Role::TreeItem, "chapters").is_some(), "the empty folder is not in the tree");
     let folders: Vec<String> = h.state_mut().session().empty_folders().map(|f| f.as_str().to_owned()).collect();
     assert_eq!(folders, ["chapters"]);
+    Ok(())
 }
 
 #[test]
-fn the_keyboard_moves_a_file_into_a_folder_from_its_menu() {
-    let mut h = harness(&["plot.png", "figures/old.png"]);
+fn the_keyboard_moves_a_file_into_a_folder_from_its_menu() -> Result<(), String> {
+    let mut h = harness(&["plot.png", "figures/old.png"])?;
     h.get_by_role_and_label(Role::TreeItem, "plot.png").focus();
     h.run();
     h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F10);
@@ -61,11 +62,12 @@ fn the_keyboard_moves_a_file_into_a_folder_from_its_menu() {
     h.key_press(egui::Key::Enter);
     h.run();
     assert!(has(&mut h, "figures/plot.png") && !has(&mut h, "plot.png"), "the file was not moved");
+    Ok(())
 }
 
 #[test]
-fn a_file_dragged_onto_a_folder_moves_there_but_not_over_a_file_of_its_name() {
-    let mut h = harness(&["plot.png", "figures/old.png", "other/plot.png"]);
+fn a_file_dragged_onto_a_folder_moves_there_but_not_over_a_file_of_its_name() -> Result<(), String> {
+    let mut h = harness(&["plot.png", "figures/old.png", "other/plot.png"])?;
     let drag = |h: &mut Harness<'_, App>, from: egui::Pos2, to: egui::Pos2| {
         let button =
             |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
@@ -90,7 +92,9 @@ fn a_file_dragged_onto_a_folder_moves_there_but_not_over_a_file_of_its_name() {
         .query_all_by_role_and_label(Role::TreeItem, "plot.png")
         .map(|n| n.rect().center())
         .fold(None, |a: Option<egui::Pos2>, p| Some(a.map_or(p, |a| if p.y > a.y { p } else { a })));
-    let (Some(from), to) = (top, center(&mut h, "other")) else { panic!("no plot.png row") };
+    let from = top.ok_or("no plot.png row")?;
+    let to = center(&mut h, "other");
     drag(&mut h, from, to);
     assert!(has(&mut h, "plot.png") && has(&mut h, "other/plot.png"), "moved over a file of the same name");
+    Ok(())
 }
