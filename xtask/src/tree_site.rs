@@ -138,9 +138,21 @@ fn installation_cnf() -> Result<String> {
     Ok(text)
 }
 
+/// Folders whose files are taken one by one, as read, not whole: ConTeXt's (44 MB, of which LaTeX
+/// documents read a file or two, such as graphicx's `supp-pdf.mkii`).
+const FILE_BY_FILE: &[&str] = &["tex/context/"];
+
+/// The pdfTeX font map LuaTeX reads, cut to the fonts of the tree; its variants for `updmap`'s
+/// choices are not read, and left out.
+const FONT_MAP: &str = "fonts/map/pdftex/updmap/pdftex.map";
+const FONT_MAP_VARIANTS: &[&str] = &["fonts/map/pdftex/updmap/pdftex_dl14.map", "fonts/map/pdftex/updmap/pdftex_ndl14.map"];
+
 /// The folder that holds the package of `rel` (`tex/latex/pgf`, `fonts/opentype/public/lm`), or
-/// `rel` itself for other files.
+/// `rel` itself for other files and those of [`FILE_BY_FILE`] folders.
 fn package_of(rel: &str) -> String {
+    if FILE_BY_FILE.iter().any(|f| rel.starts_with(f)) {
+        return rel.to_owned();
+    }
     let depth = match rel.split('/').next() {
         Some("tex") => 3,
         Some("fonts") => 4,
@@ -383,9 +395,38 @@ fn contents(tree: &Tree) -> Result<BTreeMap<String, Vec<u8>>> {
         contents.insert(rel.clone(), fs::read(source).map_err(io(source))?);
     }
     contents.insert("web2c/texmf.cnf".to_owned(), format!("{CNF}{}", installation_cnf()?).into_bytes());
+    for variant in FONT_MAP_VARIANTS {
+        contents.remove(*variant);
+    }
+    if let Some(map) = contents.get(FONT_MAP) {
+        let files: BTreeSet<&str> = contents.keys().filter_map(|k| k.rsplit('/').next()).collect();
+        let cut = cut_font_map(&String::from_utf8_lossy(map), &files);
+        contents.insert(FONT_MAP.to_owned(), cut.into_bytes());
+    }
     let ls_r = ls_r(contents.keys().map(String::as_str).chain(["ls-R"]));
     contents.insert("ls-R".to_owned(), ls_r);
     Ok(contents)
+}
+
+/// The lines of the font map `map` whose fonts are among `files` (names): a line naming a font file
+/// (`<name.pfb`, `<<name.ttf`) the tree does not have is left out; comments and lines naming no
+/// file are kept.
+fn cut_font_map(map: &str, files: &BTreeSet<&str>) -> String {
+    let mut out = String::new();
+    for line in map.lines() {
+        // Files are the words after `<` (`<<` and `<[` too).
+        let needs: Vec<&str> = line
+            .split_whitespace()
+            .filter(|w| w.starts_with('<'))
+            .map(|w| w.trim_start_matches(['<', '[']))
+            .filter(|f| [".pfb", ".pfa", ".ttf", ".otf"].iter().any(|e| f.ends_with(e)))
+            .collect();
+        if needs.iter().all(|f| files.contains(f)) {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
 }
 
 /// Where each file of the tree is on the site: alone (`tree/texlive/texmf-dist/…`) or in a pack
@@ -597,6 +638,20 @@ mod tests {
         assert_eq!(package_of("tex/latex/pgf/frontendlayer/tikz.sty"), "tex/latex/pgf");
         assert_eq!(package_of("fonts/opentype/public/lm/lmroman10-regular.otf"), "fonts/opentype/public/lm");
         assert_eq!(package_of("web2c/texmf.cnf"), "web2c/texmf.cnf");
+    }
+
+    #[test]
+    fn the_font_map_keeps_the_fonts_of_the_tree() {
+        let map = "% a comment\ncmr10 CMR10 <cmr10.pfb\nptmr8r Times-Roman \"TeXBase1Encoding ReEncodeFont\" <8r.enc <utmr8a.pfb\nnoemb Foo\n";
+        let files: BTreeSet<&str> = ["cmr10.pfb", "8r.enc"].into_iter().collect();
+        let cut = cut_font_map(map, &files);
+        assert!(cut.contains("cmr10 CMR10") && cut.contains("% a comment") && cut.contains("noemb Foo"));
+        assert!(!cut.contains("utmr8a"), "a font the tree lacks stays in the map");
+    }
+
+    #[test]
+    fn context_files_are_taken_one_by_one() {
+        assert_eq!(package_of("tex/context/base/mkii/supp-pdf.mkii"), "tex/context/base/mkii/supp-pdf.mkii");
     }
 
     #[test]
