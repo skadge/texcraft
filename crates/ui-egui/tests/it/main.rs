@@ -12,6 +12,7 @@ mod insert;
 mod log_copy;
 mod recent;
 mod regions;
+mod rename;
 mod review;
 mod shortcuts;
 mod unsaved;

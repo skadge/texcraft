@@ -14,6 +14,8 @@ use crate::App;
 pub enum Pick {
     OpenProject,
     SaveProjectAs,
+    /// The folder to make a folder named as the untitled project in, and save it there.
+    SaveProjectIn,
     SavePdf,
     AddFiles,
     /// A new or empty folder for a project made from a template.
@@ -62,6 +64,17 @@ impl App {
                     if let Some(next) = self.after_save.take() {
                         self.proceed(next);
                     }
+                }
+            }
+            Pick::SaveProjectIn => {
+                let Some(name) = self.pending_name.take() else { return };
+                let folder = std::path::Path::new(&first).join(&name);
+                if folder.exists() {
+                    let said = tl!("There is already a folder named {name} there: choose another place or name.");
+                    self.view.status = Some((said.replace("{name}", &name), true));
+                } else if self.run("project.save_as", json!({"path": folder.display().to_string()})).is_some() {
+                    self.remember_project();
+                    self.view.status = Some((tl!("The project is saved as {name}.").replace("{name}", &name), false));
                 }
             }
             Pick::SavePdf => {
@@ -138,6 +151,7 @@ impl App {
         let (kind, title, file_name, filter) = match pick {
             Pick::OpenProject => (PickKind::Folder, tl!("Open Project Folder"), None, None),
             Pick::SaveProjectAs => (PickKind::Folder, tl!("Save Project to Folder"), None, None),
+            Pick::SaveProjectIn => (PickKind::Folder, tl!("Choose Where to Make the Project's Folder"), self.pending_name.clone(), None),
             Pick::SavePdf => {
                 let stem = self
                     .session

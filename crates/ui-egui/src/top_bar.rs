@@ -98,6 +98,7 @@ fn icon_for(id: &str) -> Option<&'static str> {
         "app.settings" => "settings",
         "app.start" => "columns-2",
         "project.save_as" => "folder-plus",
+        "project.rename" => "pencil",
         "build.save_pdf" => "file-text",
         "build.compile" => "play",
         "build.auto" => "refresh-cw",
@@ -154,17 +155,47 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
     }
 }
 
+/// The project's name being edited in place.
+pub(crate) struct Rename {
+    pub text: String,
+    /// Focus the field and select its text next frame.
+    pub focus: bool,
+}
+
+impl App {
+    /// Starts editing the project's name in the top bar.
+    pub(crate) fn start_rename(&mut self) {
+        let text = if self.session.dir().is_some() { self.project_name() } else { String::new() };
+        self.view.rename = Some(Rename { text, focus: true });
+    }
+}
+
+/// The project's name, centred: a button that edits it in place, and beside it the project's menu.
 fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
+    if app.view.rename.is_some() {
+        rename_field(app, ui, bar);
+        return;
+    }
     let t = app.tokens;
     let name = app.project_name();
     let galley = ui.painter().layout_no_wrap(name.clone(), t.strong(), t.text);
-    let width = galley.size().x + 3.0 * t.unit + t.icon_size + 6.0 * t.unit;
+    let menu_width = t.icon_size + 2.0 * t.unit;
+    let width = galley.size().x + 3.0 * t.unit + menu_width + 4.0 * t.unit;
     let rect = egui::Rect::from_center_size(bar.center(), vec2(width, t.toolbar_height - 8.0));
-    let response = ui.interact(rect, ui.scope_id().with("project-title"), Sense::click());
+    let (name_rect, menu_rect) = rect.split_left_right_at_x(rect.right() - menu_width - t.unit);
+    let fill = crate::theme::blend(t.frame, t.hover);
+
+    let response = ui.interact(name_rect, ui.scope_id().with("project-title"), Sense::click());
     app.region(crate::Region::TopBar, response.id);
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{name} {}", tl!("project menu"))));
+    let folder = app.session.dir().is_some() && app.session.library().is_none();
+    let action = match (app.session.dir().is_some(), folder) {
+        (false, _) => tl!("name and save the project"),
+        (true, true) => tl!("rename the project's folder"),
+        (true, false) => tl!("rename the project"),
+    };
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{name}: {action}")));
     if response.hovered() || response.has_focus() {
-        ui.painter().rect_filled(rect, t.corner(), crate::theme::blend(t.frame, t.hover));
+        ui.painter().rect_filled(name_rect, t.corner(), fill);
     }
     let text_pos = egui::pos2(rect.left() + 3.0 * t.unit, rect.center().y - galley.size().y / 2.0);
     let text_right = text_pos.x + galley.size().x;
@@ -172,15 +203,34 @@ fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
     if app.session.is_dirty() {
         ui.painter().circle_filled(egui::pos2(text_right + 7.0, rect.center().y), 3.0, t.text_muted);
     }
-    let chevron = egui::Rect::from_min_size(egui::pos2(text_right + 12.0, rect.top()), vec2(t.icon_size, rect.height()));
-    icons::paint(ui, chevron, "chevron-down", t.icon_size - 2.0, t.text_muted);
-    widgets::focus_ring(ui, &t, &response, rect, t.corner());
-    let response = if app.session.is_dirty() { response.on_hover_text(tl!("Unsaved changes")) } else { response };
-    egui::Popup::menu(&response).align(egui::RectAlign::BOTTOM).show(|ui| {
+    widgets::focus_ring(ui, &t, &response, name_rect, t.corner());
+    let hint = match (app.session.dir().is_some(), folder) {
+        (false, _) => tl!("Click to name the project and save it"),
+        (true, true) => tl!("Click to rename the project's folder"),
+        (true, false) => tl!("Click to rename the project"),
+    };
+    let hint = if app.session.is_dirty() { format!("{hint}\n{}", tl!("Unsaved changes")) } else { hint.to_owned() };
+    if response.on_hover_text(hint).on_hover_cursor(egui::CursorIcon::Text).clicked() {
+        app.start_rename();
+        return;
+    }
+
+    let menu = ui.interact(menu_rect, ui.scope_id().with("project-menu"), Sense::click());
+    menu.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{name} {}", tl!("project menu"))));
+    if menu.hovered() || menu.has_focus() {
+        ui.painter().rect_filled(menu_rect, t.corner(), fill);
+    }
+    icons::paint(ui, menu_rect, "chevron-down", t.icon_size - 2.0, t.text_muted);
+    widgets::focus_ring(ui, &t, &menu, menu_rect, t.corner());
+    let menu = menu.on_hover_text(tl!("Project menu"));
+    egui::Popup::menu(&menu).align(egui::RectAlign::BOTTOM).show(|ui| {
         ui.set_min_width(220.0);
         let mut chosen = None;
         recent_menu(app, ui);
         ui.separator();
+        if item(ui, &t, icon_for("project.rename"), crate::i18n::t("Rename Project"), None, Ok(())) {
+            chosen = Some("project.rename");
+        }
         for id in ["project.save", "project.save_as", "build.save_pdf", "project.open", "project.new"] {
             if let Some(spec) = cmd::find(id)
                 && item(ui, &t, icon_for(id), crate::i18n::t(spec.label), app.keys.shortcut_text(id), (spec.enabled)(&app.session))
@@ -190,9 +240,52 @@ fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
         }
         if let Some(id) = chosen {
             ui.close();
-            ui_cmd::run(app, id);
+            if id == "project.rename" {
+                app.start_rename();
+            } else {
+                ui_cmd::run(app, id);
+            }
         }
     });
+}
+
+/// The project's name as a text field: Enter gives the project the name typed; Escape, or
+/// leaving the field, keeps the name it had.
+fn rename_field(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
+    let t = app.tokens;
+    let Some(rename) = app.view.rename.as_mut() else { return };
+    let typed = ui.painter().layout_no_wrap(rename.text.clone(), t.strong(), t.text).size().x;
+    let width = (typed + 8.0 * t.unit).clamp(240.0, (bar.width() * 0.4).max(240.0));
+    let rect = egui::Rect::from_center_size(bar.center(), vec2(width, t.toolbar_height - 8.0));
+    let id = ui.scope_id().with("project-name-field");
+    let field = egui::TextEdit::singleline(&mut rename.text)
+        .id(id)
+        .font(t.strong())
+        .hint_text(tl!("Project name"))
+        .margin(vec2(3.0 * t.unit, 0.0))
+        .align(egui::Align2::LEFT_CENTER);
+    let response = ui.put(rect, field);
+    // Named for screen readers by what it edits; the field shows the name itself.
+    ui.ctx().accesskit_node_builder(response.id, |node| node.set_label(tl!("Project name")));
+    let first = std::mem::take(&mut rename.focus);
+    if first {
+        response.request_focus();
+        if let Some(mut state) = egui::text_edit::TextEditState::load(ui.ctx(), id) {
+            state.cursor.set_char_range(Some(egui::text::CCursorRange::select_all_str(&rename.text)));
+            state.store(ui.ctx(), id);
+        }
+    }
+    app.region(crate::Region::TopBar, response.id);
+    if first {
+        return;
+    }
+    if response.lost_focus() || !response.has_focus() {
+        let commit = ui.input(|i| i.key_pressed(egui::Key::Enter));
+        let text = app.view.rename.take().map(|r| r.text).unwrap_or_default();
+        if commit {
+            app.rename_project(&text);
+        }
+    }
 }
 
 fn layout_switch(app: &mut App, ui: &mut egui::Ui) {
