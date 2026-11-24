@@ -13,6 +13,7 @@ use crate::{Result, Session};
 
 mod build;
 mod file;
+mod image;
 mod language;
 mod pdf;
 mod project;
@@ -55,6 +56,8 @@ impl CommandSpec {
     }
 }
 
+pub use image::is_image;
+
 pub fn always(_: &Session) -> Result<()> {
     Ok(())
 }
@@ -69,6 +72,7 @@ pub fn all() -> &'static [CommandSpec] {
     ALL.get_or_init(|| {
         let mut v = project::specs();
         v.extend(file::specs());
+        v.extend(image::specs());
         v.extend(build::specs());
         v.extend(template::specs());
         v.extend(language::specs());
