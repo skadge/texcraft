@@ -1,4 +1,4 @@
-//! The New Project gallery (docs/plan.md, phase 1, item 2b): a blank project, or one of the
+//! The New Project gallery (docs/ROADMAP.md): a blank project, or one of the
 //! publishers' templates, by category and search, with each template's source and licence shown
 //! before it is used. A template that is not kept yet is downloaded on a background thread (the
 //! window never waits), then copied into the chosen folder by `project.from_template`. In the browser

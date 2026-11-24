@@ -1,4 +1,4 @@
-//! The editor's text (docs/plan.md, phase 2, item 1).
+//! The editor's text (docs/ROADMAP.md).
 //!
 //! A [`Buffer`] is a rope ([`ropey`]) changed only by [`Transaction`]s: sorted, non-overlapping
 //! replacements of the text as it was before the transaction. Each one is kept with its inverse

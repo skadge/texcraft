@@ -1,6 +1,6 @@
 //! TeXCraft in the browser. Build with `trunk build --release` from this folder.
 //!
-//! Builds run retex's WebAssembly module in a Web Worker (`engine-worker`, docs/plan.md, phase 6);
+//! Builds run retex's WebAssembly module in a Web Worker (`engine-worker`, docs/ROADMAP.md);
 //! the module is TeXCraft's own build of the pinned retex (`cargo xtask retex-wasm`).
 
 #[cfg(target_arch = "wasm32")]

@@ -1,7 +1,8 @@
 # Changelog
 
 What changed in each release of TeXCraft, for the people who use it. The day-by-day record is the
-progress log in [ROADMAP.md](ROADMAP.md); how a release is made is in
+progress log in [docs/progress.md](docs/progress.md), what comes next in
+[docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
 ## 0.4.0 (2026-11-24)

@@ -464,7 +464,7 @@ impl Session {
     fn start_build(&mut self) -> Result<u64> {
         if self.roots.is_some() {
             // RFC-0015: every path a document names must be checked against the roots, and retex
-            // does not yet let its host decide which files a build may read (docs/plan.md, R4).
+            // does not yet let its host decide which files a build may read (docs/retex-changes.md, R4).
             return Err("Building is not available to agents yet: the engine cannot confine the files a document reads.".to_owned());
         }
         let id = self.next_job;

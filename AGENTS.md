@@ -68,7 +68,7 @@ TeXCraft is a Rust-native LaTeX editor for desktop (Linux, macOS, Windows) and t
 ### Layout
 - `crates/*`: `project` (files of a project), `latex` (lexer and outline), `compile` (build backends over retex), `preview` (PDF pages to pixels through craft-pdf), `engine` (session, commands, file access), `ui-egui` (the egui frontend), `mcp` (agent tools); `apps/{texcraft, texcraft-cli, texcraft-web}`; `xtask`. `cargo xtask layers` enforces the layering: nothing below `ui-egui` depends on egui, eframe, winit or rfd.
 - Commands live in `crates/engine/src/cmd/*` (id, label, menu path, shortcut, params doc, `enabled`, `run`). Colours and sizes come from `ui-egui`'s `theme::Tokens`.
-- Plan and progress: `ROADMAP.md`, `docs/plan.md`. Progress fragments: `docs/progress.d/<issue>-<branch-slug>.md` (RFC-0017).
+- Roadmap and progress: `docs/ROADMAP.md` (a table per area: done with its release, or planned), `docs/progress.md` (the log). Progress fragments: `docs/progress.d/<issue>-<branch-slug>.md` (RFC-0017).
 - Behaviour specifications from observing other editors live in the gitignored `plan/observations/`; they are read, never committed or quoted.
 
 ### Checks

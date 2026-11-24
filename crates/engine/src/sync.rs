@@ -1,4 +1,4 @@
-//! Going between the source and the PDF (docs/plan.md, phase 4), through the SyncTeX data of the
+//! Going between the source and the PDF (docs/ROADMAP.md), through the SyncTeX data of the
 //! last build that wrote some (`retex-synctex`).
 //!
 //! SyncTeX names a file as the document named it, relative to the main document's folder

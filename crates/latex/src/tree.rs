@@ -1,4 +1,4 @@
-//! A tolerant syntax tree of LaTeX source, for the formatted view (docs/plan.md, phase 3, item 1).
+//! A tolerant syntax tree of LaTeX source, for the formatted view (docs/ROADMAP.md).
 //!
 //! [`parse`] never fails. Every byte of the text belongs to exactly one top-level node, and the
 //! nodes of each sequence (a group's body, an argument's, an environment's) follow each other with

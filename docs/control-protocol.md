@@ -49,4 +49,4 @@ craft-control's own methods (`control.capabilities`, `control.running`, `control
 
 ## Not yet
 
-Synthetic input (`ui.key`, `ui.click`) and the web page's `window.texcraft` API are planned (docs/plan.md, phase 1). Until then, `ui.inspect` and `ui.screenshot` are the ways to check the window's state.
+Synthetic input (`ui.key`, `ui.click`) and the web page's `window.texcraft` API are planned (docs/ROADMAP.md). Until then, `ui.inspect` and `ui.screenshot` are the ways to check the window's state.

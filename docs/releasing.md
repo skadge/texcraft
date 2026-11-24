@@ -10,11 +10,11 @@ the commits only (AGENTS.md rule 4).
 1. **Version.** Set `version` in `[workspace.package]` of `Cargo.toml` (every crate inherits it) and
    run `cargo check --workspace` so `Cargo.lock` follows. Versions before 1.0 bump the minor number
    for a release with new features.
-2. **Progress log.** Join the fragments of `docs/progress.d/` into `ROADMAP.md`'s "Progress log"
+2. **Progress log and roadmap.** Join the fragments of `docs/progress.d/` into `docs/progress.md`
    (RFC-0017): each fragment's text unchanged, newest first by the date of the commit that added it,
-   then delete the fragment files. Update the status line (`**Last updated:** date · **Change:**
-   kind`) and the stage line. Until the craft-libs joiner (`cargo xtask progress --write`) is in
-   this repository, this is done by hand.
+   then delete the fragment files. Until the craft-libs joiner (`cargo xtask progress --write`) is in
+   this repository, this is done by hand. In `docs/ROADMAP.md`, mark the features the release
+   completes `✅ X.Y.Z`, and update its status line.
 3. **Changelog.** Add a `## X.Y.Z (date)` section at the top of `CHANGELOG.md`, written for users
    from the fragments, grouped by theme, with the known limits. The section's body becomes the
    GitLab release's description.
@@ -136,7 +136,7 @@ With the packages from step 8 (or from the release):
 ## Known limits
 
 - Only x86_64 Linux packages; macOS and Windows build from source.
-- The browser build does not build documents (no engine in the browser yet, docs/plan.md phase 6).
+- In the browser, a document that needs a package outside the site's TeX tree does not build.
 - English only in the packages (no pinned craft-i18n).
 - The packages are not signed, and the AppImage carries no update information.
 - The Flatpak does not use a host TeX Live.

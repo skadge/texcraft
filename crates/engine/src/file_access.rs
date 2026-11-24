@@ -111,6 +111,6 @@ fn hard_linked(path: &Path) -> bool {
 
 #[cfg(not(unix))]
 fn hard_linked(_path: &Path) -> bool {
-    // Windows link counts need a handle query (docs/plan.md, confined access on Windows).
+    // Windows link counts need a handle query (docs/ROADMAP.md).
     false
 }

@@ -1,4 +1,4 @@
-//! The view model of the formatted view (docs/plan.md, phase 3, item 2): the [`tree`](crate::tree)
+//! The view model of the formatted view (docs/ROADMAP.md): the [`tree`](crate::tree)
 //! mapped to blocks and inline runs, each holding the byte range of the source it stands for.
 //!
 //! What the view cannot show faithfully stays as its source ([`BlockKind::Source`],

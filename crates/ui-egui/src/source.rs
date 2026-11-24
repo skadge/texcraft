@@ -1,4 +1,4 @@
-//! TeXCraft's source editor widget (docs/plan.md, phase 2, item 3): a [`Buffer`] laid out one
+//! TeXCraft's source editor widget (docs/ROADMAP.md): a [`Buffer`] laid out one
 //! galley per line, with the gutter, the caret line's band, selection, search matches and the
 //! caret painted around it.
 //!

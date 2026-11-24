@@ -13,7 +13,7 @@ workspace = true
 [features]
 default = ["retex"]
 # The in-process retex engine (desktop and CLI). The web build leaves it out until the WASI engine
-# host lands (docs/plan.md, phase 3).
+# host lands (docs/ROADMAP.md).
 retex = ["dep:retex"]
 
 [dependencies]

@@ -1,6 +1,6 @@
 //! `cargo xtask retex-wasm`: retex's engine as a WebAssembly module
 //! (`wasm32-wasip1`), built from the crates.io release `Cargo.lock` pins,
-//! for the browser build (plan, phase 6). Written to
+//! for the browser build (docs/ROADMAP.md). Written to
 //! `<target>/retex-wasm/retex.wasm`, with the version beside it.
 //!
 //! It is built as retex's own `cargo xtask wasm` builds it, from the

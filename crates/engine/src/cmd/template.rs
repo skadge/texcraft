@@ -1,4 +1,4 @@
-//! Templates (docs/plan.md, phase 1, item 2b): listing the catalogue, downloading a template, and
+//! Templates (docs/ROADMAP.md): listing the catalogue, downloading a template, and
 //! starting a project from one.
 
 #[cfg(not(target_arch = "wasm32"))]

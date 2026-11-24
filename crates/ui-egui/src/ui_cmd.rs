@@ -1,6 +1,6 @@
 //! Commands that change only the view (layout, panels, theme), and the menu entries that run
 //! engine commands needing input first. Menus are built from [`MENUS`] and the engine registry,
-//! so every entry has a command id the control channel can run too (docs/plan.md, phase 1).
+//! so every entry has a command id the control channel can run too (docs/ROADMAP.md).
 
 use serde_json::json;
 

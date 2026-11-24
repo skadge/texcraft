@@ -1,4 +1,4 @@
-//! The find and replace bar (docs/plan.md, phase 2, item 4), above the source: the text to find
+//! The find and replace bar (docs/ROADMAP.md), above the source: the text to find
 //! with Match Case, Regular Expression, Whole Word and In Selection, the count and the current
 //! match, Previous and Next, and with Replace open, Replace and Replace All.
 //!

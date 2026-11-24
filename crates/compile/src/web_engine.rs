@@ -1,6 +1,6 @@
 //! The engine's side of the browser build, in a Web Worker: retex's WebAssembly module (built by
 //! `cargo xtask retex-wasm`, served beside the app) over `texcraft-wasi`'s in-memory files, with
-//! the TeX tree of the web build's own site (`cargo xtask tree-site`) loaded as retex reads it (plan, phase 6).
+//! the TeX tree of the web build's own site (`cargo xtask tree-site`) loaded as retex reads it (docs/ROADMAP.md).
 //!
 //! WASI's reads are synchronous. A file of the tree not fetched yet is fetched with a
 //! synchronous request where the browser serves one; where it does not (Chrome stops serving

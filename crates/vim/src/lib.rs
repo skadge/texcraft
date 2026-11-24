@@ -1,4 +1,4 @@
-//! Vim key bindings (docs/plan.md, phase 2, item 3b), as a state machine over a
+//! Vim key bindings (docs/ROADMAP.md), as a state machine over a
 //! [`texcraft_buffer::Buffer`]: the editor widget turns key presses into [`Key`]s and hands them
 //! to [`Vim::key`] with the buffer and selection ([`Ctx`]); Vim edits the buffer, sets the
 //! selection, and returns what the window must do ([`Effect`]: save, close, open, copy, scroll,

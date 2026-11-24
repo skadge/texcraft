@@ -1,5 +1,5 @@
 //! `cargo xtask tree-site OUT`: the TeX tree of the browser build, so that TeXCraft's site serves
-//! its own TeX files instead of retex's site (plan, phase 6). Ported from retex's
+//! its own TeX files instead of retex's site (docs/ROADMAP.md). Ported from retex's
 //! `xtask/src/wasm/tree.rs` (CC0), which builds the tree of retex's own site the same way.
 //!
 //! 1. **The files.** The documents `apps/texcraft-web/tree.txt` lists (a class or a package

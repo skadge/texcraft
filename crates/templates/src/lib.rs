@@ -1,4 +1,4 @@
-//! Project templates (docs/plan.md, phase 1, item 2b).
+//! Project templates (docs/ROADMAP.md).
 //!
 //! The [`Catalog`] is TeXCraft's own list (`templates/catalog.toml`, compiled in): each template's
 //! title, publisher, category, licence and where its files come from. The files are not bundled:

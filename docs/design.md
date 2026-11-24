@@ -103,7 +103,7 @@ Faces come from storytold/craft-fonts through the optional `CRAFT_FONTS_DIR`: In
   - In the centre: the project name, with its menu (rename, download source, copy) and an unsaved-changes dot.
   - On the right: the layout switch (editor and PDF, editor only, PDF only).
   - In the desktop app, the window's controls at the far right (minimize, maximize or restore, close: Lucide `minus`, `square` or `copy`, `x`), round, the close button red under the pointer. The window has no system title bar: the bar's empty space moves the window, a double-click on it maximizes or restores it, and the window's edges resize it. Settings › Appearance › System title bar gives the system's frame back instead.
-  - Sharing and history buttons appear when those features exist (plan, phase 7).
+  - Sharing and history buttons appear when those features exist (docs/ROADMAP.md).
 - **Rail.** Files and Outline at the top; Settings and Help at the bottom.
   - The active section has an accent bar on its inner edge.
   - Clicking the active section hides the side panel.
@@ -124,7 +124,7 @@ Faces come from storytold/craft-fonts through the optional `CRAFT_FONTS_DIR`: In
 - **Status bar.**
   - On the left: the build state (with a small progress ring while building) and its last result.
   - On the right: the caret's line and column, and the engine.
-- **Dividers.** 1 px lines with an 8 px grab area. The dividers next to the editor have a small collapse handle at the midpoint. The divider between editor and PDF will carry the two navigation buttons (plan, phase 4).
+- **Dividers.** 1 px lines with an 8 px grab area. The dividers next to the editor have a small collapse handle at the midpoint. The divider between editor and PDF will carry the two navigation buttons (docs/ROADMAP.md).
 
 ## Motion
 

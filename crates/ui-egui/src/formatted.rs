@@ -1,4 +1,4 @@
-//! The formatted view of a `.tex` file (docs/plan.md, phase 3): the file's view model
+//! The formatted view of a `.tex` file (docs/ROADMAP.md): the file's view model
 //! ([`texcraft_latex::view`]) drawn as a document, at a reading measure in the reading face.
 //!
 //! It is read-only for now. Double-clicking a part (or pressing Enter on it) shows the source with

@@ -1,14 +1,6 @@
-# TeXCraft roadmap
+# TeXCraft progress log
 
-**Last updated:** 2026-11-24 · **Change:** release
-
-**Stage:** 0.4.0 ([CHANGELOG.md](CHANGELOG.md)), with a self-contained browser build (its own TeX tree, projects and templates kept in the browser): phase 1 of [docs/plan.md](docs/plan.md), the window and the suite, is under way, with parts of phases 2 to 4 and 7 (TeXCraft's own editor with Vim bindings, a read-only formatted view, source and PDF navigation, comments). **Next:** finishing phase 1, suggested changes, missing packages in the browser (retex 2.5.0's downloads, from a CORS-enabled TeX Live repository still to be hosted), and a read list per project.
-
-The plan, phase by phase, and the changes TeXCraft needs in retex are in [docs/plan.md](docs/plan.md). Review and working together have their own design and roadmap: [docs/collaboration.md](docs/collaboration.md) and [docs/collaboration-roadmap.md](docs/collaboration-roadmap.md).
-
-## Progress log
-
-Each change adds a fragment `docs/progress.d/<issue>-<branch-slug>.md` instead of editing this file (RFC-0017). Fragments are joined here at release time.
+What changed, day by day, newest first. Each change adds a fragment `docs/progress.d/<issue>-<branch-slug>.md` instead of editing this file (RFC-0017); fragments are joined here at release time. What is done and what comes next is in [ROADMAP.md](ROADMAP.md).
 
 - 2026-11-24: retex 2.5.0. In the browser, the whole project goes to the engine (under `/project`, started in the main document's folder through `PWD`), so files outside that folder are found, and draft images work (`--draft-images`).
 - 2026-11-24: The browser's TeX tree is cut to what LaTeX documents read: ConTeXt's folder file by file, the pdfTeX font map cut to the tree's fonts. 174 MB instead of 234, and a first visit's build in 6 s instead of 18.

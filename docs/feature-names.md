@@ -4,7 +4,7 @@ User-visible names are checked under standards/naming.md before they ship. Other
 
 | Our name | What it is | Status |
 |---|---|---|
-| TeXCraft | The app | **Unchecked.** "TeX" is a trademark of the American Mathematical Society; the rule 4 check must run before a release (docs/plan.md §6). |
+| TeXCraft | The app | **Unchecked.** "TeX" is a trademark of the American Mathematical Society; the rule 4 check must run before a release (docs/ROADMAP.md, open decisions). |
 | Compile, Compile Automatically | Building the PDF | Plain descriptive words |
 | Build Log | The list of messages of a build | Plain descriptive words |
 | Outline | The section list | Plain descriptive words |

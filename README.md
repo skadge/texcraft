@@ -119,7 +119,7 @@ It refuses to start without both. The open window's control channel is described
 
 ## Status
 
-TeXCraft is in early development. [`docs/plan.md`](docs/plan.md) has what works, the phases ahead and the changes it needs in retex; [`ROADMAP.md`](ROADMAP.md) the stage.
+TeXCraft is in early development. [`docs/ROADMAP.md`](docs/ROADMAP.md) has what works and what comes next; [`docs/retex-changes.md`](docs/retex-changes.md) what it uses of retex and asks of it.
 
 **What works:**
 - projects as folders, a start page and recent projects;

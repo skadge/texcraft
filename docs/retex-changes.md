@@ -52,7 +52,7 @@ The editor pane's image preview decodes with `retex_image::decode_rgba8` (PNG, J
 
 ### From the browser build (asked with 2.4.1, answered by 2.5.0, 2026-11-24)
 
-The web build runs TeXCraft's own build of retex's WebAssembly module (`cargo xtask retex-wasm`) through `texcraft-wasi`, with TeXCraft's own TeX tree (plan, phase 6). retex 2.5.0 answered the four requests:
+The web build runs TeXCraft's own build of retex's WebAssembly module (`cargo xtask retex-wasm`) through `texcraft-wasi`, with TeXCraft's own TeX tree (docs/ROADMAP.md). retex 2.5.0 answered the four requests:
 
 - **R14. Missing packages downloaded in the module** (**in 2.5.0, not used yet**). With the cargo feature `download` and `RETEX_REPOSITORY` naming a folder the host serves in the layout of a TeX Live repository, the module reads the package database and archives from it, checks signatures and checksums, and installs into `$RETEX_CACHE/texlive/<year>/`; the host only fetches each file it is asked for. TeXCraft needs a CORS-enabled copy of a TeX Live repository to point it at (the open hosting question of plan phase 6, item 6), and the module built with `download`.
 - **R15. `--draft-images`** (**used**, 0.4.0): the browser build passes it when draft images are on.

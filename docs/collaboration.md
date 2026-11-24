@@ -1,6 +1,6 @@
 # Working together: live editing and review
 
-> **Status:** plan, 2026-11-22, decisions settled (§9). Nothing built yet. It details `docs/plan.md` phase 7, items 3 to 5. The ordered work is in [`collaboration-roadmap.md`](collaboration-roadmap.md).
+> **Status:** plan, 2026-11-22, decisions settled (§9). Nothing built yet. It details the "Comments and working together" part of [`ROADMAP.md`](ROADMAP.md). The ordered work is in [`collaboration-roadmap.md`](collaboration-roadmap.md).
 
 Overleaf's two collaborative features are the ones people choose it for:
 - several people typing in the same project at once;

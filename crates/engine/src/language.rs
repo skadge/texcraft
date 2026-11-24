@@ -1,4 +1,4 @@
-//! The language server (docs/plan.md, phase 2, item 5): retex-lsp's `Server`, in process, with no
+//! The language server (docs/ROADMAP.md): retex-lsp's `Server`, in process, with no
 //! JSON-RPC transport. It sees the project's text files as they change (JSON-RPC notifications) and
 //! answers completion, hover, definition and fix queries through its typed calls (retex 2.4); its
 //! lint reports problems as the text is typed, before a build.
