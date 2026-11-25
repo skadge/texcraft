@@ -291,9 +291,11 @@ const MAX_DIFF_LINES: usize = 5000;
 /// whether lines were left out (past [`MAX_DIFF_LINES`]).
 fn line_diff(old: &str, new: &str) -> (Vec<Value>, usize, usize, bool) {
     let mut config = similar::TextDiff::configure();
-    // A pathological pair of files gives a coarser diff rather than a stall.
-    #[cfg(not(target_arch = "wasm32"))]
-    config.timeout(std::time::Duration::from_millis(500));
+    // A pathological pair of files gives a coarser diff rather than a stall (the browser has no
+    // clock similar can read).
+    if cfg!(not(target_arch = "wasm32")) {
+        config.timeout(std::time::Duration::from_millis(500));
+    }
     let diff = config.diff_lines(old, new);
     let (mut added, mut removed, mut shown, mut truncated) = (0, 0, 0, false);
     let mut hunks = Vec::new();
