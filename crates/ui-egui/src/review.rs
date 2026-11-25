@@ -18,7 +18,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use egui::{Align, Color32, Layout, Rect, RichText, Sense, Stroke, UiBuilder, pos2, vec2};
 use serde_json::json;
 use texcraft_engine::project::ProjectPath;
@@ -187,18 +187,6 @@ pub(crate) fn open_suggestions_in_current(app: &App) -> usize {
 fn short(text: &str, max: usize) -> String {
     let one_line = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if one_line.chars().count() <= max { one_line } else { one_line.chars().take(max.saturating_sub(1)).collect::<String>() + "…" }
-}
-
-/// "just now", "5 min ago", "3 h ago", "yesterday", or the date.
-fn ago(time: DateTime<Utc>, now: DateTime<Utc>) -> String {
-    let seconds = (now - time).num_seconds().max(0);
-    match seconds {
-        0..60 => tl!("just now").to_owned(),
-        60..3600 => tl!("{n} min ago").replace("{n}", &(seconds / 60).to_string()),
-        3600..86_400 => tl!("{n} h ago").replace("{n}", &(seconds / 3600).to_string()),
-        86_400..172_800 => tl!("yesterday").to_owned(),
-        _ => time.format("%Y-%m-%d").to_string(),
-    }
 }
 
 /// The name of a thread for screen readers: who started it, on which words (a suggestion: what
@@ -652,7 +640,7 @@ fn message(app: &App, ui: &mut egui::Ui, th: &Thread, m: &Message, first: bool, 
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             ui.label(RichText::new(&m.author.name).font(t.strong()).color(t.text));
-            let mut when = ago(m.time, now);
+            let mut when = crate::i18n::ago(m.time, now);
             if m.edited.is_some() {
                 when.push_str(tl!(" · edited"));
             }
@@ -771,7 +759,7 @@ fn card(app: &mut App, ui: &mut egui::Ui, th: &Thread, in_panel: bool, actions: 
                 message(app, ui, th, m, i == 0 && !th.is_suggestion(), actions);
             }
             if let State::Resolved { by, at } = &th.state {
-                let text = tl!("Resolved by {name}, {when}").replace("{name}", &by.name).replace("{when}", &ago(*at, Utc::now()));
+                let text = tl!("Resolved by {name}, {when}").replace("{name}", &by.name).replace("{when}", &crate::i18n::ago(*at, Utc::now()));
                 ui.label(RichText::new(text).font(t.small()).color(t.success));
             }
             if selected && th.is_open() {
@@ -807,7 +795,7 @@ fn suggestion(app: &App, ui: &mut egui::Ui, th: &Thread, actions: &mut Vec<Actio
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             ui.label(RichText::new(&s.author.name).font(t.strong()).color(t.text));
-            let when = tl!("suggested {when}").replace("{when}", &ago(s.edited.unwrap_or(s.time), Utc::now()));
+            let when = tl!("suggested {when}").replace("{when}", &crate::i18n::ago(s.edited.unwrap_or(s.time), Utc::now()));
             ui.label(RichText::new(when).font(t.small()).color(t.text_muted));
         });
         if mine && th.is_open() {
@@ -843,11 +831,11 @@ fn suggestion(app: &App, ui: &mut egui::Ui, th: &Thread, actions: &mut Vec<Actio
             ui.add(egui::Label::new(RichText::new(note).font(t.small()).color(t.warning)).wrap());
         }
         State::Accepted { by, at } => {
-            let text = tl!("Accepted by {name}, {when}").replace("{name}", &by.name).replace("{when}", &ago(*at, Utc::now()));
+            let text = tl!("Accepted by {name}, {when}").replace("{name}", &by.name).replace("{when}", &crate::i18n::ago(*at, Utc::now()));
             ui.label(RichText::new(text).font(t.small()).color(t.success));
         }
         State::Rejected { by, at } => {
-            let text = tl!("Rejected by {name}, {when}").replace("{name}", &by.name).replace("{when}", &ago(*at, Utc::now()));
+            let text = tl!("Rejected by {name}, {when}").replace("{name}", &by.name).replace("{when}", &crate::i18n::ago(*at, Utc::now()));
             ui.label(RichText::new(text).font(t.small()).color(t.text_muted));
         }
         _ => {}
@@ -1088,18 +1076,4 @@ pub(crate) fn status(app: &mut App, ui: &mut egui::Ui) {
 /// The open threads in `path`, for the file tree.
 pub(crate) fn open_in(app: &App, path: &ProjectPath) -> usize {
     app.session.review().threads().iter().filter(|th| th.is_open() && th.anchor.path == path.as_str()).count()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn times_read_as_how_long_ago() {
-        let now = Utc::now();
-        let earlier = |s: i64| now - chrono::Duration::seconds(s);
-        assert_eq!(ago(earlier(5), now), "just now");
-        assert!(ago(earlier(600), now).contains("10"));
-        assert!(ago(earlier(400_000), now).contains('-'), "an old time is not a date");
-    }
 }

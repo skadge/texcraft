@@ -37,7 +37,7 @@ impl App {
         for title in MENUS {
             let mut children: Vec<Node> = Vec::new();
             for spec in cmd::all().iter().filter(|c| c.menu.first() == Some(title)) {
-                let label = crate::forge::label(self, spec.id).unwrap_or_else(|| t(spec.label));
+                let label = crate::forge::label(self, spec.id).unwrap_or_else(|| crate::i18n::tid(spec.id, spec.label));
                 children.push(Item::new(spec.id, label).enabled((spec.enabled)(&self.session).is_ok()).into());
             }
             if *title == "File" {
@@ -54,7 +54,7 @@ impl App {
                     children.push(Node::Separator);
                 }
                 last_group = c.group;
-                children.push(Item::new(c.id, t(c.label)).enabled(ui_cmd::enabled(self, c.id).is_ok()).into());
+                children.push(Item::new(c.id, crate::i18n::tid(c.id, c.label)).enabled(ui_cmd::enabled(self, c.id).is_ok()).into());
             }
             menus.push(Menu::new(t(title), craft_menu::tidy(children)).role(role(title)));
         }

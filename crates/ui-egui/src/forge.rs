@@ -292,7 +292,7 @@ fn signed_out(app: &mut App, done: &Value) {
         said = format!("{said} {}", tl!("To end TeXCraft's access, remove it on GitHub, under Settings › Applications › Authorized OAuth Apps."));
     }
     if let Some(w) = done["warning"].as_str() {
-        said = format!("{said} {w}");
+        said = format!("{said} {}", crate::i18n::msg(w));
         error = true;
     }
     app.view.status = Some((said, error));
@@ -304,7 +304,7 @@ fn signed_in(app: &mut App, done: &Value) {
         .replace("{name}", done["name"].as_str().unwrap_or_default())
         .replace("{username}", done["username"].as_str().unwrap_or_default());
     match done["warning"].as_str() {
-        Some(w) => app.view.status = Some((format!("{said} {w}"), true)),
+        Some(w) => app.view.status = Some((format!("{said} {}", crate::i18n::msg(w)), true)),
         None => app.view.status = Some((said, false)),
     }
     // A commit that waited for the permission to write: its dialog again.
@@ -1042,7 +1042,7 @@ fn committed(app: &mut App, done: &Value) {
     }
     said = with_merged_and_kept(said, done);
     if let Some(e) = done["merge_request_error"].as_str() {
-        said = format!("{said} {}", tl!("The merge request could not be opened: {why}").replace("{why}", e));
+        said = format!("{said} {}", tl!("The merge request could not be opened: {why}").replace("{why}", &crate::i18n::msg(e)));
         app.view.status = Some((said, true));
         return;
     }
@@ -1160,7 +1160,7 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             });
         }
         for problem in app.session.forge_server_problems() {
-            let text = tl!("Your organisation's list of servers has an entry TeXCraft left out: {problem}").replace("{problem}", problem);
+            let text = tl!("Your organisation's list of servers has an entry TeXCraft left out: {problem}").replace("{problem}", &crate::i18n::msg(problem));
             ui.label(RichText::new(text).font(t.small()).color(t.error));
         }
         ui.horizontal_wrapped(|ui| {
@@ -1195,7 +1195,7 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         let host = texcraft_engine::forge::servers::host_of(&instance).to_owned();
         let said = tl!("Removed {host}.").replace("{host}", &host);
         app.view.status = Some(match done["signed_out"]["warning"].as_str() {
-            Some(w) => (format!("{said} {w}"), true),
+            Some(w) => (format!("{said} {}", crate::i18n::msg(w)), true),
             None => (said, false),
         });
     }

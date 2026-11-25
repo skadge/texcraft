@@ -216,7 +216,7 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
     }
     // How many, said politely when it changes.
     let summary = match (&search.error, &search.found) {
-        (Some(e), _) => Some((e.clone(), t.error)),
+        (Some(e), _) => Some((crate::i18n::msg(e), t.error)),
         (None, Some(f)) if f.count == 0 => Some((tl!("No results").to_owned(), t.text_muted)),
         (None, Some(f)) => {
             let (m, n) = matches_in_files(f);

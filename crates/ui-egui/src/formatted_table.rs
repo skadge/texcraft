@@ -354,7 +354,7 @@ fn grid(ui: &mut egui::Ui, cx: &mut Cx<'_>, tb: &TableBlock, selected: bool) {
 pub(super) fn unsupported(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, why: &Unsupported) {
     let src = cx.text.get(range.clone()).unwrap_or_default().trim_end();
     let reason = reason(why);
-    let tag = tl!("Table, shown as source: {reason}").replace("{reason}", &reason);
+    let tag = tl!("Table, shown as source: {reason}").replace("{reason}", &crate::i18n::msg(&reason));
     let r = code(ui, cx, src, range.start, None, Some(&tag));
     let _ = r.on_hover_text(tl!("The table editor shows this table as its source, because it cannot show it faithfully as a grid."));
 }

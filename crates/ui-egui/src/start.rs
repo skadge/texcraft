@@ -152,7 +152,7 @@ fn templates(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         });
         ui.add_space(t.unit * 2.0);
     } else if let Some(error) = &app.gallery.error {
-        ui.horizontal(|ui| ui.colored_label(t.error, error.as_str()));
+        ui.horizontal(|ui| ui.colored_label(t.error, crate::i18n::msg(error)));
         ui.add_space(t.unit * 2.0);
     }
     let mut chosen = None;

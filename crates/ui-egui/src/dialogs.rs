@@ -346,8 +346,8 @@ fn about(ui: &mut egui::Ui, t: &Tokens, engine: &str) -> Outcome {
         crate::app_icon::paint(ui, icon);
         ui.add_space(t.unit * 2.0);
         title(ui, t, "TeXCraft");
-        ui.label(format!("{} {}", tl!("Version"), env!("CARGO_PKG_VERSION")));
-        ui.label(RichText::new(format!("{} {engine}", tl!("Typesetting engine:"))).color(t.text_muted));
+        ui.label(tf!("Version {version}", version = env!("CARGO_PKG_VERSION")));
+        ui.label(RichText::new(tf!("Typesetting engine: {engine}", engine = engine)).color(t.text_muted));
         ui.add_space(t.unit * 2.0);
         ui.label(
             RichText::new(tl!("Free software under the MIT or Apache 2.0 licence. Icons from Lucide (ISC).")).font(t.small()).color(t.text_muted),

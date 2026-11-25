@@ -118,24 +118,24 @@ impl Kind {
 
 /// How a selection can be rewritten: `ai.rewrite`'s `how`, and the menu's label.
 pub(crate) const REWRITES: [(&str, &str); 4] =
-    [("clearer", "Clearer"), ("shorter", "Shorter"), ("formal", "More Formal"), ("grammar", "Fix Grammar and Spelling")];
+    [("clearer", tn!("Clearer")), ("shorter", tn!("Shorter")), ("formal", tn!("More Formal")), ("grammar", tn!("Fix Grammar and Spelling"))];
 
 /// The languages Translate to… offers, in English (the name the model is given).
 pub(crate) const LANGUAGES: [&str; 14] = [
-    "English",
-    "French",
-    "German",
-    "Spanish",
-    "Italian",
-    "Portuguese",
-    "Dutch",
-    "Polish",
-    "Swedish",
-    "Russian",
-    "Arabic",
-    "Chinese",
-    "Japanese",
-    "Korean",
+    tn!("English"),
+    tn!("French"),
+    tn!("German"),
+    tn!("Spanish"),
+    tn!("Italian"),
+    tn!("Portuguese"),
+    tn!("Dutch"),
+    tn!("Polish"),
+    tn!("Swedish"),
+    tn!("Russian"),
+    tn!("Arabic"),
+    tn!("Chinese"),
+    tn!("Japanese"),
+    tn!("Korean"),
 ];
 
 /// The pause in typing after which the next words are asked for, in seconds.
@@ -168,7 +168,7 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
             app.view.status = Some((said.replace("{n}", &n.to_string()), false));
         }
         Some(texcraft_engine::ai::Event::Models(Err(e))) => {
-            app.view.status = Some((tl!("The endpoint did not answer: {error}").replace("{error}", &e), true));
+            app.view.status = Some((tl!("The endpoint did not answer: {error}").replace("{error}", &crate::i18n::msg(&e)), true));
         }
         Some(texcraft_engine::ai::Event::Explained(Ok(made))) => {
             let said = if made {
@@ -179,17 +179,17 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
             app.view.status = Some((said.to_owned(), false));
         }
         Some(texcraft_engine::ai::Event::Explained(Err(e))) => {
-            app.view.status = Some((tl!("No explanation: {error}").replace("{error}", &e), true));
+            app.view.status = Some((tl!("No explanation: {error}").replace("{error}", &crate::i18n::msg(&e)), true));
         }
         Some(texcraft_engine::ai::Event::Rewritten(Ok(_))) => {
             let said = tl!("The rewrite is a suggested change: accept or reject it beside the text or in the Review panel.");
             app.view.status = Some((said.to_owned(), false));
         }
         Some(texcraft_engine::ai::Event::Rewritten(Err(e))) => {
-            app.view.status = Some((tl!("No rewrite: {error}").replace("{error}", &e), true));
+            app.view.status = Some((tl!("No rewrite: {error}").replace("{error}", &crate::i18n::msg(&e)), true));
         }
         Some(texcraft_engine::ai::Event::Completed(Err(e))) => {
-            app.view.status = Some((tl!("No words were suggested: {error}").replace("{error}", &e), true));
+            app.view.status = Some((tl!("No words were suggested: {error}").replace("{error}", &crate::i18n::msg(&e)), true));
         }
         Some(texcraft_engine::ai::Event::Made(Ok(typeset))) => {
             let said = if typeset {
@@ -200,20 +200,20 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
             app.view.status = Some((said.to_owned(), !typeset));
         }
         Some(texcraft_engine::ai::Event::Made(Err(e))) => {
-            app.view.status = Some((tl!("Nothing was made: {error}").replace("{error}", &e), true));
+            app.view.status = Some((tl!("Nothing was made: {error}").replace("{error}", &crate::i18n::msg(&e)), true));
         }
         Some(texcraft_engine::ai::Event::Referenced(Ok(bib))) => {
             let said = tl!("The drafted entry is a suggested change in {bib}: check every field before accepting it.");
             app.view.status = Some((said.replace("{bib}", &bib), false));
         }
         Some(texcraft_engine::ai::Event::Referenced(Err(e))) => {
-            app.view.status = Some((tl!("No reference was drafted: {error}").replace("{error}", &e), true));
+            app.view.status = Some((tl!("No reference was drafted: {error}").replace("{error}", &crate::i18n::msg(&e)), true));
         }
         Some(texcraft_engine::ai::Event::Answered(Ok(_))) => {
             app.view.status = Some((tl!("The answer is in the Ask panel.").to_owned(), false));
         }
         Some(texcraft_engine::ai::Event::Answered(Err(e))) => {
-            app.view.status = Some((tl!("No answer: {error}").replace("{error}", &e), true));
+            app.view.status = Some((tl!("No answer: {error}").replace("{error}", &crate::i18n::msg(&e)), true));
         }
         Some(texcraft_engine::ai::Event::Reviewed(Ok((left, dropped)))) => {
             let said = crate::i18n::trn(left, "The review left {n} comment.", "The review left {n} comments.").replace("{n}", &left.to_string());
@@ -230,7 +230,7 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
             app.view.status = Some((said, false));
         }
         Some(texcraft_engine::ai::Event::Reviewed(Err(e))) => {
-            app.view.status = Some((tl!("No review: {error}").replace("{error}", &e), true));
+            app.view.status = Some((tl!("No review: {error}").replace("{error}", &crate::i18n::msg(&e)), true));
         }
         // The editor shows (and announces) the words when the caret is still where they go.
         Some(texcraft_engine::ai::Event::Completed(Ok(_))) | None => {}
@@ -574,7 +574,7 @@ pub(crate) fn explanation(ui: &mut egui::Ui, t: &Tokens, e: Option<&Explanation>
         }
         Some(Explanation::Failed(why)) => {
             ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new(tl!("No explanation: {error}").replace("{error}", why)).font(t.small()).color(t.error));
+                ui.label(RichText::new(tl!("No explanation: {error}").replace("{error}", &crate::i18n::msg(why))).font(t.small()).color(t.error));
                 let again = widgets::text_button(ui, t, tl!("Try Again"), !busy);
                 if let Some(why) = blocked {
                     let _ = again.clone().on_disabled_hover_text(why);
@@ -602,7 +602,7 @@ pub(crate) fn explanation(ui: &mut egui::Ui, t: &Tokens, e: Option<&Explanation>
 /// Settings › AI.
 pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     if !available() {
-        ui.label(RichText::new(tl!(UNAVAILABLE)).color(t.text));
+        ui.label(RichText::new(crate::i18n::msg(UNAVAILABLE)).color(t.text));
         return;
     }
     let status = app.session.execute("ai.status", &json!({})).unwrap_or_default();
@@ -911,10 +911,10 @@ fn requests(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
             let at = s["at_ms"]
                 .as_i64()
                 .and_then(chrono::DateTime::from_timestamp_millis)
-                .map(|d| d.with_timezone(&chrono::Local).format("%H:%M").to_string());
-            let line = tl!("{time} · {bytes} bytes to {destination} · {model} · {outcome}")
+                .map(|d| crate::i18n::time(d.with_timezone(&chrono::Local).time()));
+            let line = tl!("{time} · {size} to {destination} · {model} · {outcome}")
                 .replace("{time}", &at.unwrap_or_default())
-                .replace("{bytes}", &bytes.to_string())
+                .replace("{size}", &crate::i18n::file_size(bytes))
                 .replace("{destination}", s["destination"].as_str().unwrap_or_default())
                 .replace("{model}", s["model"].as_str().unwrap_or_default())
                 .replace("{outcome}", outcome);

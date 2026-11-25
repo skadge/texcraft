@@ -177,20 +177,6 @@ impl HistoryView {
     }
 }
 
-/// When a version was made, said from `now`: "5 minutes ago", "yesterday", a date past a month.
-pub(crate) fn relative(time: chrono::DateTime<chrono::Utc>, now: chrono::DateTime<chrono::Utc>) -> String {
-    let seconds = (now - time).num_seconds().max(0);
-    let n = |d: i64| usize::try_from(seconds / d).unwrap_or(0);
-    match seconds {
-        0..60 => tl!("just now").to_owned(),
-        60..3600 => trn(n(60), "{n} minute ago", "{n} minutes ago"),
-        3600..86_400 => trn(n(3600), "{n} hour ago", "{n} hours ago"),
-        86_400..172_800 => tl!("yesterday").to_owned(),
-        172_800..2_592_000 => trn(n(86_400), "{n} day ago", "{n} days ago"),
-        _ => time.with_timezone(&chrono::Local).format("%Y-%m-%d").to_string(),
-    }
-}
-
 /// The word for how a file changed, so the change is not told by colour or icon alone.
 fn change_word(change: &str) -> &'static str {
     match change {
@@ -297,7 +283,7 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
     });
     // What the list is, or why there is none.
     let note = match (&owner, &view.error) {
-        (_, Some(e)) => Some((e.clone(), t.error)),
+        (_, Some(e)) => Some((crate::i18n::msg(e), t.error)),
         (None, None) => Some((no_history(&app.session).to_owned(), t.text_muted)),
         (Some(_), None) if view.commits.is_empty() => Some((tl!("No saved versions yet.").to_owned(), t.text_muted)),
         (Some(o), None) if o == "theirs" => {
@@ -352,7 +338,7 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
             }
         }
         Some(Action::RestoreProject(id)) => {
-            let when = view.commits.iter().find(|c| c.id == id).and_then(|c| c.time).map(|t| relative(t, chrono::Utc::now()));
+            let when = view.commits.iter().find(|c| c.id == id).and_then(|c| c.time).map(|t| crate::i18n::ago(t, chrono::Utc::now()));
             app.view.dialog = Some(Dialog::Confirm(Confirm {
                 title: tl!("Restore the project as it was {when}?").replace("{when}", when.as_deref().unwrap_or_default()),
                 message: tl!(
@@ -503,7 +489,7 @@ fn restore_file(view: &HistoryView) -> Option<Dialog> {
     } else {
         (commit.id.clone(), tl!("Restore {file} as it was {when}?"))
     };
-    let when = commit.time.map(|t| relative(t, chrono::Utc::now())).unwrap_or_default();
+    let when = commit.time.map(|t| crate::i18n::ago(t, chrono::Utc::now())).unwrap_or_default();
     let file = diff.path.rsplit('/').next().unwrap_or(&diff.path);
     let params = json!({"commit": version, "path": diff.path});
     Some(Dialog::Confirm(Confirm {
@@ -520,7 +506,7 @@ fn commit_row(ui: &mut egui::Ui, t: &Tokens, c: &Commit, selected: bool, now: ch
     let height = 2.0 * t.row_height - 2.0 * t.unit;
     let (rect, r) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::click());
     let message = c.message.lines().next().unwrap_or_default();
-    let when = c.time.map(|time| relative(time, now)).unwrap_or_default();
+    let when = c.time.map(|time| crate::i18n::ago(time, now)).unwrap_or_default();
     let files = trn(c.changes.len(), "{n} file", "{n} files");
     let meta = format!("{when} · {} · {files}", c.author);
     let name = format!("{message}, {when}, {}, {files}", c.author);
@@ -571,7 +557,7 @@ fn diff_view(ui: &mut egui::Ui, t: &Tokens, diff: &Diff, action: &mut Option<Act
         });
     });
     let summary = if let Some(e) = &diff.error {
-        e.clone()
+        crate::i18n::msg(e)
     } else if diff.binary {
         tl!("{change}; not a text file, so its lines are not compared.").replace("{change}", change_word(&diff.change))
     } else {

@@ -166,7 +166,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             _ => tl!("{w} × {h} pixels").replace("{w}", &format!("{w:.0}")).replace("{h}", &format!("{h:.0}")),
         });
     }
-    info.push(format!("{:.0} kB", bytes.len() as f64 / 1024.0));
+    info.push(crate::i18n::file_size(bytes.len() as u64));
     let zoom_shown = app.figure.zoom;
     ui.horizontal(|ui| {
         ui.set_min_height(t.toolbar_height);
@@ -216,7 +216,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             ui.add_space(t.unit * 4.0);
             ui.horizontal(|ui| {
                 ui.add_space(t.unit * 3.0);
-                ui.colored_label(t.error, tl!("This image cannot be shown: {e}").replace("{e}", e));
+                ui.colored_label(t.error, tl!("This image cannot be shown: {e}").replace("{e}", &crate::i18n::msg(e)));
             });
             return;
         }
