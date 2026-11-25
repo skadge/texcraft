@@ -205,15 +205,13 @@ impl Formulas {
                 self.cache.insert(key, Arc::new(done));
             }
         }
-        if self.running.is_empty() {
-            self.running.clear();
-            if let Some(next) = self.waiting.take() {
-                // Formulas typeset meanwhile are not sent again.
-                let wanted: Vec<Wanted> =
-                    next.wanted.iter().filter(|w| !self.cache.contains_key(&(next.preamble_hash, (*w).clone()))).cloned().collect();
-                if !wanted.is_empty() {
-                    self.send(Request { wanted, ..next });
-                }
+        if self.running.is_empty()
+            && let Some(next) = self.waiting.take()
+        {
+            // Formulas typeset meanwhile are not sent again.
+            let wanted: Vec<Wanted> = next.wanted.iter().filter(|w| !self.cache.contains_key(&(next.preamble_hash, (*w).clone()))).cloned().collect();
+            if !wanted.is_empty() {
+                self.send(Request { wanted, ..next });
             }
         }
     }
