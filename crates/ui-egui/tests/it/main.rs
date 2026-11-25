@@ -32,6 +32,7 @@ mod log_copy;
 mod menu_bar;
 mod narrow;
 mod output_log;
+mod paste;
 mod pdf_preview;
 mod pdf_window;
 mod progress;
