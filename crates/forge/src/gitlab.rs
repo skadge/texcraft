@@ -1,0 +1,231 @@
+//! GitLab's REST API (version 4): the calls a project opened from it needs, each answer checked
+//! and its errors put in words.
+
+use serde_json::{Value, json};
+
+use crate::{Address, Error, MAX_FILE, Request, Response, Result, Token, Transport, encode};
+
+/// Largest answer of the API read (a page of the tree, a commit), apart from files' contents.
+const MAX_JSON: u64 = 16 * 1024 * 1024;
+/// Entries a page of the tree lists.
+const PER_PAGE: usize = 100;
+/// Pages of the tree read at most: more than a project holds (`texcraft_project::MAX_FILES`).
+const MAX_PAGES: usize = 200;
+
+/// A client of one project on one GitLab instance, with the token it sends.
+pub struct GitLab {
+    transport: Box<dyn Transport>,
+    address: Address,
+    token: Token,
+}
+
+/// What the API says of a project.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectInfo {
+    pub id: u64,
+    /// `group/project`, as GitLab writes it.
+    pub path: String,
+    /// None for a project with an empty repository.
+    pub default_branch: Option<String>,
+    pub web_url: String,
+}
+
+/// A branch and the commit at its head.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Branch {
+    pub name: String,
+    pub commit: String,
+    /// Whether the token's user can commit to it (false for a protected branch, or a role that
+    /// cannot push).
+    pub can_push: bool,
+}
+
+/// An entry of a commit's tree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeEntry {
+    pub path: String,
+    /// The object's id: a file's blob id.
+    pub id: String,
+    /// `blob` (a file or a symbolic link), `tree` (a folder) or `commit` (a submodule).
+    pub kind: String,
+    /// Git's mode: `100644`, `100755`, `120000` (a symbolic link)…
+    pub mode: String,
+}
+
+impl TreeEntry {
+    /// A file a project loads: a blob that is not a symbolic link.
+    pub fn is_file(&self) -> bool {
+        self.kind == "blob" && self.mode != "120000"
+    }
+}
+
+/// Whether `id` is a full git object id (40 hexadecimal digits).
+pub(crate) fn is_object_id(id: &str) -> bool {
+    id.len() == 40 && id.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+impl GitLab {
+    pub fn new(transport: Box<dyn Transport>, address: Address, token: Token) -> Self {
+        Self { transport, address, token }
+    }
+
+    pub fn address(&self) -> &Address {
+        &self.address
+    }
+
+    fn project_url(&self) -> String {
+        format!("{}/projects/{}", self.address.api(), self.address.id())
+    }
+
+    fn request(&self, method: &'static str, url: String, body: Option<Vec<u8>>, max_body: u64) -> Request {
+        let mut headers = vec![("Authorization".to_owned(), self.token.header()), ("Accept".to_owned(), "application/json".to_owned())];
+        if body.is_some() {
+            headers.push(("Content-Type".to_owned(), "application/json".to_owned()));
+        }
+        Request { method, url, headers, body, max_body }
+    }
+
+    /// Sends `request`; an answer that is not a success is an error about `what`.
+    async fn send(&self, request: Request, what: &str) -> Result<Response> {
+        let response = self.transport.send(request).await.map_err(Error::Network)?;
+        check(response, what)
+    }
+
+    async fn get_json(&self, url: String, what: &str) -> Result<(Value, Response)> {
+        let response = self.send(self.request("GET", url, None, MAX_JSON), what).await?;
+        if response.too_large {
+            return Err(Error::Invalid(format!("the answer about {what} is too large")));
+        }
+        let value = serde_json::from_slice(&response.body).map_err(|e| Error::Invalid(e.to_string()))?;
+        Ok((value, response))
+    }
+
+    /// The project: its id, path and default branch.
+    pub async fn project(&self) -> Result<ProjectInfo> {
+        let what = format!("project {}", self.address.path);
+        let (v, _) = self.get_json(self.project_url(), &what).await?;
+        Ok(ProjectInfo {
+            id: v["id"].as_u64().ok_or_else(|| Error::Invalid("the project has no id".to_owned()))?,
+            path: v["path_with_namespace"].as_str().unwrap_or(&self.address.path).to_owned(),
+            default_branch: v["default_branch"].as_str().filter(|b| !b.is_empty()).map(str::to_owned),
+            web_url: v["web_url"].as_str().map_or_else(|| self.address.web_url(), str::to_owned),
+        })
+    }
+
+    /// Branch `name`: the commit at its head, and whether the token's user can commit to it.
+    pub async fn branch(&self, name: &str) -> Result<Branch> {
+        let what = format!("branch {name} in {}", self.address.path);
+        let url = format!("{}/repository/branches/{}", self.project_url(), encode(name));
+        let (v, _) = self.get_json(url, &what).await?;
+        let commit = v["commit"]["id"].as_str().filter(|id| is_object_id(id)).ok_or_else(|| Error::Invalid("the branch has no commit".to_owned()))?;
+        Ok(Branch {
+            name: v["name"].as_str().unwrap_or(name).to_owned(),
+            commit: commit.to_owned(),
+            can_push: v["can_push"].as_bool().unwrap_or(false),
+        })
+    }
+
+    /// Every entry of `commit`'s tree, its folders' too, page after page.
+    pub async fn tree(&self, commit: &str) -> Result<Vec<TreeEntry>> {
+        if !is_object_id(commit) {
+            return Err(Error::Invalid(format!("{commit} is not a commit's id")));
+        }
+        let what = format!("files of {} at {commit}", self.address.path);
+        let first = format!("{}/repository/tree?ref={commit}&recursive=true&per_page={PER_PAGE}", self.project_url());
+        let mut url = first.clone();
+        let mut entries = Vec::new();
+        for _ in 0..MAX_PAGES {
+            let (v, response) = self.get_json(url, &what).await?;
+            let page = v.as_array().ok_or_else(|| Error::Invalid("the tree is not a list".to_owned()))?;
+            for e in page {
+                let (Some(path), Some(id), Some(kind)) = (e["path"].as_str(), e["id"].as_str(), e["type"].as_str()) else {
+                    return Err(Error::Invalid("an entry of the tree has no path, id or type".to_owned()));
+                };
+                entries.push(TreeEntry {
+                    path: path.to_owned(),
+                    id: id.to_owned(),
+                    kind: kind.to_owned(),
+                    mode: e["mode"].as_str().unwrap_or_default().to_owned(),
+                });
+            }
+            // The next page: from the `Link` header (keyset pagination), else by number. Only an
+            // address of this instance's API, which the token may go to.
+            let api = format!("{}/", self.address.api());
+            let next = response.header("link").and_then(next_link).filter(|n| n.starts_with(&api)).or_else(|| {
+                let page = response.header("x-next-page").map(str::trim).filter(|p| !p.is_empty())?;
+                page.parse::<u32>().ok().map(|n| format!("{first}&page={n}"))
+            });
+            match next {
+                Some(next) => url = next,
+                None => return Ok(entries),
+            }
+        }
+        Err(Error::Invalid(format!("the project lists more than {} files and folders", MAX_PAGES * PER_PAGE)))
+    }
+
+    /// The contents of blob `id`, checked against its id; none when it is over [`MAX_FILE`].
+    pub async fn blob(&self, id: &str) -> Result<Option<Vec<u8>>> {
+        if !is_object_id(id) {
+            return Err(Error::Invalid(format!("{id} is not a file's id")));
+        }
+        let url = format!("{}/repository/blobs/{id}/raw", self.project_url());
+        let response = self.send(self.request("GET", url, None, MAX_FILE), &format!("file {id} in {}", self.address.path)).await?;
+        if response.too_large {
+            return Ok(None);
+        }
+        let got = texcraft_history::store::blob_id(&response.body).map_err(Error::Invalid)?;
+        if !got.eq_ignore_ascii_case(id) {
+            return Err(Error::Invalid(format!("the contents of file {id} do not match its id")));
+        }
+        Ok(Some(response.body))
+    }
+
+    /// Makes one commit of `actions` (the API's `create`, `update`, `delete`, `move`) on `branch`:
+    /// its id and its parents' ids.
+    pub async fn create_commit(&self, branch: &str, message: &str, actions: Vec<Value>) -> Result<(String, Vec<String>)> {
+        let body = json!({"branch": branch, "commit_message": message, "actions": actions});
+        let body = serde_json::to_vec(&body).map_err(|e| Error::Invalid(e.to_string()))?;
+        let url = format!("{}/repository/commits", self.project_url());
+        let response = self.send(self.request("POST", url, Some(body), MAX_JSON), &format!("the commit to branch {branch}")).await?;
+        let v: Value = serde_json::from_slice(&response.body).map_err(|e| Error::Invalid(e.to_string()))?;
+        let id = v["id"].as_str().filter(|id| is_object_id(id)).ok_or_else(|| Error::Invalid("the commit has no id".to_owned()))?;
+        let parents = v["parent_ids"].as_array().map(|a| a.iter().filter_map(|p| p.as_str().map(str::to_owned)).collect()).unwrap_or_default();
+        Ok((id.to_owned(), parents))
+    }
+}
+
+/// `response` when it is a success; otherwise the error its status means, about `what`.
+pub fn check(response: Response, what: &str) -> Result<Response> {
+    match response.status {
+        200..=299 => Ok(response),
+        401 => Err(Error::Unauthorized),
+        403 => Err(Error::Forbidden { what: what.to_owned() }),
+        404 => Err(Error::NotFound { what: what.to_owned() }),
+        429 => Err(Error::RateLimited { retry_after: response.header("retry-after").and_then(|s| s.trim().parse().ok()) }),
+        status @ 400..=499 => Err(Error::Refused { status, message: message_of(&response.body) }),
+        status => Err(Error::Server { status }),
+    }
+}
+
+/// GitLab's message in an error's body (`{"message": …}` or `{"error": …}`), or the body's start.
+fn message_of(body: &[u8]) -> String {
+    let text = match serde_json::from_slice::<Value>(body) {
+        Ok(v) => match v.get("message").or_else(|| v.get("error")) {
+            Some(Value::String(s)) => s.clone(),
+            Some(other) => other.to_string(),
+            None => v.to_string(),
+        },
+        Err(_) => String::from_utf8_lossy(body).into_owned(),
+    };
+    let text = text.trim();
+    if text.chars().count() > 300 { format!("{}…", text.chars().take(300).collect::<String>()) } else { text.to_owned() }
+}
+
+/// The `rel="next"` address of a `Link` header.
+fn next_link(header: &str) -> Option<String> {
+    header.split(',').find_map(|part| {
+        let (url, params) = part.split_once(';')?;
+        let next = params.split(';').any(|p| matches!(p.trim(), "rel=\"next\"" | "rel=next"));
+        next.then(|| url.trim().trim_start_matches('<').trim_end_matches('>').to_owned())
+    })
+}

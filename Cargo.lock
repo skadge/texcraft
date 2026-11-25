@@ -5950,6 +5950,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "texcraft-forge"
+version = "0.6.0"
+dependencies = [
+ "base64 0.22.1",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "texcraft-history",
+ "ureq",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "texcraft-history"
 version = "0.6.0"
 dependencies = [
