@@ -21,6 +21,11 @@ pub enum Error {
 }
 
 pub mod figure;
+mod links;
+
+/// Whether a link's URI may be opened: web and mail addresses only (craft-pdf's check).
+pub use craft_pdf::safe_url;
+pub use links::{Link, Target};
 
 /// A page drawn at some scale.
 #[derive(Debug, Clone)]
@@ -55,6 +60,11 @@ impl Document {
                 [w, h]
             })
             .collect()
+    }
+
+    /// The links of page `index` (from 0): where each is on the page, where it goes.
+    pub fn links(&self, index: usize) -> Vec<Link> {
+        links::links(&self.pdf, index)
     }
 
     /// Page `index` (from 0) at `scale` device pixels per point, on white.

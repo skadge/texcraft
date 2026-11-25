@@ -68,3 +68,23 @@ fn the_actual_size_chord_zooms_the_pdf_not_the_window() {
     assert!((zoom(&mut harness) - 1.0).abs() < 1e-3, "the zoom is {}", zoom(&mut harness));
     assert!(harness.query_by_label("100 %").is_some(), "the zoom button does not say 100 %");
 }
+
+#[test]
+fn a_link_to_a_page_scrolls_there() {
+    let mut harness = built();
+    // Two links go there: the first is drawn with its destination given in place.
+    harness.query_all_by_label("Link to page 2").next().expect("the link is not exposed").click();
+    for _ in 0..4 {
+        harness.step();
+    }
+    assert!(harness.query_by_label("2 / 2").is_some(), "the link did not scroll to page 2");
+}
+
+#[test]
+fn a_link_to_a_script_is_not_opened() {
+    let mut harness = built();
+    harness.get_by_label("Link to javascript:alert(1)").click();
+    harness.run();
+    let inspect = harness.state_mut().control("ui.inspect", &json!({}));
+    assert_eq!(inspect["result"]["status"]["error"], json!(true), "{inspect}");
+}

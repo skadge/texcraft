@@ -52,6 +52,16 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         if let Some((page, x, y)) = app.pdf.clicked.take() {
             go_to_source(app, page, x, y);
         }
+        match app.pdf.followed.take() {
+            Some(crate::pdf_view::Followed::Opened(uri)) => {
+                app.view.status = Some((tl!("Opening {address} in your browser.").replace("{address}", uri.trim()), false));
+            }
+            Some(crate::pdf_view::Followed::Refused(uri)) => {
+                let text = tl!("Not opened: {address} is not a web or mail address. Links from the PDF open only those.");
+                app.view.status = Some((text.replace("{address}", uri.trim()), true));
+            }
+            None => {}
+        }
     }
 }
 

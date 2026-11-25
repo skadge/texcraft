@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use texcraft_preview::Document;
+use texcraft_preview::{Document, Link, Target};
 
 use crate::theme::Tokens;
 
@@ -227,6 +227,21 @@ pub(crate) struct PdfView {
     mark: Option<(Vec<texcraft_engine::PageRect>, f64)>,
     /// Scroll to this page and height (PDF points) next frame.
     reveal: Option<(usize, f32)>,
+    /// A link followed: scroll so that this page and height (PDF points) is at the top.
+    jump: Option<(usize, f32)>,
+    /// The links of the pages shown, read once a PDF.
+    links: HashMap<usize, Arc<Vec<Link>>>,
+    /// A link to the web followed, or refused: the preview pane says it in the status bar.
+    pub followed: Option<Followed>,
+}
+
+/// A link to outside the document, clicked.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Followed {
+    /// Opened in the browser.
+    Opened(String),
+    /// Not opened: not a web or mail address (a file, a program, a script).
+    Refused(String),
 }
 
 impl Default for PdfView {
@@ -247,6 +262,9 @@ impl Default for PdfView {
             clicked: None,
             mark: None,
             reveal: None,
+            jump: None,
+            links: HashMap::new(),
+            followed: None,
         }
     }
 }
@@ -266,6 +284,7 @@ impl PdfView {
         // The pages drawn stay on screen until the new PDF's are drawn.
         self.generation += 1;
         self.pending.clear();
+        self.links.clear();
         self.error = None;
         self.doc = None;
         self.sizes.clear();
@@ -403,6 +422,11 @@ impl PdfView {
         {
             area = area.vertical_scroll_offset((top + y * zoom - rect.height() / 3.0).max(0.0));
         }
+        if let Some((page, y)) = self.jump.take()
+            && let Some(top) = tops.get(page)
+        {
+            area = area.vertical_scroll_offset((top + y * zoom - PAGE_GAP).max(0.0));
+        }
         let now = ui.input(|i| i.time);
         const MARK_SECONDS: f64 = 1.8;
         if self.mark.as_ref().is_some_and(|(_, since)| now - since > MARK_SECONDS) {
@@ -414,6 +438,7 @@ impl PdfView {
             i.modifiers.command || i.events.iter().any(|e| matches!(e, egui::Event::PointerButton { modifiers, .. } if modifiers.command))
         });
         let mut clicked = None;
+        let mut follow = None;
         let shadow = egui::Shadow { offset: [0, 2], blur: 10, spread: 0, color: t.shadow };
         let sizes = self.sizes.clone();
         area.show_viewport(ui, |ui, viewport| {
@@ -450,6 +475,11 @@ impl PdfView {
                 {
                     clicked = Some((i, (p.x - page.left()) / zoom, (p.y - page.top()) / zoom));
                 }
+                match self.page_links(ui, t, i, page, zoom) {
+                    Some((point, _)) if command => clicked = Some((i, point.x, point.y)),
+                    Some((_, target)) => follow = Some(target),
+                    None => {}
+                }
                 // The place shown from the source, fading.
                 if let Some((rects, since)) = &mark {
                     let fade = (1.0 - ((now - since) / MARK_SECONDS) as f32).clamp(0.0, 1.0);
@@ -469,9 +499,46 @@ impl PdfView {
         if clicked.is_some() {
             self.clicked = clicked;
         }
+        match follow {
+            Some(Target::Page { page, y }) => {
+                self.jump = Some((page, y.unwrap_or(0.0)));
+                ui.ctx().request_repaint();
+            }
+            Some(Target::Uri(uri)) if texcraft_preview::safe_url(&uri) => {
+                ui.ctx().open_url(egui::OpenUrl::new_tab(uri.trim()));
+                self.followed = Some(Followed::Opened(uri));
+            }
+            Some(Target::Uri(uri)) => self.followed = Some(Followed::Refused(uri)),
+            None => {}
+        }
         if let Some(pass) = building.and_then(|b| b.draft) {
             draft_badge(ui, t, rect, pass);
         }
+    }
+
+    /// The links of page `i`, drawn at `page`: each a link for the pointer (a hand, its target
+    /// as a tooltip), the keyboard and screen readers. The link clicked, if one was: the point
+    /// clicked (PDF points from the page's top left) and where it goes.
+    fn page_links(&mut self, ui: &mut egui::Ui, t: &Tokens, i: usize, page: egui::Rect, zoom: f32) -> Option<(egui::Pos2, Target)> {
+        let doc = self.doc.as_ref()?;
+        let links = self.links.entry(i).or_insert_with(|| Arc::new(doc.links(i))).clone();
+        let mut clicked = None;
+        for (k, link) in links.iter().enumerate() {
+            let [l, top, r, b] = link.rect;
+            let area = egui::Rect::from_min_max(page.min + egui::vec2(l, top) * zoom, page.min + egui::vec2(r, b) * zoom);
+            let label = link_label(&link.target);
+            let response = ui.interact(area, ui.scope_id().with(("pdf-link", i, k)), egui::Sense::click());
+            response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Link, true, &label));
+            if response.has_focus() {
+                ui.painter().rect_stroke(area.expand(2.0), 2.0, egui::Stroke::new(2.0, t.accent), egui::StrokeKind::Outside);
+            }
+            if response.clicked() {
+                let at = response.interact_pointer_pos().unwrap_or(area.center());
+                clicked = Some((((at - page.min) / zoom).to_pos2(), link.target.clone()));
+            }
+            let _ = response.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(label);
+        }
+        clicked
     }
 
     /// Asks for `pages` (in that order) at `scale`, those not drawn at it yet; the renderer drops
@@ -532,6 +599,14 @@ impl PdfView {
             }
             Some(Err(e)) => log::warn!("page {}: {e}", d.index + 1),
         }
+    }
+}
+
+/// What a link says: where it goes.
+fn link_label(target: &Target) -> String {
+    match target {
+        Target::Page { page, .. } => tl!("Link to page {n}").replace("{n}", &(page + 1).to_string()),
+        Target::Uri(uri) => tl!("Link to {address}").replace("{address}", uri.trim()),
     }
 }
 
