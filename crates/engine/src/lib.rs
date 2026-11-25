@@ -76,6 +76,21 @@ impl Default for Settings {
 /// A print build's PDF/X and its standard, or why it wrote none.
 type PrintPdf = std::result::Result<(texcraft_compile::PdfX, Arc<Vec<u8>>), String>;
 
+/// The kinds of file a build can make, in the order the build log lists them.
+pub const OUTPUT_KINDS: [&str; 4] = ["pdf", "pdfx", "synctex", "log"];
+
+/// A file the last build made, as the build log lists it (`build.outputs`).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct BuildOutput {
+    /// One of [`OUTPUT_KINDS`]: the PDF, a print build's PDF/X, the SyncTeX data, the raw log.
+    pub kind: &'static str,
+    /// Its file name, after the main document's.
+    pub name: String,
+    pub bytes: usize,
+    /// Where it was last saved in this session (`build.save_output`), if it was.
+    pub saved: Option<String>,
+}
+
 /// Where builds run.
 enum Builder {
     #[cfg(not(target_arch = "wasm32"))]
@@ -170,6 +185,8 @@ pub struct Session {
     ai: ai::State,
     /// Spell checking: the dictionary, the word lists and each file's words.
     spelling: spelling::State,
+    /// Where each kind of build output was last saved (`build.save_output`).
+    saved_outputs: std::collections::BTreeMap<&'static str, PathBuf>,
 }
 
 impl Session {
@@ -229,6 +246,7 @@ impl Session {
             forge_problem: None,
             ai: ai::State::default(),
             spelling: spelling::State::default(),
+            saved_outputs: std::collections::BTreeMap::new(),
         }
     }
 
@@ -340,6 +358,52 @@ impl Session {
             Some(Ok((standard, pdfx))) => Ok((pdfx.clone(), standard.name())),
             Some(Err(why)) => Err(why.clone()),
         }
+    }
+
+    /// The files the last build made: its PDF, a print build's PDF/X, the SyncTeX data and the
+    /// raw log, each named after the main document. A build that failed has its log only.
+    pub fn outputs(&self) -> Vec<BuildOutput> {
+        OUTPUT_KINDS
+            .iter()
+            .filter_map(|kind| {
+                let bytes = self.output_data(kind)?.len();
+                let saved = self.saved_outputs.get(kind).map(|p| p.display().to_string());
+                Some(BuildOutput { kind, name: self.output_name(kind), bytes, saved })
+            })
+            .collect()
+    }
+
+    /// The contents of the last build's output of `kind`, if it made one.
+    pub(crate) fn output_data(&self, kind: &str) -> Option<Arc<Vec<u8>>> {
+        let last = self.last.as_ref()?;
+        match kind {
+            "pdf" => last.pdf.clone(),
+            "pdfx" => last.preflight.as_ref()?.pdfx.clone(),
+            "synctex" => last.synctex.clone(),
+            "log" => (!last.log.is_empty()).then(|| Arc::new(last.log.clone().into_bytes())),
+            _ => None,
+        }
+    }
+
+    /// The file name of an output of `kind`: the main document's name with the output's
+    /// extension (`main.pdf`, `main-print.pdf` for the PDF/X, `main.synctex`, `main.log`).
+    pub(crate) fn output_name(&self, kind: &str) -> String {
+        let stem = self.project.main().map(|m| m.file_name().rsplit_once('.').map_or(m.file_name(), |(s, _)| s)).unwrap_or("document");
+        match kind {
+            "pdfx" => format!("{stem}-print.pdf"),
+            other => format!("{stem}.{other}"),
+        }
+    }
+
+    /// Notes where an output of `kind` was saved, for Show in Folder.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn output_saved(&mut self, kind: &'static str, path: PathBuf) {
+        self.saved_outputs.insert(kind, path);
+    }
+
+    /// Where the output of `kind` was last saved in this session.
+    pub fn saved_output(&self, kind: &str) -> Option<&std::path::Path> {
+        self.saved_outputs.get(kind).map(PathBuf::as_path)
     }
 
     pub fn is_building(&self) -> bool {
@@ -751,6 +815,7 @@ impl Session {
         self.last = None;
         self.pdf = None;
         self.pdfx = None;
+        self.saved_outputs.clear();
     }
 
     /// Starts a build of the current sources; returns its job id.

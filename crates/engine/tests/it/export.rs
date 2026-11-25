@@ -124,3 +124,65 @@ fn a_failed_background_export_reports_its_reason() -> R {
     assert!(!path.exists());
     Ok(())
 }
+
+/// A print build that writes every output: the PDF, the PDF/X, the SyncTeX data and the log; or,
+/// failing, the log alone.
+struct Outputs(bool);
+
+impl Backend for Outputs {
+    fn name(&self) -> String {
+        "test".to_owned()
+    }
+    fn compile(&mut self, job: &Job) -> Outcome {
+        let mut o = Outcome::unavailable(job.id, "");
+        o.log = "This is the log.".to_owned();
+        if self.0 {
+            o.status = texcraft_compile::Status::Built;
+            o.pdf = Some(Arc::new(b"%PDF screen".to_vec()));
+            o.synctex = Some(Arc::new(b"SyncTeX Version:1".to_vec()));
+            o.preflight = Some(texcraft_compile::Preflight {
+                standard: texcraft_compile::PdfX::X4,
+                pdfx: Some(Arc::new(b"%PDF print".to_vec())),
+                checks: Vec::new(),
+                rules: Vec::new(),
+            });
+        } else {
+            o.status = texcraft_compile::Status::Failed;
+        }
+        o
+    }
+}
+
+fn kinds(s: &mut Session) -> Result<Vec<String>, String> {
+    let listed = s.execute("build.outputs", &json!({}))?;
+    Ok(listed["outputs"].as_array().into_iter().flatten().filter_map(|o| o["kind"].as_str().map(str::to_owned)).collect())
+}
+
+#[test]
+fn a_build_lists_its_outputs_and_each_saves_as_it_was_made() -> R {
+    let dir = temp("outputs")?;
+    let mut s = session(Box::new(Outputs(true)), "\\documentclass{article}");
+    assert!(s.execute("build.save_output", &json!({"output": "pdf", "path": "x.pdf"})).is_err(), "nothing to save before a build");
+    s.execute("build.compile", &json!({}))?;
+    s.wait();
+    assert_eq!(kinds(&mut s)?, ["pdf", "pdfx", "synctex", "log"]);
+    for (kind, bytes) in [("pdfx", &b"%PDF print"[..]), ("synctex", b"SyncTeX Version:1"), ("log", b"This is the log.")] {
+        let path = dir.join(kind);
+        s.execute("build.save_output", &json!({"output": kind, "path": path.display().to_string()}))?;
+        assert_eq!(std::fs::read(&path)?, bytes, "{kind} is saved as the build made it");
+    }
+    let listed = s.execute("build.outputs", &json!({}))?;
+    let saved = listed["outputs"].as_array().into_iter().flatten().filter(|o| o["saved"].is_string()).count();
+    assert_eq!(saved, 3, "the outputs saved say where: {listed}");
+    Ok(())
+}
+
+#[test]
+fn a_failed_build_offers_its_log_and_nothing_it_did_not_make() -> R {
+    let mut s = session(Box::new(Outputs(false)), "\\documentclass{article}");
+    s.execute("build.compile", &json!({}))?;
+    s.wait();
+    assert_eq!(kinds(&mut s)?, ["log"]);
+    assert!(s.execute("build.save_output", &json!({"output": "pdf", "path": "x.pdf"})).is_err(), "a PDF the build did not write");
+    Ok(())
+}
