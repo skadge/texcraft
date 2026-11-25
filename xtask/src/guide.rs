@@ -153,7 +153,10 @@ mod tests {
     }
 
     fn guide(pages: &[(&str, String)]) -> Vec<String> {
-        let dir = std::env::temp_dir().join(format!("texcraft-guide-check-{}-{}", std::process::id(), pages.len()));
+        // A folder per call: the tests run in parallel in one process.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("texcraft-guide-check-{}-{n}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         for (name, text) in pages {
