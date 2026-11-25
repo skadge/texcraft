@@ -93,6 +93,11 @@ mod web {
                         let (name, result, what) = match &change {
                             Change::Saved(name, project) => (name, store.put_project(name, project).await, project_failed),
                             Change::Deleted(name) => (name, store.delete_project(name).await, project_failed),
+                            Change::Versions { project, versions, blobs } => (
+                                project,
+                                store.put_versions(project, versions, blobs).await,
+                                t("A version of {project} could not be kept in this browser: {error}"),
+                            ),
                             Change::Thread { project, file, text } => (
                                 project,
                                 store.put_thread(project, file, text.as_deref()).await,

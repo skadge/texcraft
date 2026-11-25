@@ -1,9 +1,12 @@
 //! Projects kept by name in a library (the browser's projects, with no folders).
 
+use std::collections::BTreeMap;
+
 use serde_json::json;
 use texcraft_compile::Unavailable;
 use texcraft_engine::Session;
-use texcraft_engine::library::{Change, Library};
+use texcraft_engine::history::store::{Version, Versions};
+use texcraft_engine::library::{Change, Library, Stored};
 use texcraft_engine::project::ProjectPath;
 
 fn session() -> Session {
@@ -21,7 +24,10 @@ fn a_project_saved_by_name_opens_again_with_its_files_and_main_document() {
     assert!(!s.is_dirty());
     assert_eq!(s.dir().and_then(|d| d.to_str()), Some("Thesis"), "the name is trimmed");
     let changes = s.take_library_changes();
-    assert!(matches!(&changes[..], [Change::Saved(name, _)] if name == "Thesis"), "the shell is told what to store");
+    assert!(
+        matches!(&changes[..], [Change::Saved(name, _), Change::Versions { project, versions, .. }] if name == "Thesis" && project == "Thesis" && versions.len() == 1),
+        "the shell is told what to store: the project, and its first version"
+    );
 
     s.execute("project.new", &json!({})).unwrap();
     assert!(s.project().get(&ProjectPath::new("chapters/one.tex").unwrap()).is_none());
@@ -120,7 +126,7 @@ fn a_comment_made_before_the_first_save_is_saved_with_the_project() {
     s.execute("review.comment", &json!({"path": "main.tex", "start": 4, "end": 9, "text": "Which fox?"})).unwrap();
     assert!(s.take_library_changes().is_empty(), "nowhere to keep it yet");
     s.execute("project.save_as", &json!({"path": "Draft"})).unwrap();
-    assert!(matches!(&s.take_library_changes()[..], [Change::Saved(_, stored)] if stored.review.len() == 1));
+    assert!(matches!(&s.take_library_changes()[..], [Change::Saved(_, stored), Change::Versions { .. }] if stored.review.len() == 1));
     s.execute("project.new", &json!({})).unwrap();
     s.execute("project.open", &json!({"path": "Draft"})).unwrap();
     assert_eq!(first_thread_quote(&mut s).as_deref(), Some("quick"));
@@ -151,4 +157,147 @@ fn a_suggestion_is_kept_with_a_library_project_and_comes_back() {
     let id = list["threads"][0]["id"].clone();
     s.execute("review.accept", &json!({"id": id})).unwrap();
     assert_eq!(s.execute("file.read", &json!({"path": "main.tex"})).unwrap()["text"], "The slow brown fox.");
+}
+
+// The history of a library project (C8): a version per save, kept by the shell beside the project.
+
+fn write(s: &mut Session, text: &str) -> Result<(), String> {
+    s.execute("file.write", &json!({"path": "main.tex", "text": text})).map(drop)
+}
+
+/// The history's versions, newest first: each one's id and its changed paths with how they changed.
+fn versions(s: &mut Session) -> Result<Vec<(String, Vec<String>)>, String> {
+    let list = s.execute("history.list", &json!({}))?;
+    let commits = list["commits"].as_array().ok_or("no commits")?;
+    Ok(commits
+        .iter()
+        .map(|c| {
+            let changes = c["changes"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|ch| format!("{} {}", ch["change"].as_str().unwrap_or(""), ch["path"].as_str().unwrap_or("")))
+                .collect();
+            (c["id"].as_str().unwrap_or("").to_owned(), changes)
+        })
+        .collect())
+}
+
+#[test]
+fn each_save_that_changes_a_library_project_is_a_version_newest_first() -> Result<(), String> {
+    let mut s = session();
+    assert!(s.execute("history.list", &json!({})).is_err(), "an untitled project has no history");
+    write(&mut s, "first\n")?;
+    s.execute("project.save_as", &json!({"path": "Paper"}))?;
+    let saved = s.execute("project.save", &json!({}))?;
+    assert!(saved["history"]["commit"].is_null(), "a save that changed nothing is no version: {saved}");
+    write(&mut s, "second\n")?;
+    s.execute("file.new", &json!({"path": "intro.tex"}))?;
+    s.execute("project.save", &json!({}))?;
+    let list = versions(&mut s)?;
+    assert_eq!(list.len(), 2);
+    assert_eq!(list[0].1, ["added intro.tex", "modified main.tex"], "the newest first, with what it changed");
+    assert!(list[1].1.contains(&"added main.tex".to_owned()));
+    let added: usize = s.take_library_changes().iter().map(|c| if let Change::Versions { versions, .. } = c { versions.len() } else { 0 }).sum();
+    assert_eq!(added, 2, "the shell stores each version once");
+    let shown = s.execute("history.show", &json!({"commit": list[1].0, "path": "main.tex"}))?;
+    assert_eq!(shown["text"], "first\n");
+    let diff = s.execute("history.diff", &json!({"commit": list[0].0, "path": "main.tex"}))?;
+    assert_eq!((diff["added"].as_u64(), diff["removed"].as_u64()), (Some(1), Some(1)), "{diff}");
+    assert!(s.execute("history.commit", &json!({"message": "x"})).is_err(), "saving already makes the versions");
+    Ok(())
+}
+
+#[test]
+fn restoring_a_library_version_brings_it_back_unsaved_and_the_next_save_is_a_version() -> Result<(), String> {
+    let mut s = session();
+    write(&mut s, "old\n")?;
+    s.execute("project.save_as", &json!({"path": "Paper"}))?;
+    write(&mut s, "new\n")?;
+    s.execute("file.new", &json!({"path": "later.tex"}))?;
+    s.execute("project.save", &json!({}))?;
+    let first = versions(&mut s)?.last().map(|v| v.0.clone()).ok_or("no version")?;
+    s.execute("history.restore", &json!({"commit": first}))?;
+    assert_eq!(s.project().text(&ProjectPath::new("main.tex").unwrap()), Ok("old\n"));
+    assert!(s.project().get(&ProjectPath::new("later.tex").unwrap()).is_none(), "a file added since leaves");
+    assert!(s.is_dirty(), "restored as unsaved edits");
+    s.execute("project.save", &json!({}))?;
+    assert_eq!(versions(&mut s)?.len(), 3, "the history is never rewritten: the restore is a new version");
+    Ok(())
+}
+
+/// What the web shell keeps: each change applied, as it applies them to IndexedDB.
+#[derive(Default)]
+struct Shell {
+    projects: BTreeMap<String, Stored>,
+    versions: BTreeMap<String, Vec<Version>>,
+    blobs: BTreeMap<String, BTreeMap<String, Vec<u8>>>,
+}
+
+impl Shell {
+    fn keep(&mut self, changes: Vec<Change>) {
+        for change in changes {
+            match change {
+                Change::Saved(name, stored) => {
+                    self.projects.insert(name, stored);
+                }
+                Change::Deleted(name) => {
+                    self.projects.remove(&name);
+                    self.versions.remove(&name);
+                    self.blobs.remove(&name);
+                }
+                Change::Thread { .. } => {}
+                Change::Versions { project, versions, blobs } => {
+                    self.versions.entry(project.clone()).or_default().extend(versions);
+                    self.blobs.entry(project).or_default().extend(blobs);
+                }
+            }
+        }
+    }
+
+    /// The library the shell fills at the next start.
+    fn reload(&self) -> Library {
+        let mut library = Library::default();
+        for (name, stored) in &self.projects {
+            let mut stored = stored.clone();
+            // In any order, as a store's keys come back.
+            let mut versions = self.versions.get(name).cloned().unwrap_or_default();
+            versions.reverse();
+            stored.history = Versions::from_parts(versions, self.blobs.get(name).cloned().unwrap_or_default());
+            library.insert(name.clone(), stored);
+        }
+        library
+    }
+}
+
+#[test]
+fn the_history_the_shell_stores_comes_back_and_moves_with_a_renamed_project() -> Result<(), String> {
+    let mut shell = Shell::default();
+    let mut s = session();
+    write(&mut s, "one\n")?;
+    s.execute("project.save_as", &json!({"path": "Paper"}))?;
+    write(&mut s, "two\n")?;
+    s.execute("project.save", &json!({}))?;
+    shell.keep(s.take_library_changes());
+    let before = versions(&mut s)?;
+
+    let mut s = session();
+    s.use_library(shell.reload());
+    s.execute("project.open", &json!({"path": "Paper"}))?;
+    assert_eq!(versions(&mut s)?, before, "the same versions after a reload");
+    s.execute("project.rename", &json!({"name": "Thesis"}))?;
+    write(&mut s, "three\n")?;
+    s.execute("project.save", &json!({}))?;
+    shell.keep(s.take_library_changes());
+    assert!(!shell.versions.contains_key("Paper"), "nothing is left under the old name");
+
+    let mut s = session();
+    s.use_library(shell.reload());
+    s.execute("project.open", &json!({"path": "Thesis"}))?;
+    let after = versions(&mut s)?;
+    assert_eq!(after.len(), 3, "the history moved with the project and goes on");
+    assert_eq!(&after[1..], &before[..]);
+    let shown = s.execute("history.show", &json!({"commit": before[1].0, "path": "main.tex"}))?;
+    assert_eq!(shown["text"], "one\n", "the files' bytes came back too");
+    Ok(())
 }

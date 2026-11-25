@@ -32,6 +32,7 @@ use texcraft_project::{Project, ProjectPath};
 pub use texcraft_compile::{
     Diagnostic, Draft, Engine, Export, MAX_BLEED_MM, Options as BuildOptions, Outcome, Output, PdfX, Progress, Severity, Status,
 };
+pub use texcraft_history as history;
 pub use texcraft_project as project;
 
 /// What a command returns: a JSON value for automation, or a message for the user.

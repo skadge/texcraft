@@ -39,8 +39,8 @@ fn a_library_project_renamed_is_kept_under_its_new_name_only() -> R {
     assert!(s.is_dirty(), "renaming does not save the edits");
     let changes = s.take_library_changes();
     assert!(
-        matches!(&changes[..], [Change::Deleted(old), Change::Saved(new, _)] if old == "Draft" && new == "Thesis"),
-        "the shell moves the stored project: {changes:?}"
+        matches!(&changes[..], [Change::Deleted(old), Change::Saved(new, _), Change::Versions { project, .. }] if old == "Draft" && new == "Thesis" && project == "Thesis"),
+        "the shell moves the stored project and its history: {changes:?}"
     );
     Ok(())
 }

@@ -2,11 +2,14 @@
 //! session's library (store `projects`, by name), their review threads (store `reviews`, by
 //! `<project>/<thread file>`, each the text a project folder keeps in `.texcraft/review/`), the
 //! preferences (store `app`, key `prefs`, as JSON) and the recent projects' thumbnails (store
-//! `thumbnails`, by project).
+//! `thumbnails`, by project), and the projects' histories: their versions (store `versions`, by
+//! `<project>/<version id>`) and the bytes of the versions' files (store `blobs`, by
+//! `<project>/<blob id>`, each kept once however many versions have it).
 //!
 //! The threads have their own store, not a field of the project's value, so a comment stores one
 //! small value at once instead of rewriting the project's files. Version 1 had no `reviews`
-//! store: opening it makes the store, and its projects have no threads.
+//! store: opening it makes the store, and its projects have no threads. Version 2 had no
+//! `versions` and `blobs` stores: opening it makes them, and its projects' histories start empty.
 //!
 //! IndexedDB's requests call back; each is wrapped in a Promise here and awaited. Writes are
 //! awaited to their transaction's end, so an error reaches the user.
@@ -14,6 +17,7 @@
 use std::collections::BTreeMap;
 
 use js_sys::{Array, Object, Promise, Reflect, Uint8Array};
+use texcraft_engine::history::store::{Version, Versions};
 use texcraft_engine::library::Stored;
 use texcraft_ui_egui::Thumbnail;
 use wasm_bindgen::JsCast;
@@ -22,11 +26,13 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{IdbDatabase, IdbKeyRange, IdbObjectStore, IdbOpenDbRequest, IdbRequest, IdbTransaction, IdbTransactionMode};
 
 const NAME: &str = "texcraft";
-const VERSION: u32 = 2;
+const VERSION: u32 = 3;
 const PROJECTS: &str = "projects";
 const REVIEWS: &str = "reviews";
 const APP: &str = "app";
 const THUMBNAILS: &str = "thumbnails";
+const VERSIONS: &str = "versions";
+const BLOBS: &str = "blobs";
 
 fn why(e: JsValue) -> String {
     e.dyn_ref::<js_sys::Error>().map(|e| String::from(e.message())).or_else(|| e.as_string()).unwrap_or_else(|| format!("{e:?}"))
@@ -101,7 +107,7 @@ impl Store {
         let upgrade = Closure::<dyn FnMut()>::new(move || {
             let Ok(db) = upgrading.result().and_then(|r| r.dyn_into::<IdbDatabase>()) else { return };
             let names = db.object_store_names();
-            for store in [PROJECTS, REVIEWS, APP, THUMBNAILS] {
+            for store in [PROJECTS, REVIEWS, APP, THUMBNAILS, VERSIONS, BLOBS] {
                 if !names.contains(store)
                     && let Err(e) = db.create_object_store(store)
                 {
@@ -137,12 +143,26 @@ impl Store {
         committed(&tx).await
     }
 
-    /// The projects, each with its review threads.
+    /// The projects, each with its review threads and its history.
     pub async fn projects(&self) -> Result<Vec<(String, Stored)>, String> {
         let mut reviews: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
         for (key, text) in self.all(REVIEWS).await? {
             if let (Some((project, file)), Some(text)) = (key.split_once('/'), text.as_string()) {
                 reviews.entry(project.to_owned()).or_default().insert(file.to_owned(), text);
+            }
+        }
+        let mut versions: BTreeMap<String, Vec<Version>> = BTreeMap::new();
+        for (key, v) in self.all(VERSIONS).await? {
+            if let Some((project, id)) = key.split_once('/')
+                && let Some(version) = version_from(id, &v)
+            {
+                versions.entry(project.to_owned()).or_default().push(version);
+            }
+        }
+        let mut blobs: BTreeMap<String, BTreeMap<String, Vec<u8>>> = BTreeMap::new();
+        for (key, v) in self.all(BLOBS).await? {
+            if let (Some((project, id)), Ok(bytes)) = (key.split_once('/'), v.dyn_into::<Uint8Array>()) {
+                blobs.entry(project.to_owned()).or_default().insert(id.to_owned(), bytes.to_vec());
             }
         }
         Ok(self
@@ -152,9 +172,26 @@ impl Store {
             .filter_map(|(name, v)| {
                 let mut project = project_from(&v)?;
                 project.review = reviews.remove(&name).unwrap_or_default();
+                project.history = Versions::from_parts(versions.remove(&name).unwrap_or_default(), blobs.remove(&name).unwrap_or_default());
                 Some((name, project))
             })
             .collect())
+    }
+
+    /// Adds `versions` and the files' bytes `blobs` (by blob id) to project `name`'s history, in
+    /// one transaction.
+    pub async fn put_versions(&self, name: &str, versions: &[Version], blobs: &[(String, Vec<u8>)]) -> Result<(), String> {
+        let names = Array::of2(&JsValue::from_str(VERSIONS), &JsValue::from_str(BLOBS));
+        let tx = self.db.transaction_with_str_sequence_and_mode(&names, IdbTransactionMode::Readwrite).map_err(why)?;
+        let version_store = tx.object_store(VERSIONS).map_err(why)?;
+        let blob_store = tx.object_store(BLOBS).map_err(why)?;
+        for (id, bytes) in blobs {
+            blob_store.put_with_key(&Uint8Array::from(&bytes[..]), &JsValue::from_str(&thread_key(name, id))).map_err(why)?;
+        }
+        for version in versions {
+            version_store.put_with_key(&version_to(version), &JsValue::from_str(&thread_key(name, &version.id))).map_err(why)?;
+        }
+        committed(&tx).await
     }
 
     /// Both stores of a project, for one transaction.
@@ -190,11 +227,15 @@ impl Store {
         committed(&tx).await
     }
 
+    /// Deletes the project, its threads and its history.
     pub async fn delete_project(&self, name: &str) -> Result<(), String> {
-        let (tx, projects, reviews) = self.project_stores()?;
-        projects.delete(&JsValue::from_str(name)).map_err(why)?;
-        let threads: JsValue = threads_of(name)?.into();
-        reviews.delete(&threads).map_err(why)?;
+        let names: Array = [PROJECTS, REVIEWS, VERSIONS, BLOBS].iter().map(|n| JsValue::from_str(n)).collect();
+        let tx = self.db.transaction_with_str_sequence_and_mode(&names, IdbTransactionMode::Readwrite).map_err(why)?;
+        tx.object_store(PROJECTS).map_err(why)?.delete(&JsValue::from_str(name)).map_err(why)?;
+        let keys: JsValue = threads_of(name)?.into();
+        for store in [REVIEWS, VERSIONS, BLOBS] {
+            tx.object_store(store).map_err(why)?.delete(&keys).map_err(why)?;
+        }
         committed(&tx).await?;
         let (tx, store) = self.store(THUMBNAILS, IdbTransactionMode::Readwrite)?;
         store.delete(&JsValue::from_str(name)).map_err(why)?;
@@ -238,13 +279,13 @@ impl Store {
     }
 }
 
-/// The key of thread `file` of project `name` in the `reviews` store; a project's name has no `/`
-/// (`library::check_name`).
+/// The key of thread `file` of project `name` in the `reviews` store (and of a version or a blob
+/// in theirs); a project's name has no `/` (`library::check_name`).
 fn thread_key(name: &str, file: &str) -> String {
     format!("{name}/{file}")
 }
 
-/// Every key of project `name`'s threads: from `<name>/` up to `<name>0` (`0` follows `/`).
+/// Every key of project `name`'s threads (or versions, or blobs): from `<name>/` up to `<name>0` (`0` follows `/`).
 fn threads_of(name: &str) -> Result<IdbKeyRange, String> {
     IdbKeyRange::bound_with_lower_open_and_upper_open(&JsValue::from_str(&format!("{name}/")), &JsValue::from_str(&format!("{name}0")), false, true)
         .map_err(why)
@@ -272,5 +313,45 @@ fn project_from(v: &JsValue) -> Option<Stored> {
     let names: Array = get(v, "names").dyn_into().ok()?;
     let contents: Array = get(v, "contents").dyn_into().ok()?;
     let files = names.iter().zip(contents.iter()).filter_map(|(n, c)| Some((n.as_string()?, c.dyn_into::<Uint8Array>().ok()?.to_vec()))).collect();
-    Some(Stored { files, main: get(v, "main").as_string(), saved: get(v, "saved").as_f64().unwrap_or(0.0) as i64, review: BTreeMap::new() })
+    Some(Stored {
+        files,
+        main: get(v, "main").as_string(),
+        saved: get(v, "saved").as_f64().unwrap_or(0.0) as i64,
+        review: BTreeMap::new(),
+        history: Versions::default(),
+    })
+}
+
+/// A version as IndexedDB keeps it: `{parent, time, author, message, paths, blobs}`, its files'
+/// paths and blob ids in two arrays. Its id is its key.
+fn version_to(version: &Version) -> JsValue {
+    let paths = Array::new();
+    let blobs = Array::new();
+    for (path, blob) in &version.files {
+        paths.push(&JsValue::from_str(path));
+        blobs.push(&JsValue::from_str(blob));
+    }
+    object(&[
+        ("parent", version.parent.as_deref().map_or(JsValue::NULL, JsValue::from_str)),
+        ("time", JsValue::from(version.time as f64)),
+        ("author", JsValue::from_str(&version.author)),
+        ("message", JsValue::from_str(&version.message)),
+        ("paths", paths.into()),
+        ("blobs", blobs.into()),
+    ])
+    .into()
+}
+
+fn version_from(id: &str, v: &JsValue) -> Option<Version> {
+    let paths: Array = get(v, "paths").dyn_into().ok()?;
+    let blobs: Array = get(v, "blobs").dyn_into().ok()?;
+    let files = paths.iter().zip(blobs.iter()).filter_map(|(p, b)| Some((p.as_string()?, b.as_string()?))).collect();
+    Some(Version {
+        id: id.to_owned(),
+        parent: get(v, "parent").as_string(),
+        time: get(v, "time").as_f64()? as i64,
+        author: get(v, "author").as_string().unwrap_or_default(),
+        message: get(v, "message").as_string().unwrap_or_default(),
+        files,
+    })
 }

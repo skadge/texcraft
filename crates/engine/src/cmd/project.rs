@@ -162,10 +162,9 @@ fn save_to(s: &mut Session, dir: &Path) -> Result<Value> {
     }
     s.dir = Some(dir.to_path_buf());
     s.dirty = false;
-    if s.library.is_none() {
-        // The project is saved either way; the history says what became of the commit.
-        result["history"] = super::history::after_save(s, moved);
-    }
+    // The project is saved either way; the history says what became of the version.
+    result["history"] =
+        if s.library.is_some() { super::history::after_library_save(s, &dir.display().to_string()) } else { super::history::after_save(s, moved) };
     Ok(result)
 }
 

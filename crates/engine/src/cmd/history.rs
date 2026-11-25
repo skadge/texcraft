@@ -1,10 +1,13 @@
 //! The project's history (docs/ROADMAP.md, C8): the git repository its folder is in. A folder in
 //! none becomes one on its first save and each save of it is a commit; a repository someone else
 //! made is committed to only when asked (`history.commit`).
+//!
+//! A project of the library (the browser) keeps its history there instead, as values: each save
+//! that changed it is a version, and the same commands read it.
 
 use base64::Engine as _;
 use serde_json::{Value, json};
-use texcraft_history::{History, Owner, Person, Snapshot};
+use texcraft_history::{History, Owner, Person, Snapshot, Versioned};
 use texcraft_project::{Contents, ProjectPath};
 
 use super::{CommandSpec, always, path_param, string};
@@ -111,12 +114,22 @@ fn commit_schema() -> Value {
 fn has_history(s: &Session) -> Result<()> {
     match (&s.history, &s.library) {
         (Some(_), _) => Ok(()),
-        (None, Some(_)) => Err("A project's history is not kept in the browser yet.".to_owned()),
+        (None, Some(_)) => library_history(s).map(drop),
         (None, None) => Err("The project has no history yet: save it in a folder first.".to_owned()),
     }
 }
 
+/// The history of the open project of the library.
+fn library_history(s: &Session) -> Result<&texcraft_history::store::Versions> {
+    let library = s.library.as_ref().ok_or("The project is not kept in the browser.")?;
+    let name = s.dir.as_ref().map(|d| d.display().to_string()).ok_or("The project has no history yet: save it first.")?;
+    library.history(&name).ok_or_else(|| "The project has no history yet: save it first.".to_owned())
+}
+
 fn can_commit(s: &Session) -> Result<()> {
+    if s.library.is_some() {
+        return Err("In the browser every save that changes the project is a version: there is nothing to commit.".to_owned());
+    }
     has_history(s)?;
     if s.dirty { Err("Save the project first: a commit holds the files as saved.".to_owned()) } else { Ok(()) }
 }
@@ -132,6 +145,10 @@ fn allowed(s: &Session, history: &History, access: Access) -> Result<()> {
 /// Finds the repository the project's folder is in (opening a folder: none is made).
 pub(super) fn find(s: &mut Session) {
     s.history = None;
+    if s.library.is_some() {
+        // A project of the library has a name, not a folder: its history is in the library.
+        return;
+    }
     let Some(dir) = s.dir.clone() else { return };
     match History::find(&dir) {
         Ok(Some(history)) => match allowed(s, &history, Access::Read) {
@@ -169,6 +186,20 @@ fn commit_save(s: &mut Session, moved: bool) -> Result<Value> {
     Ok(json!({"repository": "ours", "commit": id}))
 }
 
+/// After the project was saved in the library as `name`: records the save as a version of its
+/// history. Says what was done.
+pub(super) fn after_library_save(s: &mut Session, name: &str) -> Value {
+    let recorded = snapshot(s).and_then(|snapshot| {
+        let author = s.author.as_ref().map_or_else(|| "TeXCraft".to_owned(), |a| a.name.clone());
+        let now = s.now();
+        s.library.as_mut().ok_or_else(|| "The project is not kept in the browser.".to_owned())?.record(name, &snapshot, SAVE_MESSAGE, &author, now)
+    });
+    match recorded {
+        Ok(id) => json!({"repository": "ours", "commit": id}),
+        Err(e) => json!({"repository": "ours", "commit": null, "error": e}),
+    }
+}
+
 /// Commits the session's files and review as they are with `message`; none when nothing changed.
 fn commit_now(s: &mut Session, message: &str) -> Result<Option<String>> {
     let snapshot = snapshot(s)?;
@@ -189,6 +220,12 @@ fn snapshot(s: &mut Session) -> Result<Snapshot> {
 
 /// The repository the project is in, for `project.open` and `history.status`.
 pub(super) fn status_of(s: &Session) -> Value {
+    if s.library.is_some() {
+        let Ok(versions) = library_history(s) else { return json!({"repository": null}) };
+        // Kept like a repository TeXCraft made: every save is a version.
+        let name = s.dir.as_ref().map(|d| d.display().to_string());
+        return json!({"repository": "ours", "kept": "browser", "folder": name, "prefix": "", "branch": null, "head": versions.head()});
+    }
     let Some(h) = &s.history else { return json!({"repository": null}) };
     let head = h.head();
     json!({
@@ -205,7 +242,12 @@ fn status(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(status_of(s))
 }
 
-fn history(s: &Session, access: Access) -> Result<&History> {
+/// The project's history: its folder's repository (agents: inside their roots), or its versions
+/// in the library.
+fn history(s: &Session, access: Access) -> Result<&dyn Versioned> {
+    if s.library.is_some() {
+        return Ok(library_history(s)?);
+    }
     let history = s.history.as_ref().ok_or("The project has no history yet: save it in a folder first.")?;
     allowed(s, history, access)?;
     Ok(history)
@@ -392,6 +434,7 @@ fn restore(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn commit(s: &mut Session, p: &Value) -> Result<Value> {
+    can_commit(s)?;
     let message = string(p, "message")?.trim().to_owned();
     if message.is_empty() {
         return Err("A commit needs a message.".to_owned());
