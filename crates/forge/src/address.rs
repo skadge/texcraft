@@ -161,6 +161,11 @@ impl Address {
         encode(&self.path)
     }
 
+    /// The project's address for git over HTTPS.
+    pub fn clone_url(&self) -> String {
+        format!("{}/{}.git", self.instance, self.path)
+    }
+
     /// The project's page.
     pub fn web_url(&self) -> String {
         format!("{}/{}", self.instance, self.path)

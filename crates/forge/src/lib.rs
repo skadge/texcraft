@@ -15,6 +15,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod address;
+pub mod create;
 pub mod fake;
 mod forge;
 mod github;
@@ -112,6 +113,10 @@ pub enum Error {
     Busy { branch: String },
     /// A new branch's name git does not accept.
     BranchName(String),
+    /// A new repository's name the forges do not accept: why.
+    Name(String),
+    /// The owner has a repository of that name already.
+    NameTaken { forge: Service, name: String, owner: Option<String> },
     /// Signing in did not work, or cannot here: why, in words.
     SignIn(String),
     /// There is nothing to commit.
@@ -183,6 +188,13 @@ impl std::fmt::Display for Error {
                 write!(f, "Nothing was committed: the branch {branch} kept getting new commits while yours was made. Try again in a moment.")
             }
             Error::BranchName(why) => write!(f, "This cannot be a branch's name: {why}."),
+            Error::Name(why) => f.write_str(why),
+            Error::NameTaken { forge, name, owner: Some(owner) } => {
+                write!(f, "{owner} has a repository named {name} on {} already: choose another name.", forge.name())
+            }
+            Error::NameTaken { forge, name, owner: None } => {
+                write!(f, "You have a repository named {name} on {} already: choose another name.", forge.name())
+            }
             Error::SignIn(why) => f.write_str(why),
             Error::Nothing => f.write_str("Nothing to commit: the files are as on the branch."),
             Error::Stopped => f.write_str("The operation on the forge stopped unexpectedly."),

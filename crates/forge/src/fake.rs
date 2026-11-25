@@ -62,6 +62,14 @@ struct State {
     /// The projects the instance lists: those the user reaches (its own first), and public ones
     /// only a search finds.
     listed: Vec<FakeListed>,
+    /// The signed-in account's name (GitHub's login, GitLab's username).
+    user: String,
+    /// Its organisations (GitHub) or groups (GitLab): id and path.
+    groups: Vec<(u64, String)>,
+    /// Repositories that exist already, by path, besides the fake's own.
+    taken: std::collections::BTreeSet<String>,
+    /// The bodies of the requests that made repositories.
+    created: Vec<Value>,
 }
 
 /// A project the fake lists or finds.
@@ -127,6 +135,44 @@ impl Fake {
         let changes: Vec<(&str, Option<&[u8]>)> = files.iter().map(|(p, b)| (*p, Some(*b))).collect();
         fake.push("main", &changes);
         fake
+    }
+
+    /// An account named `user` on `instance` (github.com for GitHub) with no repository yet,
+    /// whose API accepts `token`: repositories are made on it ([`crate::create`]), and the first
+    /// one made becomes the fake's project.
+    pub fn account(service: Service, instance: &str, user: &str, token: &str) -> Self {
+        let instance = if service == Service::GitHub { GITHUB_COM } else { instance };
+        let state = State {
+            service,
+            instance: instance.to_owned(),
+            token: token.to_owned(),
+            can_push: true,
+            per_page: 100,
+            link_header: true,
+            user: user.to_owned(),
+            ..Default::default()
+        };
+        Self { state: Arc::new(Mutex::new(state)) }
+    }
+
+    /// An organisation (GitHub) or a group (GitLab) the account can make repositories in.
+    pub fn add_group(&self, id: u64, path: &str) {
+        self.lock().groups.push((id, path.to_owned()));
+    }
+
+    /// A repository that exists already at `path` (`owner/name`).
+    pub fn take(&self, path: &str) {
+        self.lock().taken.insert(path.to_owned());
+    }
+
+    /// The bodies of the requests that made repositories, in order.
+    pub fn created(&self) -> Vec<Value> {
+        self.lock().created.clone()
+    }
+
+    /// The fake's project's path (the repository made last, for an account).
+    pub fn path(&self) -> String {
+        self.lock().path.clone()
     }
 
     fn lock(&self) -> MutexGuard<'_, State> {
@@ -397,6 +443,17 @@ impl State {
         if self.service == Service::GitHub {
             return self.github(request);
         }
+        let api = format!("{}/api/v4", self.instance);
+        if request.method == "GET" && request.url == format!("{api}/user") {
+            return json_response(200, &json!({"id": 7, "username": self.user, "name": self.user}));
+        }
+        if request.method == "GET" && request.url.starts_with(&format!("{api}/groups?")) {
+            let groups: Vec<Value> = self.groups.iter().map(|(id, path)| json!({"id": id, "full_path": path})).collect();
+            return json_response(200, &Value::Array(groups));
+        }
+        if request.method == "POST" && request.url == format!("{api}/projects") {
+            return self.gitlab_create(request);
+        }
         if request.url.starts_with(&format!("{}/api/v4/projects?", self.instance)) {
             return self.gitlab_projects(request);
         }
@@ -493,6 +550,8 @@ impl State {
             (Some(start), None) if self.commits.contains_key(start) => start.to_owned(),
             (Some(_), None) => return message(404, "404 Commit Not Found"),
             (None, Some(head)) => head.clone(),
+            // An empty project takes a first commit on a new branch.
+            (None, None) if self.branches.is_empty() => String::new(),
             (None, None) => return message(400, "You can only create or edit files when you are on a branch"),
         };
         let mut files = self.commits.get(&parent).map(|c| c.files.clone()).unwrap_or_default();
@@ -540,8 +599,9 @@ impl State {
                 _ => return message(400, "unknown action"),
             }
         }
-        let id = new_commit(self, branch, Some(parent.clone()), files);
-        json_response(201, &json!({"id": id, "parent_ids": [parent]}))
+        let parent = Some(parent).filter(|p| !p.is_empty());
+        let id = new_commit(self, branch, parent.clone(), files);
+        json_response(201, &json!({"id": id, "parent_ids": parent.into_iter().collect::<Vec<_>>()}))
     }
 }
 
@@ -573,6 +633,17 @@ impl State {
         }
         if request.url.starts_with("https://api.github.com/search/repositories?") {
             return self.github_search(request);
+        }
+        if request.method == "GET" && request.url == "https://api.github.com/user" {
+            return json_response(200, &json!({"login": self.user, "name": self.user}));
+        }
+        if request.method == "GET" && request.url.starts_with("https://api.github.com/user/orgs") {
+            let orgs: Vec<Value> = self.groups.iter().map(|(id, path)| json!({"id": id, "login": path})).collect();
+            return json_response(200, &Value::Array(orgs));
+        }
+        if request.method == "POST" && (request.url == "https://api.github.com/user/repos" || request.url.starts_with("https://api.github.com/orgs/"))
+        {
+            return self.github_create(request);
         }
         let prefix = format!("https://api.github.com/repos/{}", self.path);
         let Some(rest) = request.url.strip_prefix(&prefix) else { return message(404, "Not Found") };
@@ -851,6 +922,69 @@ impl State {
             .map(github_repo)
             .collect();
         json_response(200, &json!({"total_count": items.len(), "incomplete_results": false, "items": items}))
+    }
+}
+
+impl State {
+    /// Takes repository `path` as the fake's project, empty; a refusal when it exists already.
+    fn make_repository(&mut self, path: String, body: &Value) -> bool {
+        if self.taken.contains(&path) || (!self.path.is_empty() && self.path == path) {
+            return false;
+        }
+        self.created.push(body.clone());
+        self.taken.insert(path.clone());
+        self.path = path;
+        self.branches.clear();
+        self.default_branch = Some("main".to_owned());
+        true
+    }
+
+    fn github_create(&mut self, request: &Request) -> Response {
+        let body = serde_json::from_slice::<Value>(request.body.as_deref().unwrap_or_default()).unwrap_or(Value::Null);
+        let Some(name) = body["name"].as_str() else { return message(422, "Validation Failed") };
+        let owner = match request.url.strip_prefix("https://api.github.com/orgs/").and_then(|r| r.strip_suffix("/repos")) {
+            Some(org) if self.groups.iter().any(|(_, g)| g == org) => org.to_owned(),
+            Some(_) => return message(404, "Not Found"),
+            None => self.user.clone(),
+        };
+        let path = format!("{owner}/{name}");
+        if !self.make_repository(path.clone(), &body) {
+            return json_response(
+                422,
+                &json!({"message": "Repository creation failed.", "errors": [{"resource": "Repository", "code": "custom", "field": "name", "message": "name already exists on this account"}]}),
+            );
+        }
+        if body["auto_init"] == true {
+            let readme = b"# README\n";
+            let id = texcraft_history::store::blob_id(readme).unwrap_or_default();
+            self.blobs.insert(id.clone(), readme.to_vec());
+            let files = BTreeMap::from([("README.md".to_owned(), Entry { mode: "100644".to_owned(), id })]);
+            new_commit(self, "main", None, files);
+        }
+        json_response(
+            201,
+            &json!({"id": 4242, "full_name": path, "html_url": format!("{}/{path}", self.instance), "clone_url": format!("{}/{path}.git", self.instance), "default_branch": "main", "private": body["private"]}),
+        )
+    }
+
+    fn gitlab_create(&mut self, request: &Request) -> Response {
+        let body = serde_json::from_slice::<Value>(request.body.as_deref().unwrap_or_default()).unwrap_or(Value::Null);
+        let Some(name) = body["path"].as_str().or(body["name"].as_str()) else { return message(400, "name is missing") };
+        let owner = match body["namespace_id"].as_u64() {
+            Some(id) => match self.groups.iter().find(|(g, _)| *g == id) {
+                Some((_, path)) => path.clone(),
+                None => return message(404, "404 Namespace Not Found"),
+            },
+            None => self.user.clone(),
+        };
+        let path = format!("{owner}/{name}");
+        if !self.make_repository(path.clone(), &body) {
+            return json_response(400, &json!({"message": {"name": ["has already been taken"], "path": ["has already been taken"]}}));
+        }
+        json_response(
+            201,
+            &json!({"id": 42, "path_with_namespace": path, "web_url": format!("{}/{path}", self.instance), "http_url_to_repo": format!("{}/{path}.git", self.instance), "default_branch": "main", "visibility": body["visibility"]}),
+        )
     }
 }
 
