@@ -1,8 +1,10 @@
-//! Embeds the craft-i18n interface catalogs (storytold/craft-i18n) from `CRAFT_I18N_DIR`, following
-//! craft-i18n's `docs/integration.md`: `OUT_DIR/craft_i18n.rs` holds `CRAFT_I18N`, one
-//! (locale, shared catalog, TeXCraft catalog) entry per locale that has a `texcraft.tsv`. Without the
-//! variable the list is empty and the interface is English only; `CRAFT_I18N_REQUIRED=1` (releases)
-//! makes that an error.
+//! Embeds TeXCraft's interface catalogs. Until TeXCraft's cutover to storytold/craft-i18n
+//! (its `docs/integration.md`, "Before the app's cutover"), they live in this repository as
+//! `i18n/<locale>.tsv`, in craft-i18n's catalog format; `OUT_DIR/craft_i18n.rs` holds `CRAFT_I18N`,
+//! one (locale, shared catalog, TeXCraft catalog) entry per file there. When `CRAFT_I18N_DIR` names a
+//! craft-i18n checkout, each locale's shared `locales/<locale>/common.tsv` is embedded too, so the
+//! strings every Crafting App shares show translated; without it the shared catalog is empty.
+//! `CRAFT_I18N_REQUIRED=1` makes a missing or invalid checkout an error.
 //!
 //! Also embeds the interface faces from storytold/craft-fonts' opt-in Latin catalog
 //! (`fonts/latin-manifest.txt`) when `CRAFT_FONTS_DIR` names a checkout: Inter for the interface,
@@ -12,31 +14,59 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-const APP_CATALOG: &str = "texcraft.tsv";
-
 fn main() {
     ui_faces();
     icons();
+    catalogs();
+}
+
+/// `CRAFT_I18N`: the in-repository catalogs, each with craft-i18n's shared catalog of its locale
+/// when `CRAFT_I18N_DIR` is set.
+fn catalogs() {
     println!("cargo::rerun-if-env-changed=CRAFT_I18N_DIR");
     println!("cargo::rerun-if-env-changed=CRAFT_I18N_REQUIRED");
     let required = std::env::var("CRAFT_I18N_REQUIRED").is_ok_and(|v| v.trim() == "1");
-    let entries = match std::env::var_os("CRAFT_I18N_DIR").filter(|d| !d.is_empty()) {
-        Some(dir) => locales(&PathBuf::from(dir).join("locales")).unwrap_or_else(|e| {
-            let level = if required { "error" } else { "warning" };
-            println!("cargo::{level}=CRAFT_I18N_DIR: {e}; the interface is English only");
-            Vec::new()
-        }),
+    let shared_dir = match std::env::var_os("CRAFT_I18N_DIR").filter(|d| !d.is_empty()) {
+        Some(dir) => shared_locales(&PathBuf::from(dir).join("locales")).map_or_else(
+            |e| {
+                let level = if required { "error" } else { "warning" };
+                println!("cargo::{level}=CRAFT_I18N_DIR: {e}; strings shared with the other Crafting Apps show from TeXCraft's own catalogs only");
+                None
+            },
+            Some,
+        ),
         None => {
             if required {
                 println!("cargo::error=CRAFT_I18N_REQUIRED=1 but CRAFT_I18N_DIR is unset");
             }
-            Vec::new()
+            None
         }
     };
-    let mut out = String::from("/// The embedded craft-i18n catalogs (build.rs).\npub static CRAFT_I18N: &craft_i18n::Embedded = &[\n");
-    for (code, shared, app) in entries {
-        let shared = shared.map_or_else(|| "\"\"".to_owned(), |p| format!("include_str!({p:?})"));
-        let _ = writeln!(out, "    ({code:?}, {shared}, include_str!({app:?})),");
+    let own = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../i18n");
+    println!("cargo::rerun-if-changed={}", own.display());
+    let mut entries: Vec<(String, PathBuf)> = std::fs::read_dir(&own)
+        .map(|list| {
+            list.flatten()
+                .filter_map(|e| {
+                    let path = e.path();
+                    let code = path.file_name()?.to_str()?.strip_suffix(".tsv")?.to_ascii_lowercase();
+                    Some((code, path))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    entries.sort();
+    let mut out = String::from(
+        "/// The embedded catalogs (build.rs): (locale, craft-i18n's shared catalog, TeXCraft's own).\npub static CRAFT_I18N: &craft_i18n::Embedded = &[\n",
+    );
+    for (code, app) in entries {
+        println!("cargo::rerun-if-changed={}", app.display());
+        let shared = shared_dir.as_ref().map(|d| d.join(&code).join("common.tsv")).filter(|p| p.is_file());
+        if let Some(p) = &shared {
+            println!("cargo::rerun-if-changed={}", p.display());
+        }
+        let shared = shared.map_or_else(|| "\"\"".to_owned(), |p| format!("include_str!({:?})", p.display().to_string()));
+        let _ = writeln!(out, "    ({code:?}, {shared}, include_str!({:?})),", app.display().to_string());
     }
     out.push_str("];\n");
     let target = PathBuf::from(std::env::var_os("OUT_DIR").unwrap_or_default()).join("craft_i18n.rs");
@@ -45,30 +75,18 @@ fn main() {
     }
 }
 
-type Locale = (String, Option<PathBuf>, PathBuf);
-
-fn locales(dir: &Path) -> Result<Vec<Locale>, String> {
+/// The checkout's `locales/` directory, checked to be one.
+fn shared_locales(dir: &Path) -> Result<PathBuf, String> {
     // Not canonicalised (Windows `\\?\` paths break include_str!), but must be absolute, since
     // include_str! resolves relative paths against the generated file.
     if !dir.is_absolute() {
         return Err(format!("{} is not an absolute path", dir.display()));
     }
-    println!("cargo::rerun-if-changed={}", dir.display());
-    let list = std::fs::read_dir(dir).map_err(|e| format!("{} is not a craft-i18n checkout ({e})", dir.display()))?;
-    let mut out = Vec::new();
-    for entry in list.flatten() {
-        let path = entry.path();
-        let Some(code) = path.file_name().and_then(|n| n.to_str()).map(str::to_owned) else { continue };
-        let app = path.join(APP_CATALOG);
-        if !app.is_file() {
-            continue;
-        }
-        println!("cargo::rerun-if-changed={}", app.display());
-        let shared = Some(path.join("common.tsv")).filter(|p| p.is_file());
-        out.push((code, shared, app));
+    if !dir.is_dir() {
+        return Err(format!("{} is not a craft-i18n checkout", dir.display()));
     }
-    out.sort();
-    Ok(out)
+    println!("cargo::rerun-if-changed={}", dir.display());
+    Ok(dir.to_path_buf())
 }
 
 /// (name used in the app, family, style) of the faces embedded from the Latin catalog.

@@ -3,6 +3,7 @@
 mod ai;
 mod ai_make_ask;
 mod carets;
+mod catalogs;
 mod closing;
 mod completion;
 mod contrast;
