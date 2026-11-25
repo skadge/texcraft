@@ -40,7 +40,7 @@ pub struct WebWorker {
     inbox: Rc<RefCell<VecDeque<JsValue>>>,
     /// Why there is no worker, when it could not start.
     error: Option<String>,
-    running: Option<(u64, Option<String>)>,
+    running: Option<(u64, Option<String>, crate::Options)>,
     waiting: Option<Job>,
     progress: Progress,
     draft: Option<Draft>,
@@ -95,7 +95,7 @@ impl WebWorker {
     }
 
     pub fn running(&self) -> Option<u64> {
-        self.running.as_ref().map(|(id, _)| *id)
+        self.running.as_ref().map(|(id, _, _)| *id)
     }
 
     /// Starts `job` now, or after the running one (replacing a job already waiting).
@@ -117,7 +117,7 @@ impl WebWorker {
         let dir = main_dir(&job);
         let msg = message("build", job.id as f64, &job);
         self.send(msg.into());
-        self.running = Some((job.id, dir));
+        self.running = Some((job.id, dir, job.options));
         self.progress = Progress::default();
         self.draft = None;
         self.started = js_sys::Date::now();
@@ -226,6 +226,24 @@ fn exported(msg: &JsValue) -> Exported {
     Exported { data, media: files }
 }
 
+/// retex's command-line flags for the kind of PDF `options` ask for (as `retex --help` has them):
+/// `--accessible`, or the PDF and a PDF/X beside it (`<job>.pdf-x4.pdf`) with its bleed and crop
+/// marks.
+fn output_flags(options: &crate::Options) -> Vec<String> {
+    match options.output {
+        crate::Output::Screen => Vec::new(),
+        crate::Output::Accessible => vec!["--accessible".to_owned()],
+        crate::Output::Print => {
+            let mut flags = vec![format!("-output-format=pdf,{}", options.pdfx.format())];
+            flags.push(format!("--bleed={}mm", options.bleed_mm.clamp(0.0, crate::MAX_BLEED_MM)));
+            if options.crop_marks {
+                flags.push("--crop-marks".to_owned());
+            }
+            flags
+        }
+    }
+}
+
 /// A `build` or `export` message for `job`: the main document's name and folder, the project's
 /// files at their paths, retex's extra arguments.
 fn message(kind: &str, id: f64, job: &Job) -> Object {
@@ -255,6 +273,12 @@ fn message(kind: &str, id: f64, job: &Job) -> Object {
     if job.options.draft_images {
         args.push(&"--draft-images".into());
     }
+    // The kind of PDF, for a build: an export sets its own `-output-format`.
+    if kind == "build" {
+        for flag in output_flags(&job.options) {
+            args.push(&flag.into());
+        }
+    }
     let msg = Object::new();
     for (k, v) in [
         ("type", JsValue::from(kind)),
@@ -274,7 +298,7 @@ fn message(kind: &str, id: f64, job: &Job) -> Object {
 impl WebWorker {
     /// Takes the messages that arrived; returns the running job's outcome when it ended.
     fn receive(&mut self) -> Option<Outcome> {
-        let (id, dir) = self.running.clone()?;
+        let (id, dir, options) = self.running.clone()?;
         if let Some(error) = &self.error {
             return Some(Outcome::unavailable(id, error.clone()));
         }
@@ -306,7 +330,9 @@ impl WebWorker {
                     }
                     let output = get(&msg, "output").as_string().unwrap_or_default();
                     let seconds = get(&msg, "seconds").as_f64().unwrap_or(0.0);
-                    return Some(records::outcome(id, &output, dir.as_deref(), bytes(get(&msg, "pdf")), bytes(get(&msg, "synctex")), seconds));
+                    let written =
+                        records::Written { pdf: bytes(get(&msg, "pdf")), synctex: bytes(get(&msg, "synctex")), pdfx: bytes(get(&msg, "pdfx")) };
+                    return Some(records::outcome(id, &output, dir.as_deref(), &options, written, seconds));
                 }
                 _ => {}
             }

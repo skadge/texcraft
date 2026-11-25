@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 
-use crate::{Diagnostic, DiagnosticFix, Event, Outcome, Severity, Status};
+use crate::{Diagnostic, DiagnosticFix, Event, Options, Outcome, Output, PdfxRule, Preflight, PrintCheck, Severity, Status};
 
 /// One line of retex's output, read.
 #[derive(Debug, Clone, PartialEq)]
@@ -25,6 +25,10 @@ pub enum Record {
     Finished {
         pages: u32,
     },
+    /// A print check of the PDF/X.
+    PrintCheck(PrintCheck),
+    /// The PDF/X's rules and their problems.
+    Pdfx(Vec<PdfxRule>),
 }
 
 fn text(v: &Value, key: &str) -> Option<String> {
@@ -65,13 +69,17 @@ fn project_file(file: &str, main_dir: Option<&str>) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join("/"))
 }
 
-fn diagnostic(v: &Value, main_dir: Option<&str>) -> Option<Diagnostic> {
-    let severity = match v.get("severity")?.as_str()? {
+fn severity(v: &Value) -> Option<Severity> {
+    Some(match v.get("severity")?.as_str()? {
         "error" => Severity::Error,
         "warning" => Severity::Warning,
         "note" => Severity::Note,
         _ => Severity::Hint,
-    };
+    })
+}
+
+fn diagnostic(v: &Value, main_dir: Option<&str>) -> Option<Diagnostic> {
+    let severity = severity(v)?;
     let fixes = v
         .get("fixes")
         .and_then(Value::as_array)
@@ -86,10 +94,11 @@ fn diagnostic(v: &Value, main_dir: Option<&str>) -> Option<Diagnostic> {
             })
         })
         .collect();
+    let message = v.get("message")?.as_str()?.to_owned();
     Some(Diagnostic {
         severity,
-        message: v.get("message")?.as_str()?.to_owned(),
-        origin: text(v, "origin"),
+        origin: crate::origin(text(v, "origin"), &message),
+        message,
         file: text(v, "file").and_then(|f| project_file(&f, main_dir)),
         line: number(v, "line"),
         column: number(v, "column"),
@@ -125,22 +134,68 @@ pub fn parse(line: &str, main_dir: Option<&str>) -> Option<Record> {
         }
         "symbols" => Some(Record::Symbols(v)),
         "finished" => Some(Record::Finished { pages: number(&v, "pages").unwrap_or(0) }),
+        "print_check" => print_check(&v, main_dir).map(Record::PrintCheck),
+        "pdfx" => Some(Record::Pdfx(
+            v.get("rules")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|r| Some(PdfxRule { rule: text(r, "rule")?, problems: texts(r, "problems") }))
+                .collect(),
+        )),
         _ => None,
     }
 }
 
-/// The outcome of a run of retex's command line, from its whole output and the files it
-/// wrote.
-pub fn outcome(job: u64, output: &str, main_dir: Option<&str>, pdf: Option<Vec<u8>>, synctex: Option<Vec<u8>>, seconds: f64) -> Outcome {
+/// A `print_check` record (retex's `json.rs`): its page from 1, its area in points.
+fn print_check(v: &Value, main_dir: Option<&str>) -> Option<PrintCheck> {
+    let area = v.get("area");
+    let f = |k: &str| area.and_then(|a| a.get(k)).and_then(Value::as_f64).unwrap_or(0.0) as f32;
+    Some(PrintCheck {
+        kind: text(v, "kind")?,
+        title: text(v, "title").unwrap_or_default(),
+        severity: severity(v).unwrap_or(Severity::Note),
+        page: number(v, "page")?.saturating_sub(1),
+        x: f("x"),
+        y: f("y"),
+        width: f("width"),
+        height: f("height"),
+        count: number(v, "count").unwrap_or(0),
+        value: v.get("value").and_then(Value::as_f64).unwrap_or(0.0),
+        limit: v.get("limit").and_then(Value::as_f64),
+        detail: text(v, "detail"),
+        file: text(v, "file").and_then(|f| project_file(&f, main_dir)),
+        line: number(v, "line"),
+        image: text(v, "image"),
+    })
+}
+
+/// The files a run of retex's command line wrote.
+#[derive(Debug, Default)]
+pub struct Written {
+    pub pdf: Option<Vec<u8>>,
+    pub synctex: Option<Vec<u8>>,
+    /// A print build's PDF/X.
+    pub pdfx: Option<Vec<u8>>,
+}
+
+/// The outcome of a run of retex's command line with `options`, from its whole output and the
+/// files it wrote.
+pub fn outcome(job: u64, output: &str, main_dir: Option<&str>, options: &Options, written: Written, seconds: f64) -> Outcome {
+    let Written { pdf, synctex, pdfx } = written;
     let mut diagnostics = Vec::new();
     let mut symbols = None;
     let mut pages = 0;
     let mut log = String::new();
+    let mut checks = Vec::new();
+    let mut rules = Vec::new();
     for line in output.lines() {
         match parse(line, main_dir) {
             Some(Record::Diagnostic(d)) => diagnostics.push(d),
             Some(Record::Symbols(v)) => symbols = Some(v),
             Some(Record::Finished { pages: n }) => pages = n,
+            Some(Record::PrintCheck(c)) => checks.push(c),
+            Some(Record::Pdfx(r)) => rules = r,
             Some(_) => {}
             None => {
                 log.push_str(line);
@@ -159,6 +214,13 @@ pub fn outcome(job: u64, output: &str, main_dir: Option<&str>, pdf: Option<Vec<u
         pages,
         symbols,
         synctex: synctex.map(Arc::new),
+        output: options.output,
+        preflight: (options.output == Output::Print).then(|| Preflight {
+            standard: options.pdfx,
+            pdfx: pdfx.filter(|p| !p.is_empty()).map(Arc::new),
+            checks,
+            rules,
+        }),
     }
 }
 
@@ -177,9 +239,13 @@ mod tests {
 {"type":"finished","status":"errors","pages":2,"seconds":0.3}
 "#;
 
+    fn pdf(bytes: &[u8]) -> Written {
+        Written { pdf: Some(bytes.to_vec()), ..Written::default() }
+    }
+
     #[test]
     fn a_run_s_records_become_its_outcome() {
-        let o = outcome(7, RUN, Some("paper"), Some(b"%PDF".to_vec()), None, 1.0);
+        let o = outcome(7, RUN, Some("paper"), &Options::default(), pdf(b"%PDF"), 1.0);
         assert_eq!(o.status, Status::Built);
         assert_eq!((o.errors(), o.warnings(), o.pages), (1, 1, 2));
         let w = &o.diagnostics[0];
@@ -189,6 +255,48 @@ mod tests {
         assert_eq!(o.diagnostics[1].file, None, "a file of the TeX tree is not in the project");
         assert!(o.symbols.is_some());
         assert!(o.log.contains("This is retex") && !o.log.contains("\"type\""), "the log keeps the text, not the records");
+    }
+
+    // A print build's records, as retex 2.5.0 writes them (`-output-format=pdf,pdf-x4`).
+    const PRINT: &str = r#"{"type":"pdfx","file":"doc.pdf-x4.pdf","variant":"PDF/X-4","rules":[{"rule":"fonts embedded","problems":[]},{"rule":"output intent with its ICC profile","problems":["no output intent"]}],"checked":true}
+{"type":"print_check","kind":"low-resolution","title":"images of 150 ppi or more","severity":"warning","page":2,"area":{"x":148.71,"y":135.87,"width":226.96,"height":226.96},"count":1,"value":5.076,"limit":150,"detail":null,"file":"./doc.tex","line":6,"image":"low.png"}
+{"type":"diagnostic","severity":"warning","message":"page 2: image low.png prints at 5 ppi, below 150 ppi","origin":"print","file":"doc.tex","line":6,"column":null,"end_column":null,"source":null,"notes":[],"help":[],"fixes":[]}
+{"type":"diagnostic","severity":"warning","message":"image `low.png` has no alternative text","origin":null,"file":"doc.tex","line":6,"column":null,"end_column":null,"source":null,"notes":[],"help":[],"fixes":[]}
+{"type":"finished","status":"ok","output":"doc.pdf","pages":2,"also_output":"doc.pdf-x4.pdf","seconds":0.5}
+"#;
+
+    #[test]
+    fn a_print_run_s_checks_are_placed_on_the_page_and_in_the_source() {
+        let options = Options { output: Output::Print, ..Options::default() };
+        let written = Written { pdfx: Some(b"%PDF-x".to_vec()), ..pdf(b"%PDF") };
+        let o = outcome(1, PRINT, Some("paper"), &options, written, 0.0);
+        let preflight = o.preflight.as_ref().expect("a print build has its preflight");
+        let check = &preflight.checks[0];
+        assert_eq!((check.page, check.file.as_deref(), check.line), (1, Some("paper/doc.tex"), Some(6)), "pages from 0, files in the project");
+        assert_eq!(preflight.rules[1].problems, ["no output intent"]);
+        assert_eq!(o.place_on_page(&o.diagnostics[0]), Some(check));
+        assert_eq!(o.print_problems(), Some(1));
+        assert!(o.diagnostics[1].is_accessibility(), "a rewritten tagging message is not an accessibility finding");
+        assert!(o.place_on_page(&o.diagnostics[1]).is_none());
+        let screen = outcome(1, PRINT, None, &Options::default(), pdf(b"%PDF"), 0.0);
+        assert!(screen.preflight.is_none(), "a screen build has no preflight");
+    }
+
+    #[test]
+    fn a_print_message_without_a_line_is_placed_by_its_pages() {
+        let options = Options { output: Output::Print, ..Options::default() };
+        let line = |page: u32, message: &str| {
+            format!(
+                "{{\"type\":\"print_check\",\"kind\":\"no-bleed\",\"page\":{page},\"area\":{{\"x\":1,\"y\":1,\"width\":1,\"height\":1}}}}\n{{\"type\":\"diagnostic\",\"severity\":\"warning\",\"message\":\"{message}\",\"origin\":\"print\"}}\n"
+            )
+        };
+        for (page, message, placed) in [(3, "pages 2–4: art stops short", true), (5, "pages 2, 5 and 7: art", true), (6, "pages 2–4: art", false)]
+        {
+            let o = outcome(1, &line(page, message), None, &options, pdf(b"%PDF"), 0.0);
+            assert_eq!(o.place_on_page(&o.diagnostics[0]).is_some(), placed, "{message} on page {page}");
+        }
+        // A print build that wrote no PDF/X has that problem too.
+        assert_eq!(outcome(1, "", None, &options, pdf(b"%PDF"), 0.0).print_problems(), Some(1));
     }
 
     #[test]
@@ -202,8 +310,8 @@ mod tests {
 
     #[test]
     fn no_pdf_is_a_failed_build() {
-        assert_eq!(outcome(1, RUN, None, None, None, 0.0).status, Status::Failed);
-        assert_eq!(outcome(1, RUN, None, Some(Vec::new()), None, 0.0).status, Status::Failed);
+        assert_eq!(outcome(1, RUN, None, &Options::default(), Written::default(), 0.0).status, Status::Failed);
+        assert_eq!(outcome(1, RUN, None, &Options::default(), pdf(b""), 0.0).status, Status::Failed);
     }
 
     #[test]

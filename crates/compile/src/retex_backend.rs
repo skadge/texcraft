@@ -21,7 +21,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::{Backend, Canceller, Cleaner, Diagnostic, DiagnosticFix, Engine, Event, Job, Options, Outcome, Severity, Status};
+use crate::{
+    Backend, Canceller, Cleaner, Diagnostic, DiagnosticFix, Engine, Event, Job, Options, Outcome, Output, PdfX, PdfxRule, Preflight, PrintCheck,
+    Severity, Status,
+};
 
 pub struct Retex {
     dir: PathBuf,
@@ -207,7 +210,11 @@ impl Backend for Retex {
         let main_dir = job.main.as_str().rsplit_once('/').map(|(d, _)| d.to_owned());
         let src = std::fs::canonicalize(self.dir.join("src")).unwrap_or_else(|_| self.dir.join("src"));
         let place = |d: &retex::Diagnostic| convert(d, &src, main_dir.as_deref());
-        let via_worker = self.worker.as_ref().and_then(|slot| self.through_worker(slot, &main, job.options, report));
+        // retex 2.5.0's worker takes every option but `accessible` (its `BuildRequest` options pass
+        // SyncTeX, symbols, the engine, halting, draft images and PDF/X on): an accessible build
+        // runs in process.
+        let worker = self.worker.as_ref().filter(|_| job.options.output != Output::Accessible);
+        let via_worker = worker.and_then(|slot| self.through_worker(slot, &main, job.options, report));
         let outcome = match via_worker {
             Some(o) => o,
             None => self.in_process(&main, job.options, report),
@@ -215,7 +222,8 @@ impl Backend for Retex {
         let seconds = started.elapsed().as_secs_f64();
         let symbols = outcome.outputs.symbols().cloned();
         let synctex = outcome.outputs.synctex().map(|s| Arc::new(s.to_vec()));
-        let base = Outcome { symbols, synctex, seconds, ..Outcome::unavailable(job.id, "") };
+        let preflight = (job.options.output == Output::Print).then(|| preflight(&outcome.outputs, job.options.pdfx, &src, main_dir.as_deref()));
+        let base = Outcome { symbols, synctex, seconds, output: job.options.output, preflight, ..Outcome::unavailable(job.id, "") };
         if outcome.cancelled {
             return Outcome { status: Status::Cancelled, log: "The build was stopped.".to_owned(), ..base };
         }
@@ -231,9 +239,7 @@ impl Backend for Retex {
             Err(retex::Error::Failed { diagnostics, log }) => {
                 Outcome { status: Status::Failed, diagnostics: diagnostics.iter().map(place).collect(), log, ..base }
             }
-            Err(other) => {
-                Outcome { log: other.to_string(), symbols: base.symbols, synctex: base.synctex, seconds, ..failure(job.id, &other.to_string()) }
-            }
+            Err(other) => Outcome { log: other.to_string(), ..base.clone() }.with_failure(&other.to_string()),
         }
     }
 }
@@ -301,6 +307,14 @@ fn reason(e: &retex::Error) -> String {
     }
 }
 
+impl Outcome {
+    /// This outcome, failed with `message` as its error.
+    fn with_failure(self, message: &str) -> Outcome {
+        let Outcome { diagnostics, status, .. } = failure(self.job, message);
+        Outcome { diagnostics, status, ..self }
+    }
+}
+
 fn failure(job: u64, message: &str) -> Outcome {
     let diagnostic = Diagnostic {
         severity: Severity::Error,
@@ -325,6 +339,8 @@ fn project_file(file: &str, src: &Path, main_dir: Option<&str>) -> Option<String
         let rel = canonical.strip_prefix(src).ok()?;
         return Some(rel.to_string_lossy().replace('\\', "/"));
     }
+    // `./main.tex` (a print check's file) is `main.tex`.
+    let file = file.trim_start_matches("./");
     Some(match main_dir {
         Some(dir) => format!("{dir}/{file}"),
         None => file.to_owned(),
@@ -337,14 +353,9 @@ fn convert(d: &retex::Diagnostic, src: &Path, main_dir: Option<&str>) -> Diagnos
         log::debug!("diagnostic outside the project: {:?}", d.file);
     }
     Diagnostic {
-        severity: match d.severity {
-            retex::Severity::Hint => Severity::Hint,
-            retex::Severity::Note => Severity::Note,
-            retex::Severity::Warning => Severity::Warning,
-            retex::Severity::Error => Severity::Error,
-        },
+        severity: severity(d.severity),
         message: d.message.clone(),
-        origin: d.origin.clone(),
+        origin: crate::origin(d.origin.clone(), &d.message),
         file,
         line: d.line,
         column: d.column,
@@ -355,6 +366,42 @@ fn convert(d: &retex::Diagnostic, src: &Path, main_dir: Option<&str>) -> Diagnos
             .iter()
             .map(|f| DiagnosticFix { column: f.column, end_column: f.end_column, replacement: f.replacement.clone(), title: f.title.clone() })
             .collect(),
+    }
+}
+
+/// A print build's PDF/X and checks, their files as project paths.
+fn preflight(outputs: &retex::Outputs, standard: PdfX, src: &Path, main_dir: Option<&str>) -> Preflight {
+    let checks = outputs
+        .print_checks()
+        .iter()
+        .map(|c| PrintCheck {
+            kind: c.kind.clone(),
+            title: c.title.clone(),
+            severity: severity(c.severity),
+            page: c.page,
+            x: c.area.x,
+            y: c.area.y,
+            width: c.area.width,
+            height: c.area.height,
+            count: c.count,
+            value: c.value,
+            limit: c.limit,
+            detail: c.detail.clone(),
+            file: c.file.as_deref().and_then(|f| project_file(f, src, main_dir)),
+            line: c.line,
+            image: c.image.clone(),
+        })
+        .collect();
+    let rules = outputs.pdfx_rules().iter().map(|r| PdfxRule { rule: r.rule.clone(), problems: r.problems.clone() }).collect();
+    Preflight { standard, pdfx: outputs.pdfx().map(|p| Arc::new(p.to_vec())), checks, rules }
+}
+
+fn severity(s: retex::Severity) -> Severity {
+    match s {
+        retex::Severity::Hint => Severity::Hint,
+        retex::Severity::Note => Severity::Note,
+        retex::Severity::Warning => Severity::Warning,
+        retex::Severity::Error => Severity::Error,
     }
 }
 
@@ -376,5 +423,17 @@ fn engine_options(options: Options) -> retex::Retex {
         Engine::LuaLatex => retex::Identity::LuaLatex,
         Engine::PdfLatex => retex::Identity::PdfLatex,
     };
-    retex::Retex::new().symbols(true).synctex(true).identity(identity).halt_on_error(options.halt_on_error).draft_images(options.draft_images)
+    let retex =
+        retex::Retex::new().symbols(true).synctex(true).identity(identity).halt_on_error(options.halt_on_error).draft_images(options.draft_images);
+    match options.output {
+        Output::Screen => retex,
+        Output::Accessible => retex.accessible(true),
+        Output::Print => {
+            let variant = match options.pdfx {
+                PdfX::X4 => retex::PdfX::X4,
+                PdfX::X1a => retex::PdfX::X1a,
+            };
+            retex.pdfx(variant).bleed_mm(options.bleed_mm.clamp(0.0, crate::MAX_BLEED_MM)).crop_marks(options.crop_marks)
+        }
+    }
 }

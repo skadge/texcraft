@@ -67,8 +67,53 @@ pub enum Engine {
     PdfLatex,
 }
 
-/// How a build runs (Settings › Building, the Compile button's menu).
+/// The kind of PDF a build makes.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Output {
+    /// A PDF for reading on a screen.
+    #[default]
+    Screen,
+    /// A tagged PDF (PDF/UA), checked for what screen readers need.
+    Accessible,
+    /// The PDF, and beside it a PDF/X for the press, with its preflight checks.
+    Print,
+}
+
+/// The PDF/X standard of a print build.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PdfX {
+    /// PDF/X-4: colour profiles and live transparency.
+    #[default]
+    X4,
+    /// PDF/X-1a: CMYK only, transparency flattened.
+    X1a,
+}
+
+impl PdfX {
+    /// The standard's name, as printers write it.
+    pub fn name(self) -> &'static str {
+        match self {
+            PdfX::X4 => "PDF/X-4",
+            PdfX::X1a => "PDF/X-1a",
+        }
+    }
+
+    /// retex's name for it in `-output-format` (`pdf-x4`).
+    pub fn format(self) -> &'static str {
+        match self {
+            PdfX::X4 => "pdf-x4",
+            PdfX::X1a => "pdf-x1a",
+        }
+    }
+}
+
+/// The largest bleed a print build takes, in millimetres.
+pub const MAX_BLEED_MM: f32 = 20.0;
+
+/// How a build runs (Settings › Building, the Compile button's menu).
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct Options {
     pub engine: Engine,
@@ -76,6 +121,28 @@ pub struct Options {
     pub halt_on_error: bool,
     /// Draw images as framed boxes with their names, for faster builds.
     pub draft_images: bool,
+    /// The kind of PDF: for the screen, accessible, or for print.
+    pub output: Output,
+    /// For print: the PDF/X standard.
+    pub pdfx: PdfX,
+    /// For print: how far the art goes past the page's edges, in millimetres.
+    pub bleed_mm: f32,
+    /// For print: crop marks outside the bleed.
+    pub crop_marks: bool,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Options {
+            engine: Engine::Auto,
+            halt_on_error: false,
+            draft_images: false,
+            output: Output::Screen,
+            pdfx: PdfX::X4,
+            bleed_mm: 3.0,
+            crop_marks: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
@@ -119,6 +186,84 @@ pub struct DiagnosticFix {
     pub title: Option<String>,
 }
 
+impl Diagnostic {
+    /// A finding of the accessibility checks (an accessible build's).
+    pub fn is_accessibility(&self) -> bool {
+        self.origin.as_deref() == Some(ACCESSIBILITY)
+    }
+
+    /// A finding of the print checks or the PDF/X conversion (a print build's).
+    pub fn is_print(&self) -> bool {
+        matches!(self.origin.as_deref(), Some(PRINT | PDFX))
+    }
+}
+
+/// The origin of accessibility findings.
+pub const ACCESSIBILITY: &str = "accessibility";
+/// The origin of print checks.
+pub const PRINT: &str = "print";
+/// The origin of the PDF/X conversion's messages.
+pub const PDFX: &str = "PDF/X";
+
+/// A diagnostic's origin as this crate keeps it. retex 2.5.0 gives its own accessibility checks
+/// the origin `accessibility`, but rewrites LaTeX's tagging messages (an image without
+/// alternative text, formulas without MathML, the PDF's language, a class without tagging) with
+/// no origin; those are accessibility findings too.
+pub(crate) fn origin(origin: Option<String>, message: &str) -> Option<String> {
+    let tagging = message.ends_with("has no alternative text")
+        || message == "formulas are tagged without MathML"
+        || message.starts_with("the PDF's language is taken to be")
+        || message.ends_with("does not support LaTeX's tagging yet");
+    if origin.is_none() && tagging { Some(ACCESSIBILITY.to_owned()) } else { origin }
+}
+
+/// A finding of a print build's preflight, placed on the page and in the source (retex's
+/// `PrintCheck`, after GWG 2022).
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct PrintCheck {
+    /// `low-resolution`, `ink-coverage`, `hairline`, `near-trim`, `no-bleed`, ...
+    pub kind: String,
+    /// The check in words, with its limit (`images of 150 ppi or more`).
+    pub title: String,
+    pub severity: Severity,
+    /// The page, from 0.
+    pub page: u32,
+    /// The worst object's box, in PDF points from the page's top left corner, on the page as
+    /// designed (the PDF the preview shows).
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    /// How many objects.
+    pub count: u32,
+    /// The worst value, and the limit it was compared with, in the check's unit.
+    pub value: f64,
+    pub limit: Option<f64>,
+    pub detail: Option<String>,
+    /// The project file and line, when retex found them.
+    pub file: Option<String>,
+    pub line: Option<u32>,
+    /// The image file, for images.
+    pub image: Option<String>,
+}
+
+/// A rule of the PDF/X standard, and what breaks it (none: met).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct PdfxRule {
+    pub rule: String,
+    pub problems: Vec<String>,
+}
+
+/// What a print build made besides the PDF: the PDF/X and its checks.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct Preflight {
+    pub standard: PdfX,
+    #[serde(skip)]
+    pub pdfx: Option<Arc<Vec<u8>>>,
+    pub checks: Vec<PrintCheck>,
+    pub rules: Vec<PdfxRule>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(tag = "status", content = "reason", rename_all = "lowercase")]
 pub enum Status {
@@ -146,6 +291,10 @@ pub struct Outcome {
     pub symbols: Option<serde_json::Value>,
     /// The SyncTeX data, for going between the source and the PDF.
     pub synctex: Option<Arc<Vec<u8>>>,
+    /// The kind of PDF the build was asked for.
+    pub output: Output,
+    /// A print build's PDF/X and checks.
+    pub preflight: Option<Preflight>,
 }
 
 impl Outcome {
@@ -160,7 +309,43 @@ impl Outcome {
             pages: 0,
             symbols: None,
             synctex: None,
+            output: Output::Screen,
+            preflight: None,
         }
+    }
+
+    /// The findings of the accessibility checks.
+    pub fn accessibility(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.diagnostics.iter().filter(|d| d.is_accessibility())
+    }
+
+    /// The problems a print build found: its print and PDF/X messages that are warnings or
+    /// errors. A print build that wrote no PDF/X has one more. `None` for other builds.
+    pub fn print_problems(&self) -> Option<usize> {
+        let preflight = self.preflight.as_ref()?;
+        let found = self.diagnostics.iter().filter(|d| d.is_print() && d.severity >= Severity::Warning).count();
+        Some(found + usize::from(preflight.pdfx.is_none()))
+    }
+
+    /// The print check behind a print message, which places it on the page: the one at its source
+    /// line, or for a message without one, on the page it names first.
+    pub fn place_on_page(&self, d: &Diagnostic) -> Option<&PrintCheck> {
+        if d.origin.as_deref() != Some(PRINT) {
+            return None;
+        }
+        let checks = &self.preflight.as_ref()?.checks;
+        if d.line.is_some() {
+            return checks.iter().find(|c| c.line == d.line && c.file == d.file);
+        }
+        // `page 3: …`, `pages 2–4: …`, `pages 2, 5 and 7: …`: the pages the check's worst object
+        // may be on.
+        let (pages, _) = d.message.strip_prefix("page")?.split_once(':')?;
+        let pages: Vec<u32> = pages.split(|c: char| !c.is_ascii_digit()).filter_map(|n| n.parse().ok()).collect();
+        let on = |page: u32| match (pages.as_slice(), d.message.contains('–')) {
+            ([a, b], true) => (*a..=*b).contains(&page),
+            (list, _) => list.contains(&page),
+        };
+        checks.iter().find(|c| c.line.is_none() && on(c.page + 1))
     }
 
     pub fn errors(&self) -> usize {
