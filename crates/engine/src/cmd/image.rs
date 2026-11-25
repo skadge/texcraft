@@ -42,7 +42,7 @@ pub fn is_image(path: &ProjectPath) -> bool {
 }
 
 /// `image` as written from the folder of `from` (a file): `../figures/a.png`.
-fn relative(from: &ProjectPath, image: &ProjectPath) -> String {
+pub(super) fn relative(from: &ProjectPath, image: &ProjectPath) -> String {
     let folder: Vec<&str> = from.as_str().split('/').collect();
     let folder = &folder[..folder.len().saturating_sub(1)];
     let target: Vec<&str> = image.as_str().split('/').collect();

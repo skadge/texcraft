@@ -627,23 +627,41 @@ impl Table {
     /// An empty row above (`below` false) or below row `r`.
     pub fn insert_row(&self, text: &str, r: usize, below: bool) -> Result<TableEdit, EditError> {
         let row = self.row(r)?;
+        if below && let Some(next) = self.rows.get(r + 1) {
+            // Above the next row, under the rules above it: a row under a header's rule is a row
+            // of the body.
+            return self.row_above(text, next);
+        }
+        if !below {
+            return self.row_above(text, row);
+        }
         let start = row.start();
         let indent = self.indent_before(text, start).map(|(_, i)| i).unwrap_or_default();
         let new = self.empty_row();
-        let changes = if below {
-            match &row.end {
-                Some(end) => vec![change(end.end..end.end, format!("\n{indent}{new} \\\\"))],
-                None => {
-                    // The last row gets the `\\` it lacks, and the new row ends as it did.
-                    let last = row.cells.last().map_or(start, Cell::end);
-                    vec![change(last..last, format!(" \\\\\n{indent}{new}"))]
-                }
+        // With every border drawn, the new row gets its rule too.
+        let rule = if self.borders() == Some(Borders::All) { format!("\n{indent}\\hline") } else { String::new() };
+        let changes = match &row.end {
+            Some(end) => vec![change(end.end..end.end, format!("{rule}\n{indent}{new} \\\\"))],
+            None => {
+                // The last row gets the `\\` it lacks, and the new row ends as it did.
+                let last = row.cells.last().map_or(start, Cell::end);
+                vec![change(last..last, format!(" \\\\{rule}\n{indent}{new}"))]
             }
-        } else {
-            match self.indent_before(text, start) {
-                Some((line_start, _)) => vec![change(line_start..line_start, format!("{indent}{new} \\\\\n"))],
-                None => vec![change(start..start, format!("{new} \\\\ "))],
+        };
+        Ok(sorted(changes))
+    }
+
+    /// An empty row above `row`, under the rules above it.
+    fn row_above(&self, text: &str, row: &Row) -> Result<TableEdit, EditError> {
+        let start = row.start();
+        let new = self.empty_row();
+        let all = self.borders() == Some(Borders::All);
+        let changes = match self.indent_before(text, start) {
+            Some((line_start, indent)) => {
+                let rule = if all { format!("{indent}\\hline\n") } else { String::new() };
+                vec![change(line_start..line_start, format!("{indent}{new} \\\\\n{rule}"))]
             }
+            None => vec![change(start..start, format!("{new} \\\\ {}", if all { "\\hline " } else { "" }))],
         };
         Ok(sorted(changes))
     }
@@ -661,6 +679,10 @@ impl Table {
             None => start..end,
         };
         let mut changes = vec![change(range, "")];
+        if r > 0 && self.borders() == Some(Borders::All) {
+            // One rule between the rows that are left.
+            changes.extend(row.rules.iter().map(|rule| change(removal(text, rule.range.clone()), "")));
+        }
         if row.end.is_none()
             && let Some(prev) = r.checked_sub(1).and_then(|p| self.rows.get(p))
             && let Some(e) = &prev.end

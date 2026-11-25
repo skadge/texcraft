@@ -123,6 +123,13 @@ fn inserting_and_deleting_rows_keeps_the_other_rows_and_the_rules() -> R {
     assert_eq!(cells(&out)?, [["a", "b"], ["c", "d"], ["", ""]]);
     let back = edited(&out, grid(&out)?.delete_row(&out, 2))?;
     assert_eq!(cells(&back)?, cells(text)?);
+    // With every border drawn, a new row has its rule and a deleted one takes one away.
+    let boxed = "\\begin{tabular}{|l|}\n\\hline\n  a \\\\\n\\hline\n  b \\\\\n\\hline\n\\end{tabular}";
+    let more = edited(boxed, grid(boxed)?.insert_row(boxed, 0, true))?;
+    assert_eq!(grid(&more)?.borders(), Some(Borders::All), "{more}");
+    let fewer = edited(&more, grid(&more)?.delete_row(&more, 1))?;
+    assert_eq!((cells(&fewer)?, fewer.matches("\\hline").count()), (cells(boxed)?, 3), "{fewer}");
+    assert_eq!(grid(&fewer)?.borders(), Some(Borders::All), "{fewer}");
     Ok(())
 }
 
