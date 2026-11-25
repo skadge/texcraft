@@ -103,6 +103,7 @@ Dependencies come from crates.io, including retex (CC0-1.0) at the version in `C
 |---|---|---|---|
 | jpeg-encoder | (MIT OR Apache-2.0) AND IJG | retex's PDF writer (retex-pdf) | This software is based in part on the work of the Independent JPEG Group. |
 | webpki-roots | CDLA-Permissive-2.0 | retex-texlive's downloads (ureq) | Mozilla's list of trusted certificate authorities, under the Community Data License Agreement – Permissive 2.0. |
+| webpki-root-certs | CDLA-Permissive-2.0 | the forges' HTTPS (texcraft-forge), beside the system's certificate store | The same list of Mozilla's trusted certificate authorities, as certificates, under the Community Data License Agreement – Permissive 2.0. |
 
 Spell checking (docs/ROADMAP.md, E11) uses craft-proof from storytold/craft-libs, which brings its own word lists. No dictionary is copied into this repository:
 

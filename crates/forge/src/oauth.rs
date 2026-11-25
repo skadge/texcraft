@@ -13,7 +13,9 @@
 //!
 //! Each build is registered as an application with each forge; the client ids are
 //! [`GITLAB_CLIENT_ID`] and [`GITHUB_CLIENT_ID`]. A build whose id is still a placeholder cannot
-//! sign in ([`Clients::ready`]), and says so.
+//! sign in ([`Clients::ready`]), and says so. A self-managed GitLab or a GitHub Enterprise Server
+//! has an application of its own, which the user registers there ([`crate::servers`]); the same
+//! flows sign in to it, with its client id, and a grant remembers which application it was got by.
 //!
 //! Tokens are [`Token`]s, which never print. A [`Grant`] (the tokens, their scopes and who they
 //! are for) is written out only by [`Grant::stored`], for the secret store that keeps it.
@@ -56,8 +58,11 @@ pub const GITLAB_WRITE: &[&str] = &["api", "read_user"];
 /// The scope the GitHub device flow asks for: repositories, to read and commit.
 pub const GITHUB_SCOPE: &str = "repo";
 
-/// GitHub's API, where the signed-in user is read.
-const GITHUB_API: &str = "https://api.github.com";
+/// GitHub's API on `instance`: api.github.com for github.com, `/api/v3` on a GitHub Enterprise
+/// Server.
+fn github_api(instance: &str) -> String {
+    if instance == GITHUB_COM { "https://api.github.com".to_owned() } else { format!("{instance}/api/v3") }
+}
 
 /// Largest answer of a token endpoint or of `/user`.
 const MAX_JSON: u64 = 1024 * 1024;
@@ -103,8 +108,8 @@ impl Clients {
     }
 }
 
-/// The instance signing in reaches for `service`: gitlab.com or github.com (another instance
-/// needs an application of its own, so it keeps the personal access token).
+/// The public instance of `service`: gitlab.com or github.com, whose applications are this
+/// build's (another instance needs an application of its own: [`crate::servers`]).
 pub fn instance(service: Service) -> &'static str {
     match service {
         Service::GitLab => GITLAB_COM,
@@ -258,6 +263,9 @@ pub struct Grant {
     /// The redirect URI and the PKCE verifier it was got with, which GitLab's refresh asks for.
     redirect: String,
     verifier: Option<Token>,
+    /// The application it was got by (empty for a grant kept before this was kept): renewing and
+    /// revoking it go through the same one.
+    client_id: String,
 }
 
 impl std::fmt::Debug for Grant {
@@ -290,6 +298,8 @@ struct Stored {
     redirect: String,
     #[serde(default)]
     verifier: Option<String>,
+    #[serde(default)]
+    client_id: String,
 }
 
 impl Grant {
@@ -324,6 +334,7 @@ impl Grant {
             user: self.user.clone(),
             redirect: self.redirect.clone(),
             verifier: self.verifier.as_ref().map(|t| t.0.clone()),
+            client_id: self.client_id.clone(),
         };
         serde_json::to_string(&stored).unwrap_or_default()
     }
@@ -341,12 +352,19 @@ impl Grant {
             user: s.user,
             redirect: s.redirect,
             verifier: s.verifier.as_deref().map(Token::new).transpose()?,
+            client_id: s.client_id,
         })
+    }
+
+    /// The client id of the application it was got by, or `fallback` for a grant kept before it
+    /// was kept.
+    pub fn client_id<'a>(&'a self, fallback: &'a str) -> &'a str {
+        if self.client_id.is_empty() { fallback } else { &self.client_id }
     }
 
     /// A grant of a token answer from `service`'s token endpoint (`access_token`, `refresh_token`,
     /// `expires_in`, `created_at`, `scope`), at `now` when it does not say when it was made.
-    fn of(service: Service, instance: &str, v: &Value, redirect: &str, verifier: Option<&Pkce>, now: i64) -> Result<Self> {
+    fn of(service: Service, instance: &str, client_id: &str, v: &Value, redirect: &str, verifier: Option<&Pkce>, now: i64) -> Result<Self> {
         let access = v["access_token"].as_str().ok_or_else(|| Error::Invalid("the token endpoint gave no access token".to_owned()))?;
         let made = v["created_at"].as_i64().unwrap_or(now);
         Ok(Self {
@@ -360,6 +378,7 @@ impl Grant {
             user: None,
             redirect: redirect.to_owned(),
             verifier: verifier.map(|p| p.verifier.clone()),
+            client_id: client_id.to_owned(),
         })
     }
 }
@@ -420,12 +439,13 @@ pub async fn exchange(transport: &dyn Transport, instance: &str, client_id: &str
         ],
     );
     let v = oauth_json(transport, Service::GitLab, request).await?;
-    Grant::of(Service::GitLab, instance, &v, redirect, Some(pkce), now())
+    Grant::of(Service::GitLab, instance, client_id, &v, redirect, Some(pkce), now())
 }
 
 /// A new access token for `grant`, from its refresh token (`grant_type=refresh_token`). GitLab
 /// gives a new refresh token too, and the old one stops working: keep the grant this returns.
 pub async fn refresh(transport: &dyn Transport, client_id: &str, grant: &Grant) -> Result<Grant> {
+    let client_id = grant.client_id(client_id);
     let name = grant.service.name();
     let Some(token) = &grant.refresh else {
         return Err(Error::SignIn(format!("The sign-in to {name} has expired: sign in again.")));
@@ -446,7 +466,7 @@ pub async fn refresh(transport: &dyn Transport, client_id: &str, grant: &Grant) 
     }
     let request = form_post(format!("{}/oauth/token", grant.instance), &pairs);
     let v = oauth_json(transport, grant.service, request).await?;
-    let mut renewed = Grant::of(grant.service, &grant.instance, &v, &grant.redirect, None, now())?;
+    let mut renewed = Grant::of(grant.service, &grant.instance, client_id, &v, &grant.redirect, None, now())?;
     renewed.verifier = grant.verifier.clone();
     renewed.user = grant.user.clone();
     if renewed.refresh.is_none() {
@@ -464,7 +484,7 @@ pub async fn fresh(transport: &dyn Transport, clients: &Clients, grant: &Grant, 
     if !grant.expired(now) {
         return Ok((grant.access.clone(), None));
     }
-    let renewed = refresh(transport, clients.id(grant.service), grant).await?;
+    let renewed = refresh(transport, grant.client_id(clients.id(grant.service)), grant).await?;
     Ok((renewed.access.clone(), Some(renewed)))
 }
 
@@ -475,6 +495,7 @@ pub async fn revoke(transport: &dyn Transport, client_id: &str, grant: &Grant) -
     if grant.service == Service::GitHub {
         return Err(Error::SignIn(GITHUB_REVOKE.to_owned()));
     }
+    let client_id = grant.client_id(client_id);
     let request = form_post(format!("{}/oauth/revoke", grant.instance), &[("client_id", client_id), ("token", grant.access.0.as_str())]);
     oauth_json(transport, grant.service, request).await.map(|_| ())
 }
@@ -484,7 +505,7 @@ pub async fn user(transport: &dyn Transport, grant: &Grant) -> Result<User> {
     let (url, mut headers) = match grant.service {
         Service::GitLab => (format!("{}/api/v4/user", grant.instance), vec![("Accept".to_owned(), "application/json".to_owned())]),
         Service::GitHub => (
-            format!("{GITHUB_API}/user"),
+            format!("{}/user", github_api(&grant.instance)),
             vec![("Accept".to_owned(), "application/vnd.github+json".to_owned()), ("X-GitHub-Api-Version".to_owned(), "2022-11-28".to_owned())],
         ),
     };
@@ -507,6 +528,8 @@ pub async fn with_user(transport: &dyn Transport, mut grant: Grant) -> Result<Gr
 /// A device code (GitHub's device flow): the code the user enters at `verification_uri`.
 #[derive(Clone, PartialEq, Eq)]
 pub struct DeviceCode {
+    /// The GitHub it is for: github.com, or a GitHub Enterprise Server.
+    pub instance: String,
     device_code: Token,
     pub user_code: String,
     pub verification_uri: String,
@@ -522,9 +545,15 @@ impl std::fmt::Debug for DeviceCode {
     }
 }
 
-/// Asks GitHub for a device code (`POST https://github.com/login/device/code`).
+/// Asks github.com for a device code (`POST https://github.com/login/device/code`).
 pub async fn device_code(transport: &dyn Transport, client_id: &str, scope: &str) -> Result<DeviceCode> {
-    let request = form_post(format!("{GITHUB_COM}/login/device/code"), &[("client_id", client_id), ("scope", scope)]);
+    device_code_at(transport, GITHUB_COM, client_id, scope).await
+}
+
+/// Asks the GitHub at `instance` (github.com, or a GitHub Enterprise Server) for a device code
+/// (`POST {instance}/login/device/code`).
+pub async fn device_code_at(transport: &dyn Transport, instance: &str, client_id: &str, scope: &str) -> Result<DeviceCode> {
+    let request = form_post(format!("{instance}/login/device/code"), &[("client_id", client_id), ("scope", scope)]);
     let v = oauth_json(transport, Service::GitHub, request).await?;
     if v["error"].is_string() {
         return Err(refusal(Service::GitHub, &v));
@@ -535,6 +564,7 @@ pub async fn device_code(transport: &dyn Transport, client_id: &str, scope: &str
         return Err(Error::Invalid("GitHub's verification page is not on HTTPS".to_owned()));
     }
     Ok(DeviceCode {
+        instance: instance.to_owned(),
         device_code: Token::new(text("device_code")?)?,
         user_code: text("user_code")?.to_owned(),
         verification_uri: verification_uri.to_owned(),
@@ -559,12 +589,12 @@ pub enum DevicePoll {
 /// errors, in words.
 pub async fn poll_device(transport: &dyn Transport, client_id: &str, device: &DeviceCode) -> Result<DevicePoll> {
     let request = form_post(
-        format!("{GITHUB_COM}/login/oauth/access_token"),
+        format!("{}/login/oauth/access_token", device.instance),
         &[("client_id", client_id), ("device_code", device.device_code.0.as_str()), ("grant_type", "urn:ietf:params:oauth:grant-type:device_code")],
     );
     let v = oauth_json(transport, Service::GitHub, request).await?;
     match v["error"].as_str() {
-        None => Ok(DevicePoll::Granted(Box::new(Grant::of(Service::GitHub, GITHUB_COM, &v, "", None, now())?))),
+        None => Ok(DevicePoll::Granted(Box::new(Grant::of(Service::GitHub, &device.instance, client_id, &v, "", None, now())?))),
         Some("authorization_pending") => Ok(DevicePoll::Pending),
         Some("slow_down") => Ok(DevicePoll::SlowDown(v["interval"].as_u64().unwrap_or(device.interval + 5))),
         Some("expired_token") => Err(Error::SignIn("The code expired before it was entered on GitHub: sign in again.".to_owned())),
@@ -605,9 +635,9 @@ where
 }
 
 /// The JSON of a pending GitLab sign-in (the browser keeps it across the round trip): its state,
-/// verifier, redirect URI and whether it asks to commit.
-pub fn pending_json(state: &str, pkce: &Pkce, redirect: &str, write: bool) -> String {
-    json!({"state": state, "verifier": pkce.verifier(), "redirect": redirect, "write": write}).to_string()
+/// verifier, redirect URI, whether it asks to commit, and the instance it signs in to.
+pub fn pending_json(state: &str, pkce: &Pkce, redirect: &str, write: bool, instance: &str) -> String {
+    json!({"state": state, "verifier": pkce.verifier(), "redirect": redirect, "write": write, "instance": instance}).to_string()
 }
 
 #[cfg(not(target_arch = "wasm32"))]

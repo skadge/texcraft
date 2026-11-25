@@ -16,15 +16,24 @@ texcraft-history = { workspace = true }
 base64 = "0.22"
 serde = { workspace = true }
 serde_json = { workspace = true }
+log = { workspace = true }
 # The line diff of the three-way merge (Apache-2.0), as the engine uses it.
 # Signing in (OAuth with PKCE): the challenge's SHA-256, and the verifier's and state's random bytes.
 sha2 = { workspace = true }
 getrandom = { workspace = true }
 similar = { version = "3", default-features = false, features = ["std", "text"] }
+# The organisation's list of servers (texcraft-forges.toml).
+toml = { workspace = true }
 
 # The desktop's HTTP client (MIT OR Apache-2.0), the one retex-texlive already downloads with.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ureq = { version = "3", default-features = false, features = ["rustls"] }
+# The system's certificate store, trusted beside the bundled roots, so that a server whose
+# certificate comes from its organisation's own authority is reached (Apache-2.0 OR ISC OR MIT),
+# and the bundled roots as certificates to put beside them (CDLA-Permissive-2.0, as webpki-roots).
+# Both were in the tree already, through ureq's platform verifier.
+rustls-native-certs = "0.8"
+webpki-root-certs = "1"
 
 # The browser's `fetch`.
 [target.'cfg(target_arch = "wasm32")'.dependencies]

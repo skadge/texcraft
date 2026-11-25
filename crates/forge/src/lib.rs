@@ -22,6 +22,7 @@ mod gitlab;
 mod http;
 pub mod merge;
 pub mod oauth;
+pub mod servers;
 mod sync;
 pub mod task;
 

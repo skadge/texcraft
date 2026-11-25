@@ -113,14 +113,39 @@ pub fn transport() -> Box<dyn Transport> {
 mod native {
     use super::{Request, Response, Sending, Transport};
 
-    /// HTTPS with rustls and the bundled root certificates, blocking: it runs on its own thread.
+    use std::sync::{Arc, OnceLock};
+
+    use ureq::tls::{Certificate, RootCerts, TlsConfig};
+
+    /// HTTPS with rustls, blocking: it runs on its own thread. It trusts the bundled root
+    /// certificates and the system's certificate store, so that a company's server whose
+    /// certificate comes from the company's own authority (installed on its computers) is reached.
     pub struct Ureq {
         agent: ureq::Agent,
+    }
+
+    /// The certificate authorities trusted: Mozilla's list (webpki-root-certs) and the system's
+    /// store (rustls-native-certs), read once per run. Certificates the system's store cannot give
+    /// are logged and left out.
+    fn roots() -> RootCerts {
+        static ROOTS: OnceLock<Arc<Vec<Certificate<'static>>>> = OnceLock::new();
+        let certs = ROOTS.get_or_init(|| {
+            let mut certs: Vec<Certificate<'static>> =
+                webpki_root_certs::TLS_SERVER_ROOT_CERTS.iter().map(|c| Certificate::from_der(c).to_owned()).collect();
+            let system = rustls_native_certs::load_native_certs();
+            for e in &system.errors {
+                log::warn!("a certificate of the system's store could not be read: {e}");
+            }
+            certs.extend(system.certs.iter().map(|c| Certificate::from_der(c).to_owned()));
+            Arc::new(certs)
+        });
+        RootCerts::Specific(certs.clone())
     }
 
     impl Ureq {
         pub fn new() -> Self {
             let config = ureq::Agent::config_builder()
+                .tls_config(TlsConfig::builder().root_certs(roots()).build())
                 // Error statuses are answers, read like any other.
                 .http_status_as_error(false)
                 .timeout_global(Some(std::time::Duration::from_secs(300)))

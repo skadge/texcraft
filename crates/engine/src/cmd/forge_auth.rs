@@ -254,7 +254,7 @@ fn gitlab(s: &mut Session, client_id: String, write: bool) -> Result<Value> {
     let scopes = if write { oauth::GITLAB_WRITE } else { oauth::GITLAB_READ };
     let instance = oauth::instance(Service::GitLab);
     if let Some(page) = s.forge_auth.redirect.clone() {
-        let pending = SecretString::new(oauth::pending_json(&state, &pkce, &page, write));
+        let pending = SecretString::new(oauth::pending_json(&state, &pkce, &page, write, instance));
         s.forge_auth.secrets.put(PENDING, &pending).map_err(|e| format!("This page cannot keep the sign-in while it goes to GitLab: {e}"))?;
         let url = oauth::authorize_url(instance, &client_id, &page, scopes, &state, &pkce);
         return Ok(json!({"operation": "sign_in", "service": "gitlab", "navigate": url}));
