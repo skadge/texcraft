@@ -132,9 +132,35 @@ impl App {
             if cfg!(target_arch = "wasm32") {
                 self.dropped.push(file);
             } else {
-                self.run("file.import", json!({"source": file.path().display().to_string()}));
+                let imported = self.run("file.import", json!({"source": file.path().display().to_string()}));
                 self.view.last_edit = Some(0.0);
+                if let Some(path) = imported.as_ref().and_then(|r| r["path"].as_str()) {
+                    self.figure_for_drop(path);
+                }
             }
+        }
+    }
+
+    /// An image dropped while the formatted view is shown becomes a figure after the block holding
+    /// the caret (`figure.insert`), its caption left for the figure dialog.
+    fn figure_for_drop(&mut self, image: &str) {
+        let Some(path) = self.session.current().cloned() else { return };
+        let is_image = texcraft_engine::project::ProjectPath::new(image).is_ok_and(|p| texcraft_engine::cmd::is_image(&p));
+        if !is_image || !self.editor.formatted.shows(&path) {
+            return;
+        }
+        crate::editor::send_edits(self);
+        let Ok(text) = self.session.project().text(&path).map(str::to_owned) else { return };
+        let caret = crate::formatted_edit::caret_byte(self).min(text.len());
+        let blocks = texcraft_latex::view::view(&text);
+        let at = blocks.iter().find(|b| b.range.end >= caret).map_or(text.len(), |b| b.range.end);
+        let stem = image.rsplit('/').next().unwrap_or(image).rsplit_once('.').map_or(image, |(s, _)| s).to_owned();
+        let label: String = stem.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | ':')).collect();
+        let chars = text.get(..at).map_or(0, |s| s.chars().count());
+        let params = json!({"path": path.as_str(), "at": chars, "image": image, "width": 0.8, "placement": "htbp", "label": format!("fig:{label}")});
+        if self.run("figure.insert", params).is_some() {
+            let said = tl!("{image} is in a new figure: give it a caption with Edit Figure….").replace("{image}", image);
+            self.view.status = Some((said, false));
         }
     }
 
