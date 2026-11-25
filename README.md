@@ -11,13 +11,13 @@
 <p align="center">
   A project of files, a source editor and the PDF side by side, rebuilt as you type by
   <a href="https://gitlab.com/severin-lemaignan/retex">retex</a>, a TeX engine written in Rust.
-  It runs natively on Linux, macOS and Windows; a browser version is being built.
+  It runs natively on Linux, macOS and Windows, and in the browser.
 </p>
 
 <p align="center">
   <img alt="Status: early development" src="https://img.shields.io/badge/status-early%20development-d6bc25?style=flat-square">
   <img alt="Written in pure Rust" src="https://img.shields.io/badge/pure-Rust-a08a10?style=flat-square&logo=rust&logoColor=white">
-  <img alt="Runs on Linux, macOS and Windows; web in progress" src="https://img.shields.io/badge/runs%20on-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows%20%C2%B7%20Web%20(soon)-555555?style=flat-square">
+  <img alt="Runs on Linux, macOS, Windows and the web" src="https://img.shields.io/badge/runs%20on-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows%20%C2%B7%20Web-555555?style=flat-square">
   <img alt="Engine: retex" src="https://img.shields.io/badge/engine-retex-555555?style=flat-square">
   <img alt="MCP server for agents" src="https://img.shields.io/badge/agents-MCP%20server-555555?style=flat-square">
   <img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-555555?style=flat-square">
@@ -78,7 +78,7 @@
 - **Messages you can act on.** retex explains errors and warnings in words, with help on how to fix them; each one links to its line, and the editor marks the lines.
 - **Yours, offline.** A project is a folder on your disk, opened, saved and versioned like any other.
 - **Agent-native.** Every command of the menus can be run over a JSON control channel of the open window and by an **MCP server**, confined to the folders it is given.
-- **One codebase.** The same Rust interface for the desktop and, once the engine runs there, the browser.
+- **One codebase.** The same Rust interface on the desktop and in the browser, where the engine runs in the page, with no server.
 
 ## What retex brings
 
@@ -122,20 +122,16 @@ It refuses to start without both. The open window's control channel is described
 TeXCraft is in early development. [`docs/ROADMAP.md`](docs/ROADMAP.md) has what works and what comes next; [`docs/retex-changes.md`](docs/retex-changes.md) what it uses of retex and asks of it.
 
 **What works:**
-- projects as folders, a start page and recent projects;
-- the source editor with highlighting, line numbers, error markers and an insert toolbar;
-- the PDF preview with zoom and pages;
-- builds after typing pauses, the build log, and the outline;
-- native file dialogs, keyboard shortcuts you can change, settings;
-- light and dark themes;
+- projects as folders, a start page with recent projects, publishers' templates, Go to File, folders and moving files;
+- TeXCraft's own source editor: completion, hover, quick fixes, find and replace, Vim key bindings;
+- a read-only formatted view of the source;
+- builds as you type, with a draft PDF while later passes run, a build log you can copy from, and source ↔ PDF navigation;
+- export to Word, OpenDocument, PowerPoint (first for beamer slides), HTML, Markdown and SVG, from the PDF pane;
+- comments on passages, in a margin beside the text;
+- the browser version: builds in the page, projects, comments and templates kept in the browser, its own TeX tree;
 - the control channel and the MCP server.
 
-**What's next:**
-- TeXCraft's own editor widget, with completion, find and replace, and spell checking;
-- a formatted editing mode, with sections, emphasis, formulas and tables shown formatted;
-- navigation between the source and the PDF;
-- the engine in the browser;
-- history, sharing and working together.
+**What's next:** every project a git repository with its history, suggested changes, an editable formatted view, and packages downloaded in the browser. The full list is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 **Workspace:** `crates/{project, latex, compile, preview, engine, ui-egui, mcp}` and `apps/{texcraft, texcraft-cli, texcraft-web}`. The egui frontend is its own crate, so the interface can change without touching the engine. The interface's look is described in [`docs/design.md`](docs/design.md).
 
