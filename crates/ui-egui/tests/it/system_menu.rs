@@ -48,7 +48,7 @@ fn with_system_menu(app: App) -> (Harness<'static, App>, Shared<MenuBar>, Shared
     let mut app = app;
     app.set_system_menu(NativeMenu::new(Box::new(fake)));
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
-    h.run();
+    h.run_steps(10);
     (h, synced, events)
 }
 
@@ -57,7 +57,9 @@ fn choose(h: &mut Harness<'_, App>, events: &Shared<Event>, command: CommandRef)
     events.borrow_mut().push(Event::Click(command));
     let mut raw = egui::RawInput::default();
     h.state_mut().system_menu_input(&mut raw);
-    h.run();
+    // Frames by number, not until settled: opening a project starts a build, whose spinner
+    // keeps asking for frames for as long as it lasts.
+    h.run_steps(10);
 }
 
 fn default_chord(shortcut: Option<&str>) -> Option<Chord> {
