@@ -5,7 +5,30 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
-## 0.12.0 (2026-11-25)
+## 0.12.1 (2026-11-25)
+
+0.12.0 with two fixes, and AI assistance that no longer asks before every request. 0.12.0's
+Linux packages were not published (its release check failed on the first fix below); its
+Windows and macOS builds and the web editor have the git bug.
+
+### Fixes
+
+- Pull, Push and Save to GitHub/GitLab failed on a computer where git has no name and email set
+  ("Could not update reflog"): TeXCraft is now the fallback name, as for commits.
+- Copy and paste work with other programs in every text field and in the editor: Ctrl+V into
+  Settings, dialogs and the find bar; on Linux, middle-click paste and the selection offered to
+  other programs. Edit › Cut, Copy, Paste and Select All act on the field that had the keyboard.
+
+### AI assistance (desktop)
+
+- No dialog before a request: Settings › AI lists what may be sent, with a switch for each kind
+  of request, and connecting agrees to the ones switched on; another model or address asks again
+  (#15).
+- The instructions sent for each kind are in Settings › AI › Prompts, to change or reset.
+- The token is shown as you type it (Hide the token to mask it), and every AI feature has the same
+  icon.
+
+## 0.12.0 (2026-11-25, Linux packages not published)
 
 Save a project to GitHub or GitLab, push and pull, folders and zip files, and fixes from testing.
 
