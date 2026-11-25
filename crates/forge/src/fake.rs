@@ -42,6 +42,18 @@ struct State {
     /// A commit someone else makes just before the next commit request: branch, path, bytes.
     race: Option<(String, String, Vec<u8>)>,
     counter: u64,
+    /// Branches no one can commit to.
+    protected: std::collections::BTreeSet<String>,
+    merge_requests: Vec<FakeMergeRequest>,
+}
+
+/// A merge request opened on the fake.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FakeMergeRequest {
+    pub iid: u64,
+    pub source: String,
+    pub target: String,
+    pub title: String,
 }
 
 /// The fake instance; clones share it.
@@ -157,6 +169,21 @@ impl FakeGitLab {
         self.lock().can_push = on;
     }
 
+    /// Protects `branch`: the token's user cannot commit to it (other branches stay open).
+    pub fn protect(&self, branch: &str) {
+        self.lock().protected.insert(branch.to_owned());
+    }
+
+    /// The merge requests opened so far.
+    pub fn merge_requests(&self) -> Vec<FakeMergeRequest> {
+        self.lock().merge_requests.clone()
+    }
+
+    /// The names of the branches.
+    pub fn branches(&self) -> Vec<String> {
+        self.lock().branches.keys().cloned().collect()
+    }
+
     /// Every request is answered with `status`, these headers (names in lower case) and this body
     /// from now on.
     pub fn fail_with(&self, status: u16, headers: &[(&str, &str)], body: &str) {
@@ -241,7 +268,13 @@ impl State {
             ("GET", r) if r.starts_with("/repository/branches/") => {
                 let name = decode(&r["/repository/branches/".len()..]);
                 match self.branches.get(&name) {
-                    Some(commit) => json_response(200, &json!({"name": name, "commit": {"id": commit}, "can_push": self.can_push})),
+                    Some(commit) => {
+                        let can_push = self.can_push && !self.protected.contains(&name);
+                        json_response(
+                            200,
+                            &json!({"name": name, "commit": {"id": commit}, "can_push": can_push, "protected": self.protected.contains(&name)}),
+                        )
+                    }
                     None => message(404, "404 Branch Not Found"),
                 }
             }
@@ -255,6 +288,7 @@ impl State {
                 }
             }
             ("POST", "/repository/commits") => self.commit(request),
+            ("POST", "/merge_requests") => self.merge_request(request),
             _ => message(404, "404 Not Found"),
         }
     }
@@ -308,11 +342,17 @@ impl State {
             return message(400, "branch, commit_message and actions are required");
         };
         self.last_actions = actions.clone();
-        if !self.can_push {
+        if !self.can_push || self.protected.contains(branch) {
             return message(403, "403 Forbidden - You are not allowed to push into this branch");
         }
-        let Some(parent) = self.branches.get(branch).cloned() else {
-            return message(400, "You can only create or edit files when you are on a branch");
+        let parent = match (body["start_sha"].as_str(), self.branches.get(branch)) {
+            (Some(_), Some(_)) => {
+                return message(400, &format!("A branch called '{branch}' already exists. Switch to that branch in order to make changes"));
+            }
+            (Some(start), None) if self.commits.contains_key(start) => start.to_owned(),
+            (Some(_), None) => return message(404, "404 Commit Not Found"),
+            (None, Some(head)) => head.clone(),
+            (None, None) => return message(400, "You can only create or edit files when you are on a branch"),
         };
         let mut files = self.commits.get(&parent).map(|c| c.files.clone()).unwrap_or_default();
         for a in actions {
@@ -361,6 +401,25 @@ impl State {
         }
         let id = new_commit(self, branch, Some(parent.clone()), files);
         json_response(201, &json!({"id": id, "parent_ids": [parent]}))
+    }
+}
+
+impl State {
+    fn merge_request(&mut self, request: &Request) -> Response {
+        let Ok(body) = serde_json::from_slice::<Value>(request.body.as_deref().unwrap_or_default()) else { return message(400, "bad JSON") };
+        let (Some(source), Some(target), Some(title)) = (body["source_branch"].as_str(), body["target_branch"].as_str(), body["title"].as_str())
+        else {
+            return message(400, "source_branch, target_branch and title are required");
+        };
+        if !self.branches.contains_key(source) || !self.branches.contains_key(target) {
+            return message(404, "404 Branch Not Found");
+        }
+        if !self.can_push {
+            return message(403, "403 Forbidden");
+        }
+        let iid = self.merge_requests.len() as u64 + 1;
+        self.merge_requests.push(FakeMergeRequest { iid, source: source.to_owned(), target: target.to_owned(), title: title.to_owned() });
+        json_response(201, &json!({"iid": iid, "web_url": format!("{}/{}/-/merge_requests/{iid}", self.instance, self.path)}))
     }
 }
 

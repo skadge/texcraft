@@ -5,6 +5,7 @@ mod commit;
 mod errors;
 mod merge;
 mod open;
+mod pull;
 
 use texcraft_forge::fake::FakeGitLab;
 use texcraft_forge::{Address, GitLab, Token};

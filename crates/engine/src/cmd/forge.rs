@@ -216,7 +216,7 @@ fn commit(s: &mut Session, p: &Value) -> Result<Value> {
     let (connect, sent, snapshot) = (s.forge_transport.clone(), token.clone(), files.clone());
     let make = move || async move {
         let client = GitLab::new(connect(), link.address.clone(), sent);
-        texcraft_forge::commit(&client, &link, &snapshot, &message).await
+        texcraft_forge::commit(&client, &link, &snapshot, &message, &texcraft_forge::Choices::new()).await
     };
     match start(p, make)? {
         Ok(pending) => {
@@ -233,7 +233,7 @@ fn committed(s: &mut Session, done: Committed, token: Token, files: &[(String, V
     s.forge_tokens.insert(done.link.address.instance.clone(), token);
     let then: std::collections::BTreeMap<&str, &[u8]> = files.iter().map(|(p, b)| (p.as_str(), b.as_slice())).collect();
     let (mut taken, mut removed, mut kept) = (Vec::new(), Vec::new(), Vec::new());
-    for (path, bytes) in &done.taken {
+    for (path, bytes) in done.updates.iter().filter_map(|(p, b)| Some((p, b.as_ref()?))) {
         let Ok(pp) = ProjectPath::new(path) else { continue };
         if s.project.get(&pp).map(Contents::as_bytes) != then.get(path.as_str()).copied() {
             kept.push(path.clone());
@@ -246,7 +246,7 @@ fn committed(s: &mut Session, done: Committed, token: Token, files: &[(String, V
             Err(e) => kept.push(format!("{path} ({e})")),
         }
     }
-    for path in &done.removed {
+    for path in done.updates.iter().filter(|(_, b)| b.is_none()).map(|(p, _)| p) {
         let Ok(pp) = ProjectPath::new(path) else { continue };
         if s.project.get(&pp).map(Contents::as_bytes) == then.get(path.as_str()).copied() && s.project.remove(&pp).is_ok() {
             removed.push(path.clone());

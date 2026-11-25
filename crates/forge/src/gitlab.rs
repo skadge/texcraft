@@ -180,10 +180,13 @@ impl GitLab {
         Ok(Some(response.body))
     }
 
-    /// Makes one commit of `actions` (the API's `create`, `update`, `delete`, `move`) on `branch`:
-    /// its id and its parents' ids.
-    pub async fn create_commit(&self, branch: &str, message: &str, actions: Vec<Value>) -> Result<(String, Vec<String>)> {
-        let body = json!({"branch": branch, "commit_message": message, "actions": actions});
+    /// Makes one commit of `actions` (the API's `create`, `update`, `delete`, `move`) on `branch`,
+    /// or on a new branch `branch` from commit `start`: its id and its parents' ids.
+    pub async fn create_commit(&self, branch: &str, message: &str, actions: Vec<Value>, start: Option<&str>) -> Result<(String, Vec<String>)> {
+        let mut body = json!({"branch": branch, "commit_message": message, "actions": actions});
+        if let Some(start) = start {
+            body["start_sha"] = json!(start);
+        }
         let body = serde_json::to_vec(&body).map_err(|e| Error::Invalid(e.to_string()))?;
         let url = format!("{}/repository/commits", self.project_url());
         let response = self.send(self.request("POST", url, Some(body), MAX_JSON), &format!("the commit to branch {branch}")).await?;
@@ -191,6 +194,23 @@ impl GitLab {
         let id = v["id"].as_str().filter(|id| is_object_id(id)).ok_or_else(|| Error::Invalid("the commit has no id".to_owned()))?;
         let parents = v["parent_ids"].as_array().map(|a| a.iter().filter_map(|p| p.as_str().map(str::to_owned)).collect()).unwrap_or_default();
         Ok((id.to_owned(), parents))
+    }
+
+    /// Opens a merge request of branch `source` into `target`.
+    pub async fn create_merge_request(&self, source: &str, target: &str, title: &str) -> Result<crate::MergeRequest> {
+        let body = json!({"source_branch": source, "target_branch": target, "title": title});
+        let body = serde_json::to_vec(&body).map_err(|e| Error::Invalid(e.to_string()))?;
+        let url = format!("{}/merge_requests", self.project_url());
+        let what = format!("a merge request of {source} into {target}");
+        let response = self.send(self.request("POST", url, Some(body), MAX_JSON), &what).await?;
+        let v: Value = serde_json::from_slice(&response.body).map_err(|e| Error::Invalid(e.to_string()))?;
+        let iid = v["iid"].as_u64().ok_or_else(|| Error::Invalid("the merge request has no number".to_owned()))?;
+        // Only an address on this instance is shown as the merge request's link.
+        let web_url = v["web_url"]
+            .as_str()
+            .filter(|u| u.starts_with(&format!("{}/", self.address.instance)))
+            .map_or_else(|| format!("{}/-/merge_requests/{iid}", self.address.web_url()), str::to_owned);
+        Ok(crate::MergeRequest { iid, web_url })
     }
 }
 

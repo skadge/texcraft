@@ -1,7 +1,7 @@
 //! What changed since the base, and committing it back as one commit.
 
 use serde_json::Value;
-use texcraft_forge::{ChangeKind, Error, Loaded, changes, commit, open};
+use texcraft_forge::{ChangeKind, Choices, Conflict, ConflictKind, Error, Loaded, changes, commit, open};
 
 use crate::{block_on, client, paper};
 
@@ -52,7 +52,7 @@ fn a_commit_sends_each_change_as_an_action_and_moves_the_base() {
     remove(&mut files, "chapters/intro.tex");
     let png = remove(&mut files, "fig/plot.png");
     set(&mut files, "plot.png", &png);
-    let done = block_on(commit(&client(&fake).unwrap(), &link, &files, "Edit the paper")).unwrap();
+    let done = block_on(commit(&client(&fake).unwrap(), &link, &files, "Edit the paper", &Choices::new())).unwrap();
 
     let actions = fake.last_actions();
     let of = |path: &str| actions.iter().find(|a| a["file_path"] == path).cloned().unwrap_or(Value::Null);
@@ -72,7 +72,7 @@ fn a_commit_sends_each_change_as_an_action_and_moves_the_base() {
     assert_eq!(done.commit, fake.head("main"));
     assert_eq!(fake.parent(done.commit.as_deref().unwrap()), Some(link.base.clone()));
     assert!(changes(&done.link, &files).unwrap().is_empty());
-    assert!(done.taken.is_empty() && done.removed.is_empty() && !done.raced);
+    assert!(done.updates.is_empty() && !done.raced);
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn nothing_to_commit_makes_no_commit() {
     let fake = paper();
     let Loaded { link, files } = opened(&fake).unwrap();
     let before = fake.head("main");
-    let done = block_on(commit(&client(&fake).unwrap(), &link, &files, "Nothing")).unwrap();
+    let done = block_on(commit(&client(&fake).unwrap(), &link, &files, "Nothing", &Choices::new())).unwrap();
     assert_eq!(done.commit, None);
     assert_eq!(fake.head("main"), before);
 }
@@ -91,29 +91,31 @@ fn new_commits_to_other_files_are_kept_and_taken_in() {
     let Loaded { link, mut files } = opened(&fake).unwrap();
     fake.push("main", &[("chapters/intro.tex", Some(b"Their intro\n".as_slice())), ("theirs.tex", Some(b"new\n".as_slice()))]);
     set(&mut files, "main.tex", b"mine\n");
-    let done = block_on(commit(&client(&fake).unwrap(), &link, &files, "Mine")).unwrap();
+    let done = block_on(commit(&client(&fake).unwrap(), &link, &files, "Mine", &Choices::new())).unwrap();
     let branch = fake.files("main");
     assert_eq!(branch["main.tex"], b"mine\n");
     assert_eq!(branch["chapters/intro.tex"], b"Their intro\n", "their change was undone");
-    let mut taken: Vec<&str> = done.taken.iter().map(|(p, _)| p.as_str()).collect();
-    taken.sort();
+    let taken: Vec<&str> = done.updates.iter().map(|(p, _)| p.as_str()).collect();
     assert_eq!(taken, ["chapters/intro.tex", "theirs.tex"]);
     // With what was taken in, the project is the branch.
-    for (path, bytes) in done.taken {
-        set(&mut files, &path, &bytes);
+    for (path, bytes) in done.updates {
+        set(&mut files, &path, &bytes.unwrap());
     }
     assert!(changes(&done.link, &files).unwrap().is_empty());
 }
 
 #[test]
-fn new_commits_to_the_same_files_refuse_the_commit() {
+fn overlapping_changes_on_the_branch_refuse_the_commit() {
     let fake = paper();
     let Loaded { link, mut files } = opened(&fake).unwrap();
     fake.push("main", &[("main.tex", Some(b"theirs\n".as_slice()))]);
     let head = fake.head("main");
     set(&mut files, "main.tex", b"mine\n");
-    let err = block_on(commit(&client(&fake).unwrap(), &link, &files, "Mine")).unwrap_err();
-    assert_eq!(err, Error::Conflict { branch: "main".to_owned(), files: vec!["main.tex".to_owned()] });
+    let err = block_on(commit(&client(&fake).unwrap(), &link, &files, "Mine", &Choices::new())).unwrap_err();
+    assert_eq!(
+        err,
+        Error::Conflict { branch: "main".to_owned(), files: vec![Conflict { path: "main.tex".to_owned(), kind: ConflictKind::Overlap }] }
+    );
     assert_eq!(fake.head("main"), head, "something was committed");
 }
 
@@ -124,7 +126,7 @@ fn the_same_change_made_on_the_branch_is_no_conflict() {
     fake.push("main", &[("main.tex", Some(b"same\n".as_slice()))]);
     set(&mut files, "main.tex", b"same\n");
     set(&mut files, "extra.tex", b"x\n");
-    let done = block_on(commit(&client(&fake).unwrap(), &link, &files, "Mine")).unwrap();
+    let done = block_on(commit(&client(&fake).unwrap(), &link, &files, "Mine", &Choices::new())).unwrap();
     assert!(done.commit.is_some());
     assert!(fake.last_actions().iter().all(|a| a["file_path"] != "main.tex"), "the branch's own change was sent again");
 }
@@ -135,18 +137,18 @@ fn a_commit_made_meanwhile_is_said_and_taken_in() {
     let Loaded { link, mut files } = opened(&fake).unwrap();
     fake.race("main", "late.tex", b"late\n");
     set(&mut files, "main.tex", b"mine\n");
-    let done = block_on(commit(&client(&fake).unwrap(), &link, &files, "Mine")).unwrap();
+    let done = block_on(commit(&client(&fake).unwrap(), &link, &files, "Mine", &Choices::new())).unwrap();
     assert!(done.raced);
-    assert!(done.taken.iter().any(|(p, _)| p == "late.tex"));
+    assert!(done.updates.iter().any(|(p, _)| p == "late.tex"));
 }
 
 #[test]
 fn a_protected_branch_is_refused_before_anything_is_sent() {
     let fake = paper();
     let Loaded { link, mut files } = opened(&fake).unwrap();
-    fake.set_can_push(false);
+    fake.protect("main");
     set(&mut files, "main.tex", b"mine\n");
-    let err = block_on(commit(&client(&fake).unwrap(), &link, &files, "Mine")).unwrap_err();
-    assert!(matches!(&err, Error::Forbidden { what } if what.contains("protected")), "{err:?}");
+    let err = block_on(commit(&client(&fake).unwrap(), &link, &files, "Mine", &Choices::new())).unwrap_err();
+    assert_eq!(err, Error::CannotPush { branch: "main".to_owned() });
     assert!(!fake.requests().iter().any(|r| r.starts_with("POST")));
 }

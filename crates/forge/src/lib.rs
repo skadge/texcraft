@@ -24,7 +24,10 @@ pub mod task;
 pub use address::{Address, GITLAB_COM, encode};
 pub use gitlab::{Branch, GitLab, ProjectInfo, TreeEntry};
 pub use http::{Request, Response, Sending, Transport, transport};
-pub use sync::{ChangeKind, Committed, FileChange, Link, Loaded, Skipped, changes, commit, open};
+pub use sync::{
+    ChangeKind, Choice, Choices, Committed, Conflict, ConflictKind, FileChange, Link, Loaded, MergeRequest, Pulled, REVIEW_DIR, Skipped, Update,
+    changes, check_branch_name, commit, commit_to_new_branch, is_review, open, pull,
+};
 
 /// Files larger than this are not loaded (datasets, videos): the project opens without them.
 pub const MAX_FILE: u64 = 10 * 1024 * 1024;
@@ -88,8 +91,15 @@ pub enum Error {
     Invalid(String),
     /// The project's files add up to more than [`MAX_PROJECT`].
     TooLarge { bytes: u64 },
-    /// The branch has commits since the base that change files changed here too.
-    Conflict { branch: String, files: Vec<String> },
+    /// The branch has commits since the base that change files changed here too, in ways that do
+    /// not merge.
+    Conflict { branch: String, files: Vec<Conflict> },
+    /// The branch does not take commits from this user: it is protected, or their role cannot push.
+    CannotPush { branch: String },
+    /// A new branch's name git does not accept.
+    BranchName(String),
+    /// There is nothing to commit.
+    Nothing,
     /// The operation's thread ended without an outcome.
     Stopped,
 }
@@ -126,9 +136,15 @@ impl std::fmt::Display for Error {
             ),
             Error::Conflict { branch, files } => write!(
                 f,
-                "Nothing was committed: the branch {branch} has new commits that change files you changed too ({}). Merging them is not available yet: copy your changes aside, open the branch again from GitLab and make them there.",
-                files.join(", ")
+                "The branch {branch} has new commits that change the same parts of files you changed ({}): nothing was taken in or committed. Choose for each file whether to keep yours or take the branch's, or commit to a new branch and open a merge request.",
+                files.iter().map(|c| format!("{}: {}", c.path, c.kind.as_str())).collect::<Vec<_>>().join(", ")
             ),
+            Error::CannotPush { branch } => write!(
+                f,
+                "Nothing was committed: the branch {branch} is protected, or your role in the project cannot push to it. Commit to a new branch and open a merge request instead."
+            ),
+            Error::BranchName(why) => write!(f, "This cannot be a branch's name: {why}."),
+            Error::Nothing => f.write_str("Nothing to commit: the files are as on the branch."),
             Error::Stopped => f.write_str("The GitLab operation stopped unexpectedly."),
         }
     }
