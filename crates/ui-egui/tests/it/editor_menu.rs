@@ -73,3 +73,53 @@ fn edit_comment_in_vim_mode_comments_visual_modes_selection_and_leaves_visual_mo
     assert!(h.query_by_label("NORMAL").is_some(), "Visual mode stayed after the comment was started");
     assert_eq!(post(&mut h, "Fast?"), "quick");
 }
+
+/// Presses and releases `button` at `at`, a frame each, as a hand does.
+fn press(h: &mut Harness<'_, App>, at: egui::Pos2, button: egui::PointerButton) {
+    h.event(egui::Event::PointerMoved(at));
+    h.run();
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton { pos: at, button, pressed, modifiers: egui::Modifiers::default() });
+        h.run();
+    }
+}
+
+#[test]
+fn add_a_comment_from_the_mouse_menu_comments_the_text_selected_with_the_mouse() {
+    for (vim, layout) in [(false, "split"), (true, "split"), (false, "editor")] {
+        let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+        s.execute("file.write", &json!({"path": "main.tex", "text": "The quick brown fox.\n"})).unwrap();
+        // Split: the editor's pane is too narrow for the margin, and the Review panel opens for the
+        // comment; the editor alone: the margin opens.
+        let prefs = Prefs { auto_compile: false, vim, layout: layout.to_owned(), identity: Some(Identity::new("Ada").unwrap()), ..Prefs::default() };
+        let mut h =
+            Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), App::with_prefs(s, prefs));
+        h.run();
+        // A drag across "quick", on the first line, past the gutter.
+        let r = h.get_by_label("main.tex source").rect();
+        let y = r.top() + 17.0;
+        let line = |h: &Harness<'_, App>| h.get_all_by_value("The quick brown fox.\n").next().map(|n| n.rect()).unwrap();
+        let x0 = line(&h).left();
+        let (a, b) = (egui::pos2(x0 + 70.0, y), egui::pos2(x0 + 140.0, y));
+        h.event(egui::Event::PointerMoved(a));
+        h.run();
+        h.event(egui::Event::PointerButton { pos: a, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::default() });
+        h.run();
+        for k in 1..=6 {
+            h.event(egui::Event::PointerMoved(a + (b - a) * (k as f32 / 6.0)));
+            h.run();
+        }
+        h.event(egui::Event::PointerButton { pos: b, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::default() });
+        h.run();
+        press(&mut h, egui::pos2(x0 + 100.0, y), egui::PointerButton::Secondary);
+        h.run();
+        let entry = h.get_by_label_contains("Add a Comment").rect().center();
+        press(&mut h, entry, egui::PointerButton::Primary);
+        h.run();
+        h.run();
+        let field = h.get_by_role_and_label(Role::MultilineTextInput, "Comment");
+        assert!(field.is_focused(), "the new comment's field did not get the keyboard (vim {vim}, {layout})");
+        let quote = post(&mut h, "Which fox?");
+        assert!(!quote.is_empty() && "The quick brown fox.".contains(&quote) && quote.len() < 12, "the comment is not on the selection: {quote:?}");
+    }
+}

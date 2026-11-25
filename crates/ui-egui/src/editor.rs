@@ -898,6 +898,14 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, r: &egui::Response) {
         menu = menu.open_memory(egui::SetOpenCommand::Bool(true));
     }
     let keyed = ui.data(|d| d.get_temp::<bool>(by_key));
+    // The selection as the menu opened: Add a Comment is on it, whatever the frames until an entry
+    // is chosen do to the editor's selection (the Review panel opening, the pointer's press).
+    let kept_id = r.id.with("menu-selection");
+    if r.secondary_clicked() || keyed == Some(true) {
+        let p = app.editor.source.doc.selection.primary();
+        ui.data_mut(|d| d.insert_temp(kept_id, (p.start(), p.end())));
+    }
+    let kept = ui.data(|d| d.get_temp::<(usize, usize)>(kept_id)).filter(|(start, end)| start < end);
     if keyed.is_some() {
         let source = &app.editor.source;
         let at = source.screen_rect(source.caret()).map_or(r.rect.left_top(), |c| c.left_bottom());
@@ -910,7 +918,7 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, r: &egui::Response) {
         Some(("edit.select_all", tl!("Select All"))),
         None,
     ];
-    if app.editor.source.selected().is_some() {
+    if app.editor.source.selected().is_some() || kept.is_some() {
         entries.push(Some(("edit.comment", tl!("Add a Comment"))));
     }
     if app.editor.source.on_problem() {
@@ -978,6 +986,9 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, r: &egui::Response) {
     if keyed == Some(true) {
         ui.data_mut(|d| d.insert_temp(by_key, false));
     }
+    if shown.is_none() || chosen.is_some() || spell_choice.is_some() || rewrite.is_some() {
+        ui.data_mut(|d| d.remove::<(usize, usize)>(kept_id));
+    }
     if let Some(choice) = rewrite {
         ui.data_mut(|d| d.remove::<bool>(by_key));
         app.editor.focus = true;
@@ -998,6 +1009,10 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, r: &egui::Response) {
     if let Some(id) = chosen {
         if id != "edit.comment" {
             app.editor.focus = true;
+        } else if let Some((start, end)) = kept
+            && app.editor.source.selected().is_none()
+        {
+            app.editor.source.select(start, end);
         }
         crate::ui_cmd::run(app, id);
     }
