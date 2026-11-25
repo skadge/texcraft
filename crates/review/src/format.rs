@@ -1,5 +1,5 @@
-//! The `.texcraft/review/` files (docs/review-format.md): one JSON file per thread, named by its
-//! id, with a format `version`. A file of a newer version is refused with a message instead of
+//! The `.texcraft/review/` files (docs/review-format.md): one JSON file per thread or suggestion,
+//! named by its id, with a format `version` and a `kind` (`thread` or `suggestion`). A file of a newer version is refused with a message instead of
 //! being read wrongly.
 
 use serde::Serialize;
@@ -28,7 +28,8 @@ struct File<'a> {
 
 /// The file's text for `thread`: pretty JSON, ending with a newline, so it diffs well in git.
 pub fn write(thread: &Thread) -> Result<String> {
-    let file = File { version: VERSION, kind: "thread", thread };
+    let kind = if thread.is_suggestion() { "suggestion" } else { "thread" };
+    let file = File { version: VERSION, kind, thread };
     let mut text = serde_json::to_string_pretty(&file).map_err(|e| Error::Invalid(e.to_string()))?;
     text.push('\n');
     Ok(text)
@@ -41,10 +42,16 @@ pub fn read(text: &str) -> Result<Thread> {
     if version > VERSION {
         return Err(Error::Newer(version));
     }
-    match value.get("kind").and_then(Value::as_str) {
-        Some("thread") => {}
-        Some(other) => return Err(Error::Invalid(format!("it holds a `{other}`, not a thread"))),
+    let suggestion = match value.get("kind").and_then(Value::as_str) {
+        Some("thread") => false,
+        Some("suggestion") => true,
+        Some(other) => return Err(Error::Invalid(format!("it holds a `{other}`, not a thread or a suggestion"))),
         None => return Err(Error::Invalid("it has no `kind`".to_owned())),
+    };
+    let thread: Thread = serde_json::from_value(value).map_err(|e| Error::Invalid(e.to_string()))?;
+    if thread.is_suggestion() != suggestion {
+        let what = if suggestion { "a suggestion without its `suggestion`" } else { "a thread with a `suggestion`" };
+        return Err(Error::Invalid(format!("it is {what}")));
     }
-    serde_json::from_value(value).map_err(|e| Error::Invalid(e.to_string()))
+    Ok(thread)
 }

@@ -38,6 +38,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "build.suggestions",
+            label: "Show Suggestions in the PDF",
+            menu: &[],
+            shortcut: None,
+            params: suggestions_schema,
+            enabled: always,
+            run: suggestions,
+            changes: true,
+        },
+        CommandSpec {
             id: "build.options",
             label: "Build Options",
             menu: &[],
@@ -101,6 +111,18 @@ fn on_schema() -> Value {
         "on": {"type": "boolean"},
         "delay_ms": {"type": "integer", "minimum": 200, "maximum": 10000, "description": "How long typing must pause before a build."}
     }, "required": ["on"], "additionalProperties": false})
+}
+
+fn suggestions_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "on": {"type": "boolean", "description": "Build the sources with their open suggestions applied (the files are not changed); off, builds ignore suggestions."}
+    }, "required": ["on"], "additionalProperties": false})
+}
+
+fn suggestions(s: &mut Session, p: &Value) -> Result<Value> {
+    let on = p.get("on").and_then(Value::as_bool).ok_or("the parameter `on` (a boolean) is missing")?;
+    s.set_with_suggestions(on);
+    Ok(json!({"on": on}))
 }
 
 fn options_schema() -> Value {

@@ -113,3 +113,74 @@ fn commenting_needs_a_name_and_a_passage_in_the_text() {
     assert!(s.execute("review.comment", &json!({"path": "main.tex", "start": 0, "end": 1, "text": "x"})).is_ok());
     assert_eq!(s.review().threads().len(), 1);
 }
+
+fn text_of(s: &mut Session) -> Result<String, String> {
+    Ok(str_of(&s.execute("file.read", &json!({"path": "main.tex"}))?["text"]))
+}
+
+#[test]
+fn a_suggestion_leaves_the_file_is_kept_in_the_folder_and_accepting_it_makes_the_edit() -> R {
+    let dir = project("suggest", "The colour of the sky.\n")?;
+    let mut s = open(&dir, "Bob")?;
+    let r = s.execute("review.suggest", &json!({"path": "main.tex", "start": 4, "end": 10, "text": "color"}))?;
+    let id = str_of(&r["id"]);
+    assert_eq!(text_of(&mut s)?, "The colour of the sky.\n", "suggesting changed the file");
+    assert_eq!(r["thread"]["kind"], "suggestion");
+    let file = std::fs::read_to_string(&review_files(&dir)?[0])?;
+    assert!(file.contains("\"suggestion\""), "{file}");
+    // Typed before it, then read again from the folder: it is on its passage.
+    s.execute("file.edit", &json!({"path": "main.tex", "edits": [{"start": 0, "end": 0, "text": "See: "}]}))?;
+    s.execute("project.save", &json!({}))?;
+    let mut ada = open(&dir, "Ada")?;
+    let list = ada.execute("review.list", &json!({"kind": "suggestion"}))?;
+    assert_eq!(list["openSuggestions"], 1);
+    ada.execute("review.reply", &json!({"id": id, "text": "Yes, American spelling."}))?;
+    ada.execute("review.accept", &json!({"id": id}))?;
+    assert_eq!(text_of(&mut ada)?, "See: The color of the sky.\n");
+    let edits = ada.edits_since(&texcraft_engine::project::ProjectPath::new("main.tex")?, 0).unwrap_or_default();
+    assert!(edits.last().is_some_and(|e| e.origin == texcraft_engine::Origin::Review), "the accept is not an edit with the review origin");
+    assert!(ada.execute("review.accept", &json!({"id": id})).is_err(), "a suggestion was accepted twice");
+    let file = std::fs::read_to_string(&review_files(&dir)?[0])?;
+    assert!(file.contains("accepted"), "{file}");
+    Ok(())
+}
+
+#[test]
+fn rejecting_leaves_the_text_and_undoing_an_accept_reopens_the_suggestion() -> R {
+    let dir = project("undo-accept", "one two three\n")?;
+    let mut s = open(&dir, "Ada")?;
+    let two = str_of(&s.execute("review.suggest", &json!({"path": "main.tex", "start": 4, "end": 7, "text": "2"}))?["id"]);
+    let three = str_of(&s.execute("review.suggest", &json!({"path": "main.tex", "start": 8, "end": 13, "text": "3"}))?["id"]);
+    s.execute("review.reject", &json!({"id": three}))?;
+    assert_eq!(text_of(&mut s)?, "one two three\n");
+    s.execute("review.accept", &json!({"id": two}))?;
+    assert_eq!(text_of(&mut s)?, "one 2 three\n");
+    // The editor's undo of it, sent back as an edit with the undo origin.
+    s.execute("file.edit", &json!({"path": "main.tex", "edits": [{"start": 4, "end": 5, "text": "two"}], "origin": "undo"}))?;
+    assert_eq!(text_of(&mut s)?, "one two three\n");
+    let open = s.execute("review.list", &json!({"state": "open", "kind": "suggestion"}))?;
+    assert_eq!(open["threads"][0]["id"], json!(two), "the undone accept did not reopen its suggestion");
+    s.execute("review.accept", &json!({"id": two}))?;
+    assert_eq!(text_of(&mut s)?, "one 2 three\n");
+    Ok(())
+}
+
+#[test]
+fn accept_all_is_one_edit_and_reports_the_overlapping_suggestions_as_outdated() -> R {
+    let dir = project("accept-all", "a quick brown fox\n")?;
+    let mut s = open(&dir, "Ada")?;
+    for (start, end, text) in [(2, 7, "slow"), (14, 17, "dog"), (4, 13, "ick red")] {
+        s.execute("review.suggest", &json!({"path": "main.tex", "start": start, "end": end, "text": text}))?;
+    }
+    let before = s.revision();
+    let r = s.execute("review.accept_all", &json!({"path": "main.tex"}))?;
+    assert_eq!(text_of(&mut s)?, "a slow brown dog\n");
+    assert_eq!(s.revision(), before + 1, "Accept All was not one edit");
+    assert_eq!(r["accepted"], 2);
+    assert_eq!(r["outdated"].as_array().map(Vec::len), Some(1));
+    // Outdated, the last can still be rejected, and Reject All takes what is left.
+    let r = s.execute("review.reject_all", &json!({}))?;
+    assert_eq!(r["rejected"], 1);
+    assert_eq!(s.execute("review.list", &json!({"state": "open"}))?["open"], 0);
+    Ok(())
+}

@@ -46,11 +46,14 @@ pub struct Settings {
     pub auto_compile_delay_ms: u64,
     /// The engine, stopping at the first error, draft images (`build.options`).
     pub build: texcraft_compile::Options,
+    /// Build the sources with their open suggestions applied, without writing them
+    /// (`build.suggestions`); the normal build ignores suggestions.
+    pub with_suggestions: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { auto_compile: true, auto_compile_delay_ms: 800, build: texcraft_compile::Options::default() }
+        Self { auto_compile: true, auto_compile_delay_ms: 800, build: texcraft_compile::Options::default(), with_suggestions: false }
     }
 }
 
@@ -82,6 +85,8 @@ pub struct Session {
     revision: u64,
     /// The revision the last finished build was started from.
     built_revision: Option<u64>,
+    /// The review revision the last build started at, for builds with suggestions.
+    built_review: u64,
     builder: Builder,
     next_job: u64,
     last: Option<Outcome>,
@@ -156,6 +161,7 @@ impl Session {
             dirty: false,
             revision: 0,
             built_revision: None,
+            built_review: 0,
             builder,
             next_job: 1,
             last: None,
@@ -529,7 +535,37 @@ impl Session {
 
     /// Whether the sources changed since the last build started.
     pub fn is_stale(&self) -> bool {
-        self.built_revision != Some(self.revision)
+        self.built_revision != Some(self.revision) || (self.settings.with_suggestions && self.built_review != self.review.revision)
+    }
+
+    /// Builds with the open suggestions applied, or not (`build.suggestions`); a change makes the
+    /// PDF stale.
+    pub(crate) fn set_with_suggestions(&mut self, on: bool) {
+        if on != self.settings.with_suggestions {
+            self.settings.with_suggestions = on;
+            self.built_revision = None;
+        }
+    }
+
+    /// The project as it would be with every open suggestion that can be applied, for a build
+    /// with suggestions; the files are not changed.
+    fn with_suggestions(&self) -> Project {
+        let mut project = self.project.clone();
+        let filter = review::Filter { open: Some(true), kind: Some(review::Kind::Suggestion), ..Default::default() };
+        let list = self.review.review.to_accept_all(&filter);
+        let mut rest = list.as_slice();
+        while let Some(first) = rest.first() {
+            let n = rest.iter().take_while(|a| a.path == first.path).count();
+            let (group, next) = rest.split_at(n);
+            rest = next;
+            let changes = group.iter().map(|a| Change { start: a.start, end: a.end, text: a.replacement.clone() }).collect();
+            let (Ok(path), Ok(tx)) = (ProjectPath::new(&first.path), Transaction::new(changes)) else { continue };
+            let made = project.text(&path).ok().and_then(|text| edits::apply(text, &tx));
+            if let Some(text) = made {
+                let _ = project.set(&path, texcraft_project::Contents::Text(text));
+            }
+        }
+        project
     }
 
     /// Replaces the text of `path` as the smallest edit that makes it (`file.write`).
@@ -549,9 +585,23 @@ impl Session {
         }
         self.project.set(path, texcraft_project::Contents::Text(new)).map_err(|e| e.to_string())?;
         self.touch();
-        let changes: Vec<(usize, usize, usize)> = tx.changes().iter().map(|c| (c.start, c.end, c.text.chars().count())).collect();
-        self.review.review.follow(path.as_str(), &changes);
+        // The anchors follow; an undo or redo may also take back or make again an accept.
+        let changed = if matches!(origin, Origin::Undo | Origin::Redo) {
+            let changes: Vec<(usize, usize, String)> = tx.changes().iter().map(|c| (c.start, c.end, c.text.clone())).collect();
+            let now = self.now();
+            self.review.review.follow_undo(path.as_str(), &changes, self.author.as_ref(), now)
+        } else {
+            let changes: Vec<(usize, usize, usize)> = tx.changes().iter().map(|c| (c.start, c.end, c.text.chars().count())).collect();
+            self.review.review.follow(path.as_str(), &changes)
+        };
         self.edits.push(FileEdit { revision: self.revision, path: path.clone(), changes: tx.clone(), origin });
+        // Suggestions the edit outdated, reopened or accepted again: the edit is made either way,
+        // and a review file that could not be written is reported with the review's problems.
+        for id in changed {
+            if let Err(e) = self.review_changed(id) {
+                self.review.problems.push(e);
+            }
+        }
         Ok(())
     }
 
@@ -666,10 +716,12 @@ impl Session {
         }
         let id = self.next_job;
         self.next_job += 1;
-        let mut job = Job::from_project(&self.project, id).ok_or("The project has no main document to build.")?;
+        let suggested = self.settings.with_suggestions.then(|| self.with_suggestions());
+        let mut job = Job::from_project(suggested.as_ref().unwrap_or(&self.project), id).ok_or("The project has no main document to build.")?;
         job.options = self.settings.build;
         job.project = self.project_key();
         self.built_revision = Some(self.revision);
+        self.built_review = self.review.revision;
         match &mut self.builder {
             #[cfg(not(target_arch = "wasm32"))]
             Builder::Thread(w) => w.submit(job),

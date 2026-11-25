@@ -29,7 +29,8 @@ impl Tools for TexTools {
         "TeXCraft edits and builds LaTeX projects. Call `command_list` to see every command and its \
          parameters, then `command_run`. Open a project folder inside the write root with \
          `project.open`; files are addressed by paths relative to the project. Change text with \
-         `file.edit` (character offsets); comment on a passage with `review.comment`."
+         `file.edit` (character offsets); comment on a passage with `review.comment`, or propose \
+         a change for the author to accept or reject with `review.suggest`."
             .to_owned()
     }
 

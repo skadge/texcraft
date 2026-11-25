@@ -70,7 +70,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 |---|---|---|---|
 | C1 | ✅ 0.2.2 | Comments | Threads on passages in a margin beside the text, replies, resolve, filters, kept in the project. |
 | C2 | ✅ 0.4.0 | Hiding the comments | The margin can be hidden; the Review panel still lists the comments. |
-| C3 | ⬜ | Suggested changes | Edits proposed in the margin, accepted or rejected one by one. |
+| C3 | ✅ 0.7.0 | Suggested changes | Suggest mode: edits proposed instead of made, shown struck through and underlined in the text and as cards in the margin, accepted or rejected one by one or all at once (each accept undoable), replies, a PDF with or without them. Outside Suggest mode a replacement shows only in its card. |
 | C4 | ✅ 0.5.0 | History | The project's commits (C8) by date, a diff view, restoring a file or the whole project at a version (itself a new commit). |
 | C5 | ⬜ | Git forges | A project opened from GitLab or GitHub (their web APIs answer browsers), committed back, kept up with the branch with a three-way merge, a merge request when the branch cannot take a commit; push and pull for folders (retex's `docs/design/gitlab.md`). |
 | C6 | ⬜ | Cloud projects and sharing | Projects in cloud storage, shared with others. |

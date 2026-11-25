@@ -1,6 +1,6 @@
 # Roadmap: review and working together
 
-> **Status:** plan, 2026-11-22. F1 and R1 are done; the rest is to do. The design is in [`collaboration.md`](collaboration.md); this page orders the work. Each milestone ends with something a user can use. Each lists its deliverables, its tests, and how we know it is done.
+> **Status:** plan, 2026-11-22. F1, R1 and R2 are done; the rest is to do. The design is in [`collaboration.md`](collaboration.md); this page orders the work. Each milestone ends with something a user can use. Each lists its deliverables, its tests, and how we know it is done.
 
 ## Decisions (operator, 2026-11-22)
 
@@ -107,6 +107,8 @@ Later, outside this roadmap: cloud backends and named-people sharing (`craft-clo
 ---
 
 ## R2: Suggested changes
+
+**Status:** **done** (2026-11-25), built as below with these differences. A suggestion is a thread with a `suggestion` (author, time, replacement, outdated) rather than a separate type, so replies, filters, F8, files and the margin are the comments'; its file's `kind` is `suggestion` ([`review-format.md`](review-format.md)). The suggested text is drawn inline in **Suggest mode** only: there the editor shows the file with its suggestions in it (`texcraft_review::view`, the passage struck through and the replacement underlined) and reads each edit of that text as `review.suggest` and `review.delete` calls, instead of the view laying out virtual text; outside Suggest mode passages are struck through and insertion points marked, and the replacement is in the card. Suggest mode is a toolbar switch beside Source and Formatted, Edit › Suggest Changes (`edit.suggest_mode`, Cmd+Shift+E) and `:set suggest`. `review.suggest` takes an optional `id` to change one's own suggestion (how typing on extends one). An undo of an accept is recognised by the session (an `undo` edit that puts the passage back reopens the suggestion; a redo accepts it again), so it works for agents' undos too; an accept made while suggesting is not in the editor's undo history. Preview with suggestions is `build.suggestions {on}`, a switch in Suggest mode's line and the Review panel. Limits: suggestions an accept outdated stay outdated when it is undone; in Suggest mode completion, hover and go to definition are off; an insertion is found again on load by its offset only (R4 adds context).
 
 **Deliverables:**
 - **`texcraft-review`:** `Suggestion { id, author, time, anchor, replacement, state, thread? }`.

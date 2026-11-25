@@ -2,6 +2,7 @@
 
 mod anchors;
 mod model;
+mod suggestions;
 
 use chrono::{DateTime, TimeZone, Utc};
 use texcraft_review::{Anchor, Author, Id, Message, Review};

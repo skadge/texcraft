@@ -42,6 +42,9 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("edit.comment", "Comment", "Edit", "review", Some("Cmd+Alt+M")),
     ui("edit.next_comment", "Next Comment", "Edit", "review", Some("F8")),
     ui("edit.previous_comment", "Previous Comment", "Edit", "review", Some("Shift+F8")),
+    ui("edit.suggest_mode", "Suggest Changes", "Edit", "review", Some("Cmd+Shift+E")),
+    ui("edit.accept_all", "Accept All Suggestions", "Edit", "review", None),
+    ui("edit.reject_all", "Reject All Suggestions", "Edit", "review", None),
     ui("app.settings", "Settings…", "Edit", "settings", Some("Cmd+,")),
     // Insert holds what the editor's toolbar does, for the keyboard and when the toolbar is narrow.
     ui("edit.section", "Section", "Insert", "headings", None),
@@ -106,6 +109,9 @@ pub const MENUS: &[&str] = &["File", "Edit", "Insert", "Help"];
 pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
     match id {
         "edit.cut" | "edit.copy" if app.editor.source.selected().is_none() => Err(tl!("Select some text first.").to_owned()),
+        "edit.accept_all" | "edit.reject_all" if crate::review::open_suggestions_in_current(app) == 0 => {
+            Err(tl!("There are no open suggestions in this file.").to_owned())
+        }
         // The browser gives a page the clipboard's text only with the paste keys.
         "edit.paste" if cfg!(target_arch = "wasm32") => {
             Err(tl!("In the browser, paste with Ctrl+V (Cmd+V on a Mac): a menu cannot read the clipboard there.").to_owned())
