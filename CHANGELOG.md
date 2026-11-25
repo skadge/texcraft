@@ -5,6 +5,50 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.5.0 (2026-11-25)
+
+Every project now has a history, kept in git, and TeXCraft exports to Word, PowerPoint and
+more. First experimental builds for Windows and macOS.
+
+### Projects and history
+
+- Every project is a git repository, as on online LaTeX editors: a folder that is not in one
+  becomes one on its first save, and each save is a version. A folder already in a repository is
+  used as it is, and TeXCraft commits there only when asked.
+- A History panel lists the versions, shows what changed in each file, and restores a file or
+  the whole project.
+- Go to File (Ctrl+P), new folders, and moving files by dragging them onto a folder.
+- Search and replace across the whole project (Ctrl+Shift+F), results grouped by file.
+- Six templates of TeXCraft's own (article, thesis, slides, letter, CV, homework), built in: no
+  download, offline and in the browser.
+- A file deleted, renamed or moved in TeXCraft no longer comes back when the project is reopened
+  (#2).
+
+### Writing and building
+
+- Export from the PDF pane: Word, OpenDocument, PowerPoint (first for beamer slides), HTML,
+  Markdown and SVG, on the desktop and in the browser.
+- A menu on right-click in the text (also Shift+F10): cut, copy, paste, add a comment, quick fix,
+  show in PDF.
+- In Vim mode, a Visual selection can be commented.
+- The page being built shows beside the PDF too.
+
+### In the browser
+
+- A project's second visit builds without waiting for TeX files one by one.
+- The engine's files are named after their contents, so an update never leaves an old engine in
+  the browser.
+
+### Windows and macOS (experimental)
+
+- A Windows zip and a macOS app (Apple Silicon) are attached to the release on the GitHub mirror.
+  They are not signed and have had little testing: please report what goes wrong.
+
+Known limits:
+
+- History is kept on the desktop only; browser projects keep their latest version.
+- In the browser, a document that needs a package outside the site's TeX tree does not build.
+
 ## 0.4.0 (2026-11-24)
 
 The browser version is now self-contained and keeps your work: projects, templates and the TeX

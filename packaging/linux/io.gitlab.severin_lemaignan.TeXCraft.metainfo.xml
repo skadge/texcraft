@@ -41,6 +41,19 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.5.0" date="2026-11-25" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.5.0</url>
+      <description>
+        <p>Project history in git, export to other formats, and editing comforts.</p>
+        <ul>
+          <li>Every project is a git repository, with a History panel to compare and restore versions</li>
+          <li>Export to Word, OpenDocument, PowerPoint, HTML, Markdown and SVG</li>
+          <li>Go to File, search across the project, new folders and moving files</li>
+          <li>Built-in templates for an article, a thesis, slides, a letter, a CV and homework</li>
+          <li>A context menu in the text</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-11-24" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.4.0</url>
       <description>
