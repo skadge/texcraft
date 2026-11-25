@@ -31,6 +31,7 @@ wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [
     "Window", "Document", "HtmlCanvasElement", "Element", "Event", "EventTarget", "BeforeUnloadEvent", "Response",
     "DragEvent", "DataTransfer", "Url", "HtmlAnchorElement", "HtmlElement", "DataTransferItemList", "DataTransferItem", "FileList", "File", "Blob", "AddEventListenerOptions",
+    "FileSystemEntry", "FileSystemDirectoryEntry", "FileSystemFileEntry", "FileSystemDirectoryReader",
     "IdbFactory", "IdbOpenDbRequest", "IdbRequest", "IdbDatabase", "IdbObjectStore", "IdbTransaction", "IdbTransactionMode", "IdbKeyRange", "DomException", "DomStringList",
     "Location", "History", "Storage",
 ] }

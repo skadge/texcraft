@@ -33,6 +33,9 @@ mod web {
     type Errors = Rc<RefCell<Vec<String>>>;
     /// The window's context once it draws, for work done outside a frame to ask for one.
     type Repaint = Rc<RefCell<Option<egui::Context>>>;
+    /// The names of what a drop of folders brought, read by [`read_dropped_tree`]: eframe hands
+    /// the same drop over as files, which are left out.
+    type Taken = Rc<RefCell<Vec<String>>>;
     /// Templates fetched (their files, or why not), waiting for the next frame.
     type Fetched = Rc<RefCell<Vec<(String, Result<Vec<(String, Vec<u8>)>, String>)>>>;
 
@@ -68,6 +71,9 @@ mod web {
     struct Shell {
         app: App,
         chosen: Chosen,
+        /// Zip files chosen for Import a Zip File.
+        zips: Chosen,
+        taken: Taken,
         started: bool,
         store: Option<Store>,
         errors: Errors,
@@ -152,12 +158,30 @@ mod web {
                             ctx.request_repaint();
                         });
                     }
+                    Pick::ImportZip => {
+                        let zips = self.zips.clone();
+                        let ctx = ctx.clone();
+                        wasm_bindgen_futures::spawn_local(async move {
+                            let dialog = rfd::AsyncFileDialog::new().set_title(&request.title).add_filter("zip", &["zip"]);
+                            let Some(handles) = dialog.pick_files().await else { return };
+                            for handle in handles {
+                                let bytes = handle.read().await;
+                                zips.borrow_mut().push((handle.file_name(), bytes));
+                            }
+                            ctx.request_repaint();
+                        });
+                    }
                     _ => {
                         self.app.pick_failed(texcraft_ui_egui::i18n::t("Folders and paths on disk are not available in the browser yet.").to_owned())
                     }
                 }
             }
+            let taken = std::mem::take(&mut *self.taken.borrow_mut());
             for file in self.app.take_dropped_files() {
+                // Read already, with its folders, from the drop's entries.
+                if taken.iter().any(|name| file.path().as_os_str() == name.as_str()) {
+                    continue;
+                }
                 let chosen = self.chosen.clone();
                 let errors = self.errors.clone();
                 let ctx = ctx.clone();
@@ -168,12 +192,17 @@ mod web {
                         Ok(bytes) => chosen.borrow_mut().push((name, bytes)),
                         Err(e) => {
                             log::warn!("the dropped file {name} could not be read: {e}");
-                            let what = texcraft_ui_egui::i18n::t("The browser did not let TeXCraft read {file}: {error}");
+                            let what = texcraft_ui_egui::i18n::t(
+                                "The browser did not let TeXCraft read {file}: {error}. If it is a folder, this browser does not let pages read dropped folders: drop a zip file of it instead.",
+                            );
                             errors.borrow_mut().push(what.replace("{file}", &name).replace("{error}", &e));
                         }
                     }
                     ctx.request_repaint();
                 });
+            }
+            for (name, bytes) in std::mem::take(&mut *self.zips.borrow_mut()) {
+                self.app.unzip_file(name, bytes);
             }
             for id in self.app.take_template_requests() {
                 let fetched = self.fetched.clone();
@@ -241,14 +270,37 @@ mod web {
     /// drags leave empty (Firefox, from a file manager) while their items hold the file. Those
     /// files are read from the items here; a drop with no file at all is said on the status line,
     /// with what it carried. Listens before eframe (capture), and leaves drops with files to it.
-    fn watch_drops(canvas: &web_sys::HtmlCanvasElement, chosen: &Chosen, errors: &Errors, repaint: &Repaint) {
-        let (chosen, errors, repaint) = (chosen.clone(), errors.clone(), repaint.clone());
+    ///
+    /// A drop with a folder is read here too, through the drop's entries (`webkitGetAsEntry`):
+    /// eframe's files have no folders. The whole drop is then read here, and eframe's copy of it
+    /// left out ([`Taken`]).
+    fn watch_drops(canvas: &web_sys::HtmlCanvasElement, chosen: &Chosen, errors: &Errors, repaint: &Repaint, taken: &Taken) {
+        let (chosen, errors, repaint, taken) = (chosen.clone(), errors.clone(), repaint.clone(), taken.clone());
         let ondrop = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::DragEvent)>::new(move |event: web_sys::DragEvent| {
             let Some(transfer) = event.data_transfer() else { return };
+            let items = transfer.items();
+            // The entries can be read only while the event is handled; their files later.
+            let entries: Vec<web_sys::FileSystemEntry> = (0..items.length())
+                .filter_map(|i| items.get(i))
+                .filter(|item| item.kind() == "file")
+                .filter_map(|item| item.webkit_get_as_entry().ok().flatten())
+                .collect();
+            if entries.iter().any(|e| e.is_directory()) {
+                *taken.borrow_mut() = entries.iter().map(|e| e.name()).collect();
+                let (chosen, errors, repaint) = (chosen.clone(), errors.clone(), repaint.clone());
+                wasm_bindgen_futures::spawn_local(async move {
+                    let (files, problems) = read_dropped_tree(entries).await;
+                    chosen.borrow_mut().extend(files);
+                    errors.borrow_mut().extend(problems);
+                    if let Some(ctx) = &*repaint.borrow() {
+                        ctx.request_repaint();
+                    }
+                });
+                return;
+            }
             if transfer.files().is_some_and(|f| f.length() > 0) {
                 return;
             }
-            let items = transfer.items();
             let files: Vec<web_sys::File> = (0..items.length())
                 .filter_map(|i| items.get(i))
                 .filter(|item| item.kind() == "file")
@@ -286,6 +338,104 @@ mod web {
             log::warn!("drops cannot be watched: {e:?}");
         }
         ondrop.forget();
+    }
+
+    /// The files of dropped folders and files, by their path from the drop (`paper/figures/a.png`),
+    /// with what could not be read. Hidden entries and build outputs are not read: they are
+    /// passed on by name, empty, for the import to report as left out. The import's limits stop
+    /// the reading; what is left unread is said.
+    async fn read_dropped_tree(roots: Vec<web_sys::FileSystemEntry>) -> (Vec<(String, Vec<u8>)>, Vec<String>) {
+        use texcraft_engine::import::{Limits, skip_reason};
+        use texcraft_ui_egui::i18n::t;
+        const MAX_DEPTH: usize = 32;
+        let limits = Limits::default();
+        let max_file = texcraft_engine::project::MAX_FILE_BYTES as f64;
+        let (mut files, mut problems) = (Vec::new(), Vec::new());
+        let (mut bytes, mut count, mut unread) = (0u64, 0usize, 0usize);
+        let mut stack: Vec<(web_sys::FileSystemEntry, String, usize)> = roots.into_iter().rev().map(|e| (e.clone(), e.name(), 0)).collect();
+        while let Some((entry, path, depth)) = stack.pop() {
+            if skip_reason(&path).is_some() {
+                files.push((path, Vec::new()));
+                continue;
+            }
+            // By what the entries say they are: the interfaces' names differ between browsers.
+            if entry.is_directory() {
+                let dir: &web_sys::FileSystemDirectoryEntry = entry.unchecked_ref();
+                if depth >= MAX_DEPTH {
+                    unread += 1;
+                    continue;
+                }
+                match entries_of(dir, limits.files.saturating_mul(2)).await {
+                    Ok(children) => stack.extend(children.into_iter().rev().map(|c| {
+                        let name = c.name();
+                        (c, format!("{path}/{name}"), depth + 1)
+                    })),
+                    Err(e) => {
+                        problems.push(t("The browser did not let TeXCraft read {file}: {error}").replace("{file}", &path).replace("{error}", &e))
+                    }
+                }
+                continue;
+            }
+            if !entry.is_file() {
+                continue;
+            }
+            let entry: &web_sys::FileSystemFileEntry = entry.unchecked_ref();
+            let file = match file_of(entry).await {
+                Ok(file) => file,
+                Err(e) => {
+                    problems.push(t("The browser did not let TeXCraft read {file}: {error}").replace("{file}", &path).replace("{error}", &e));
+                    continue;
+                }
+            };
+            let size = file.size();
+            if count >= limits.files || size > max_file || bytes as f64 + size > limits.bytes as f64 {
+                unread += 1;
+                continue;
+            }
+            match wasm_bindgen_futures::JsFuture::from(file.array_buffer()).await {
+                Ok(buffer) => {
+                    let data = js_sys::Uint8Array::new(&buffer).to_vec();
+                    bytes += data.len() as u64;
+                    count += 1;
+                    files.push((path, data));
+                }
+                Err(e) => problems
+                    .push(t("The browser did not let TeXCraft read {file}: {error}").replace("{file}", &path).replace("{error}", &format!("{e:?}"))),
+            }
+        }
+        if unread > 0 {
+            let said = t("{n} dropped files were not read: past the limit of 5,000 files or 500 MB, larger than 64 MB, or nested too deep.");
+            problems.push(said.replace("{n}", &unread.to_string()));
+        }
+        (files, problems)
+    }
+
+    /// The entries of folder `dir`, at most `max`. The browser gives them in batches until one is
+    /// empty.
+    async fn entries_of(dir: &web_sys::FileSystemDirectoryEntry, max: usize) -> Result<Vec<web_sys::FileSystemEntry>, String> {
+        let reader = dir.create_reader();
+        let mut all = Vec::new();
+        while all.len() < max {
+            let promise = js_sys::Promise::new(&mut |resolve, reject| {
+                if let Err(e) = reader.read_entries_with_callback_and_callback(&resolve, &reject) {
+                    let _ = reject.call1(&wasm_bindgen::JsValue::NULL, &e);
+                }
+            });
+            let batch = wasm_bindgen_futures::JsFuture::from(promise).await.map_err(|e| format!("{e:?}"))?;
+            let batch: js_sys::Array = batch.dyn_into().map_err(|_| "the browser listed no entries".to_owned())?;
+            if batch.length() == 0 {
+                break;
+            }
+            all.extend(batch.iter().map(|v| v.unchecked_into::<web_sys::FileSystemEntry>()));
+        }
+        Ok(all)
+    }
+
+    /// The file of a dropped folder's entry.
+    async fn file_of(entry: &web_sys::FileSystemFileEntry) -> Result<web_sys::File, String> {
+        let promise = js_sys::Promise::new(&mut |resolve, reject| entry.file_with_callback_and_callback(&resolve, &reject));
+        let file = wasm_bindgen_futures::JsFuture::from(promise).await.map_err(|e| format!("{e:?}"))?;
+        file.dyn_into().map_err(|_| "not a file".to_owned())
     }
 
     /// Asks the browser to warn before the page is left or reloaded while `unsaved` is set (the
@@ -456,10 +606,12 @@ mod web {
             }
             let chosen = Chosen::default();
             let repaint = Repaint::default();
-            watch_drops(&canvas, &chosen, &errors, &repaint);
+            let taken = Taken::default();
+            watch_drops(&canvas, &chosen, &errors, &repaint, &taken);
             let unsaved = Rc::new(Cell::new(false));
             warn_before_leaving(unsaved.clone());
-            let shell = Shell { app, chosen, started: false, store, errors, fetched: Fetched::default(), repaint, unsaved };
+            let shell =
+                Shell { app, chosen, zips: Chosen::default(), taken, started: false, store, errors, fetched: Fetched::default(), repaint, unsaved };
             let started = eframe::WebRunner::new().start(canvas, eframe::WebOptions::default(), Box::new(|_cc| Ok(Box::new(shell)))).await;
             if let Err(e) = started {
                 log::error!("TeXCraft could not start: {e:?}");
