@@ -11,7 +11,8 @@
 //!   have built anything (AGENTS.md rule 15).
 //!
 //! [`formulas`] (feature `retex`, not on wasm32) typesets a file's formulas on their own, for the
-//! formatted view.
+//! formatted view; [`scratch`] typesets a scratch document after the project's preamble, for a
+//! preview of LaTeX a model wrote.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
@@ -24,6 +25,8 @@ pub mod formulas;
 pub mod records;
 #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
 pub mod retex_backend;
+#[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
+pub mod scratch;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
 #[cfg(target_arch = "wasm32")]

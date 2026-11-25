@@ -4,3 +4,4 @@ mod export;
 mod formulas;
 mod output;
 mod progress;
+mod scratch;
