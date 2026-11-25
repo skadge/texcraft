@@ -330,6 +330,18 @@ impl Vim {
         self.write(ctx);
     }
 
+    /// A command outside Vim acted on Visual mode's selection (commenting it, copying it from a
+    /// menu): Vim goes back to Normal mode as after an operator, with the caret at the selection's
+    /// start and the `'<` and `'>` marks on it (`gv` selects it again).
+    pub fn end_visual(&mut self, ctx: &mut Ctx) {
+        self.adopt(ctx);
+        if self.mode.is_visual() {
+            self.pending.clear();
+            self.leave_visual(ctx);
+        }
+        self.write(ctx);
+    }
+
     /// Handles a key.
     pub fn key(&mut self, key: Key, ctx: &mut Ctx) -> Outcome {
         self.adopt(ctx);
@@ -362,15 +374,18 @@ impl Vim {
                 if self.mode.is_visual() {
                     self.mode = Mode::Normal;
                 }
-            } else if !self.mode.is_inserting() {
+            } else {
+                // A selection made in Insert mode (a drag) ends the insert, as Escape would, so
+                // that the selection is Visual mode's and the commands that act on one see it.
+                if self.mode.is_inserting() {
+                    self.finish_insert(ctx);
+                }
                 self.mode = Mode::Visual;
                 if r.head > r.anchor {
                     (self.anchor, self.cursor) = (r.anchor, r.head - 1);
                 } else {
                     (self.anchor, self.cursor) = (r.anchor.saturating_sub(1), r.head);
                 }
-            } else {
-                self.cursor = r.head;
             }
             self.want = None;
         }
@@ -1412,6 +1427,12 @@ impl Vim {
         if column(b, self.cursor) > 0 {
             self.cursor -= 1;
         }
+        self.finish_insert(ctx);
+    }
+
+    /// Back to Normal mode from Insert mode: the insert is one undo step and what `.` repeats.
+    fn finish_insert(&mut self, ctx: &mut Ctx) {
+        self.insert = None;
         self.mode = Mode::Normal;
         self.oneshot = false;
         ctx.buffer.end_group();

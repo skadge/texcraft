@@ -65,6 +65,18 @@ fn mark(ui: &mut egui::Ui, t: &Tokens) -> bool {
 
 /// One menu item with an optional icon and shortcut; disabled items say why on hover.
 pub(crate) fn item(ui: &mut egui::Ui, t: &Tokens, icon: Option<&str>, label: &str, shortcut: Option<String>, enabled: Result<(), String>) -> bool {
+    item_response(ui, t, icon, label, shortcut, enabled).clicked()
+}
+
+/// [`item`]'s response, for giving it the keyboard.
+pub(crate) fn item_response(
+    ui: &mut egui::Ui,
+    t: &Tokens,
+    icon: Option<&str>,
+    label: &str,
+    shortcut: Option<String>,
+    enabled: Result<(), String>,
+) -> egui::Response {
     let mut button = match icon {
         Some(name) => egui::Button::image_and_text(icons::image(name, t.icon_size, t.text_muted), label),
         None => egui::Button::new(label),
@@ -74,20 +86,19 @@ pub(crate) fn item(ui: &mut egui::Ui, t: &Tokens, icon: Option<&str>, label: &st
     }
     let response = ui.add_enabled(enabled.is_ok(), button.frame_when_inactive(false));
     match enabled {
-        Err(reason) => {
-            response.on_disabled_hover_text(reason);
-            false
-        }
-        Ok(()) => response.clicked(),
+        Err(reason) => response.on_disabled_hover_text(reason),
+        Ok(()) => response,
     }
 }
 
 /// The icon of an engine or view command in menus.
-fn icon_for(id: &str) -> Option<&'static str> {
+pub(crate) fn icon_for(id: &str) -> Option<&'static str> {
     Some(match id {
         "project.new" => "file-plus",
         "project.from_template" => "book-open",
         "edit.undo" => "undo-2",
+        "edit.copy" => "copy",
+        "edit.comment" => "message-square-text",
         "edit.redo" => "redo-2",
         "edit.find" => "search",
         "project.open" => "folder-open",
@@ -145,7 +156,7 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
             ui.separator();
         }
         last_group = c.group;
-        if item(ui, &t, icon_for(c.id), crate::i18n::t(c.label), app.keys.shortcut_text(c.id), Ok(())) {
+        if item(ui, &t, icon_for(c.id), crate::i18n::t(c.label), app.keys.shortcut_text(c.id), ui_cmd::enabled(app, c.id)) {
             chosen = Some(c.id);
         }
     }

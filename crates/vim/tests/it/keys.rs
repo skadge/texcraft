@@ -210,3 +210,44 @@ fn file_commands_become_effects() {
     assert_eq!(run("|a", ":e intro.tex<CR>").effects, [Effect::Open("intro.tex".to_owned())]);
     assert_eq!(run("|abc", "\"+yiw").effects, [Effect::Copy("abc".to_owned())]);
 }
+
+/// Keys typed into `vim` over `buffer` and `selection`.
+fn type_keys(vim: &mut Vim, buffer: &mut Buffer, selection: &mut Selection, keys: &str) {
+    for key in parse_keys(keys) {
+        let mut ctx = Ctx { buffer: &mut *buffer, selection: &mut *selection, now: 0.0, view_top: 0, view_rows: 20, clipboard: None, indent: "  " };
+        vim.key(key, &mut ctx);
+    }
+}
+
+#[test]
+fn a_command_on_visual_modes_selection_leaves_visual_mode_and_gv_selects_it_again() {
+    let mut buffer = Buffer::new("one two three");
+    let mut selection = Selection::point(0);
+    let mut vim = Vim::new();
+    type_keys(&mut vim, &mut buffer, &mut selection, "wve");
+    let selected = selection.primary();
+    assert!(!selected.is_empty());
+    let mut ctx = Ctx { buffer: &mut buffer, selection: &mut selection, now: 0.0, view_top: 0, view_rows: 20, clipboard: None, indent: "  " };
+    vim.end_visual(&mut ctx);
+    assert_eq!(vim.mode(), Mode::Normal);
+    assert!(selection.primary().is_empty(), "the selection stayed after Visual mode ended");
+    assert_eq!(vim.cursor(), selected.start(), "the caret is not at the selection's start");
+    type_keys(&mut vim, &mut buffer, &mut selection, "gv");
+    assert_eq!(selection.primary(), selected, "gv did not select the passage again");
+}
+
+#[test]
+fn a_selection_made_in_insert_mode_is_visual_modes() {
+    let mut buffer = Buffer::new("one two three");
+    let mut selection = Selection::point(0);
+    let mut vim = Vim::new();
+    type_keys(&mut vim, &mut buffer, &mut selection, "iX");
+    // A drag over "two".
+    selection = Selection::single(5, 8);
+    let mut ctx = Ctx { buffer: &mut buffer, selection: &mut selection, now: 0.0, view_top: 0, view_rows: 20, clipboard: None, indent: "  " };
+    vim.sync(&mut ctx);
+    assert_eq!(vim.mode(), Mode::Visual);
+    assert_eq!((selection.primary().start(), selection.primary().end()), (5, 8), "the drag's selection was lost");
+    type_keys(&mut vim, &mut buffer, &mut selection, "d");
+    assert_eq!(buffer.text(), "Xone  three", "d did not delete the selection");
+}
