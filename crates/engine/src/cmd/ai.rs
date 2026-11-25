@@ -33,6 +33,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         spec("ai.reference", "Add a Reference with AI", reference_schema, reference_on, reference, true),
         spec("ai.ask", "Ask AI", ask_schema, ask_on, ask, true),
         spec("ai.review", "Review with AI", review_schema, review_on, review, true),
+        spec("ai.grammar", "Check Grammar with AI", grammar_schema, grammar_on, grammar, true),
         spec("ai.cancel", "Cancel the AI Request", cancel_schema, always, cancel, true),
     ]
 }
@@ -77,6 +78,9 @@ fn ask_on(s: &Session) -> Result<()> {
 }
 fn review_on(s: &Session) -> Result<()> {
     kind_on(s, "review")
+}
+fn grammar_on(s: &Session) -> Result<()> {
+    kind_on(s, "grammar")
 }
 
 fn switch_schema() -> Value {
@@ -161,7 +165,7 @@ const MESSAGE: &str = "The message: `index` in build.result's diagnostics (from 
 fn disclose_schema() -> Value {
     json!({"type": "object", "description": "What a request would send, where, and whether the user must agree to its kind first. \
 explain: the message (`index`, or `path` and `line`); rewrite: as ai.rewrite; instruct: as ai.instruct; complete: as ai.complete (without `path`, an example); \
-make: as ai.make; reference: as ai.reference; ask: as ai.ask; review: as ai.review.", "properties": {
+make: as ai.make; reference: as ai.reference; ask: as ai.ask; review: as ai.review; grammar: as ai.grammar.", "properties": {
         "request": {"type": "string", "enum": crate::ai::REQUESTS, "description": "Default: explain."},
         "kind": {"type": "string", "enum": KINDS},
         "description": {"type": "string"},
@@ -232,6 +236,17 @@ remarks whose quote is not in the text are dropped and counted (`dropped`).", "p
         "start": {"type": "integer", "minimum": 0},
         "end": {"type": "integer", "minimum": 0},
         "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_ai` and `Session::ai_reviewed`. Default: wait for it."}
+    }, "required": ["path", "start", "end"], "additionalProperties": false})
+}
+
+fn grammar_schema() -> Value {
+    json!({"type": "object", "description": "Sends characters `start..end` of `path` (a selection or a paragraph, in any language) for a grammar check. \
+Each problem the model reports becomes a grammar problem on the words it quotes (grammar.check lists them, `from` \"AI (<model>)\"), with its replacement when it keeps the LaTeX; \
+problems whose quote is not in the passage are dropped and counted (`dropped`).", "properties": {
+        "path": {"type": "string"},
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 0},
+        "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_ai` and `Session::ai_grammar_checked`. Default: wait for it."}
     }, "required": ["path", "start", "end"], "additionalProperties": false})
 }
 
@@ -404,6 +419,11 @@ fn ask(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn review(s: &mut Session, p: &Value) -> Result<Value> {
     let r = s.ai_review(p, cfg!(target_arch = "wasm32") || flag(p, "background"));
+    noted(s, r)
+}
+
+fn grammar(s: &mut Session, p: &Value) -> Result<Value> {
+    let r = s.ai_grammar(p, cfg!(target_arch = "wasm32") || flag(p, "background"));
     noted(s, r)
 }
 

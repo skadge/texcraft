@@ -184,6 +184,7 @@ fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         Some(r)
     });
     spelling(app, ui, t);
+    grammar(app, ui, t);
     let preview =
         egui::text::LayoutJob::simple_singleline("\\section{Introduction} % E = mc^2".to_owned(), app.tokens.code_font(), app.tokens.syntax_command);
     egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner()).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
@@ -269,6 +270,58 @@ fn spelling(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         }
         Some(r)
     });
+}
+
+/// The name of a group of grammar rules (`grammar.rule`'s `group`).
+fn grammar_group(id: &str) -> &'static str {
+    match id {
+        "agreement" => tl!("Agreement"),
+        "grammar" => tl!("Grammar and word order"),
+        "punctuation" => tl!("Punctuation and capitals"),
+        "repetition" => tl!("Repeated and redundant words"),
+        "usage" => tl!("Word choice and usage"),
+        _ => tl!("Style and readability"),
+    }
+}
+
+/// Grammar checking: on, its groups of rules, and the rules turned off from the text's menu.
+fn grammar(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    let options = app.session.settings.grammar.clone();
+    let help = match app.session.grammar_ready() {
+        Err(why) if options.on => why,
+        _ => tl!("Grammar problems in English text are underlined with a double line, checked on this computer by Harper; spelling stays with the spell checker.").to_owned(),
+    };
+    setting(ui, t, tl!("Check grammar (English)"), &help, |ui| {
+        let mut on = options.on;
+        let r = ui.add(egui::Checkbox::without_text(&mut on));
+        if r.changed() {
+            app.run("grammar.options", json!({"on": on}));
+            app.prefs_changed = true;
+        }
+        Some(r)
+    });
+    for (id, _) in texcraft_engine::grammar::GROUPS {
+        let name = grammar_group(id);
+        setting(ui, t, name, tl!("Rules of this kind are checked."), |ui| {
+            let mut on = !options.groups_off.contains(id);
+            let r = ui.add_enabled(options.on, egui::Checkbox::without_text(&mut on));
+            if r.changed() {
+                app.run("grammar.rule", json!({"group": id, "on": on}));
+                app.prefs_changed = true;
+            }
+            Some(r)
+        });
+    }
+    for rule in &options.rules_off {
+        setting(ui, t, rule, tl!("Turned off from the text's menu (Turn Off This Rule)."), |ui| {
+            let r = ui.button(tl!("Turn On"));
+            if r.clicked() {
+                app.run("grammar.rule", json!({"rule": rule, "on": true}));
+                app.prefs_changed = true;
+            }
+            Some(r)
+        });
+    }
 }
 
 fn building(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {

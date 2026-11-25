@@ -1,5 +1,5 @@
-//! E11: a misspelled word's spelling from the text's context menu replaces it, and the symbol
-//! palette inserts its command in a formula.
+//! E11 and E12: a misspelled word's spelling and a grammar problem's replacement from the text's
+//! context menu replace them, and the symbol palette inserts its command in a formula.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
@@ -27,10 +27,13 @@ impl Dictionary for Fake {
 }
 
 fn harness(text: &str) -> Result<Harness<'static, App>, String> {
+    harness_with(text, SpellingOptions { language: "en-GB".to_owned(), ..SpellingOptions::default() })
+}
+
+fn harness_with(text: &str, spelling: SpellingOptions) -> Result<Harness<'static, App>, String> {
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
     s.set_dictionary(Box::new(Fake));
     s.execute("file.write", &json!({"path": "main.tex", "text": text}))?;
-    let spelling = SpellingOptions { language: "en-GB".to_owned(), ..SpellingOptions::default() };
     let prefs = Prefs { auto_compile: false, layout: "editor".to_owned(), spelling, ..Prefs::default() };
     Ok(Harness::builder().with_size(egui::vec2(1400.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), App::with_prefs(s, prefs)))
 }
@@ -72,4 +75,34 @@ fn the_palette_inserts_a_symbol_in_dollars_outside_math_and_bare_inside() {
     h.run();
     h.run();
     assert_eq!(text(&mut h), "$\\alpha\\beta$Let be.\n");
+}
+
+/// Runs frames until the grammar checker is done with the file (it works in the background).
+fn until_checked(h: &mut Harness<'_, App>) {
+    let start = std::time::Instant::now();
+    h.run();
+    while h.state_mut().session().grammar_busy() && start.elapsed() < std::time::Duration::from_secs(60) {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        h.run();
+    }
+    h.run();
+}
+
+#[test]
+fn a_grammar_problem_is_underlined_apart_and_its_replacement_from_the_menu_keeps_the_latex() {
+    // Spelling off: only the grammar problem is underlined.
+    let spelling = SpellingOptions { on: false, language: "en-GB".to_owned(), ..SpellingOptions::default() };
+    let mut h = harness_with("It is \\textbf{here}: this is an mistake.\n", spelling).unwrap();
+    until_checked(&mut h);
+    // F7 goes to it; the context menu there offers its replacement, Ignore and Turn Off This Rule.
+    ui_cmd::run(h.state_mut(), "edit.spelling.next");
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F10);
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Turn Off This Rule").is_some() && h.query_by_label("Ignore").is_some(), "the grammar entries are missing");
+    h.get_by_label("Change to “a”").click();
+    h.run();
+    h.run();
+    assert_eq!(text(&mut h), "It is \\textbf{here}: this is a mistake.\n");
 }

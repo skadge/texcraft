@@ -323,7 +323,8 @@ pub(crate) fn icon_for(id: &str) -> Option<&'static str> {
         "edit.find" => "search",
         "edit.symbols" => "omega",
         "edit.spelling.add" => "plus",
-        "edit.spelling.ignore" => "eraser",
+        "edit.spelling.ignore" | "edit.grammar.ignore" => "eraser",
+        "edit.grammar.rule_off" => "x",
         "project.open" => "folder-open",
         "forge.open" => "download",
         "forge.commit" => "git-commit-horizontal",
@@ -358,7 +359,7 @@ pub(crate) fn icon_for(id: &str) -> Option<&'static str> {
         "edit.enumerate" => "list-ordered",
         "edit.italic" => "italic",
         "edit.section" => "heading-1",
-        "edit.ai_make" | "edit.ai_reference" | "edit.ai_review" | "edit.instruct" | "edit.rewrite" => crate::ai::ICON,
+        "edit.ai_make" | "edit.ai_reference" | "edit.ai_review" | "edit.ai_grammar" | "edit.instruct" | "edit.rewrite" => crate::ai::ICON,
         _ => return None,
     })
 }

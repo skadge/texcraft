@@ -17,6 +17,7 @@ mod forge_pick;
 mod forge_servers;
 mod forge_sign_in;
 mod git;
+mod grammar;
 mod history;
 mod image;
 mod import;

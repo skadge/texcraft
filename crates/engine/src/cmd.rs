@@ -19,6 +19,7 @@ pub(crate) mod forge;
 pub(crate) mod forge_auth;
 pub(crate) mod forge_pick;
 pub(crate) mod git;
+mod grammar;
 mod history;
 mod image;
 mod language;
@@ -86,6 +87,7 @@ pub fn all() -> &'static [CommandSpec] {
         v.extend(build::specs());
         v.extend(template::specs());
         v.extend(language::specs());
+        v.extend(grammar::specs());
         v.extend(pdf::specs());
         v.extend(review::specs());
         v.extend(history::specs());

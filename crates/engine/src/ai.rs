@@ -31,6 +31,7 @@
 //! to the lines they name, and a section reviewed as comments on the words each remark quotes.
 
 mod ask;
+mod grammar;
 mod make;
 pub mod prompts;
 mod write;
@@ -70,10 +71,13 @@ pub const REFERENCE: &str = "text.reference";
 pub const ASK: &str = "text.ask";
 /// The kind of request reviewing a section is.
 pub const REVIEW: &str = "text.review";
+/// The kind of request checking a passage's grammar is.
+pub const GRAMMAR: &str = "text.grammar";
 pub use ask::{
     Answered, Link, MAX_ASK_CHARS, MAX_QUESTION_CHARS, MAX_REVIEW_CHARS, Question, Remark, Reviewed, Scope, Section, find_quote, links, remarks,
     section_at,
 };
+pub use grammar::{Checked, GrammarPassage, Issue, MAX_GRAMMAR_CHARS, issues};
 pub use make::{
     Inserted, MAX_DESCRIPTION_CHARS, Made, MakeKind, Making, Preview, Referenced, Scratch, Typeset, UNVERIFIED, entry, made, retex_typeset,
 };
@@ -261,6 +265,8 @@ pub enum Event {
     Answered(std::result::Result<usize, String>),
     /// A review left this many comments and dropped this many remarks, or why not.
     Reviewed(std::result::Result<(usize, usize), String>),
+    /// A grammar check found this many problems and dropped this many, or why not.
+    Grammar(std::result::Result<(usize, usize), String>),
 }
 
 /// What an explanation sends: exactly these parts, in [`Context::prompt`].
@@ -414,6 +420,7 @@ enum Work {
     Reference { lookup: Box<make::Lookup>, model: String, run: String },
     Ask { question: Box<Question>, model: String, run: String },
     Review { section: Box<Section>, model: String, run: String },
+    Grammar { passage: Box<GrammarPassage>, model: String, run: String },
 }
 
 /// Where a request's answer comes.
@@ -461,6 +468,7 @@ pub(crate) struct State {
     reference: Option<Referenced>,
     answers: Vec<Answered>,
     reviewed: Option<Reviewed>,
+    grammar: Option<Checked>,
     /// The project's own setting: the folder it was read from, and whether AI is off.
     project_off: Option<(Option<PathBuf>, bool)>,
     /// Goes up when `saved` changes, so the window keeps it in the preferences.
@@ -489,6 +497,7 @@ impl Default for State {
             reference: None,
             answers: Vec::new(),
             reviewed: None,
+            grammar: None,
             project_off: None,
             revision: 0,
             prompt_note: None,
@@ -516,10 +525,10 @@ fn destination(c: &Connection) -> String {
 }
 
 /// The kinds of request, as `ai.disclose` and `ai.consent` name them.
-pub const REQUESTS: [&str; 8] = ["explain", "rewrite", "instruct", "complete", "make", "reference", "ask", "review"];
+pub const REQUESTS: [&str; 9] = ["explain", "rewrite", "instruct", "complete", "make", "reference", "ask", "review", "grammar"];
 
 /// Each kind of request, as [`REQUESTS`] names it: what Settings › AI calls it, and what it sends.
-pub const KINDS: [(&str, &str, &str); 8] = [
+pub const KINDS: [(&str, &str, &str); 9] = [
     ("explain", "Explain", "the build message, its help and the source lines around it (and the preamble when the message is in it)"),
     ("rewrite", "Rewrite", "the selected text and a few lines around it"),
     ("instruct", "Change as asked", "your instruction, the selected text and a few lines around it"),
@@ -528,6 +537,7 @@ pub const KINDS: [(&str, &str, &str); 8] = [
     ("reference", "Draft a reference", "the title or DOI you type, and nothing of the project"),
     ("ask", "Ask", "your question and the open file, or every text file of the project when you choose it"),
     ("review", "Review", "the section at the caret"),
+    ("grammar", "Check grammar", "the selected text, or the paragraph at the caret, and the document's language"),
 ];
 
 /// What a kind of request's label is in [`KINDS`].
@@ -566,6 +576,7 @@ fn capability(name: &str) -> Result<&'static str> {
         "reference" | REFERENCE => Ok(REFERENCE),
         "ask" | ASK => Ok(ASK),
         "review" | REVIEW => Ok(REVIEW),
+        "grammar" | GRAMMAR => Ok(GRAMMAR),
         _ => Err(format!("There is no AI request `{name}`: there are {}.", REQUESTS.join(", "))),
     }
 }
@@ -701,6 +712,7 @@ impl Session {
                 Work::Reference { .. } => "reference",
                 Work::Ask { .. } => "ask",
                 Work::Review { .. } => "review",
+                Work::Grammar { .. } => "grammar",
             }),
             "requests": requests,
         })
@@ -887,6 +899,10 @@ impl Session {
             REVIEW => {
                 let section = self.ai_section(p)?;
                 (section.request(t)?, section.describe(t))
+            }
+            GRAMMAR => {
+                let passage = self.ai_grammar_passage(p)?;
+                (passage.request(t)?, passage.describe(t))
             }
             _ => {
                 let d = self.ai_diagnostic(p)?;
@@ -1190,6 +1206,10 @@ impl Session {
                 self.ai.reviewed = Some(Reviewed::Cancelled);
                 self.log(cancelled(run));
             }
+            Work::Grammar { run, .. } => {
+                self.ai.grammar = Some(Checked::Cancelled);
+                self.log(cancelled(run));
+            }
             Work::Models { .. } => {}
         }
         true
@@ -1321,6 +1341,7 @@ impl Session {
             (Work::Reference { lookup, model, run }, answer) => Some(self.finish_reference(&lookup, &model, run, answer)),
             (Work::Ask { question, model, run }, answer) => Some(self.finish_ask(&question, &model, run, answer)),
             (Work::Review { section, model, run }, answer) => Some(self.finish_review(&section, &model, run, answer)),
+            (Work::Grammar { passage, model, run }, answer) => Some(self.finish_grammar(&passage, &model, run, answer)),
         }
     }
 

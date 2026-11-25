@@ -799,7 +799,7 @@ fn explanation_in_popup(app: &mut App, path: &ProjectPath) {
 
 /// The problems in the shown file's text: the language server's hints, and the last build's
 /// errors and warnings, placed on the word at their column (or the line's text).
-fn problems(app: &mut App, path: &ProjectPath) -> Vec<crate::source::Problem> {
+fn problems(app: &mut App, path: &ProjectPath, ctx: &egui::Context) -> Vec<crate::source::Problem> {
     let b = &app.editor.source.doc.buffer;
     let last = b.len_lines().saturating_sub(1);
     let at = |line: usize, col: usize| {
@@ -820,6 +820,7 @@ fn problems(app: &mut App, path: &ProjectPath) -> Vec<crate::source::Problem> {
             fixes: Vec::new(),
             build: false,
             spelling: false,
+            grammar: None,
         })
         .collect();
     let b = &app.editor.source.doc.buffer;
@@ -874,10 +875,12 @@ fn problems(app: &mut App, path: &ProjectPath) -> Vec<crate::source::Problem> {
                 fixes,
                 build: true,
                 spelling: false,
+                grammar: None,
             });
         }
     }
     out.extend(crate::spell::problems(app, path));
+    out.extend(crate::grammar::problems(app, path, ctx));
     out.sort_by_key(|p| p.start);
     out
 }
@@ -948,6 +951,11 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, r: &egui::Response) {
         entries.push(Some(("edit.quick_fix", tl!("Quick Fix"))));
     }
     entries.push(Some(("view.show_in_pdf", tl!("Show in PDF"))));
+    if crate::ai::offered(app) {
+        entries.push(Some(("edit.ai_grammar", tl!("Check Grammar with AI"))));
+    }
+    // On a grammar problem: its message, its replacements, Ignore and Turn Off This Rule.
+    let grammar = app.editor.source.grammar_at_caret().cloned();
     // On a misspelled word: its spellings, Add to Dictionary and Ignore come first.
     let misspelled = app.editor.source.misspelling_at_caret().map(|p| app.editor.source.doc.buffer.slice(p.start, p.end));
     let spelling = misspelled.map(|w| crate::spell::suggestions(app, &w));
@@ -969,6 +977,28 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, r: &egui::Response) {
             ];
             for (id, label, params) in changes.chain(others) {
                 let icon = if id == "edit.spelling.replace" { Some("pencil") } else { crate::top_bar::icon_for(id) };
+                let item = crate::top_bar::item_response(ui, &t, icon, &label, None, Ok(()));
+                if std::mem::take(&mut focus) {
+                    item.request_focus();
+                }
+                if item.clicked() {
+                    spell_choice = Some((id, params));
+                }
+            }
+            ui.separator();
+        }
+        if let Some(problem) = &grammar {
+            ui.label(egui::RichText::new(&problem.message).font(t.small()).color(t.text_muted));
+            let changes = problem.fixes.iter().map(|f| {
+                let text = f.edits.first().map(|e| e.text.clone()).unwrap_or_default();
+                ("edit.grammar.replace", f.title.clone(), json!({"text": text}))
+            });
+            let mut others = vec![("edit.grammar.ignore", tl!("Ignore").to_owned(), json!({}))];
+            if problem.grammar.as_ref().is_some_and(|g| g.rule.is_some()) {
+                others.push(("edit.grammar.rule_off", tl!("Turn Off This Rule").to_owned(), json!({})));
+            }
+            for (id, label, params) in changes.chain(others) {
+                let icon = if id == "edit.grammar.replace" { Some("pencil") } else { crate::top_bar::icon_for(id) };
                 let item = crate::top_bar::item_response(ui, &t, icon, &label, None, Ok(()));
                 if std::mem::take(&mut focus) {
                     item.request_focus();
@@ -1079,7 +1109,7 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         app.editor.focus = false;
         ui.memory_mut(|m| m.request_focus(id));
     }
-    app.editor.source.problems = problems(app, path);
+    app.editor.source.problems = problems(app, path, ui.ctx());
     explanation_in_popup(app, path);
     app.editor.source.set_vim(app.prefs.vim);
     app.editor.source.auto_close = app.prefs.auto_close;
@@ -1136,7 +1166,12 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             None => crate::preview::show_in_pdf(app, path, line as u32 + 1),
         }
     }
-    if let Some(problem) = out.fixes_for.and(app.editor.source.popup.as_ref()).map(|p| p.problem.clone()).filter(|p| p.spelling) {
+    let grammar_fixes = out.fixes_for.and(app.editor.source.popup.as_ref()).filter(|p| p.problem.grammar.is_some()).map(|p| p.problem.fixes.clone());
+    if let Some(fixes) = grammar_fixes {
+        if let Some(popup) = app.editor.source.popup.as_mut() {
+            popup.fixes = Some(fixes);
+        }
+    } else if let Some(problem) = out.fixes_for.and(app.editor.source.popup.as_ref()).map(|p| p.problem.clone()).filter(|p| p.spelling) {
         let fixes = crate::spell::fixes(app, &problem);
         if let Some(popup) = app.editor.source.popup.as_mut() {
             popup.fixes = Some(fixes);

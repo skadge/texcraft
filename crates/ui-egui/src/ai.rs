@@ -54,11 +54,13 @@ pub(crate) enum Kind {
     Reference,
     Ask,
     Review,
+    Grammar,
 }
 
 impl Kind {
     /// Every kind, in the order Settings › AI lists them.
-    const ALL: [Kind; 8] = [Kind::Explain, Kind::Rewrite, Kind::Instruct, Kind::Complete, Kind::Make, Kind::Reference, Kind::Ask, Kind::Review];
+    const ALL: [Kind; 9] =
+        [Kind::Explain, Kind::Rewrite, Kind::Instruct, Kind::Complete, Kind::Make, Kind::Reference, Kind::Ask, Kind::Review, Kind::Grammar];
 
     /// Its name, in Settings › AI's list and in the reasons it is refused.
     pub(crate) fn label(self) -> &'static str {
@@ -71,6 +73,7 @@ impl Kind {
             Kind::Reference => tl!("Draft a reference"),
             Kind::Ask => tl!("Ask"),
             Kind::Review => tl!("Review"),
+            Kind::Grammar => tl!("Check grammar"),
         }
     }
 
@@ -85,6 +88,7 @@ impl Kind {
             Kind::Reference => tl!("The title or DOI you type, and nothing of the project."),
             Kind::Ask => tl!("Your question and the open file, or every text file of the project when you choose it."),
             Kind::Review => tl!("The section at the caret."),
+            Kind::Grammar => tl!("The selected text, or the paragraph at the caret, and the document's language."),
         }
     }
 
@@ -98,6 +102,7 @@ impl Kind {
             Kind::Reference => "reference",
             Kind::Ask => "ask",
             Kind::Review => "review",
+            Kind::Grammar => "grammar",
         }
     }
 
@@ -112,6 +117,7 @@ impl Kind {
             Kind::Reference => "ai.reference",
             Kind::Ask => "ai.ask",
             Kind::Review => "ai.review",
+            Kind::Grammar => "ai.grammar",
         }
     }
 }
@@ -231,6 +237,32 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
         }
         Some(texcraft_engine::ai::Event::Reviewed(Err(e))) => {
             app.view.status = Some((tl!("No review: {error}").replace("{error}", &crate::i18n::msg(&e)), true));
+        }
+        Some(texcraft_engine::ai::Event::Grammar(Ok((found, dropped)))) => {
+            let said = if found == 0 {
+                tl!("The model found no grammar problems.").to_owned()
+            } else {
+                crate::i18n::trn(
+                    found,
+                    "The model found {n} grammar problem: it is underlined.",
+                    "The model found {n} grammar problems: they are underlined.",
+                )
+                .replace("{n}", &found.to_string())
+            };
+            let said = if dropped > 0 {
+                let lost = crate::i18n::trn(
+                    dropped,
+                    "{n} was dropped: the words it quoted are not in the text.",
+                    "{n} were dropped: the words they quoted are not in the text.",
+                );
+                format!("{said} {}", lost.replace("{n}", &dropped.to_string()))
+            } else {
+                said
+            };
+            app.view.status = Some((said, false));
+        }
+        Some(texcraft_engine::ai::Event::Grammar(Err(e))) => {
+            app.view.status = Some((tl!("No grammar check: {error}").replace("{error}", &e), true));
         }
         // The editor shows (and announces) the words when the caret is still where they go.
         Some(texcraft_engine::ai::Event::Completed(Ok(_))) | None => {}
@@ -403,6 +435,7 @@ fn start(app: &mut App, kind: Kind, mut target: Value) {
         Kind::Make | Kind::Reference => crate::ai_make::started(app),
         Kind::Ask => app.view.side = Some(crate::Side::Ask),
         Kind::Review => app.view.status = Some((tl!("The model is reviewing the section…").to_owned(), false)),
+        Kind::Grammar => app.view.status = Some((tl!("The model is checking the grammar…").to_owned(), false)),
         Kind::Complete => {}
     }
     // The person's prompt was set aside for the app's own: said over the rest.
