@@ -25,6 +25,7 @@ mod find_bar;
 pub mod fonts;
 mod forge;
 mod forge_pick;
+mod forge_save;
 mod forge_server;
 mod formatted;
 mod formatted_edit;
