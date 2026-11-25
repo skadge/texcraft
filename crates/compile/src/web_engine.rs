@@ -7,7 +7,9 @@
 //! them once the worker has run for a few seconds without returning to its event loop), the run
 //! stops, the file is fetched, and the run starts again. Before its first build the worker
 //! fetches the files a plain article reads (retex's read list), so that a first build mostly
-//! runs through.
+//! runs through; and before a project's first build in a visit, the files its earlier builds
+//! read (its read list, kept per project: [`Kept::read_list`]), so that a project using
+//! packages beyond a plain article's does not stop again for each of them.
 //!
 //! What it fetched and what the engine made (its format, the indexes of the tree's files and
 //! fonts: `/cache`) is kept in the browser's Cache Storage, so a later visit neither fetches nor
@@ -16,7 +18,7 @@
 //! The messages, both ways, are plain objects: see [`crate::web`].
 
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 
 use js_sys::{Array, Object, Reflect, Uint8Array, WebAssembly};
@@ -111,6 +113,8 @@ struct Fetched {
     sync_refused: bool,
     /// When the current run started (`Date.now()`).
     run_started: f64,
+    /// The site's files the module opened since the current job started.
+    opened: BTreeSet<String>,
 }
 
 /// What retex writes during a run, and the draft PDFs it is read for.
@@ -214,6 +218,12 @@ impl Platform for Web {
     fn stderr(&mut self, bytes: &[u8]) {
         self.out.borrow_mut().text.push_str(&String::from_utf8_lossy(bytes));
     }
+
+    fn opened(&mut self, source: &str) {
+        if let Some((path, _)) = locate(source) {
+            self.fetched.borrow_mut().opened.insert(path);
+        }
+    }
 }
 
 /// A 64-bit FNV-1a hash, to name the caches after what they depend on.
@@ -225,16 +235,22 @@ fn fnv(bytes: &[u8]) -> u64 {
 /// fetched, with the file's path.
 const ENGINE_FILES: &str = "retex-cache";
 
+/// Where the projects' read lists are kept in the cache: a URL of this page's site that is never
+/// fetched, with a hash of the project's key.
+const READ_LISTS: &str = "read-lists";
+
 /// The browser's Cache Storage: the site's files fetched (cache `texcraft-tree-<index>`, by their
-/// URL), and the files the engine made in `/cache` (cache `texcraft-engine-<module>-<index>`).
-/// A cache's name holds a hash of what its files depend on: the tree's index, and for the
-/// engine's files the module too. Caches with other names are from earlier versions, and are
-/// deleted. Keeping is best effort: where the browser has no Cache Storage (or refuses it), each
-/// visit fetches again.
+/// URL), the files the engine made in `/cache` (cache `texcraft-engine-<module>-<index>`), and
+/// each project's read list, the site's files its builds read (cache `texcraft-reads-<index>`).
+/// A cache's name holds a hash of what its files depend on: the tree's index (a read list names
+/// the index's files and packs), and for the engine's files the module too. Caches with other
+/// names are from earlier versions, and are deleted. Keeping is best effort: where the browser
+/// has no Cache Storage (or refuses it), each visit fetches again.
 #[derive(Default)]
 struct Kept {
     tree: Option<Cache>,
     engine: Option<Cache>,
+    reads: Option<Cache>,
     /// The site's files in the cache.
     files: HashSet<String>,
     /// The engine's files in the cache, with their time.
@@ -251,9 +267,10 @@ impl Kept {
         let Ok(storage) = scope().caches() else { return Kept::default() };
         let tree = format!("texcraft-tree-{index:016x}");
         let engine = format!("texcraft-engine-{module:016x}-{index:016x}");
+        let reads = format!("texcraft-reads-{index:016x}");
         if let Ok(names) = promise(Ok(storage.keys())).await {
             for name in Array::from(&names).iter().filter_map(|n| n.as_string()) {
-                if name.starts_with("texcraft-") && name != tree && name != engine {
+                if name.starts_with("texcraft-") && name != tree && name != engine && name != reads {
                     log::info!("deleting the old cache {name}");
                     let _ = promise(Ok(storage.delete(&name))).await;
                 }
@@ -263,7 +280,7 @@ impl Kept {
             let storage = storage.clone();
             async move { promise(Ok(storage.open(&name))).await.ok().and_then(|c| c.dyn_into::<Cache>().ok()) }
         };
-        Kept { tree: open(tree).await, engine: open(engine).await, ..Kept::default() }
+        Kept { tree: open(tree).await, engine: open(engine).await, reads: open(reads).await, ..Kept::default() }
     }
 
     /// The bytes and the time (header `x-mtime`) of a cached response.
@@ -303,6 +320,30 @@ impl Kept {
                 log::warn!("the browser did not keep {path} ({e}): not keeping the TeX files from now on");
                 self.tree = None;
             }
+        }
+    }
+
+    fn read_list_url(project: &str) -> String {
+        format!("{READ_LISTS}/{:016x}", fnv(project.as_bytes()))
+    }
+
+    /// The site's files the builds of `project` read, as kept by an earlier visit (empty when
+    /// none is kept).
+    async fn read_list(&self, project: &str) -> BTreeSet<String> {
+        let Some(reads) = &self.reads else { return BTreeSet::new() };
+        let Ok(resp) = promise(Ok(reads.match_with_str(&Kept::read_list_url(project)))).await else { return BTreeSet::new() };
+        if resp.is_undefined() {
+            return BTreeSet::new();
+        }
+        let Some((bytes, _)) = Kept::body(resp).await else { return BTreeSet::new() };
+        String::from_utf8_lossy(&bytes).lines().filter(|l| !l.is_empty()).map(str::to_owned).collect()
+    }
+
+    async fn keep_read_list(&self, project: &str, list: &BTreeSet<String>) {
+        let Some(reads) = &self.reads else { return };
+        let text: String = list.iter().map(|p| format!("{p}\n")).collect();
+        if let Err(e) = Kept::put(reads, &Kept::read_list_url(project), text.as_bytes(), 0).await {
+            log::warn!("the browser did not keep the project's read list ({e})");
         }
     }
 
@@ -357,6 +398,9 @@ struct Engine {
     /// neighbours with it.
     folders: HashMap<String, Vec<(String, u64)>>,
     kept: Kept,
+    /// The read lists of the projects built in this visit, by project key: fetched before the
+    /// project's first build, then updated after each.
+    lists: HashMap<String, BTreeSet<String>>,
 }
 
 async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
@@ -378,7 +422,16 @@ impl Engine {
     fn new() -> Engine {
         let fs = FileSystem::new();
         let web = Web { fetched: Rc::default(), out: Rc::default(), fs: fs.clone() };
-        Engine { module: None, fs, web, written: HashSet::new(), snapshot: None, folders: HashMap::new(), kept: Kept::default() }
+        Engine {
+            module: None,
+            fs,
+            web,
+            written: HashSet::new(),
+            snapshot: None,
+            folders: HashMap::new(),
+            kept: Kept::default(),
+            lists: HashMap::new(),
+        }
     }
 
     /// Fetches the site's files at `paths` not fetched yet, a batch at a time, saying so: from
@@ -416,7 +469,8 @@ impl Engine {
         Ok(())
     }
 
-    /// The module and the tree's list of files, the first time.
+    /// The module and the tree's list of files, the first time, with the files a plain article
+    /// reads.
     async fn init(&mut self, id: f64) -> Result<(), String> {
         if self.module.is_some() {
             return Ok(());
@@ -464,11 +518,11 @@ impl Engine {
             }
         }
         // What the blank project reads, fetched together before the first build.
+        let mut paths = seeds;
         if let Ok(list) = fetch_bytes(&format!("{TREE_SITE}seed/reads/blank.txt")).await {
-            let mut paths: Vec<String> = String::from_utf8_lossy(&list).lines().filter(|l| l.starts_with("tree/")).map(str::to_owned).collect();
-            paths.extend(seeds);
-            self.fetch_all(id, paths).await?;
+            paths.extend(String::from_utf8_lossy(&list).lines().filter(|l| l.starts_with("tree/")).map(str::to_owned));
         }
+        self.fetch_all(id, paths).await?;
         log::info!("engine ready: {} files fetched", self.web.fetched.borrow().urls.len());
         self.module = Some(module.unchecked_into());
         Ok(())
@@ -476,8 +530,12 @@ impl Engine {
 
     async fn build(&mut self, msg: &JsValue) -> Result<(), String> {
         let id = get(msg, "id").as_f64().unwrap_or(0.0);
+        let project = get(msg, "project").as_string();
         self.init(id).await?;
         let Some(module) = self.module.clone() else { return Err("the engine did not load".into()) };
+        if let Some(project) = &project {
+            self.fetch_read_list(id, project).await;
+        }
         let main = get(msg, "main").as_string().ok_or("no main document")?;
         // The project's files are under `/project`, at their paths in the project; retex starts in
         // the main document's folder (`PWD`, retex 2.5).
@@ -522,7 +580,10 @@ impl Engine {
         let started = js_sys::Date::now();
         let mut stops = 0;
         let mut reruns = 0;
-        let code = loop {
+        self.web.fetched.borrow_mut().opened.clear();
+        // `whole`: whether the run that ended was started from the start (not resumed from the
+        // preamble's snapshot), so it opened every file the build needs.
+        let (code, whole) = loop {
             *self.web.out.borrow_mut() = Out { job: id, pdf: pdf.clone(), ..Out::default() };
             self.web.fetched.borrow_mut().run_started = js_sys::Date::now();
             let wasi = Wasi::new(self.fs.clone(), self.web.clone(), args.clone(), env.clone());
@@ -543,7 +604,7 @@ impl Engine {
                     if let Some(image) = image.filter(|_| export.is_none()) {
                         self.snapshot = Some((key.clone(), image));
                     }
-                    break code;
+                    break (code, !resumed);
                 }
                 Ended::Fetch(source) => {
                     stops += 1;
@@ -574,6 +635,9 @@ impl Engine {
             self.exported(id, &cwd, &job, &output, &self.written, &out.text);
             self.keep().await;
             return Ok(());
+        }
+        if let Some(project) = &project {
+            self.keep_read_list(project, whole && code == 0).await;
         }
         let mut fields = vec![("code", JsValue::from(code)), ("output", out.text.into()), ("seconds", seconds.into()), ("stops", stops.into())];
         let mut transfer = Vec::new();
@@ -628,6 +692,37 @@ impl Engine {
             }
         }
         post("exported", id, &[("names", names.into()), ("contents", contents.into())], &transfer);
+    }
+
+    /// Before `project`'s first build in this visit, fetches its read list. A file that cannot be
+    /// fetched is left for the run to stop for, as without a list.
+    async fn fetch_read_list(&mut self, id: f64, project: &str) {
+        if self.lists.contains_key(project) {
+            return;
+        }
+        let list = self.kept.read_list(project).await;
+        log::info!("the project's read list: {} files", list.len());
+        if let Err(e) = self.fetch_all(id, list.iter().cloned().collect()).await {
+            log::warn!("fetching the project's read list: {e}");
+        }
+        self.lists.insert(project.to_owned(), list);
+    }
+
+    /// Updates `project`'s read list with the site's files this build opened, and keeps it when
+    /// it changed. After a run from the start that succeeded (`whole`), what it opened is the
+    /// whole list, so a package the project no longer uses leaves it; after a run resumed from
+    /// the preamble's snapshot, which did not open the preamble's files again, or one that failed
+    /// and may have stopped early, they are added to it. Only
+    /// builds update it: an export reads files a preview does not need.
+    async fn keep_read_list(&mut self, project: &str, whole: bool) {
+        let opened = std::mem::take(&mut self.web.fetched.borrow_mut().opened);
+        let list = self.lists.entry(project.to_owned()).or_default();
+        let new = if whole { opened } else { list.union(&opened).cloned().collect() };
+        if new != *list {
+            log::info!("the project's read list: {} files, was {}", new.len(), list.len());
+            *list = new;
+            self.kept.keep_read_list(project, list).await;
+        }
     }
 
     /// Keeps what this build fetched while it ran and what the engine made, for later visits.

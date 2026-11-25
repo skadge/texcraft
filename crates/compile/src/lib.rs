@@ -36,6 +36,9 @@ pub struct Job {
     pub options: Options,
     /// Increases with every job a session starts, so an outcome can be matched to its job.
     pub id: u64,
+    /// Which project this is, for an engine that keeps something per project: the browser's
+    /// worker keeps the TeX files a project's builds read, to fetch them at once next time.
+    pub project: Option<String>,
 }
 
 impl Job {
@@ -43,7 +46,7 @@ impl Job {
     pub fn from_project(project: &Project, id: u64) -> Option<Job> {
         let main = project.main()?.clone();
         let files = project.files().map(|(p, c)| (p.clone(), Arc::<[u8]>::from(c.as_bytes()))).collect();
-        Some(Job { files, main, id, options: Options::default() })
+        Some(Job { files, main, id, options: Options::default(), project: None })
     }
 }
 
