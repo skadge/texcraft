@@ -104,6 +104,9 @@ pub struct Session {
     /// these live in the session: shown in the file tree until a file is put in them, and not
     /// saved (a folder is written when it has a file).
     folders: std::collections::BTreeSet<ProjectPath>,
+    /// The git repository the project's folder is in (docs/ROADMAP.md, C8): found when the project
+    /// is opened, made on its first save when there is none.
+    history: Option<texcraft_history::History>,
     /// The export running on its own thread (`build.export` with `background`).
     #[cfg(not(target_arch = "wasm32"))]
     export: Option<std::sync::mpsc::Receiver<Result<Value>>>,
@@ -150,6 +153,7 @@ impl Session {
             library: None,
             template_files: std::collections::BTreeMap::new(),
             folders: std::collections::BTreeSet::new(),
+            history: None,
             #[cfg(not(target_arch = "wasm32"))]
             export: None,
             #[cfg(target_arch = "wasm32")]
@@ -594,6 +598,7 @@ impl Session {
             _ => review_store::State::load(folder, &self.project),
         };
         self.sync = None;
+        self.history = None;
         self.dir = dir;
         self.dirty = false;
         self.touch();

@@ -24,6 +24,7 @@ texcraft-compile = { workspace = true, default-features = false }
 texcraft-templates = { workspace = true }
 texcraft-buffer = { workspace = true }
 texcraft-review = { workspace = true }
+texcraft-history = { workspace = true }
 chrono = { workspace = true }
 getrandom = { workspace = true }
 ed25519-dalek = { workspace = true }

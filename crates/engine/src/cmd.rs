@@ -13,6 +13,7 @@ use crate::{Result, Session};
 
 mod build;
 mod file;
+mod history;
 mod image;
 mod language;
 mod pdf;
@@ -78,6 +79,7 @@ pub fn all() -> &'static [CommandSpec] {
         v.extend(language::specs());
         v.extend(pdf::specs());
         v.extend(review::specs());
+        v.extend(history::specs());
         v
     })
 }
