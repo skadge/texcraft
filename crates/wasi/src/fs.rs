@@ -24,6 +24,9 @@ pub(crate) struct File {
     /// Nanoseconds since the epoch. Files of the TeX tree keep 0, so the
     /// caches made from them stay valid from one visit to the next.
     pub(crate) mtime: u64,
+    /// Where a file of the tree comes from, kept once it is loaded, so the
+    /// host is told each time the module opens it ([`Platform::opened`](crate::Platform::opened)).
+    pub(crate) source: Option<Rc<str>>,
 }
 
 impl File {
@@ -149,13 +152,13 @@ impl FileSystem {
     /// Adds (or replaces) the file at `path` with `bytes`. Returns false
     /// when a file is in the way of its directories.
     pub fn add(&self, path: &str, bytes: Vec<u8>, mtime: u64) -> bool {
-        self.put(path, File { data: Data::Bytes(bytes), mtime })
+        self.put(path, File { data: Data::Bytes(bytes), mtime, source: None })
     }
 
     /// Adds a file of `size` bytes loaded from `source` when it is first
     /// read, with the time 0.
     pub fn add_lazy(&self, path: &str, size: u64, source: Rc<str>) -> bool {
-        self.put(path, File { data: Data::Lazy { size, source }, mtime: 0 })
+        self.put(path, File { data: Data::Lazy { size, source: source.clone() }, mtime: 0, source: Some(source) })
     }
 
     /// Makes the directory `path` and its parents.

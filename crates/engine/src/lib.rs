@@ -460,10 +460,20 @@ impl Session {
         self.exporter().is_some()
     }
 
+    /// Which project this is, for the engine (see [`Job::project`]): its name in the browser's
+    /// library or its folder, or for a project kept nowhere yet, its main document's path.
+    fn project_key(&self) -> Option<String> {
+        match &self.dir {
+            Some(dir) => Some(format!("project:{}", dir.to_string_lossy())),
+            None => self.project.main().map(|main| format!("untitled:{}", main.as_str())),
+        }
+    }
+
     /// A job of the current sources and build options, for an export.
     pub(crate) fn export_job(&self) -> Result<Job> {
         let mut job = Job::from_project(&self.project, 0).ok_or("The project has no main document to export.")?;
         job.options = self.settings.build;
+        job.project = self.project_key();
         Ok(job)
     }
 
@@ -628,6 +638,7 @@ impl Session {
         self.next_job += 1;
         let mut job = Job::from_project(&self.project, id).ok_or("The project has no main document to build.")?;
         job.options = self.settings.build;
+        job.project = self.project_key();
         self.built_revision = Some(self.revision);
         match &mut self.builder {
             #[cfg(not(target_arch = "wasm32"))]
