@@ -4,11 +4,12 @@
 //!   WebP, TIFF, JPEG XL).
 //! - PDF figures through the PDF renderer, any page.
 //! - SVG through resvg, with the images it places looked up among the project's files (the host
-//!   says how, [`Lookup`]) and the system's fonts.
+//!   says how, [`Lookup`]), and its text in the system's fonts and those the host adds
+//!   ([`add_fonts`]: in the browser, which shows a page no installed font, the interface's own).
 //!
 //! PDF and SVG are drawn at the scale asked for, so a zoomed figure stays sharp.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use resvg::usvg;
 use retex_image::Kind as Format;
@@ -102,21 +103,157 @@ fn pdf(bytes: &[u8], page: usize, scale: f32, max_side: f32) -> Result<Figure, E
     Ok(Figure { image, size, pages: sizes.len() })
 }
 
-/// The system's fonts, loaded once, for text in SVG figures.
+/// A font file's bytes, shared (as egui's and fontdb's are).
+pub type FontBytes = Arc<dyn AsRef<[u8]> + Send + Sync>;
+
+/// The fonts of SVG text: the system's, loaded when first needed, and the host's.
+#[derive(Default)]
+struct Fonts {
+    db: Option<Arc<usvg::fontdb::Database>>,
+    added: Vec<FontBytes>,
+}
+
+static FONTS: Mutex<Fonts> = Mutex::new(Fonts { db: None, added: Vec::new() });
+
+/// The fonts SVG text is drawn with.
 fn fonts() -> Arc<usvg::fontdb::Database> {
-    static FONTS: OnceLock<Arc<usvg::fontdb::Database>> = OnceLock::new();
-    FONTS
-        .get_or_init(|| {
-            let mut db = usvg::fontdb::Database::new();
-            db.load_system_fonts();
-            Arc::new(db)
-        })
-        .clone()
+    let mut fonts = FONTS.lock().unwrap_or_else(PoisonError::into_inner);
+    let added = fonts.added.clone();
+    fonts.db.get_or_insert_with(|| Arc::new(database(true, added))).clone()
+}
+
+/// Adds font files to those SVG text is drawn with: in the browser, the only ones there are.
+/// The generic families (`sans-serif`, `serif`, `monospace`) go to faces among them when the
+/// system has none of the usual ones.
+pub fn add_fonts(files: impl IntoIterator<Item = FontBytes>) {
+    let mut fonts = FONTS.lock().unwrap_or_else(PoisonError::into_inner);
+    let files: Vec<FontBytes> = files.into_iter().collect();
+    fonts.added.extend(files.iter().cloned());
+    // Once loaded, the database takes them too; otherwise it is made with them when first needed.
+    if let Some(db) = fonts.db.as_mut() {
+        let db = Arc::make_mut(db);
+        for file in files {
+            db.load_font_source(usvg::fontdb::Source::Binary(file));
+        }
+        generic_families(db);
+    }
+}
+
+/// A font database of the system's fonts (when `system`) and `files`.
+fn database(system: bool, files: Vec<FontBytes>) -> usvg::fontdb::Database {
+    let mut db = usvg::fontdb::Database::new();
+    if system {
+        db.load_system_fonts();
+    }
+    for file in files {
+        db.load_font_source(usvg::fontdb::Source::Binary(file));
+    }
+    generic_families(&mut db);
+    db
+}
+
+/// Faces for the generic families, first found: the usual ones of each system, then the
+/// interface's and the TeX trees'.
+const SANS: &[&str] = &["Arial", "Helvetica", "Liberation Sans", "DejaVu Sans", "Noto Sans", "Inter", "Roboto", "Ubuntu", "TeX Gyre Heros"];
+const SERIF: &[&str] = &["Times New Roman", "Times", "Liberation Serif", "DejaVu Serif", "Noto Serif", "Source Serif 4", "TeX Gyre Termes"];
+const MONO: &[&str] = &["Courier New", "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", "Hack", "TeX Gyre Cursor"];
+
+fn has_family(db: &usvg::fontdb::Database, name: &str) -> bool {
+    db.faces().any(|f| f.families.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)))
+}
+
+/// Points each generic family at a face the database has, when the one it names is missing (the
+/// browser has none of them). Text in a family with no face at all goes to the sans-serif one.
+fn generic_families(db: &mut usvg::fontdb::Database) {
+    use usvg::fontdb::Family;
+    let any = db.faces().find_map(|f| f.families.first().map(|(n, _)| n.clone()));
+    let pick = |db: &usvg::fontdb::Database, generic: Family<'_>, list: &[&str]| -> Option<String> {
+        let current = db.family_name(&generic).to_owned();
+        if has_family(db, &current) {
+            return None;
+        }
+        list.iter().find(|n| has_family(db, n)).map(|n| (*n).to_owned())
+    };
+    if let Some(name) = pick(db, Family::SansSerif, SANS) {
+        db.set_sans_serif_family(name);
+    }
+    let sans = Some(db.family_name(&Family::SansSerif).to_owned()).filter(|n| has_family(db, n)).or(any);
+    let Some(sans) = sans else { return };
+    for (generic, list) in [(Family::Serif, SERIF), (Family::Monospace, MONO), (Family::Cursive, &[][..]), (Family::Fantasy, &[][..])] {
+        let name = pick(db, generic, list).or_else(|| (!has_family(db, db.family_name(&generic))).then(|| sans.clone()));
+        match (generic, name) {
+            (Family::Serif, Some(n)) => db.set_serif_family(n),
+            (Family::Monospace, Some(n)) => db.set_monospace_family(n),
+            (Family::Cursive, Some(n)) => db.set_cursive_family(n),
+            (Family::Fantasy, Some(n)) => db.set_fantasy_family(n),
+            _ => {}
+        }
+    }
+    if !has_family(db, db.family_name(&Family::SansSerif)) {
+        db.set_sans_serif_family(sans);
+    }
+}
+
+/// The generic family a font name most likely belongs to, for a family the database lacks.
+fn likely_generic(name: &str) -> usvg::fontdb::Family<'static> {
+    use usvg::fontdb::Family;
+    let n = name.to_ascii_lowercase();
+    let has = |words: &[&str]| words.iter().any(|w| n.contains(w));
+    if has(&["mono", "courier", "code", "consol", "menlo", "typewriter", "cursor"]) {
+        Family::Monospace
+    } else if !n.contains("sans") && has(&["serif", "times", "roman", "georgia", "garamond", "palatino", "book", "termes", "pagella", "schola"]) {
+        Family::Serif
+    } else {
+        Family::SansSerif
+    }
+}
+
+/// usvg's font choice, except that a family the database lacks stands for the generic family its
+/// name suggests (a missing Roboto is drawn sans-serif, not in the serif face usvg falls back to).
+fn font_resolver() -> usvg::FontResolver<'static> {
+    use usvg::fontdb::{Family, Query, Stretch, Style, Weight};
+    let select: usvg::FontSelectionFn<'static> = Box::new(|font, db| {
+        let mut families = Vec::new();
+        for family in font.families() {
+            match family {
+                usvg::FontFamily::Serif => families.push(Family::Serif),
+                usvg::FontFamily::SansSerif => families.push(Family::SansSerif),
+                usvg::FontFamily::Cursive => families.push(Family::Cursive),
+                usvg::FontFamily::Fantasy => families.push(Family::Fantasy),
+                usvg::FontFamily::Monospace => families.push(Family::Monospace),
+                usvg::FontFamily::Named(name) if has_family(db, name) => families.push(Family::Name(name)),
+                usvg::FontFamily::Named(name) => families.push(likely_generic(name)),
+            }
+        }
+        families.push(Family::SansSerif);
+        let stretch = match font.stretch() {
+            usvg::FontStretch::UltraCondensed => Stretch::UltraCondensed,
+            usvg::FontStretch::ExtraCondensed => Stretch::ExtraCondensed,
+            usvg::FontStretch::Condensed => Stretch::Condensed,
+            usvg::FontStretch::SemiCondensed => Stretch::SemiCondensed,
+            usvg::FontStretch::Normal => Stretch::Normal,
+            usvg::FontStretch::SemiExpanded => Stretch::SemiExpanded,
+            usvg::FontStretch::Expanded => Stretch::Expanded,
+            usvg::FontStretch::ExtraExpanded => Stretch::ExtraExpanded,
+            usvg::FontStretch::UltraExpanded => Stretch::UltraExpanded,
+        };
+        let style = match font.style() {
+            usvg::FontStyle::Normal => Style::Normal,
+            usvg::FontStyle::Italic => Style::Italic,
+            usvg::FontStyle::Oblique => Style::Oblique,
+        };
+        db.query(&Query { families: &families, weight: Weight(font.weight()), stretch, style })
+    });
+    usvg::FontResolver { select_font: select, select_fallback: usvg::FontResolver::default_fallback_selector() }
 }
 
 fn svg(bytes: &[u8], scale: f32, max_side: f32, lookup: Lookup<'_>) -> Result<Figure, Error> {
+    svg_with(bytes, scale, max_side, lookup, fonts())
+}
+
+fn svg_with(bytes: &[u8], scale: f32, max_side: f32, lookup: Lookup<'_>, fontdb: Arc<usvg::fontdb::Database>) -> Result<Figure, Error> {
     let bad = |e: &dyn std::fmt::Display| Error::Image(e.to_string());
-    let mut options = usvg::Options { fontdb: fonts(), ..usvg::Options::default() };
+    let mut options = usvg::Options { fontdb, font_resolver: font_resolver(), ..usvg::Options::default() };
     options.image_href_resolver.resolve_string = Box::new(move |href: &str, _: &usvg::Options| {
         let data = Arc::new(lookup(href)?);
         match retex_image::kind_of(&data)? {
@@ -157,4 +294,39 @@ fn raster(bytes: &[u8]) -> Result<Image, Error> {
         }
     }
     Ok(Image { width: r.width, height: r.height, rgba: r.data })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A label in a font the browser does not have (our own drawing, issue #5).
+    const LABEL: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="240" height="60">
+<rect width="240" height="60" fill="white"/>
+<text x="10" y="42" font-family="Roboto, Arial" font-size="32" fill="black">Label</text>
+<text x="150" y="42" font-family="sans-serif" font-size="32" fill="black">Ab</text>
+</svg>"#;
+
+    /// Dark pixels in the left part (the named family's label) and the right (the generic one's).
+    fn ink(fonts: usvg::fontdb::Database) -> (usize, usize) {
+        let figure = svg_with(LABEL, 1.0, 1024.0, &|_| None, Arc::new(fonts)).unwrap();
+        let w = figure.image.width as usize;
+        let mut ink = (0, 0);
+        for (i, px) in figure.image.rgba.chunks_exact(4).enumerate() {
+            if px[0] < 128 {
+                if i % w < 140 { ink.0 += 1 } else { ink.1 += 1 }
+            }
+        }
+        ink
+    }
+
+    #[test]
+    fn svg_text_is_drawn_with_the_fonts_the_host_adds_when_the_system_has_none() {
+        // The browser: no system fonts. Without any, the text is left out.
+        assert_eq!(ink(database(false, Vec::new())), (0, 0));
+        let hack: FontBytes = Arc::new(epaint_default_fonts::HACK_REGULAR);
+        let (named, generic) = ink(database(false, vec![hack]));
+        assert!(named > 100, "a family the browser lacks drew no text");
+        assert!(generic > 50, "sans-serif drew no text");
+    }
 }

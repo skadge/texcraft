@@ -6552,6 +6552,7 @@ name = "texcraft-preview"
 version = "0.11.0"
 dependencies = [
  "craft-pdf",
+ "epaint_default_fonts",
  "kurbo 0.13.1",
  "png 0.18.1",
  "resvg 0.48.1",

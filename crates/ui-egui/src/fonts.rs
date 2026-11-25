@@ -66,4 +66,16 @@ pub fn install(ctx: &egui::Context) {
     // of these draw.
     fonts = fonts.egui_face("Hack", &all).egui_face("Ubuntu-Light", &all).egui_face("NotoEmoji-Regular", &all).egui_face("emoji-icon-font", &all);
     fonts.install(ctx);
+    svg_fonts();
+}
+
+/// Text in SVG figures is drawn with the interface's faces too: in the browser, which shows a page
+/// none of the installed fonts, they are the only ones (issue #5).
+fn svg_fonts() {
+    static ADDED: std::sync::Once = std::sync::Once::new();
+    ADDED.call_once(|| {
+        let mut files: Vec<texcraft_preview::figure::FontBytes> = UI_FACES.iter().map(|(_, bytes)| std::sync::Arc::new(*bytes) as _).collect();
+        files.extend(egui::FontDefinitions::default().font_data.values().map(|data| data.font.clone()));
+        texcraft_preview::figure::add_fonts(files);
+    });
 }
