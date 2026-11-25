@@ -48,7 +48,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | F1 | ✅ 0.2.2 | Formatted view, read-only | A Source/Formatted switch: headings, styled text, lists, figure cards, chips for references and citations; double-click shows the source there. |
 | F2 | ✅ 0.6.0 | Typeset formulas | Formulas drawn by retex with the document's preamble, cached, in the colour of the text; errors underlined with retex's message. Desktop only: the browser still shows their source. |
 | F3 | 🚧 | Editing in the formatted view | Typing, styles and lists in the view, each edit a minimal change of the source. Done: caret and selection in text runs, typing and paste escaped, Enter (paragraphs, items), atoms as single stops with a two-press delete, Bold, Italic, headings and lists on the selection, undo shared with the source, an editable text node. Still to come: formulas and fallback spans edited in place, IME marked text, leaving a list from an empty item, Suggest mode. |
-| F4 | ⬜ | Tables and figures | A grid editor for `tabular`, and a dialog for figures. |
+| F4 | 🚧 | Tables and figures | A grid editor for `tabular`, and a dialog for figures. Done: `tabular` read as a grid (or kept as source with the reason), cells edited in place, Tab and arrows between cells, a toolbar for rows, columns, alignment and borders (none, all, booktabs, the package said not added), the figure dialog (image, width, placement, caption, label), `table.*` and `figure.*` commands, an image file dropped on the view (desktop) made a figure. Still to come: merging and splitting cells, the caption's position, `tabularx` and `longtable`, the drop in the browser. |
 
 ## Building, preview and navigation
 
