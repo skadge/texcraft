@@ -12,6 +12,8 @@ pub mod i18n;
 pub mod theme;
 
 mod ai;
+mod ai_ask;
+mod ai_make;
 mod app_icon;
 pub mod control;
 mod dialogs;
@@ -94,6 +96,8 @@ pub enum Side {
     History,
     /// The symbol palette (`edit.symbols`).
     Symbols,
+    /// Questions to the connected model about the file or the project (`view.side.ask`).
+    Ask,
 }
 
 /// How the editor and the preview share the window.

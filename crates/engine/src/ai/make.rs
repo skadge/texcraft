@@ -160,18 +160,23 @@ pub struct Scratch {
 /// the project (`texcraft_compile::scratch`); tests give their own.
 pub type Typeset = Arc<dyn Fn(&Scratch) -> std::result::Result<Vec<u8>, Vec<String>> + Send + Sync>;
 
-/// The desktop's: retex in process, in a folder of its own.
+/// The desktop's: retex in process, each preview in a folder of its own (sessions of one process
+/// may typeset at once).
 #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
 pub fn retex_typeset() -> Typeset {
+    static RUNS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     Arc::new(|s: &Scratch| {
-        let dir = std::env::temp_dir().join(format!("texcraft-ai-preview-{}", std::process::id()));
+        let run = RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("texcraft-ai-preview-{}-{run}", std::process::id()));
         let scratch = texcraft_compile::scratch::Scratch {
             files: s.files.clone(),
             main_dir: s.main_dir.clone(),
             preamble: s.preamble.clone(),
             body: s.body.clone(),
         };
-        texcraft_compile::scratch::typeset(&dir, &scratch)
+        let typeset = texcraft_compile::scratch::typeset(&dir, &scratch);
+        let _ = std::fs::remove_dir_all(&dir);
+        typeset
     })
 }
 

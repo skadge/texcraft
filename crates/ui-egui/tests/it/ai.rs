@@ -74,7 +74,7 @@ pub(crate) fn harness(s: Session) -> Harness<'static, App> {
 }
 
 /// Runs frames until no AI request is in flight.
-fn settle(h: &mut Harness<'_, App>) -> bool {
+pub(crate) fn settle(h: &mut Harness<'_, App>) -> bool {
     for _ in 0..300 {
         h.step();
         if !h.state().session().ai_busy() {
@@ -86,7 +86,7 @@ fn settle(h: &mut Harness<'_, App>) -> bool {
     false
 }
 
-fn sent(s: &Arc<Mutex<Vec<String>>>) -> usize {
+pub(crate) fn sent(s: &Arc<Mutex<Vec<String>>>) -> usize {
     s.lock().map(|p| p.len()).unwrap_or_default()
 }
 
@@ -169,7 +169,13 @@ impl Provider for Says {
 
 /// The editor on `text`, connected to a model that answers `reply`; with `complete`, the next
 /// words are suggested as one types (and the user agreed to it).
-fn editor(reply: &'static str, text: &str, sent: &Arc<Mutex<Vec<String>>>, complete: bool, vim: bool) -> Result<Harness<'static, App>, String> {
+pub(crate) fn editor(
+    reply: &'static str,
+    text: &str,
+    sent: &Arc<Mutex<Vec<String>>>,
+    complete: bool,
+    vim: bool,
+) -> Result<Harness<'static, App>, String> {
     let mut s = Session::with_backend(Box::new(Failing));
     let sent = sent.clone();
     s.set_ai_connect(Arc::new(move |_: &Target| Ok(Box::new(Says(reply, sent.clone())) as Box<dyn Provider>)));

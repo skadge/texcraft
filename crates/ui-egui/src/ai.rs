@@ -1,7 +1,9 @@
-//! AI assistance in the window (docs/ROADMAP.md, AI1 to AI3): Settings › AI, the dialog that shows
+//! AI assistance in the window (docs/ROADMAP.md, AI1 to AI5): Settings › AI, the dialog that shows
 //! what a kind of request sends before the first one goes, the explanations on build messages,
 //! Rewrite with AI on a selection (Edit menu and the text's context menu), and the next words
-//! suggested after the caret as one types. Everything goes through the engine's `ai.*` commands.
+//! suggested after the caret as one types. Making LaTeX and drafting references are in
+//! [`crate::ai_make`], asking and reviewing in [`crate::ai_ask`]. Everything goes through the
+//! engine's `ai.*` commands.
 
 use egui::{Align, Layout, RichText};
 use serde_json::{Value, json};
@@ -27,6 +29,8 @@ pub(crate) struct AiView {
     asked: Option<f64>,
     /// The suggested next words last announced.
     announced: Option<String>,
+    /// The Ask panel's question and scope.
+    pub(crate) ask: crate::ai_ask::AskForm,
 }
 
 /// A kind of request, as the consent dialog asks about it.
@@ -35,6 +39,10 @@ pub(crate) enum Kind {
     Explain,
     Rewrite,
     Complete,
+    Make,
+    Reference,
+    Ask,
+    Review,
 }
 
 impl Kind {
@@ -43,6 +51,23 @@ impl Kind {
             Kind::Explain => "explain",
             Kind::Rewrite => "rewrite",
             Kind::Complete => "complete",
+            Kind::Make => "make",
+            Kind::Reference => "reference",
+            Kind::Ask => "ask",
+            Kind::Review => "review",
+        }
+    }
+
+    /// The engine command that makes the request.
+    fn command(self) -> &'static str {
+        match self {
+            Kind::Explain => "ai.explain",
+            Kind::Rewrite => "ai.rewrite",
+            Kind::Complete => "ai.complete",
+            Kind::Make => "ai.make",
+            Kind::Reference => "ai.reference",
+            Kind::Ask => "ai.ask",
+            Kind::Review => "ai.review",
         }
     }
 }
@@ -55,6 +80,8 @@ pub(crate) struct Consent {
     target: Value,
     /// `ai.disclose`'s answer.
     disclosure: Value,
+    /// The dialog it was asked from, open again once it is answered.
+    back: Option<Box<Dialog>>,
 }
 
 /// How a selection can be rewritten: `ai.rewrite`'s `how`, and the menu's label.
@@ -175,12 +202,25 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
 
 /// Explains message `target`: at once when the user agreed before, else after the dialog.
 pub(crate) fn explain(app: &mut App, target: Value) {
-    let Some(disclosure) = app.run("ai.disclose", target.clone()) else { return };
+    request(app, Kind::Explain, target, None);
+}
+
+/// Makes request `kind` with `target`'s parameters: at once when the user agreed to its kind
+/// before, else after the dialog that shows what it sends. `back`, the dialog it is asked from,
+/// is open again after.
+pub(crate) fn request(app: &mut App, kind: Kind, target: Value, back: Option<Dialog>) {
+    let mut ask = target.clone();
+    ask["request"] = json!(kind.request());
+    let Some(disclosure) = app.run("ai.disclose", ask) else {
+        app.view.dialog = back;
+        return;
+    };
     if disclosure["needs_consent"].as_bool().unwrap_or(true) {
-        app.view.dialog = Some(Dialog::AiConsent(Box::new(Consent { kind: Kind::Explain, target, disclosure })));
+        app.view.dialog = Some(Dialog::AiConsent(Box::new(Consent { kind, target, disclosure, back: back.map(Box::new) })));
         return;
     }
-    start(app, Kind::Explain, target);
+    app.view.dialog = back;
+    start(app, kind, target);
 }
 
 /// Why the selection cannot be rewritten now, if it cannot.
@@ -210,14 +250,7 @@ pub(crate) fn rewrite(app: &mut App, params: &Value) {
     }
     // As after a Vim operator: the selection was used.
     app.editor.source.end_visual();
-    let mut ask = target.clone();
-    ask["request"] = json!("rewrite");
-    let Some(disclosure) = app.run("ai.disclose", ask) else { return };
-    if disclosure["needs_consent"].as_bool().unwrap_or(true) {
-        app.view.dialog = Some(Dialog::AiConsent(Box::new(Consent { kind: Kind::Rewrite, target, disclosure })));
-        return;
-    }
-    start(app, Kind::Rewrite, target);
+    request(app, Kind::Rewrite, target, None);
 }
 
 fn start(app: &mut App, kind: Kind, mut target: Value) {
@@ -230,13 +263,16 @@ fn start(app: &mut App, kind: Kind, mut target: Value) {
     if let Some(map) = target.as_object_mut() {
         map.insert("background".to_owned(), json!(true));
     }
-    let command = if kind == Kind::Rewrite { "ai.rewrite" } else { "ai.explain" };
-    if app.run(command, target).is_some() {
-        if kind == Kind::Rewrite {
-            app.view.status = Some((tl!("The model is rewriting the selection…").to_owned(), false));
-        } else {
-            app.view.logs = true;
-        }
+    if app.run(kind.command(), target).is_none() {
+        return;
+    }
+    match kind {
+        Kind::Rewrite => app.view.status = Some((tl!("The model is rewriting the selection…").to_owned(), false)),
+        Kind::Explain => app.view.logs = true,
+        Kind::Make | Kind::Reference => crate::ai_make::started(app),
+        Kind::Ask => app.view.side = Some(crate::Side::Ask),
+        Kind::Review => app.view.status = Some((tl!("The model is reviewing the section…").to_owned(), false)),
+        Kind::Complete => {}
     }
 }
 
@@ -290,12 +326,7 @@ fn set_typing(app: &mut App, on: bool) {
         let _ = app.session.execute("ai.cancel", &json!({"only": "completion"}));
         return;
     }
-    let Some(disclosure) = app.run("ai.disclose", json!({"request": "complete"})) else { return };
-    if disclosure["needs_consent"].as_bool().unwrap_or(true) {
-        app.view.dialog = Some(Dialog::AiConsent(Box::new(Consent { kind: Kind::Complete, target: json!({}), disclosure })));
-        return;
-    }
-    start(app, Kind::Complete, json!({}));
+    request(app, Kind::Complete, json!({}), Some(Dialog::Settings));
 }
 
 /// Each frame of the source editor, when the next words are suggested as one types: drops them
@@ -376,6 +407,15 @@ pub(crate) fn consent_dialog(app: &mut App, ctx: &egui::Context) {
             Kind::Complete => tl!(
                 "Suggesting the next words sends the paragraph you are typing, up to the caret, to {destination} after each pause in typing, at most every two seconds."
             ),
+            Kind::Make => tl!(
+                "Making LaTeX sends your description, the main document's preamble and, for a figure, the names of the project's images to {destination}. What comes back is typeset here first and inserted only as a suggested change."
+            ),
+            Kind::Reference => tl!("Drafting a reference sends the title or DOI you typed, and nothing of the project, to {destination}."),
+            Kind::Ask if d["sends"]["scope"] == "project" => {
+                tl!("Asking sends your question and every text file of the project, with numbered lines, to {destination}.")
+            }
+            Kind::Ask => tl!("Asking sends your question and the open file, with numbered lines, to {destination}."),
+            Kind::Review => tl!("Reviewing sends the section at the caret to {destination}. Its remarks come back as comments."),
         };
         ui.label(what.replace("{destination}", &destination));
         let below = if kind == Kind::Complete {
@@ -398,6 +438,10 @@ pub(crate) fn consent_dialog(app: &mut App, ctx: &egui::Context) {
                 Kind::Explain => tl!("Agree and Explain"),
                 Kind::Rewrite => tl!("Agree and Rewrite"),
                 Kind::Complete => tl!("Agree and Turn On"),
+                Kind::Make => tl!("Agree and Make"),
+                Kind::Reference => tl!("Agree and Draft"),
+                Kind::Ask => tl!("Agree and Ask"),
+                Kind::Review => tl!("Agree and Review"),
             };
             if ui.add(egui::Button::new(label).min_size(egui::vec2(120.0, 30.0))).clicked() {
                 agree = true;
@@ -417,14 +461,14 @@ pub(crate) fn consent_dialog(app: &mut App, ctx: &egui::Context) {
     }
     if agree {
         let Some(Dialog::AiConsent(consent)) = app.view.dialog.take() else { return };
-        if kind == Kind::Complete {
-            app.view.dialog = Some(Dialog::Settings);
-        }
+        let Consent { target, back, .. } = *consent;
+        app.view.dialog = back.map(|b| *b);
         if app.run("ai.consent", json!({"request": kind.request()})).is_some() {
-            start(app, kind, consent.target);
+            start(app, kind, target);
         }
     } else if close {
-        app.view.dialog = if kind == Kind::Complete { Some(Dialog::Settings) } else { None };
+        let Some(Dialog::AiConsent(consent)) = app.view.dialog.take() else { return };
+        app.view.dialog = consent.back.map(|b| *b);
         app.view.status = Some((tl!("Nothing was sent.").to_owned(), false));
     }
 }

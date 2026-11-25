@@ -134,6 +134,7 @@ impl Prefs {
             "search" => Some(Side::Search),
             "history" => Some(Side::History),
             "symbols" => Some(Side::Symbols),
+            "ask" => Some(Side::Ask),
             "" => None,
             _ => Some(Side::Files),
         }
@@ -153,6 +154,7 @@ impl Prefs {
             Some(Side::Search) => "search",
             Some(Side::History) => "history",
             Some(Side::Symbols) => "symbols",
+            Some(Side::Ask) => "ask",
             None => "",
         }
         .to_owned();

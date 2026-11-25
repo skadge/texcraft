@@ -1,6 +1,7 @@
 //! Integration tests for texcraft-ui-egui.
 
 mod ai;
+mod ai_make_ask;
 mod carets;
 mod closing;
 mod completion;

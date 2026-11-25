@@ -49,6 +49,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("edit.previous_comment", "Previous Comment", "Edit", "review", Some("Shift+F8")),
     ui("edit.suggest_mode", "Suggest Changes", "Edit", "review", Some("Cmd+Shift+E")),
     ui("edit.accept_all", "Accept All Suggestions", "Edit", "review", None),
+    // Sends the section at the caret to the connected model; its remarks arrive as comments.
+    ui("edit.ai_review", "Review This Section with AI", "Edit", "review", None),
     ui("edit.reject_all", "Reject All Suggestions", "Edit", "review", None),
     ui("app.settings", "Settings…", "Edit", "settings", Some("Cmd+,")),
     // `{"how": "shorter"}`, or `{"how": "translate", "language": "French"}`: the Edit menu's and
@@ -72,6 +74,10 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("edit.link", "Link", "Insert", "refs", None),
     ui("edit.itemize", "Bulleted List", "Insert", "lists", None),
     ui("edit.enumerate", "Numbered List", "Insert", "lists", None),
+    // The connected model writes LaTeX (a table, an equation, a TikZ diagram, a figure) or a
+    // BibTeX entry; it goes in as a suggested change.
+    ui("edit.ai_make", "Make with AI…", "Insert", "ai", None),
+    ui("edit.ai_reference", "Add a Reference with AI…", "Insert", "ai", None),
     // Not in the menu bar: each has its button in the window (the layout switch, the rail, the
     // PDF pane's toolbar, the app mark), and its shortcut and command for the keyboard and agents.
     ui("view.layout.split", "Editor and PDF", "View", "layout", None),
@@ -82,6 +88,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.side.review", "Review", "View", "side", None),
     ui("view.side.search", "Search", "View", "side", None),
     ui("view.side.history", "History", "View", "side", None),
+    ui("view.side.ask", "Ask AI", "View", "side", None),
     ui("view.side.hide", "Hide Side Panel", "View", "side", None),
     ui("view.comments", "Show or Hide the Comments Beside the Text", "View", "side", None),
     ui("view.logs", "Build Log", "View", "pdf", None),
@@ -136,6 +143,8 @@ pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
     match id {
         "edit.cut" | "edit.copy" if app.editor.source.selected().is_none() => Err(tl!("Select some text first.").to_owned()),
         "edit.rewrite" => crate::ai::can_rewrite(app),
+        "edit.ai_make" | "edit.ai_reference" => crate::ai_make::can_make(app),
+        "edit.ai_review" => crate::ai_ask::can_review(app),
         "edit.accept_all" | "edit.reject_all" if crate::review::open_suggestions_in_current(app) == 0 => {
             Err(tl!("There are no open suggestions in this file.").to_owned())
         }
@@ -196,6 +205,7 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "view.side.review" => app.view.side = Some(Side::Review),
         "view.side.search" => app.view.side = Some(Side::Search),
         "view.side.history" => app.view.side = Some(Side::History),
+        "view.side.ask" => app.view.side = Some(Side::Ask),
         "view.find_in_project" => crate::search::open(app),
         "view.side.hide" => app.view.side = None,
         "view.comments" => crate::review::toggle_margin(app),
@@ -239,6 +249,9 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             }
         }
         "edit.rewrite" => crate::ai::rewrite(app, params),
+        "edit.ai_make" => crate::ai_make::open_make(app),
+        "edit.ai_reference" => crate::ai_make::open_reference(app),
+        "edit.ai_review" => crate::ai_ask::review(app),
         id if id.starts_with("edit.") => {
             if !crate::editor::edit(app, id) {
                 app.view.status = Some((tl!("Open a text file to edit it.").to_owned(), true));

@@ -57,6 +57,10 @@ pub(crate) enum Dialog {
     Figure(Box<crate::figure_dialog::FigureForm>),
     /// What explaining a message sends, before the first one goes.
     AiConsent(Box<crate::ai::Consent>),
+    /// Make with AI: a description, the model's LaTeX typeset, Insert.
+    AiMake(Box<crate::ai_make::MakeForm>),
+    /// Add a Reference with AI: a title or DOI, the drafted entry.
+    AiReference(Box<crate::ai_make::ReferenceForm>),
 }
 
 impl Dialog {
@@ -76,6 +80,8 @@ impl Dialog {
             Dialog::ForgeMergeRequest(_) => "forge_merge_request",
             Dialog::Figure(_) => "figure",
             Dialog::AiConsent(_) => "ai_consent",
+            Dialog::AiMake(_) => "ai_make",
+            Dialog::AiReference(_) => "ai_reference",
         }
     }
 }
@@ -92,6 +98,14 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     }
     if matches!(app.view.dialog, Some(Dialog::AiConsent(_))) {
         crate::ai::consent_dialog(app, ctx);
+        return;
+    }
+    if matches!(app.view.dialog, Some(Dialog::AiMake(_))) {
+        crate::ai_make::make_dialog(app, ctx);
+        return;
+    }
+    if matches!(app.view.dialog, Some(Dialog::AiReference(_))) {
+        crate::ai_make::reference_dialog(app, ctx);
         return;
     }
     if matches!(app.view.dialog, Some(Dialog::GoToFile(_))) {
@@ -121,7 +135,9 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             | Dialog::ForgeCommit(_)
             | Dialog::ForgeResolve(_)
             | Dialog::ForgeMergeRequest(_)
-            | Dialog::AiConsent(_) => {}
+            | Dialog::AiConsent(_)
+            | Dialog::AiMake(_)
+            | Dialog::AiReference(_) => {}
             Dialog::Figure(f) => outcome = crate::figure_dialog::form(ui, &t, f),
             Dialog::About => outcome = about(ui, &t, &engine),
         }
