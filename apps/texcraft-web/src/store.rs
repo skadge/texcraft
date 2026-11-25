@@ -291,8 +291,9 @@ fn threads_of(name: &str) -> Result<IdbKeyRange, String> {
         .map_err(why)
 }
 
-/// A project as IndexedDB keeps it: `{main, saved, names, contents}`, the files' paths and their
-/// bytes in two arrays. Its threads are in the `reviews` store.
+/// A project as IndexedDB keeps it: `{main, saved, names, contents, forge}`, the files' paths and
+/// their bytes in two arrays, and the GitLab branch it is linked to as JSON (no token). Its
+/// threads are in the `reviews` store.
 fn project_to(project: &Stored) -> JsValue {
     let names = Array::new();
     let contents = Array::new();
@@ -305,6 +306,7 @@ fn project_to(project: &Stored) -> JsValue {
         ("saved", JsValue::from(project.saved as f64)),
         ("names", names.into()),
         ("contents", contents.into()),
+        ("forge", project.forge.as_ref().and_then(|l| serde_json::to_string(l).ok()).map_or(JsValue::NULL, |j| JsValue::from_str(&j))),
     ])
     .into()
 }
@@ -319,6 +321,7 @@ fn project_from(v: &JsValue) -> Option<Stored> {
         saved: get(v, "saved").as_f64().unwrap_or(0.0) as i64,
         review: BTreeMap::new(),
         history: Versions::default(),
+        forge: get(v, "forge").as_string().and_then(|j| serde_json::from_str(&j).ok()),
     })
 }
 
