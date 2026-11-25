@@ -145,3 +145,127 @@ fn explain_asks_once_shows_what_is_sent_and_puts_the_answer_in_the_card() -> Res
     assert_eq!(sent(&prompts), 1);
     Ok(())
 }
+
+/// A model that answers every prompt with the same text.
+struct Says(&'static str, Arc<Mutex<Vec<String>>>);
+
+impl Provider for Says {
+    fn name(&self) -> String {
+        "fake".into()
+    }
+    fn complete(&mut self, prompt: &str, _: &GenOpts) -> Result<String, AiError> {
+        if let Ok(mut p) = self.1.lock() {
+            p.push(prompt.to_owned());
+        }
+        Ok(self.0.into())
+    }
+    fn test(&mut self) -> Result<ProviderInfo, AiError> {
+        Ok(ProviderInfo { label: "fake".into(), models: vec!["small".into()] })
+    }
+    fn is_local(&self) -> bool {
+        false
+    }
+}
+
+/// The editor on `text`, connected to a model that answers `reply`; with `complete`, the next
+/// words are suggested as one types (and the user agreed to it).
+fn editor(reply: &'static str, text: &str, sent: &Arc<Mutex<Vec<String>>>, complete: bool, vim: bool) -> Result<Harness<'static, App>, String> {
+    let mut s = Session::with_backend(Box::new(Failing));
+    let sent = sent.clone();
+    s.set_ai_connect(Arc::new(move |_: &Target| Ok(Box::new(Says(reply, sent.clone())) as Box<dyn Provider>)));
+    s.execute("file.write", &json!({"path": "main.tex", "text": text}))?;
+    s.execute("ai.connect", &json!({"endpoint": "https://api.example.com/v1", "token": TOKEN, "model": "small"}))?;
+    if complete {
+        s.execute("ai.consent", &json!({"request": "complete"}))?;
+    }
+    let prefs =
+        Prefs { auto_compile: false, layout: "editor".to_owned(), ai: s.ai_saved().0.clone(), ai_complete: complete, vim, ..Prefs::default() };
+    Ok(Harness::builder()
+        .with_size(egui::vec2(1500.0, 800.0))
+        .with_max_steps(60)
+        .build_ui_state(|ui, app: &mut App| app.frame(ui), App::with_prefs(s, prefs)))
+}
+
+#[test]
+fn rewrite_shorter_on_a_selection_asks_first_and_makes_a_suggestion_card() -> Result<(), String> {
+    let prompts = Arc::new(Mutex::new(Vec::new()));
+    let text = "The quick brown fox jumps over the lazy dog again and again.\n";
+    let mut h = editor("<<<TEXT\nThe fox jumps over the dog.\nTEXT>>>", text, &prompts, false, false)?;
+    h.run();
+    h.get_by_label("main.tex source").focus();
+    h.run();
+    ui_cmd::run(h.state_mut(), "edit.select_all");
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F10);
+    h.run();
+    h.run();
+    h.get_by_label("Rewrite with AI").click();
+    h.run();
+    h.get_by_label("Shorter").click();
+    h.run();
+    assert!(h.query_by_label_contains("https://api.example.com").is_some(), "the dialog does not say where the selection goes");
+    assert_eq!(sent(&prompts), 0, "the selection was sent before the user agreed");
+    h.get_by_label("Agree and Rewrite").click();
+    h.run();
+    assert!(settle(&mut h), "the rewrite did not arrive");
+    assert_eq!(sent(&prompts), 1);
+    let file =
+        h.state().session().project().text(&texcraft_engine::project::ProjectPath::new("main.tex").map_err(|e| e.to_string())?).map(str::to_owned);
+    assert_eq!(file.ok().as_deref(), Some(text), "the rewrite was applied directly");
+    h.run();
+    assert!(h.query_by_label_contains("Suggestion by AI (small)").is_some(), "no suggestion card for the rewrite");
+    Ok(())
+}
+
+/// Types `typed` at the end of the first line, waits for the next words and takes them with Tab:
+/// the file's text after.
+fn take_the_next_words(vim: bool, typed: &str) -> Result<String, String> {
+    let prompts = Arc::new(Mutex::new(Vec::new()));
+    let mut h = editor(" over the lazy dog.", "\\begin{document}\nThe quick brown fox\n\\end{document}\n", &prompts, true, vim)?;
+    let main = texcraft_engine::project::ProjectPath::new("main.tex").map_err(|e| e.to_string())?;
+    h.run();
+    h.get_by_label("main.tex source").focus();
+    h.run();
+    // To the end of "The quick brown fox".
+    h.get_by_label("main.tex source").type_text(if vim { "jA" } else { "" });
+    if !vim {
+        h.key_press(egui::Key::ArrowDown);
+        h.key_press(egui::Key::End);
+    }
+    h.run();
+    h.get_by_label("main.tex source").type_text(typed);
+    h.run();
+    assert_eq!(sent(&prompts), 0, "the next words were asked for at once, without a pause");
+    let mut shown = false;
+    for _ in 0..200 {
+        h.step();
+        if h.query_by_label_contains("Suggested next words").is_some() {
+            shown = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(shown, "no next words were shown after a pause");
+    assert_eq!(sent(&prompts), 1);
+    assert!(
+        prompts.lock().map(|p| p[0].contains("The quick brown fox jumps") && !p[0].contains("end{document}")).unwrap_or(false),
+        "not the paragraph up to the caret"
+    );
+    h.key_press(egui::Key::Tab);
+    h.run();
+    Ok(h.state().session().project().text(&main).map(str::to_owned).unwrap_or_default())
+}
+
+#[test]
+fn the_next_words_appear_after_a_pause_and_tab_takes_them() -> Result<(), String> {
+    let text = take_the_next_words(false, " jumps")?;
+    assert!(text.contains("The quick brown fox jumps over the lazy dog.\n"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn in_vims_insert_mode_tab_takes_the_next_words_too() -> Result<(), String> {
+    let text = take_the_next_words(true, " jumps")?;
+    assert!(text.contains("The quick brown fox jumps over the lazy dog.\n"), "{text}");
+    Ok(())
+}

@@ -51,6 +51,8 @@ pub struct Prefs {
     pub identity: Option<Identity>,
     /// The AI connection (its token is in the keychain, never here), model and agreements.
     pub ai: texcraft_engine::ai::Saved,
+    /// After a pause in typing, the model's next words are shown after the caret (AI3).
+    pub ai_complete: bool,
 }
 
 /// The name and key a person's comments carry (docs/collaboration-roadmap.md, R1). No accounts:
@@ -102,6 +104,7 @@ impl Default for Prefs {
             build: texcraft_engine::BuildOptions::default(),
             identity: None,
             ai: texcraft_engine::ai::Saved::default(),
+            ai_complete: false,
         }
     }
 }
