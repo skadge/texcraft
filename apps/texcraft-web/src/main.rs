@@ -301,8 +301,20 @@ mod web {
         listener.forget();
     }
 
-    /// The engine worker's script, made by Trunk (`index.html`).
+    /// The engine worker's script, made by Trunk (`index.html`), under its plain name.
     const WORKER: &str = "engine-worker_loader.js";
+
+    /// The engine worker's script: the name the build gave it, named after the engine's contents
+    /// so that a browser never starts an old one after an update (`<meta name="texcraft-engine">`,
+    /// written by `cargo xtask version-worker`), or its plain name in a build without that step.
+    fn worker_url() -> String {
+        web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.query_selector("meta[name=texcraft-engine]").ok().flatten())
+            .and_then(|m| m.get_attribute("content"))
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| WORKER.to_owned())
+    }
 
     pub fn start() {
         eframe::WebLogger::init(log::LevelFilter::Info).ok();
@@ -316,7 +328,7 @@ mod web {
                 log::error!("no #texcraft_canvas element");
                 return;
             };
-            let mut session = texcraft_engine::Session::in_browser(WORKER);
+            let mut session = texcraft_engine::Session::in_browser(&worker_url());
             let errors = Errors::default();
             let store = match Store::open().await {
                 Ok(store) => Some(store),

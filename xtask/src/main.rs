@@ -12,10 +12,13 @@
 //! - `templates-site OUT`: the templates for the browser build, in `OUT/templates/`.
 //! - `tree-site OUT`: the TeX tree of the browser build and its seed, in `OUT/tree/` and
 //!   `OUT/seed/` (needs a TeX installation; see `tree_site.rs`).
+//! - `version-worker [DIR]`: names the browser build's engine files after their contents (Trunk's
+//!   post-build hook, on its staging folder; see `web_version.rs`).
 
 mod icons;
 mod retex_wasm;
 mod tree_site;
+mod web_version;
 
 use std::process::{Command, ExitCode};
 
@@ -64,7 +67,14 @@ fn main() -> ExitCode {
             Some(out) => templates_site(std::path::Path::new(&out)),
             None => Err("usage: cargo xtask templates-site OUT (the web build's folder)".to_owned()),
         },
-        _ => Err("usage: cargo xtask layers | wasm | ci | icons | retex-wasm | templates [ID] | templates-site OUT | tree-site OUT".to_owned()),
+        "version-worker" => match std::env::args().nth(2).or_else(|| std::env::var("TRUNK_STAGING_DIR").ok()) {
+            Some(dir) => web_version::run(std::path::Path::new(&dir)).map(|h| eprintln!("the engine's files are named after {h}")),
+            None => Err("usage: cargo xtask version-worker DIR (a Trunk build's folder; Trunk's hooks set TRUNK_STAGING_DIR)".to_owned()),
+        },
+        _ => Err(
+            "usage: cargo xtask layers | wasm | ci | icons | retex-wasm | templates [ID] | templates-site OUT | tree-site OUT | version-worker [DIR]"
+                .to_owned(),
+        ),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

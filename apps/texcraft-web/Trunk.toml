@@ -8,3 +8,11 @@ filehash = true
 [serve]
 addresses = ["127.0.0.1"]
 port = 8767
+
+# Names the engine's files (its worker and retex.wasm, which Trunk does not hash) after their
+# contents and writes the loader's name in index.html, so a browser never keeps an old engine
+# after an update (xtask/src/web_version.rs; docs/ROADMAP.md, W10).
+[[hooks]]
+stage = "post_build"
+command = "cargo"
+command_arguments = ["xtask", "version-worker"]
