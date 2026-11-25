@@ -37,6 +37,8 @@ pub(crate) enum Next {
     OpenProject(String),
     /// Choose a project folder, then open it.
     PickProject,
+    /// Ask for a GitLab project to open.
+    OpenFromForge,
 }
 
 pub(crate) enum Dialog {
@@ -48,6 +50,8 @@ pub(crate) enum Dialog {
     Settings,
     About,
     GoToFile(crate::goto_file::Palette),
+    ForgeOpen(crate::forge::OpenForm),
+    ForgeCommit(crate::forge::CommitForm),
 }
 
 impl Dialog {
@@ -61,6 +65,8 @@ impl Dialog {
             Dialog::Settings => "settings",
             Dialog::About => "about",
             Dialog::GoToFile(_) => "go_to_file",
+            Dialog::ForgeOpen(_) => "forge_open",
+            Dialog::ForgeCommit(_) => "forge_commit",
         }
     }
 }
@@ -79,6 +85,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         crate::goto_file::show(app, ctx);
         return;
     }
+    if matches!(app.view.dialog, Some(Dialog::ForgeOpen(_) | Dialog::ForgeCommit(_))) {
+        crate::forge::dialog(app, ctx);
+        return;
+    }
     let project = app.project_name();
     let engine = app.session.backend_name();
     let Some(dialog) = app.view.dialog.as_mut() else { return };
@@ -91,7 +101,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             Dialog::Prompt(p) => outcome = prompt(ui, &t, p),
             Dialog::Confirm(c) => outcome = confirm(ui, &t, c),
             Dialog::Unsaved(_) => outcome = unsaved(ui, &t, &project),
-            Dialog::Shortcuts | Dialog::Settings | Dialog::GoToFile(_) => {}
+            Dialog::Shortcuts | Dialog::Settings | Dialog::GoToFile(_) | Dialog::ForgeOpen(_) | Dialog::ForgeCommit(_) => {}
             Dialog::About => outcome = about(ui, &t, &engine),
         }
     });
@@ -161,7 +171,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     }
 }
 
-enum Outcome {
+pub(crate) enum Outcome {
     Open,
     Cancel,
     Run,
@@ -191,13 +201,13 @@ fn unsaved(ui: &mut egui::Ui, t: &Tokens, project: &str) -> Outcome {
     outcome
 }
 
-fn title(ui: &mut egui::Ui, t: &Tokens, text: &str) {
+pub(crate) fn title(ui: &mut egui::Ui, t: &Tokens, text: &str) {
     ui.label(RichText::new(text).font(t.title()));
     ui.add_space(t.unit * 2.0);
 }
 
 /// Cancel and the primary action, right-aligned. Returns the outcome chosen.
-fn buttons(ui: &mut egui::Ui, t: &Tokens, action: &str, danger: bool, enabled: bool) -> Outcome {
+pub(crate) fn buttons(ui: &mut egui::Ui, t: &Tokens, action: &str, danger: bool, enabled: bool) -> Outcome {
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
     button_row(ui, |ui| {
@@ -282,6 +292,6 @@ fn about(ui: &mut egui::Ui, t: &Tokens, engine: &str) -> Outcome {
 
 /// A row of buttons from the right edge, as tall as a button: a layout from the right would
 /// otherwise take the dialog's whole height and push its buttons down.
-fn button_row(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+pub(crate) fn button_row(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 32.0), Layout::right_to_left(Align::Center), add);
 }

@@ -34,6 +34,9 @@ pub struct Stored {
     pub review: BTreeMap<String, String>,
     /// Its saved versions and their files.
     pub history: Versions,
+    /// The forge branch it was opened from, with the base its changes are counted from (C5);
+    /// never a token.
+    pub forge: Option<texcraft_forge::Link>,
 }
 
 /// A change the shell has to store.
@@ -41,7 +44,7 @@ pub struct Stored {
 pub enum Change {
     /// The project of this name, with its review, replacing what was stored of it. Its history is
     /// left empty here: what the history gains comes as [`Change::Versions`].
-    Saved(String, Stored),
+    Saved(String, Box<Stored>),
     /// Versions to add to the history of a project, with the files' bytes (by blob id) the stored
     /// history does not have yet.
     Versions {
@@ -123,20 +126,26 @@ impl Library {
         self.projects.get(name).map_or(&NONE, |p| &p.review)
     }
 
-    /// Keeps `project` and its `review` (thread files by name) as `name`, replacing the project
-    /// of that name.
-    pub fn save(&mut self, name: &str, project: &Project, review: BTreeMap<String, String>, saved: i64) {
+    /// Keeps `project`, its `review` (thread files by name) and the forge branch it is linked to
+    /// as `name`, replacing the project of that name.
+    pub fn save(&mut self, name: &str, project: &Project, review: BTreeMap<String, String>, saved: i64, forge: Option<texcraft_forge::Link>) {
         let stored = Stored {
             files: project.files().map(|(p, c)| (p.as_str().to_owned(), c.as_bytes().to_vec())).collect(),
             main: project.main().map(|m| m.as_str().to_owned()),
             saved,
             review,
             history: Versions::default(),
+            forge,
         };
-        self.changes.push(Change::Saved(name.to_owned(), stored.clone()));
+        self.changes.push(Change::Saved(name.to_owned(), Box::new(stored.clone())));
         // The project of that name keeps its history.
         let history = self.projects.remove(name).map(|p| p.history).unwrap_or_default();
         self.projects.insert(name.to_owned(), Stored { history, ..stored });
+    }
+
+    /// The forge branch project `name` is linked to, if any.
+    pub fn forge(&self, name: &str) -> Option<&texcraft_forge::Link> {
+        self.projects.get(name).and_then(|p| p.forge.as_ref())
     }
 
     /// The history of project `name`; none for a project the library does not have.
@@ -185,7 +194,7 @@ impl Library {
         }
         let stored = self.projects.remove(from).ok_or_else(|| format!("There is no project named {from} in this browser."))?;
         self.changes.push(Change::Deleted(from.to_owned()));
-        self.changes.push(Change::Saved(to.to_owned(), Stored { history: Versions::default(), ..stored.clone() }));
+        self.changes.push(Change::Saved(to.to_owned(), Box::new(Stored { history: Versions::default(), ..stored.clone() })));
         // The history moves with it.
         if stored.history.head().is_some() {
             let blobs = stored.history.blobs().iter().map(|(id, bytes)| (id.clone(), bytes.clone())).collect();

@@ -239,7 +239,7 @@ impl Shell {
         for change in changes {
             match change {
                 Change::Saved(name, stored) => {
-                    self.projects.insert(name, stored);
+                    self.projects.insert(name, *stored);
                 }
                 Change::Deleted(name) => {
                     self.projects.remove(&name);

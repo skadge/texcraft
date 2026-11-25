@@ -32,6 +32,7 @@ use texcraft_project::{Project, ProjectPath};
 pub use texcraft_compile::{
     Diagnostic, Draft, Engine, Export, MAX_BLEED_MM, Options as BuildOptions, Outcome, Output, PdfX, Progress, Severity, Status,
 };
+pub use texcraft_forge as forge;
 pub use texcraft_history as history;
 pub use texcraft_project as project;
 
@@ -139,6 +140,16 @@ pub struct Session {
     export_name: Option<String>,
     #[cfg(target_arch = "wasm32")]
     exported: Vec<(String, Vec<u8>)>,
+    /// The forge branch the project is linked to (docs/ROADMAP.md, C5).
+    forge: Option<texcraft_forge::Link>,
+    /// Personal access tokens by forge instance, for this session only: never saved or logged.
+    forge_tokens: std::collections::BTreeMap<String, texcraft_forge::Token>,
+    /// The forge operation running in the background.
+    forge_task: Option<cmd::forge::Task>,
+    /// How forges are reached: this build's transport, or a fake in tests.
+    forge_transport: cmd::forge::Connect,
+    /// The files changed since the forge branch's base, at a revision.
+    forge_changes: Option<(u64, Vec<texcraft_forge::FileChange>)>,
 }
 
 impl Session {
@@ -190,6 +201,11 @@ impl Session {
             export_name: None,
             #[cfg(target_arch = "wasm32")]
             exported: Vec::new(),
+            forge: None,
+            forge_tokens: std::collections::BTreeMap::new(),
+            forge_task: None,
+            forge_transport: std::sync::Arc::new(texcraft_forge::transport),
+            forge_changes: None,
         }
     }
 
@@ -699,6 +715,12 @@ impl Session {
         };
         self.sync = None;
         self.history = None;
+        // A project of the library keeps its forge link; any other opens unlinked.
+        let link = match (&self.library, &dir) {
+            (Some(library), Some(name)) => library.forge(&name.display().to_string()).cloned(),
+            _ => None,
+        };
+        self.set_forge(link);
         self.dir = dir;
         self.dirty = false;
         self.touch();

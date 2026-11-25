@@ -10,6 +10,7 @@ mod file_access;
 mod files;
 mod find;
 mod folders;
+mod forge;
 mod history;
 mod image;
 mod language;

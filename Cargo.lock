@@ -5941,12 +5941,28 @@ dependencies = [
  "similar",
  "texcraft-buffer",
  "texcraft-compile",
+ "texcraft-forge",
  "texcraft-history",
  "texcraft-latex",
  "texcraft-project",
  "texcraft-review",
  "texcraft-templates",
  "trash",
+]
+
+[[package]]
+name = "texcraft-forge"
+version = "0.7.0"
+dependencies = [
+ "base64 0.22.1",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "texcraft-history",
+ "ureq",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

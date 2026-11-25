@@ -1,0 +1,29 @@
+[package]
+name = "texcraft-forge"
+description = "Projects on a git forge (GitLab first): its web API over a transport the shell gives, to open a project's branch and commit to it"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# Git's blob ids, as the project's history computes them.
+texcraft-history = { workspace = true }
+base64 = "0.22"
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# The desktop's HTTP client (MIT OR Apache-2.0), the one retex-texlive already downloads with.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+
+# The browser's `fetch`.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["Window", "Request", "RequestInit", "RequestMode", "Response", "Headers"] }

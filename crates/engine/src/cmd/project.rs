@@ -149,14 +149,14 @@ fn save_as(s: &mut Session, params: &Value) -> Result<Value> {
 
 /// Writes the project to `dir` (a folder, or its name in the library) and makes it the
 /// project's folder.
-fn save_to(s: &mut Session, dir: &Path) -> Result<Value> {
+pub(super) fn save_to(s: &mut Session, dir: &Path) -> Result<Value> {
     let now = s.now().timestamp_millis();
     let moved = s.dir.as_deref() != Some(dir);
     let mut result = json!({"path": dir.display().to_string()});
     match &mut s.library {
         Some(library) => {
             let review = s.review.files(&s.project).map_err(|e| format!("The review could not be saved: {e}"))?;
-            library.save(&dir.display().to_string(), &s.project, review, now);
+            library.save(&dir.display().to_string(), &s.project, review, now, s.forge.clone());
         }
         None => result["removed"] = save_dir(s, dir)?,
     }
