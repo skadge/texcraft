@@ -115,7 +115,10 @@ fn doc_container(database: &str, package: &str) -> Result<(u64, String)> {
 }
 
 pub(crate) fn fetch(store: &Store, template: &Template) -> Result<PathBuf> {
-    let Source::TexLive(package) = &template.source;
+    let Source::TexLive(package) = &template.source else {
+        // Built-in templates are compiled in: `Store::kept` writes them, nothing to download.
+        return store.keep(template, &template.builtin_files());
+    };
     let (database, repo) = database(store, texlive_year())?;
     let (size, checksum) = doc_container(&database, package)?;
     let rel = format!("archive/{package}.doc.tar.xz");

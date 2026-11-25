@@ -23,7 +23,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | P6 | ✅ 0.5.0 | New folders and moving files | New folder in the file tree, and dragging files between folders (Move to… from the keyboard). |
 | P7 | ✅ 0.5.0 | Go to File | A palette of the project's files, the recent ones first. |
 | P8 | ⬜ | Recent projects in the system | The dock menu on macOS, jump lists on Windows, recently used on Linux; pinning a project. |
-| P9 | ⬜ | More templates | TeXCraft's own templates (CC0), thumbnails in the gallery, saving a project as a template. |
+| P9 | 🚧 | More templates | ✅ 0.5.0: TeXCraft's own templates (CC0, built in, offline and in the browser): article, thesis, slides, letter, CV, homework. Still to do: thumbnails in the gallery, saving a project as a template. |
 
 ## Source editor
 

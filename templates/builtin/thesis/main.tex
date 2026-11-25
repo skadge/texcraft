@@ -1,0 +1,40 @@
+% A thesis or a long report, from TeXCraft's own templates (CC0-1.0: use it as you like).
+% Each chapter is a file of its own in chapters/, included below.
+\documentclass[11pt,a4paper,twoside,openright]{report}
+\usepackage[margin=2.8cm,bindingoffset=0.6cm]{geometry}
+\usepackage{amsmath,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+
+\newtheorem{theorem}{Theorem}[chapter]
+
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \vspace*{3cm}
+  {\Huge\bfseries The Title of the Thesis\par}
+  \vspace{1.5cm}
+  {\Large Your Name\par}
+  \vspace{1cm}
+  A thesis submitted for the degree of\\ Doctor of Philosophy\par
+  \vfill
+  Your University\\ Your Department\\[0.5cm]
+  \today
+\end{titlepage}
+
+\begin{abstract}
+The thesis in one page: the question, the approach, the contributions.
+\end{abstract}
+
+\tableofcontents
+
+\include{chapters/introduction}
+\include{chapters/background}
+
+\appendix
+\chapter{Supplementary Material}
+Data and proofs that would break the flow of the chapters.
+
+\end{document}

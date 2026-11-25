@@ -6,6 +6,8 @@
 //! keeps them in the user's data folder, so a kept template is offered offline.
 //!
 //! Sources:
+//! - **TeXCraft's own** (`builtin`): files in `templates/builtin/<id>/`, CC0-1.0, compiled in, so
+//!   they need no download and work offline and in the browser.
 //! - **TeX Live packages.** The template is part of a package's documentation. The store fetches
 //!   TeX Live's package database, checks its SHA-512 against the signature made with TeX Live's
 //!   keys (retex-texlive's `openpgp`), then the package's documentation archive against the
@@ -16,6 +18,7 @@
 
 use std::path::{Path, PathBuf};
 
+mod builtin;
 #[cfg(all(feature = "download", not(target_arch = "wasm32")))]
 mod download;
 
@@ -47,6 +50,9 @@ pub enum Source {
     /// Files from the documentation of this TeX Live package.
     #[serde(rename = "texlive")]
     TexLive(String),
+    /// TeXCraft's own template, compiled in (`templates/builtin/<the template's id>/`).
+    #[serde(rename = "builtin")]
+    Builtin(bool),
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -99,7 +105,18 @@ impl Template {
     pub fn source_text(&self) -> String {
         match &self.source {
             Source::TexLive(package) => format!("TeX Live package {package}"),
+            Source::Builtin(_) => "TeXCraft's own templates".to_owned(),
         }
+    }
+
+    /// Whether its files are compiled in (no download needed).
+    pub fn is_builtin(&self) -> bool {
+        matches!(self.source, Source::Builtin(_))
+    }
+
+    /// A built-in template's files (path in the project, bytes); none for the others.
+    pub fn builtin_files(&self) -> Vec<(String, Vec<u8>)> {
+        if self.is_builtin() { builtin::files(&self.id) } else { Vec::new() }
     }
 }
 
@@ -162,9 +179,16 @@ impl Store {
     }
 
     /// The folder of `template`'s files when it has been downloaded.
+    /// A built-in template is always kept: its files are written from the build the first time.
     pub fn kept(&self, template: &Template) -> Option<PathBuf> {
         let dir = self.dir.join(&template.id);
-        dir.join(COMPLETE).is_file().then_some(dir)
+        if dir.join(COMPLETE).is_file() {
+            return Some(dir);
+        }
+        if template.is_builtin() {
+            return self.keep(template, &template.builtin_files()).ok();
+        }
+        None
     }
 
     /// The folder of `template`'s files, downloading them first when they are not kept.

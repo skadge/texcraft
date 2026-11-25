@@ -42,3 +42,21 @@ licence = "MIT"
     let paths: Vec<String> = catalog.templates()[0].project_paths().into_iter().map(|(_, p)| p).collect();
     assert_eq!(paths, ["paper.tex", "refs.bib", "graphics/fig.png"]);
 }
+
+#[test]
+fn every_builtin_template_is_compiled_in_and_kept_without_a_download() {
+    let catalog = Catalog::builtin().unwrap();
+    let builtin: Vec<_> = catalog.templates().iter().filter(|t| t.is_builtin()).collect();
+    assert!(!builtin.is_empty());
+    let dir = std::env::temp_dir().join(format!("texcraft-builtin-{}", std::process::id()));
+    let store = texcraft_templates::Store::new(&dir);
+    for t in builtin {
+        let files = t.builtin_files();
+        for (_, path) in t.project_paths() {
+            assert!(files.iter().any(|(p, _)| *p == path), "{}: {path} is listed but not compiled in", t.id);
+        }
+        let kept = store.kept(t).unwrap_or_else(|| panic!("{} is not kept", t.id));
+        assert!(kept.join(&t.main).is_file(), "{}: its main file was not written", t.id);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

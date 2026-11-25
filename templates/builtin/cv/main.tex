@@ -1,0 +1,33 @@
+% A curriculum vitae, from TeXCraft's own templates (CC0-1.0: use it as you like).
+\documentclass[10pt]{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+
+\definecolor{accent}{RGB}{37,99,235}
+\newcommand{\cvsection}[1]{\vspace{1.2em}{\large\bfseries\color{accent}#1}\par\vspace{0.2em}\hrule\vspace{0.6em}}
+% A line of the CV: the years, then what, then where and details.
+\newcommand{\cventry}[3]{\begin{tabularx}{\textwidth}{@{}p{3cm}X@{}}#1 & \textbf{#2}\\ & #3\end{tabularx}\par\vspace{0.4em}}
+
+\begin{document}
+
+{\Huge\bfseries Your Name}\par
+\vspace{0.3em}
+Your Title \quad·\quad \href{mailto:you@example.org}{you@example.org} \quad·\quad
+\href{https://example.org}{example.org}
+
+\cvsection{Experience}
+\cventry{2022 -- now}{Current Position}{Organisation, Town. What you do, and what you achieved.}
+\cventry{2019 -- 2022}{Earlier Position}{Organisation, Town. Responsibilities and results.}
+
+\cvsection{Education}
+\cventry{2015 -- 2019}{Degree in a Subject}{University, Town. Thesis: its title.}
+
+\cvsection{Skills}
+\cventry{Languages}{English, French}{Fluent in both.}
+\cventry{Tools}{\LaTeX, programming}{And what else matters for the position.}
+
+\end{document}

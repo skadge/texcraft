@@ -1,0 +1,59 @@
+% An article, from TeXCraft's own templates (CC0-1.0: use it as you like).
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+
+\title{The Title of the Article}
+\author{First Author \and Second Author}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+One paragraph on the question, what was done, and what was found.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+Say why the question matters and what this article adds. Section~\ref{sec:method}
+describes the method, and Section~\ref{sec:results} the results.
+
+\section{Method}
+\label{sec:method}
+A displayed equation, numbered so that the text can refer to it:
+\begin{equation}
+  E = mc^2 .
+  \label{eq:energy}
+\end{equation}
+Equation~\eqref{eq:energy} is the best known in physics.
+
+\section{Results}
+\label{sec:results}
+\begin{table}[ht]
+  \centering
+  \caption{A table with rules from booktabs.}
+  \label{tab:results}
+  \begin{tabular}{lrr}
+    \toprule
+    Case & Value & Error \\
+    \midrule
+    First  & 1.00 & 0.05 \\
+    Second & 2.50 & 0.10 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+Table~\ref{tab:results} gives the values. Drag an image from the project's files onto this text
+to insert it.
+
+\section{Conclusion}
+What was shown, and what remains open.
+
+\begin{thebibliography}{9}
+\bibitem{knuth} D.~E. Knuth. \emph{The \TeX book}. Addison-Wesley, 1984.
+\end{thebibliography}
+
+\end{document}

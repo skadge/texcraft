@@ -1,0 +1,35 @@
+% A homework or exercise sheet, from TeXCraft's own templates (CC0-1.0: use it as you like).
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{enumitem}
+
+\newtheorem*{solution}{Solution}
+\newcounter{exercise}
+\newcommand{\exercise}[1][]{\stepcounter{exercise}\par\medskip\noindent\textbf{Exercise \theexercise}\ifx\relax#1\relax\else\ (#1)\fi.\ }
+
+\title{Homework 1}
+\author{Your Name}
+\date{Due \today}
+
+\begin{document}
+\maketitle
+
+\exercise[3 points]
+Show that $\sum_{k=1}^{n} k = \frac{n(n+1)}{2}$ for every $n \geq 1$.
+
+\begin{solution}
+By induction on $n$. For $n = 1$ both sides are $1$. If it holds for $n$, then
+\[
+  \sum_{k=1}^{n+1} k = \frac{n(n+1)}{2} + (n+1) = \frac{(n+1)(n+2)}{2}. \qedhere
+\]
+\end{solution}
+
+\exercise
+Answer each part.
+\begin{enumerate}[label=(\alph*)]
+  \item Is $\sqrt{2}$ rational?
+  \item Is $\mathbb{Q}$ countable?
+\end{enumerate}
+
+\end{document}

@@ -1,0 +1,51 @@
+% Presentation slides, from TeXCraft's own templates (CC0-1.0: use it as you like).
+% Export it from the PDF pane as PowerPoint or OpenDocument slides.
+\documentclass[aspectratio=169]{beamer}
+\usetheme{default}
+\setbeamertemplate{navigation symbols}{}
+
+\title{The Title of the Talk}
+\subtitle{A subtitle}
+\author{Your Name}
+\institute{Your Institution}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+\section{Motivation}
+\begin{frame}{Why this matters}
+  \begin{itemize}
+    \item<1-> A first point.
+    \item<2-> A second point, shown on the next click.
+    \item<3-> A third one.
+  \end{itemize}
+\end{frame}
+
+\section{Results}
+\begin{frame}{Two columns}
+  \begin{columns}
+    \begin{column}{0.5\textwidth}
+      Text on the left, and a formula:
+      \[ \int_0^1 x^2 \, dx = \frac{1}{3} \]
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{block}{A block}
+        Something to remember.
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Thank you}
+  \centering Questions?
+\end{frame}
+
+\end{document}

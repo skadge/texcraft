@@ -9,6 +9,69 @@
 # creating a project. Templates are taken from the TeX Live year installed (so they match its
 # classes); `aliases` lists a file's names in other years.
 
+# A `builtin` template is TeXCraft's own (CC0-1.0): its files are in templates/builtin/<id>/ and
+# compiled in, so it needs no download.
+
+[[template]]
+id = "article"
+title = "Article"
+publisher = "TeXCraft"
+category = "report"
+source = { builtin = true }
+files = ["main.tex"]
+main = "main.tex"
+licence = "CC0-1.0"
+
+[[template]]
+id = "thesis"
+title = "Thesis or long report, a chapter per file"
+publisher = "TeXCraft"
+category = "thesis"
+source = { builtin = true }
+files = ["main.tex", "chapters/introduction.tex", "chapters/background.tex"]
+main = "main.tex"
+licence = "CC0-1.0"
+
+[[template]]
+id = "slides"
+title = "Presentation slides (beamer, 16:9)"
+publisher = "TeXCraft"
+category = "slides"
+source = { builtin = true }
+files = ["main.tex"]
+main = "main.tex"
+licence = "CC0-1.0"
+
+[[template]]
+id = "letter"
+title = "Letter"
+publisher = "TeXCraft"
+category = "letter"
+source = { builtin = true }
+files = ["main.tex"]
+main = "main.tex"
+licence = "CC0-1.0"
+
+[[template]]
+id = "cv"
+title = "Curriculum vitae, one page"
+publisher = "TeXCraft"
+category = "cv"
+source = { builtin = true }
+files = ["main.tex"]
+main = "main.tex"
+licence = "CC0-1.0"
+
+[[template]]
+id = "homework"
+title = "Homework or exercise sheet"
+publisher = "TeXCraft"
+category = "report"
+source = { builtin = true }
+files = ["main.tex"]
+main = "main.tex"
+licence = "CC0-1.0"
+
 [[template]]
 id = "elsevier-num"
 title = "Elsevier journal article (numbered references)"

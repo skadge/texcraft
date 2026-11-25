@@ -1,0 +1,1 @@
+- 2026-11-25: TeXCraft's own templates, written for it and dedicated to the public domain (CC0-1.0): an article, a thesis with a chapter per file, beamer slides, a letter, a one-page CV and a homework sheet. They are compiled in (`templates/builtin/`), so they need no download and work offline and in the browser; the gallery gains Theses, Slides and Letters.

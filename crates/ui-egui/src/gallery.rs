@@ -23,6 +23,9 @@ const CATEGORIES: &[(&str, &str, &str)] = &[
     ("cv", "CVs", "file-code"),
     ("poster", "Posters", "image"),
     ("report", "Reports", "file-text"),
+    ("thesis", "Theses", "book-open"),
+    ("slides", "Slides", "columns-2"),
+    ("letter", "Letters", "pencil"),
 ];
 
 /// A download running on its own thread: one template, or every one.
