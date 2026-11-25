@@ -39,6 +39,9 @@ pub(crate) enum Next {
     PickProject,
     /// Ask for a project on GitLab or GitHub to open.
     OpenFromForge,
+    /// Make a new project from a zip file or a folder's files (`project.import` with these
+    /// parameters), to keep under this name.
+    ImportProject(Value, String),
 }
 
 pub(crate) enum Dialog {
@@ -63,6 +66,8 @@ pub(crate) enum Dialog {
     AiMake(Box<crate::ai_make::MakeForm>),
     /// Add a Reference with AI: a title or DOI, the drafted entry.
     AiReference(Box<crate::ai_make::ReferenceForm>),
+    /// A dropped zip file, or files already in the project: what to do with them.
+    Drop(Box<crate::drop::DropForm>),
 }
 
 impl Dialog {
@@ -86,6 +91,7 @@ impl Dialog {
             Dialog::AiConsent(_) => "ai_consent",
             Dialog::AiMake(_) => "ai_make",
             Dialog::AiReference(_) => "ai_reference",
+            Dialog::Drop(_) => "drop",
         }
     }
 }
@@ -110,6 +116,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     }
     if matches!(app.view.dialog, Some(Dialog::AiReference(_))) {
         crate::ai_make::reference_dialog(app, ctx);
+        return;
+    }
+    if matches!(app.view.dialog, Some(Dialog::Drop(_))) {
+        crate::drop::dialog(app, ctx);
         return;
     }
     if matches!(app.view.dialog, Some(Dialog::GoToFile(_))) {
@@ -147,7 +157,8 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             | Dialog::ForgeProposal(_)
             | Dialog::AiConsent(_)
             | Dialog::AiMake(_)
-            | Dialog::AiReference(_) => {}
+            | Dialog::AiReference(_)
+            | Dialog::Drop(_) => {}
             Dialog::Figure(f) => outcome = crate::figure_dialog::form(ui, &t, f),
             Dialog::About => outcome = about(ui, &t, &engine),
         }

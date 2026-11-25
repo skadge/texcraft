@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use serde_json::json;
 
 use crate::App;
+use crate::drop::Item;
 
 /// What a pick is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +23,8 @@ pub enum Pick {
     /// Where to write an export of the project.
     Export(texcraft_engine::Export),
     AddFiles,
+    /// Zip files to unzip into the project (Import a Zip File).
+    ImportZip,
     /// A new or empty folder for a project made from a template.
     TemplateFolder,
 }
@@ -87,66 +90,68 @@ impl App {
             Pick::Export(format) => self.export_to(format, &first),
             Pick::SaveOutput(kind) => self.save_output(kind, &first),
             Pick::TemplateFolder => self.template_folder_chosen(first),
-            Pick::AddFiles => {
-                for path in paths {
-                    self.run("file.import", json!({"source": path.display().to_string()}));
-                }
-                self.view.last_edit = Some(0.0);
-            }
+            Pick::AddFiles => self.import_items(paths.into_iter().map(Item::Path).collect(), false),
+            Pick::ImportZip => self.unzip_items(paths.into_iter().map(Item::Path).collect()),
         }
     }
 
-    /// Files the user chose or dropped, by name and contents (the browser has no paths): each is
-    /// added to the project at the top level, replacing a file of the same name.
+    /// Files the user chose or dropped, by path and contents (the browser has no paths on disk):
+    /// a file's name, or for the files of a dropped folder their path from the folder's name.
+    /// They are added to the project at the top level, a zip file asked about first; on the
+    /// start page a folder or a zip file makes a new project.
     pub fn add_files(&mut self, files: Vec<(String, Vec<u8>)>) {
-        use base64::Engine as _;
-        let mut added = 0;
-        for (name, bytes) in files {
-            let name = name.rsplit(['/', '\\']).next().unwrap_or(&name).to_owned();
-            let data = base64::engine::general_purpose::STANDARD.encode(&bytes);
-            if self.run("file.import", json!({"path": name, "data": data})).is_some() {
-                added += 1;
-            }
-        }
-        if added > 0 {
-            self.view.last_edit = Some(0.0);
-            self.view.status = Some((tl!("Files added to the project: {n}").replace("{n}", &added.to_string()), false));
-        }
+        let items = files.into_iter().map(|(name, bytes)| Item::Bytes(name.replace('\\', "/"), bytes)).collect();
+        self.import_items(items, false);
     }
 
     /// Files dropped on the window this frame: added to the project (from their path on the
     /// desktop, their contents in the browser). While files are dragged over, says what a drop does.
     pub(crate) fn dropped_files(&mut self, ctx: &egui::Context) {
-        let (dropped, hovering) = ctx.input(|i| (i.raw.dropped_files.clone(), !i.raw.hovered_files.is_empty()));
-        if self.start {
-            return;
-        }
-        if hovering {
+        let (dropped, hovered) = ctx.input(|i| (i.raw.dropped_files.clone(), i.raw.hovered_files.clone()));
+        if !hovered.is_empty() {
             let t = self.tokens;
             let screen = ctx.content_rect();
             let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("drop-files")));
             painter.rect_filled(screen, 0.0, t.canvas.gamma_multiply(0.85));
             painter.rect_stroke(screen.shrink(12.0), t.corner(), egui::Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
-            painter.text(screen.center(), egui::Align2::CENTER_CENTER, tl!("Drop to add the files to the project"), t.title(), t.text);
+            painter.text(screen.center(), egui::Align2::CENTER_CENTER, self.drop_says(&hovered), t.title(), t.text);
         }
-        for file in dropped {
-            // On the desktop a dropped file has its path on disk; in the browser only a name, and
-            // its contents are read asynchronously by the shell (`take_dropped_files`).
-            if cfg!(target_arch = "wasm32") {
-                self.dropped.push(file);
+        if dropped.is_empty() {
+            return;
+        }
+        // On the desktop a dropped file has its path on disk; in the browser only a name, and
+        // its contents are read asynchronously by the shell (`take_dropped_files`).
+        if cfg!(target_arch = "wasm32") {
+            self.dropped.extend(dropped);
+        } else {
+            self.import_items(dropped.iter().map(|f| Item::Path(f.path().to_path_buf())).collect(), true);
+        }
+    }
+
+    /// What dropping `hovered` does, for the overlay shown while they are dragged over.
+    fn drop_says(&self, hovered: &[egui::HoveredFile]) -> &'static str {
+        let paths: Vec<&std::path::Path> = hovered.iter().filter_map(|h| h.path.as_deref()).collect();
+        let zip = |p: &&std::path::Path| p.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("zip"));
+        let known = !paths.is_empty();
+        if self.start {
+            return if known && paths.iter().any(|p| p.is_dir()) {
+                tl!("Drop to open the folder as a project")
+            } else if known && paths.iter().any(zip) {
+                tl!("Drop to make a new project from the zip file")
             } else {
-                let imported = self.run("file.import", json!({"source": file.path().display().to_string()}));
-                self.view.last_edit = Some(0.0);
-                if let Some(path) = imported.as_ref().and_then(|r| r["path"].as_str()) {
-                    self.figure_for_drop(path);
-                }
-            }
+                tl!("Drop a folder or a zip file to make a new project from it")
+            };
+        }
+        if known && paths.iter().all(zip) {
+            tl!("Drop to unzip into the project, or to add the zip file")
+        } else {
+            tl!("Drop to add the files and folders to the project")
         }
     }
 
     /// An image dropped while the formatted view is shown becomes a figure after the block holding
     /// the caret (`figure.insert`), its caption left for the figure dialog.
-    fn figure_for_drop(&mut self, image: &str) {
+    pub(crate) fn figure_for_drop(&mut self, image: &str) {
         let Some(path) = self.session.current().cloned() else { return };
         let is_image = texcraft_engine::project::ProjectPath::new(image).is_ok_and(|p| texcraft_engine::cmd::is_image(&p));
         if !is_image || !self.editor.formatted.shows(&path) {
@@ -232,6 +237,7 @@ impl App {
                 (PickKind::SaveFile, tl!("Save Build Output As"), name, filter)
             }
             Pick::AddFiles => (PickKind::OpenFiles, tl!("Add Files to the Project"), None, None),
+            Pick::ImportZip => (PickKind::OpenFiles, tl!("Import a Zip File"), None, Some((tl!("Zip files").to_owned(), vec!["zip"]))),
             Pick::TemplateFolder => (PickKind::Folder, tl!("Choose a New or Empty Folder for the Project"), None, None),
         };
         self.picks.push(PickRequest { pick, kind, title: title.to_owned(), directory, file_name, filter });

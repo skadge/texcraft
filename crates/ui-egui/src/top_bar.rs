@@ -298,6 +298,7 @@ pub(crate) fn icon_for(id: &str) -> Option<&'static str> {
         "forge.pull" => "refresh-cw",
         "project.save" => "download",
         "file.import" => "upload",
+        "file.unzip" => "upload",
         "file.new" => "file-code",
         "file.close" => "x",
         "app.settings" => "settings",

@@ -300,6 +300,19 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "project.save_as" if app.native_pickers => app.request_pick(Pick::SaveProjectAs),
         "build.save_pdf" if app.native_pickers => app.request_pick(Pick::SavePdf),
         "file.import" if app.native_pickers => app.request_pick(Pick::AddFiles),
+        "file.unzip" if app.native_pickers => app.request_pick(Pick::ImportZip),
+        "file.unzip" => {
+            let prompt = Prompt {
+                title: tl!("Import a Zip File"),
+                label: tl!("The zip file on disk to unzip into the project"),
+                value: String::new(),
+                action: tl!("Unzip"),
+                command: "file.unzip",
+                params: Box::new(|v| json!({"source": v})),
+                focus: true,
+            };
+            app.view.dialog = Some(Dialog::Prompt(prompt));
+        }
         // Without native pickers (the web app, for now) the path is typed.
         "file.import" => {
             let prompt = Prompt {

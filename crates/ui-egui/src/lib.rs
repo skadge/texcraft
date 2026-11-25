@@ -17,6 +17,7 @@ mod ai_make;
 mod app_icon;
 pub mod control;
 mod dialogs;
+mod drop;
 mod editor;
 mod figure_dialog;
 mod figure_view;
@@ -429,6 +430,7 @@ impl App {
             dialogs::Next::OpenProject(folder) => self.open_project(&folder),
             dialogs::Next::PickProject => ui_cmd::pick_project(self),
             dialogs::Next::OpenFromForge => forge::ask_open(self),
+            dialogs::Next::ImportProject(params, name) => self.import_project(params, name),
         }
     }
 

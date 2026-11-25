@@ -7,6 +7,7 @@ mod closing;
 mod completion;
 mod contrast;
 mod control;
+mod drop;
 mod editor_menu;
 mod export_menu;
 mod find;

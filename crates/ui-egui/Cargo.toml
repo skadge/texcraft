@@ -43,6 +43,8 @@ sha2 = { workspace = true }
 
 [dev-dependencies]
 egui_kittest = { workspace = true }
+# Zip files for the drop tests, made by the tests themselves.
+craft-zip = { workspace = true }
 # A fake model behind the suite's provider trait: the AI tests never reach a network.
 craft-ai = { workspace = true }
 texcraft-compile = { workspace = true, default-features = false }
