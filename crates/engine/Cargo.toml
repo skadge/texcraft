@@ -50,6 +50,8 @@ craft-zip = { workspace = true }
 # system's trash (issue #2).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 trash = "5"
+# Push and pull for project folders: git's smart HTTP protocol (docs/forges.md, step 5).
+texcraft-gitwire = { workspace = true }
 # The AI token in the system's keychain (the suite's one keychain namespace).
 craft-suite-account = { workspace = true }
 

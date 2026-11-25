@@ -317,7 +317,7 @@ fn signed_in(app: &mut App, done: &Value) {
 const CHECK_EVERY: f64 = 120.0;
 
 /// `gitlab`'s words or `github`'s, as `service` is: each a whole sentence, for translators.
-fn say(service: Service, gitlab: &'static str, github: &'static str) -> &'static str {
+pub(crate) fn say(service: Service, gitlab: &'static str, github: &'static str) -> &'static str {
     match service {
         Service::GitLab => gitlab,
         Service::GitHub => github,
@@ -550,7 +550,7 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
 }
 
 /// A one-line field named by the label above it (AGENTS.md rule 21).
-fn field(ui: &mut egui::Ui, t: &Tokens, label: &str, value: &mut String, hint: &str, password: bool) -> egui::Response {
+pub(crate) fn field(ui: &mut egui::Ui, t: &Tokens, label: &str, value: &mut String, hint: &str, password: bool) -> egui::Response {
     ui.add_space(t.unit * 2.0);
     let label = ui.label(RichText::new(label).color(t.text_muted));
     let edit = egui::TextEdit::singleline(value).password(password).hint_text(hint).desired_width(f32::INFINITY).margin(egui::vec2(8.0, 6.0));
@@ -568,12 +568,12 @@ fn committing(service: Service) -> &'static str {
 }
 
 /// What a token of `service` looks like.
-fn token_hint(service: Service) -> &'static str {
+pub(crate) fn token_hint(service: Service) -> &'static str {
     say(service, "glpat-…", "github_pat_…")
 }
 
 /// What the token is for, which permissions it needs on `service`, and that it is not kept.
-fn token_note(ui: &mut egui::Ui, t: &Tokens, browser: bool, service: Service) {
+pub(crate) fn token_note(ui: &mut egui::Ui, t: &Tokens, browser: bool, service: Service) {
     let kept = if browser {
         tl!("TeXCraft keeps the token only while this page is open: it is never stored.")
     } else {
@@ -592,7 +592,7 @@ fn token_note(ui: &mut egui::Ui, t: &Tokens, browser: bool, service: Service) {
 
 /// The sign-in part and its fallback ("Use a personal access token instead"); whether the session
 /// is signed in for this dialog (then no token is needed).
-fn sign_in_or_token(
+pub(crate) fn sign_in_or_token(
     ui: &mut egui::Ui,
     t: &Tokens,
     view: &SignInView,
@@ -876,7 +876,7 @@ fn merge_request_note(ui: &mut egui::Ui, t: &Tokens, note: &mut MergeRequestNote
 
 /// Takes the outcome of a forge operation that ended, and keeps the window looking while one runs.
 pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
-    let was = app.session.forge_busy();
+    let was = app.session.forge_busy().or(app.session.git_busy());
     match app.session.poll_forge() {
         Some(Ok(done)) => {
             app.forge_check.said = None;
@@ -887,6 +887,10 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
                 Some("sign_out") => signed_out(app, &done),
                 Some("open") => opened(app, &done),
                 Some("pull") => pulled(app, &done),
+                Some("create_repository") => crate::forge_save::saved(app, &done),
+                Some("owners") => crate::forge_save::owners_listed(app, &done),
+                Some("git_push") => crate::history::pushed(app, &done),
+                Some("git_pull") => crate::history::git_pulled(app, &done),
                 _ => committed(app, &done),
             }
             app.forge_check.quiet = false;
@@ -903,7 +907,7 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
         app.prefs_changed = true;
     }
     crate::forge_pick::poll(app);
-    if app.session.forge_busy().is_some() || app.session.forge_auth_busy() || app.session.forge_lookup_busy() {
+    if app.session.forge_busy().is_some() || app.session.git_busy().is_some() || app.session.forge_auth_busy() || app.session.forge_lookup_busy() {
         ctx.request_repaint_after(std::time::Duration::from_millis(200));
     }
     // GitHub's code came: its page is opened once, where the user enters it.
@@ -919,6 +923,9 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
 /// A forge operation failed: said, and for a commit or a pull that a choice can get through
 /// (conflicts, a branch that does not take the commit), its dialog opened again with it.
 fn failed(app: &mut App, was: Option<&str>, e: String) {
+    if crate::forge_save::failed(app, was, &e) {
+        return;
+    }
     if std::mem::take(&mut app.forge_check.quiet) {
         // A periodic check: said once, not every two minutes.
         if app.forge_check.said.as_ref() != Some(&e) {
@@ -1050,6 +1057,11 @@ fn committed(app: &mut App, done: &Value) {
 
 /// What the status line says while a forge operation runs.
 pub(crate) fn busy_text(app: &App) -> Option<String> {
+    if app.session.forge_busy().is_none()
+        && let Some(op) = app.session.git_busy()
+    {
+        return crate::forge_save::busy_text(app, op).map(str::to_owned);
+    }
     Some(
         match app.session.forge_busy()? {
             "open" => opening(app.forge_check.opening),

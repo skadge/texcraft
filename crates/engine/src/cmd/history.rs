@@ -135,7 +135,7 @@ fn can_commit(s: &Session) -> Result<()> {
 }
 
 /// Whether the session may reach `history`'s repository for `access` (agents: inside the roots).
-fn allowed(s: &Session, history: &History, access: Access) -> Result<()> {
+pub(crate) fn allowed(s: &Session, history: &History, access: Access) -> Result<()> {
     match &s.roots {
         Some(roots) => roots.check(history.git_dir(), access).map(|_| ()),
         None => Ok(()),
@@ -210,7 +210,7 @@ fn commit_now(s: &mut Session, message: &str) -> Result<Option<String>> {
 }
 
 /// The project's files and its review threads' files, as the session holds them.
-fn snapshot(s: &mut Session) -> Result<Snapshot> {
+pub(crate) fn snapshot(s: &mut Session) -> Result<Snapshot> {
     let dir = texcraft_review::format::DIR;
     let mut files: Vec<(String, Vec<u8>)> = s.project.files().map(|(p, c)| (p.as_str().to_owned(), c.as_bytes().to_vec())).collect();
     let review = s.review.files(&s.project).map_err(|e| format!("The review could not be written: {e}"))?;

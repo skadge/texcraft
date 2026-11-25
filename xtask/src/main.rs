@@ -31,6 +31,7 @@ const LAYERS: &[(&str, Option<u8>)] = &[
     ("texcraft-buffer", Some(0)),
     ("texcraft-review", Some(0)),
     ("texcraft-history", Some(0)),
+    ("texcraft-gitwire", Some(0)),
     ("texcraft-wasi", Some(0)),
     ("texcraft-vim", Some(1)),
     ("texcraft-forge", Some(1)),

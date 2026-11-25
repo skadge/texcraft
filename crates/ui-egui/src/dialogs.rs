@@ -57,6 +57,8 @@ pub(crate) enum Dialog {
     ForgeCommit(crate::forge::CommitForm),
     ForgeResolve(crate::forge::ResolveForm),
     ForgeMergeRequest(crate::forge::MergeRequestNote),
+    /// Save Project to GitHub or GitLab: a new repository for the project.
+    ForgeSave(Box<crate::forge_save::SaveForm>),
     ForgeServer(crate::forge_server::ServerForm),
     ForgeProposal(crate::forge_server::ProposalForm),
     Figure(Box<crate::figure_dialog::FigureForm>),
@@ -85,6 +87,7 @@ impl Dialog {
             Dialog::ForgeCommit(_) => "forge_commit",
             Dialog::ForgeResolve(_) => "forge_resolve",
             Dialog::ForgeMergeRequest(_) => "forge_merge_request",
+            Dialog::ForgeSave(_) => "forge_save",
             Dialog::ForgeServer(_) => "forge_server",
             Dialog::ForgeProposal(_) => "forge_proposal",
             Dialog::Figure(_) => "figure",
@@ -96,42 +99,28 @@ impl Dialog {
     }
 }
 
+/// Draws the open dialog when it draws its own window; whether it does.
+fn own_window(app: &mut App, ctx: &egui::Context) -> bool {
+    let draw: fn(&mut App, &egui::Context) = match app.view.dialog {
+        Some(Dialog::Shortcuts) => shortcuts,
+        Some(Dialog::Settings) => crate::settings::show,
+        Some(Dialog::AiConsent(_)) => crate::ai::consent_dialog,
+        Some(Dialog::AiMake(_)) => crate::ai_make::make_dialog,
+        Some(Dialog::AiReference(_)) => crate::ai_make::reference_dialog,
+        Some(Dialog::Drop(_)) => crate::drop::dialog,
+        Some(Dialog::GoToFile(_)) => crate::goto_file::show,
+        Some(Dialog::ForgeServer(_) | Dialog::ForgeProposal(_)) => crate::forge_server::dialog,
+        Some(Dialog::ForgeSave(_)) => crate::forge_save::dialog,
+        Some(Dialog::ForgeOpen(_) | Dialog::ForgeCommit(_) | Dialog::ForgeResolve(_) | Dialog::ForgeMergeRequest(_)) => crate::forge::dialog,
+        _ => return false,
+    };
+    draw(app, ctx);
+    true
+}
+
 /// The window's open dialog, if any.
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
-    if matches!(app.view.dialog, Some(Dialog::Shortcuts)) {
-        shortcuts(app, ctx);
-        return;
-    }
-    if matches!(app.view.dialog, Some(Dialog::Settings)) {
-        crate::settings::show(app, ctx);
-        return;
-    }
-    if matches!(app.view.dialog, Some(Dialog::AiConsent(_))) {
-        crate::ai::consent_dialog(app, ctx);
-        return;
-    }
-    if matches!(app.view.dialog, Some(Dialog::AiMake(_))) {
-        crate::ai_make::make_dialog(app, ctx);
-        return;
-    }
-    if matches!(app.view.dialog, Some(Dialog::AiReference(_))) {
-        crate::ai_make::reference_dialog(app, ctx);
-        return;
-    }
-    if matches!(app.view.dialog, Some(Dialog::Drop(_))) {
-        crate::drop::dialog(app, ctx);
-        return;
-    }
-    if matches!(app.view.dialog, Some(Dialog::GoToFile(_))) {
-        crate::goto_file::show(app, ctx);
-        return;
-    }
-    if matches!(app.view.dialog, Some(Dialog::ForgeServer(_) | Dialog::ForgeProposal(_))) {
-        crate::forge_server::dialog(app, ctx);
-        return;
-    }
-    if matches!(app.view.dialog, Some(Dialog::ForgeOpen(_) | Dialog::ForgeCommit(_) | Dialog::ForgeResolve(_) | Dialog::ForgeMergeRequest(_))) {
-        crate::forge::dialog(app, ctx);
+    if own_window(app, ctx) {
         return;
     }
     let project = app.project_name();
@@ -153,6 +142,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             | Dialog::ForgeCommit(_)
             | Dialog::ForgeResolve(_)
             | Dialog::ForgeMergeRequest(_)
+            | Dialog::ForgeSave(_)
             | Dialog::ForgeServer(_)
             | Dialog::ForgeProposal(_)
             | Dialog::AiConsent(_)

@@ -16,6 +16,7 @@ mod folders;
 mod folding;
 mod forge;
 mod forge_pick;
+mod forge_save;
 mod forge_servers;
 mod forge_sign_in;
 mod formatted;

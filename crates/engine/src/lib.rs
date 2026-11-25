@@ -43,6 +43,8 @@ pub use texcraft_compile::{
     Diagnostic, Draft, Engine, Export, MAX_BLEED_MM, Options as BuildOptions, Outcome, Output, PdfX, Progress, Severity, Status,
 };
 pub use texcraft_forge as forge;
+#[cfg(not(target_arch = "wasm32"))]
+pub use texcraft_gitwire as gitwire;
 pub use texcraft_history as history;
 pub use texcraft_project as project;
 
@@ -190,6 +192,11 @@ pub struct Session {
     forge_auth: cmd::forge_auth::State,
     /// The projects and branches looked up for the Open dialog, and GitHub's listing kept.
     forge_lookups: cmd::forge_pick::State,
+    /// The push, pull or new repository running in the background (docs/forges.md, step 5).
+    git_task: Option<cmd::git::Task>,
+    /// How git's smart HTTP protocol reaches servers: over this build's transport, or a fake.
+    #[cfg(not(target_arch = "wasm32"))]
+    git_http: cmd::git::GitHttp,
     /// AI assistance: the connection, its requests and their answers (docs/ROADMAP.md, AI1, AI2).
     ai: ai::State,
     /// Spell checking: the dictionary, the word lists and each file's words.
@@ -255,6 +262,9 @@ impl Session {
             forge_problem: None,
             forge_auth: cmd::forge_auth::State::default(),
             forge_lookups: cmd::forge_pick::State::default(),
+            git_task: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            git_http: cmd::git::default_http(),
             ai: ai::State::default(),
             spelling: spelling::State::default(),
             saved_outputs: std::collections::BTreeMap::new(),

@@ -22,7 +22,7 @@ What it does:
     to GitLab, the window asks before closing with changes that are not committed, and Save
     Project As can still copy it into a folder. A clone into a folder would be a second copy to
     keep in step with the branch (and with C8's history in it) without git to do it; the in-memory
-    project is the simplest honest form until push and pull for folders come (step 4).
+    project is the simplest honest form. Folders push and pull with git since step 5.
   - **In the browser** it is kept in the library under the project's name, with its link (instance,
     project, branch, base commit, the files' blob ids at the base): a reload keeps the changes and
     counts them from the same base.
@@ -395,8 +395,133 @@ Limits: GitHub lists at most 500 repositories and a search 50; GitLab's search a
 branches stop at 500 (said, with "Another branch…" to type one). A fine-grained GitHub token lists
 only the repositories it was given.
 
-## Step 5: folders and more
+## Step 5: push and pull for folders, Save Project to GitHub or GitLab (done)
 
-- Push and pull for project folders (real git, on the desktop).
+A project in a folder is a git repository (C8). On the desktop it now goes to a forge and comes
+back from it with git itself: its remotes, push and pull, over git's smart HTTP protocol. And a
+project that is on no forge yet gets a repository made for it, in three steps: A, the repository
+made; B, set as the folder's remote; C, the history pushed to it.
+
+What it does:
+
+- **Save Project to GitHub…** and **Save Project to GitLab…** (File menu, and the History panel
+  when the folder has no remote; `forge.save_to_github`, `forge.save_to_gitlab`, or
+  `forge.create_repository {service, instance?, owner?, name, private?, description?, push?,
+  message?, token?}` for agents). The dialog asks for:
+  - the server: gitlab.com or github.com, or a server added (Settings › Accounts);
+  - the owner: the account itself, or an organisation (GitHub, `GET /user/orgs`) or a group in which
+    the account is at least a developer (GitLab, `GET /groups?min_access_level=30`), listed once
+    signed in or given a token (`forge.owners`);
+  - the name, suggested from the folder's (`My Thesis` → `My-Thesis`: letters, digits, `.`, `-`
+    and `_`, starting with a letter, a digit or `_`, not ending in `.git` or `.atom`, at most 100
+    long), checked as it is typed, with why in words;
+  - who can see it: Private (the default) or Public; a description;
+  - the sign-in, or a token. Making a repository needs a sign-in that can write: GitLab's read-only
+    sign-in offers "Allow Commits on GitLab" (the `api` scope), as the Commit dialog does; GitHub's
+    sign-in (`repo`) can. A fine-grained GitHub token needs Administration read and write to make
+    repositories, a classic one the repo scope; a GitLab token the api scope.
+
+  Then, on the desktop:
+  - **A**: the repository is made empty and private (GitHub `POST /user/repos` or
+    `POST /orgs/{org}/repos` with `auto_init: false`; GitLab `POST /api/v4/projects` with its
+    `namespace_id`, `visibility` and `initialize_with_readme: false`). A name the owner has already
+    is said as such ("ada has a repository named paper on GitHub already: choose another name"),
+    and the dialog stays open with nothing changed; a project that has an `origin` already is
+    refused before anything is made.
+  - before it, the project is made ready to push: saved if it has unsaved changes (a repository
+    TeXCraft made commits on save), a `.gitignore` of the build's files written when the folder
+    has none (`.retex/` and the endings import leaves out: `*.aux`, `*.log`, `*.synctex.gz`…), and
+    what is not committed committed with the message given ("Saved from TeXCraft" by default).
+  - **B**: the repository's HTTPS address is set as `origin` in `.git/config`.
+  - **C**: the whole history of the branch checked out is pushed to the same branch there, and
+    the branch follows it (`branch.main.remote = origin`, `branch.main.merge = refs/heads/main`).
+    A push that fails after the repository was made is said in the dialog; `origin` is set, so
+    Push in the History panel tries again.
+  - The dialog then says where the project is, with Open in Browser for the repository's page.
+
+  In the browser no git protocol reaches the forges (they answer git's endpoints without CORS),
+  so the repository is made through the API and the files are its **first commit**: on GitLab one
+  commit of `create` actions to `main` of the empty project; on GitHub, whose Git Data API cannot
+  write into an empty repository, the repository is made with a README, and a commit of the files
+  with no parent (blobs, a tree, the commit) replaces it (the branch moved with `force`). The
+  project is then linked to it as if opened from it, so Commit and Update work as in steps 1 to 3.
+  The versions kept in the browser stay there: the dialog says the files go as one commit.
+- **Remotes** (`git.remotes`, `git.set_remote {name, url}`): written with gix's configuration
+  writer into `.git/config` (through `config.lock`, as git does), so the git command line sees
+  them, with `remote.<name>.fetch = +refs/heads/*:refs/remotes/<name>/*`. An SSH address of a
+  server (`git@github.com:owner/name.git`, `ssh://…`) is reached over HTTPS at the same path;
+  plain HTTP only on this computer. `git.remotes` gives the remotes, the upstream, and how many
+  commits the branch has that the remote's branch (as last fetched or pushed) has not, and the
+  other way.
+- **The History panel** shows the remote (its page as a link), "2 commits to push", "1 commit to
+  pull", "Up to date with the remote, as last pushed or pulled" or "Not pushed yet", and Push and
+  Pull, each off with why when it cannot run; a live region says what runs.
+- **Push** (File menu, the History panel; `git.push {remote?, branch?, token?, background?}`):
+  the branch's upstream, else `origin` and the branch checked out. The project must be saved and
+  committed (it says which first). The server's refs are read; a branch there with commits the
+  project does not have is refused before anything is sent: "The remote's branch main has commits
+  this project does not have: pull first, then push." Otherwise the objects the server lacks go in
+  one pack, and the server's report is read: a ref it refuses (a protected branch, a hook) is said
+  with its reason.
+- **Pull** (File menu, the History panel; `git.pull {remote?, branch?, token?, background?}`): the
+  remote's branch is fetched (anonymously when no key is known for the server, for a public
+  repository); then
+  - nothing new: "Up to date";
+  - the project's branch is behind: a fast-forward, the files on disk and in the editor changed;
+  - both have commits the other has not: a merge commit (two parents). A file changed on one side
+    takes that side's; a text file changed on both is merged line by line with the merge of step 2
+    (`texcraft_forge::merge::merge3`); anything else changed on both sides (the same lines, a file
+    deleted on one side and changed on the other, binary files) refuses the pull, naming the files,
+    with nothing changed.
+  - A file changed on disk and not committed (outside TeXCraft), or one in the way of a file the
+    pull adds, stops the pull before anything is written.
+- **Credentials**: the sign-in or the token for the remote's server (gitlab.com, github.com, a
+  server added; another host is taken as a GitLab), as HTTP basic authentication: `oauth2` and the
+  token for GitLab, `x-access-token` and the token for GitHub. Never in a log, an error or a
+  command's result (tests look for them).
+
+How it is built:
+
+- `crates/gitwire` (`texcraft-gitwire`), new, below the engine: git's smart HTTP protocol, the
+  client side, protocol version 0 (stateless), over any blocking HTTP client (`Http`; the engine
+  gives it the forges' ureq transport, with the same certificates). gix 0.91 has no push, and its
+  fetch needs its own HTTP stack (curl, or reqwest), so the crate speaks the protocol itself and
+  uses gix for the repository:
+  - `pktline`: packet lines (`0000` flush), side-band channels (data, progress, error).
+  - `advertise`: `GET …/info/refs?service=git-receive-pack` (or `git-upload-pack`), checked to be
+    git's advertisement (its content type), the refs and capabilities read, an empty repository's
+    `capabilities^{}` understood.
+  - `pack`: the objects the server lacks (the walk from the commit to send stops at the commits the
+    server has; the objects of those at the edge are not sent again) and a version 2 pack of them,
+    whole objects zlib-compressed with no deltas (text projects are small), its SHA-1 at the end.
+  - `push`: `POST …/git-receive-pack` with `<old> <new> <ref>\0report-status side-band-64k agent=…`,
+    a flush, the pack; the report read (`unpack ok`, `ok <ref>` or `ng <ref> <why>`).
+  - `fetch`: `POST …/git-upload-pack` with `want <tip> side-band-64k ofs-delta no-progress`, up to
+    256 `have` lines from the branch and its remote-tracking ref, and `done` in one request; the
+    `NAK`/`ACK` lines skipped, the pack (no thin pack, so every delta's base is in it) indexed into
+    `objects/pack` with gix-pack's `Bundle::write_to_directory`.
+  - `fake::Server`: a git server in memory over a bare repository, built from the same pieces, for
+    tests (credentials required, refusals, side-band or not).
+  It knows nothing of TeXCraft: it SHOULD move to storytold/craft-libs (AGENTS.md rule 9), in a PR
+  of its own there.
+- `texcraft-history`: remotes and the upstream in the configuration, refs, ahead and behind,
+  `fast_forward` and `merge` (a three-way merge of the trees, the text merge given by the caller)
+  that move the work tree's files with the branch and write the index, so `git status` is clean
+  after them.
+- `texcraft-forge`'s `create`: the owners, the name's check and suggestion, the repository made,
+  the browser's first commit; the fake forge makes repositories (`Fake::account`).
+- The engine's `cmd/git.rs` (commands, the background task, `Session::poll_forge` gives the
+  outcomes: `git_push`, `git_pull`, `create_repository`, `owners`), `cmd/git/desktop.rs` (the
+  folder's side); the interface's `forge_save.rs` (the dialog) and the History panel's remote.
+
+Limits: HTTPS only (SSH addresses are reached over HTTPS); one branch at a time, the one checked
+out; no force push from the interface; packs without deltas, so a large history pushes more bytes
+than git would; a pull's merge is per file and per line as in step 2, with no conflict markers (a
+file that does not merge is settled with git or by keeping one side); in the browser the history
+goes as one commit.
+
+## Step 6: more
+
 - Files over the limits fetched when the engine reads them; a diff of the changes before
   committing; conflict markers or a side-by-side view to merge a file by hand.
+- Several branches of a folder: switching, and pushing a new one.

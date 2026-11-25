@@ -24,9 +24,30 @@ macro_rules! git {
     };
 }
 
+// Remotes, refs, and moving the branch with the work tree (push and pull).
+#[path = "remote.rs"]
+mod remote;
+pub use remote::{Merged, Remote};
+
 /// A folder of the tree being built: names to files (mode, blob) or folders.
 #[derive(Default)]
 struct Folder(BTreeMap<BString, Node>);
+
+/// A commit's tree as built from a snapshot over HEAD's.
+struct Built {
+    head: Option<ObjectId>,
+    head_tree: Option<ObjectId>,
+    root: ObjectId,
+    /// No commit yet and no file to commit.
+    empty: bool,
+}
+
+impl Built {
+    /// The tree, when it differs from HEAD's.
+    fn changed(&self) -> Option<ObjectId> {
+        (Some(self.root) != self.head_tree && !self.empty).then_some(self.root)
+    }
+}
 
 enum Node {
     File(EntryMode, ObjectId),
@@ -127,12 +148,9 @@ impl History {
         Ok(head.id().map(gix::Id::detach).or_else(|| head.peel_to_commit().ok().map(|c| c.id)))
     }
 
-    /// Commits `snapshot` with `message`. `author` none: the repository's configured identity,
-    /// else "TeXCraft". Returns the new commit's id, or none when the project is as in HEAD.
-    ///
-    /// In someone else's repository, refuses while changes are staged in git: the commit rewrites
-    /// the index from its tree, which would unstage them.
-    pub fn commit(&self, snapshot: &Snapshot, message: &str, author: Option<&Person>, time: chrono::DateTime<chrono::Utc>) -> Result<Option<String>> {
+    /// The tree a commit of `snapshot` would have, over HEAD's. In someone else's repository,
+    /// refuses while changes are staged in git (see [`History::commit`]).
+    fn build(&self, snapshot: &Snapshot) -> Result<Built> {
         let head = self.head_id()?;
         let head_tree = head.map(|c| self.commit_tree(c)).transpose()?;
         if self.owner == Owner::Theirs && self.staged(head_tree)? {
@@ -196,9 +214,18 @@ impl History {
             Some(r) => r,
             None => git!("A tree cannot be written", self.repo.write_object(gix::objs::Tree::empty()))?.detach(),
         };
-        if Some(root) == head_tree || (head.is_none() && new.is_none()) {
-            return Ok(None);
-        }
+        Ok(Built { head, head_tree, root, empty: head.is_none() && new.is_none() })
+    }
+
+    /// Commits `snapshot` with `message`. `author` none: the repository's configured identity,
+    /// else "TeXCraft". Returns the new commit's id, or none when the project is as in HEAD.
+    ///
+    /// In someone else's repository, refuses while changes are staged in git: the commit rewrites
+    /// the index from its tree, which would unstage them.
+    pub fn commit(&self, snapshot: &Snapshot, message: &str, author: Option<&Person>, time: chrono::DateTime<chrono::Utc>) -> Result<Option<String>> {
+        let built = self.build(snapshot)?;
+        let Some(root) = built.changed() else { return Ok(None) };
+        let head = built.head;
         let person = match author {
             Some(p) => p.clone(),
             None => self.configured_person().unwrap_or_else(|| Person::new("TeXCraft", "")),
@@ -210,6 +237,11 @@ impl History {
         let id = git!("The commit cannot be made", self.repo.commit_as(sig, sig, "HEAD", message, root, head))?.detach();
         self.write_index(root)?;
         Ok(Some(id.to_string()))
+    }
+
+    /// Whether `snapshot` differs from HEAD: a commit of it would not be empty.
+    pub fn uncommitted(&self, snapshot: &Snapshot) -> Result<bool> {
+        Ok(self.build(snapshot)?.changed().is_some())
     }
 
     /// Whether the index differs from tree `head` (what `git diff --cached` would show).

@@ -258,7 +258,7 @@ impl Forge for GitLab {
 }
 
 /// The commit API's actions for `changes`, the contents from `files`, in base64.
-fn actions(changes: &[FileChange], files: &[(String, Vec<u8>)]) -> Vec<Value> {
+pub(crate) fn actions(changes: &[FileChange], files: &[(String, Vec<u8>)]) -> Vec<Value> {
     let bytes: BTreeMap<&str, &[u8]> = files.iter().map(|(p, b)| (p.as_str(), b.as_slice())).collect();
     let content = |path: &str| base64::engine::general_purpose::STANDARD.encode(bytes.get(path).copied().unwrap_or_default());
     changes

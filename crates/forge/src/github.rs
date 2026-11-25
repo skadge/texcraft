@@ -236,6 +236,27 @@ impl GitHub {
         Ok(id.to_owned())
     }
 
+    /// Makes a commit of `files` alone, with no parent, and moves `branch` to it, forcing: the
+    /// first commit of a repository GitHub made with a README (its API cannot commit to an empty
+    /// one), which this commit replaces. Its id.
+    pub async fn replace_branch(&self, branch: &str, message: &str, files: &[(String, Vec<u8>)]) -> Result<String> {
+        let mut ids = Vec::new();
+        for chunk in files.chunks(PARALLEL) {
+            let made = crate::task::join_all(chunk.iter().map(|(_, b)| self.create_blob(b)).collect()).await;
+            for ((path, _), id) in chunk.iter().zip(made) {
+                ids.push(json!({"path": path, "mode": "100644", "type": "blob", "sha": id?}));
+            }
+        }
+        let tree = self.json("POST", format!("{}/git/trees", self.repo_url()), Some(json!({"tree": ids})), "the commit's files").await?;
+        let tree = tree["sha"].as_str().filter(|id| is_object_id(id)).ok_or_else(|| Error::Invalid("the tree has no id".to_owned()))?;
+        let body = json!({"message": message, "tree": tree, "parents": []});
+        let commit = self.json("POST", format!("{}/git/commits", self.repo_url()), Some(body), "the commit").await?;
+        let id = commit["sha"].as_str().filter(|id| is_object_id(id)).ok_or_else(|| Error::Invalid("the commit has no id".to_owned()))?.to_owned();
+        let url = format!("{}/git/refs/heads/{}", self.repo_url(), encode_path(branch));
+        self.json("PATCH", url, Some(json!({"sha": id, "force": true})), &format!("the first commit to branch {branch}")).await?;
+        Ok(id)
+    }
+
     /// Opens a pull request of branch `source` into `target`.
     pub async fn create_pull_request(&self, source: &str, target: &str, title: &str) -> Result<MergeRequest> {
         let body = json!({"title": title, "head": source, "base": target});

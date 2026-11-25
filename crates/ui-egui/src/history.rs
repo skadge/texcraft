@@ -30,6 +30,9 @@ pub(crate) struct HistoryView {
     selected: Option<String>,
     file: Option<String>,
     diff: Option<Diff>,
+    /// The repository's remote as `git.remotes` says it, and what it was read at.
+    remote: Value,
+    remote_key: Option<String>,
 }
 
 struct Commit {
@@ -308,6 +311,9 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
             ui.add(egui::Label::new(RichText::new(text).font(t.small()).color(color)).wrap());
         });
     }
+    if owner.is_some() && app.session.library().is_none() {
+        remote_section(app, ui, &t, &mut view);
+    }
     widgets::hairline(ui, &t);
     // The versions, then a version's file's changes below them, in the order the keyboard visits
     // them too. The list keeps its own id, so its controls keep theirs (and the keyboard) when the
@@ -372,6 +378,119 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
         None => {}
     }
     app.history = view;
+}
+
+/// The folder's remote (docs/forges.md, step 5): where it is, how far ahead or behind, Push and
+/// Pull; or, with none, Save to GitHub and Save to GitLab.
+fn remote_section(app: &mut App, ui: &mut egui::Ui, t: &Tokens, view: &mut HistoryView) {
+    let key = format!("{:?}\n{:?}", view.key, app.session.git_busy());
+    if view.remote_key.as_ref() != Some(&key) {
+        view.remote = app.session.execute("git.remotes", &json!({})).unwrap_or_default();
+        view.remote_key = Some(key);
+    }
+    let remote = view.remote.clone();
+    let muted = |text: String| RichText::new(text).font(t.small()).color(t.text_muted);
+    ui.horizontal_wrapped(|ui| {
+        ui.add_space(t.unit * 2.0);
+        let Some(name) = remote["remote"].as_str() else {
+            ui.label(muted(tl!("No remote yet: save the project to GitHub or GitLab to keep it there too.").to_owned()));
+            return;
+        };
+        let place = remote["web_url"].as_str().or(remote["url"].as_str()).unwrap_or_default();
+        let shown = place.trim_start_matches("https://").to_owned();
+        ui.label(muted(tl!("Remote {name}:").replace("{name}", name)));
+        match remote["web_url"].as_str() {
+            Some(url) => {
+                ui.hyperlink_to(RichText::new(shown).font(t.small()), url);
+            }
+            None => {
+                ui.label(muted(shown));
+            }
+        }
+    });
+    let state = match (remote["remote"].as_str(), remote["ahead"].as_u64(), remote["behind"].as_u64()) {
+        (None, ..) => None,
+        (Some(_), None, _) | (Some(_), _, None) => Some(tl!("Not pushed yet.").to_owned()),
+        (Some(_), Some(0), Some(0)) => Some(tl!("Up to date with the remote, as last pushed or pulled.").to_owned()),
+        (Some(_), Some(a), Some(b)) => {
+            let mut parts = Vec::new();
+            if a > 0 {
+                parts.push(trn(a as usize, "{n} commit to push", "{n} commits to push"));
+            }
+            if b > 0 {
+                parts.push(trn(b as usize, "{n} commit to pull", "{n} commits to pull"));
+            }
+            Some(format!("{}.", parts.join(", ")))
+        }
+    };
+    if let Some(state) = state {
+        ui.horizontal(|ui| {
+            ui.add_space(t.unit * 2.0);
+            ui.label(muted(state));
+        });
+    }
+    ui.horizontal(|ui| {
+        ui.add_space(t.unit * 2.0);
+        let commands: &[(&str, &str)] = if remote["remote"].is_string() {
+            &[("git.push", tl!("Push")), ("git.pull", tl!("Pull"))]
+        } else {
+            &[("forge.save_to_github", tl!("Save to GitHub…")), ("forge.save_to_gitlab", tl!("Save to GitLab…"))]
+        };
+        for (id, label) in commands {
+            let can = texcraft_engine::cmd::find(id).map_or(Ok(()), |c| (c.enabled)(&app.session));
+            let r = widgets::text_button(ui, t, label, can.is_ok());
+            match &can {
+                Err(reason) => {
+                    let _ = r.on_disabled_hover_text(reason.as_str());
+                }
+                Ok(()) if r.clicked() => crate::ui_cmd::run(app, id),
+                Ok(()) => {}
+            }
+        }
+        if let Some(op) = app.session.git_busy()
+            && let Some(text) = crate::forge_save::busy_text(app, op)
+        {
+            let said = ui.label(muted(text.to_owned()));
+            crate::status::announce(ui, &said, text);
+        }
+    });
+}
+
+/// Push: the branch's commits to its remote, in the background.
+pub(crate) fn push(app: &mut App) {
+    if app.run("git.push", json!({"background": true})).is_some() {
+        app.view.status = Some((tl!("Pushing…").to_owned(), false));
+    }
+}
+
+/// Pull: the remote's new commits into the folder, in the background.
+pub(crate) fn pull(app: &mut App) {
+    if app.run("git.pull", json!({"background": true})).is_some() {
+        app.view.status = Some((tl!("Pulling…").to_owned(), false));
+    }
+}
+
+/// A push ended.
+pub(crate) fn pushed(app: &mut App, done: &Value) {
+    let at = format!("{}/{}", done["remote"].as_str().unwrap_or_default(), done["branch"].as_str().unwrap_or_default());
+    let said = if done["up_to_date"] == true { tl!("{remote} has these commits already.") } else { tl!("Pushed to {remote}.") };
+    app.view.status = Some((said.replace("{remote}", &at), false));
+}
+
+/// A pull ended: what it brought.
+pub(crate) fn git_pulled(app: &mut App, done: &Value) {
+    let at = format!("{}/{}", done["remote"].as_str().unwrap_or_default(), done["branch"].as_str().unwrap_or_default());
+    let files: Vec<&str> = done["changed"].as_array().into_iter().flatten().filter_map(|c| c["path"].as_str()).collect();
+    let said = if done["up_to_date"] == true {
+        tl!("Up to date with {remote}.").replace("{remote}", &at)
+    } else if done["merged"] == true {
+        tl!("Merged {remote} into the project: {files}.").replace("{remote}", &at).replace("{files}", &files.join(", "))
+    } else if files.is_empty() {
+        tl!("Pulled {remote}: no file of the project changed.").replace("{remote}", &at)
+    } else {
+        tl!("Pulled {remote}: {files}.").replace("{remote}", &at).replace("{files}", &files.join(", "))
+    };
+    app.view.status = Some((said, false));
 }
 
 /// The confirmation before bringing back the compared file: as it was in the chosen version, or
