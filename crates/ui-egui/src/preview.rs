@@ -52,6 +52,14 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         if let Some((page, x, y)) = app.pdf.clicked.take() {
             go_to_source(app, page, x, y);
         }
+        if let Some(text) = app.pdf.copied.take() {
+            let message = if text.trim().is_empty() {
+                tl!("The selected part of the PDF has no text to copy: its font does not say which characters it draws.").to_owned()
+            } else {
+                tl!("Copied {n} characters from the PDF.").replace("{n}", &text.chars().count().to_string())
+            };
+            app.view.status = Some((message, false));
+        }
         match app.pdf.followed.take() {
             Some(crate::pdf_view::Followed::Opened(uri)) => {
                 app.view.status = Some((tl!("Opening {address} in your browser.").replace("{address}", uri.trim()), false));

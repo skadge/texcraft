@@ -7,7 +7,8 @@
 //! - y 400–420: to the named destination `sec.2`, page 2 at y 300 (through the `/Names` tree);
 //! - y 300–320: to `javascript:alert(1)`, a URI no reader should open.
 //!
-//! Page 2: "Second page" at (72, 700).
+//! Page 2: "Second page" at (72, 700), as TeX writes it: no space drawn, a gap of a third of an em
+//! instead; and "Next line" under it.
 //!
 //! The ui-egui tests include this file too.
 
@@ -15,7 +16,7 @@
 pub fn links_pdf() -> Vec<u8> {
     let text = |s: &str| format!("BT /F1 12 Tf 72 700 Td ({s}) Tj ET");
     let page1 = text("Hello world");
-    let page2 = text("Second page");
+    let page2 = "BT /F1 12 Tf 72 700 Td [(Second) -333 (page)] TJ 0 -14 Td (Next line) Tj ET".to_owned();
     let objects = [
         "<< /Type /Catalog /Pages 2 0 R /Names << /Dests << /Names [(sec.2) [4 0 R /XYZ 0 300 null]] >> >> >>".to_owned(),
         "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 612 792] >>".to_owned(),

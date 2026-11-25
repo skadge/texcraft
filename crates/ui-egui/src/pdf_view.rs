@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use texcraft_preview::{Document, Link, Target};
+use texcraft_preview::{Document, Glyph, Link, Target};
 
 use crate::theme::Tokens;
 
@@ -233,6 +233,13 @@ pub(crate) struct PdfView {
     links: HashMap<usize, Arc<Vec<Link>>>,
     /// A link to the web followed, or refused: the preview pane says it in the status bar.
     pub followed: Option<Followed>,
+    /// The glyphs of the pages text was selected on, read once a PDF.
+    glyphs: HashMap<usize, Arc<Vec<Glyph>>>,
+    /// The text selected by dragging over a page: the page, and the glyphs where the drag started
+    /// and where it is.
+    selection: Option<(usize, usize, usize)>,
+    /// Text copied from the PDF this frame: the preview pane says it in the status bar.
+    pub copied: Option<String>,
 }
 
 /// A link to outside the document, clicked.
@@ -265,6 +272,9 @@ impl Default for PdfView {
             jump: None,
             links: HashMap::new(),
             followed: None,
+            glyphs: HashMap::new(),
+            selection: None,
+            copied: None,
         }
     }
 }
@@ -285,6 +295,8 @@ impl PdfView {
         self.generation += 1;
         self.pending.clear();
         self.links.clear();
+        self.glyphs.clear();
+        self.selection = None;
         self.error = None;
         self.doc = None;
         self.sizes.clear();
@@ -468,13 +480,16 @@ impl PdfView {
                     let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
                     ui.painter().image(texture.id(), page, uv, egui::Color32::WHITE);
                 }
-                // Double-click or Ctrl+click: the source of that point.
-                let r = ui.interact(page, ui.scope_id().with(("pdf-page", i)), egui::Sense::click());
+                // Double-click or Ctrl+click: the source of that point. A drag selects text.
+                let r = ui.interact(page, ui.scope_id().with(("pdf-page", i)), egui::Sense::click_and_drag());
+                let name = tl!("Page {n} of {count}").replace("{n}", &(i + 1).to_string()).replace("{count}", &sizes.len().to_string());
+                r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Document, true, &name));
                 if (r.double_clicked() || (r.clicked() && command))
                     && let Some(p) = r.interact_pointer_pos()
                 {
                     clicked = Some((i, (p.x - page.left()) / zoom, (p.y - page.top()) / zoom));
                 }
+                self.select(ui, t, i, page, zoom, &r);
                 match self.page_links(ui, t, i, page, zoom) {
                     Some((point, _)) if command => clicked = Some((i, point.x, point.y)),
                     Some((_, target)) => follow = Some(target),
@@ -539,6 +554,69 @@ impl PdfView {
             let _ = response.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(label);
         }
         clicked
+    }
+
+    /// Text selection on page `i`, drawn at `page`, through the page's response `r`: a drag
+    /// selects from the glyph nearest where it started to the one nearest the pointer; a click or
+    /// Escape clears it; Ctrl+C (Cmd+C) copies it while the page has the keyboard.
+    fn select(&mut self, ui: &mut egui::Ui, t: &Tokens, i: usize, page: egui::Rect, zoom: f32, r: &egui::Response) {
+        let at = |p: egui::Pos2| ((p - page.min) / zoom).to_pos2();
+        if r.drag_started()
+            && let Some(start) = ui.input(|input| input.pointer.press_origin())
+        {
+            let start = at(start);
+            self.selection = self.page_glyphs(i).and_then(|g| texcraft_preview::glyph_at(&g, start.x, start.y)).map(|g| (i, g, g));
+            r.request_focus();
+        } else if r.dragged()
+            && let Some((page_selected, _, head)) = &mut self.selection
+            && *page_selected == i
+            && let Some(p) = r.interact_pointer_pos()
+            && let Some(glyphs) = self.glyphs.get(&i)
+        {
+            let p = at(p);
+            *head = texcraft_preview::glyph_at(glyphs, p.x, p.y).unwrap_or(*head);
+        } else if r.clicked() && !r.double_clicked() {
+            self.selection = None;
+        }
+        let Some((page_selected, anchor, head)) = self.selection.filter(|s| s.0 == i) else { return };
+        let Some(glyphs) = self.glyphs.get(&page_selected).cloned() else { return };
+        let (a, b) = (anchor.min(head), anchor.max(head));
+        for g in glyphs.iter().take(b + 1).skip(a) {
+            let [l, top, right, bottom] = g.rect;
+            let area = egui::Rect::from_min_max(page.min + egui::vec2(l, top) * zoom, page.min + egui::vec2(right, bottom) * zoom);
+            ui.painter().rect_filled(area, 0.0, t.selection);
+        }
+        if !r.has_focus() {
+            return;
+        }
+        let (copy, escape) = ui.input(|input| {
+            let copy = input.events.iter().any(|e| matches!(e, egui::Event::Copy)) || (input.modifiers.command && input.key_pressed(egui::Key::C));
+            (copy, input.key_pressed(egui::Key::Escape))
+        });
+        if copy {
+            let text = texcraft_preview::text_between(&glyphs, anchor, head);
+            ui.ctx().copy_text(text.clone());
+            self.copied = Some(text);
+        }
+        if escape {
+            self.selection = None;
+        }
+    }
+
+    /// The glyphs of page `i`, read the first time they are asked for.
+    fn page_glyphs(&mut self, i: usize) -> Option<Arc<Vec<Glyph>>> {
+        if let Some(g) = self.glyphs.get(&i) {
+            return Some(g.clone());
+        }
+        let glyphs = match self.doc.as_ref()?.glyphs(i) {
+            Ok(g) => Arc::new(g),
+            Err(e) => {
+                log::warn!("page {}: {e}", i + 1);
+                Arc::new(Vec::new())
+            }
+        };
+        self.glyphs.insert(i, glyphs.clone());
+        Some(glyphs)
     }
 
     /// Asks for `pages` (in that order) at `scale`, those not drawn at it yet; the renderer drops

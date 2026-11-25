@@ -3,3 +3,4 @@
 mod figure;
 mod links;
 mod sample;
+mod text;

@@ -88,3 +88,28 @@ fn a_link_to_a_script_is_not_opened() {
     let inspect = harness.state_mut().control("ui.inspect", &json!({}));
     assert_eq!(inspect["result"]["status"]["error"], json!(true), "{inspect}");
 }
+
+#[test]
+fn text_dragged_over_is_copied() {
+    let mut harness = built();
+    ui_cmd::run(harness.state_mut(), "view.actual_size");
+    harness.run();
+    // At 100 %, a point of the page is a point of the window. "Hello world" is at x 72 from the
+    // left and on the baseline 700 points from the bottom of the 792-point page.
+    let page = harness.get_by_label("Page 1 of 2").rect();
+    let at = |x: f32, y: f32| page.min + egui::vec2(x, 792.0 - y);
+    harness.hover_at(at(60.0, 704.0));
+    harness.run();
+    harness.drag_at(at(60.0, 704.0));
+    harness.run();
+    for x in [90.0, 150.0, 250.0] {
+        harness.hover_at(at(x, 704.0));
+        harness.run();
+    }
+    harness.drop_at(at(250.0, 704.0));
+    harness.run();
+    harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::C);
+    harness.run();
+    let inspect = harness.state_mut().control("ui.inspect", &json!({}));
+    assert_eq!(inspect["result"]["status"]["text"], json!("Copied 11 characters from the PDF."), "{inspect}");
+}
