@@ -21,6 +21,8 @@ texcraft-vim = { workspace = true }
 craft-i18n = { workspace = true }
 craft-ui = { workspace = true }
 craft-keymap = { workspace = true }
+# The menus as a tree for the system's menu bar (macOS), and its per-frame driver.
+craft-menu = { workspace = true }
 egui_extras = { workspace = true, features = ["svg"] }
 egui = { workspace = true, features = ["monochrome_emoji_fonts"] }
 serde_json = { workspace = true }

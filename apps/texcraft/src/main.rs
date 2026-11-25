@@ -6,6 +6,8 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod control;
+#[cfg(target_os = "macos")]
+mod mac_menu;
 mod thumbnails;
 
 use std::sync::Arc;
@@ -71,6 +73,11 @@ impl Shell {
 }
 
 impl eframe::App for Shell {
+    /// The system menu's key equivalents go back into egui's input as the key presses they were.
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        self.app.system_menu_input(raw_input);
+    }
+
     /// Runs before `ui`, also while the window is hidden: closing asks about unsaved changes first
     /// (craft-quit's order: the app's decision, then `on_close_request`).
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -226,6 +233,9 @@ fn run() -> eframe::Result {
         "TeXCraft",
         options,
         Box::new(|cc| {
+            // In the creator, so that winit's default menu doesn't stay up.
+            #[cfg(target_os = "macos")]
+            let app = mac_menu::install(app, &cc.egui_ctx);
             let ctx = cc.egui_ctx.clone();
             let wake = ctx.clone();
             let dialogs = Dialogs::new(Arc::new(move || wake.request_repaint()));

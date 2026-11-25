@@ -41,6 +41,7 @@ mod side;
 mod start;
 mod status;
 mod suggest;
+mod system_menu;
 mod top_bar;
 pub mod ui_cmd;
 pub mod widgets;
@@ -191,6 +192,8 @@ pub struct App {
     forge_check: forge::Check,
     /// Alt pressed alone, to reach the menu bar when it is released.
     alt: top_bar::AltTap,
+    /// The system's menu bar (macOS), when the shell installed it; the in-window one is hidden then.
+    system_menu: Option<craft_menu::NativeMenu>,
 }
 
 impl App {
@@ -262,6 +265,7 @@ impl App {
             forge_count: forge::Count::default(),
             forge_check: forge::Check::default(),
             alt: top_bar::AltTap::default(),
+            system_menu: None,
         };
         app.remember_project();
         app
@@ -565,6 +569,12 @@ impl App {
     /// Draws one frame into the window's root `ui`. Called by the desktop and web shells from
     /// `eframe::App::ui`.
     pub fn frame(&mut self, ui: &mut egui::Ui) {
+        self.draw(ui);
+        // After the frame, so the system's menus show what it changed.
+        self.sync_system_menu();
+    }
+
+    fn draw(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
         self.ctx = ctx.clone();
         if !self.fonts_ready {
@@ -616,6 +626,7 @@ impl App {
         if self.alt.tapped(ctx) {
             ui_cmd::run(self, "view.menu_bar");
         }
+        self.system_menu_clicks(ctx);
         for id in self.keys.dispatch(ctx) {
             ui_cmd::run(self, &id);
         }

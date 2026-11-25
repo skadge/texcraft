@@ -21,6 +21,10 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui_cmd::run(app, "app.start");
             }
             ui.add_space(t.unit * 2.0);
+            // On macOS the menus are in the system's menu bar, when the shell installed it.
+            if app.has_system_menu() {
+                return;
+            }
             navigate(app, ui.ctx());
             let mut ids = Vec::with_capacity(MENUS.len());
             let mut entered = None;
@@ -81,6 +85,10 @@ pub(crate) struct MenuNav {
 /// the menu bar already.
 pub(crate) fn toggle_menu_bar(app: &mut App) {
     if app.view.dialog.is_some() || app.pdf.presenting().is_some() {
+        return;
+    }
+    if let Err(reason) = ui_cmd::enabled(app, "view.menu_bar") {
+        app.view.status = Some((reason, false));
         return;
     }
     if let Some(nav) = app.view.menu_nav.take() {
