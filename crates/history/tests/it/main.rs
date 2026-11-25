@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use texcraft_history::store::{Versions, blob_id};
 use texcraft_history::{ChangeKind, History, Owner, Person, Snapshot, Versioned};
 
+mod remote;
+
 type R = Result<(), String>;
 
 /// A new empty scratch folder, removed when dropped.
