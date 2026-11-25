@@ -114,7 +114,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | A6 | ✅ 0.4.0 | GitHub mirror and releases | Each push mirrored to GitHub, each release published there with its files. |
 | A7 | 🚧 | macOS and Windows | Experimental builds on the GitHub releases (a Windows zip, a macOS app for Apple Silicon, unsigned); still to do: signing, installers, Intel Macs. |
 | A8 | ⬜ | Updates and translations | In-app updates (craft-update), translations (craft-i18n). |
-| A9 | ⬜ | More of the window | The PDF in its own window, a distraction-free mode, the macOS menu bar, Alt or F10 for the menus. |
+| A9 | 🚧 | More of the window | The PDF in its own window, a distraction-free mode (focus mode), Alt or F10 for the menus: done. Remaining: the macOS menu bar (craft-menu), not built here for want of a macOS toolchain. |
 | A10 | ⬜ | Accessibility pass | Keyboard-path tests for each panel, a screen-reader pass. |
 
 ## AI assistance
