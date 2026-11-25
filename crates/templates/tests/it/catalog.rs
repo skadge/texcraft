@@ -55,7 +55,8 @@ fn every_builtin_template_is_compiled_in_and_kept_without_a_download() {
         for (_, path) in t.project_paths() {
             assert!(files.iter().any(|(p, _)| *p == path), "{}: {path} is listed but not compiled in", t.id);
         }
-        let kept = store.kept(t).unwrap_or_else(|| panic!("{} is not kept", t.id));
+        assert!(store.available(t), "{} is not offered offline", t.id);
+        let kept = store.fetch(t).unwrap_or_else(|e| panic!("{}: {e}", t.id));
         assert!(kept.join(&t.main).is_file(), "{}: its main file was not written", t.id);
     }
     let _ = std::fs::remove_dir_all(&dir);

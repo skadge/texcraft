@@ -68,7 +68,7 @@ impl App {
 
     /// Whether template `t` can be used without downloading it.
     pub(crate) fn template_kept(&self, t: &Template) -> bool {
-        self.session.has_template(&t.id) || self.session.template_store().is_some_and(|s| s.kept(t).is_some())
+        self.session.has_template(&t.id) || t.is_builtin() || self.session.template_store().is_some_and(|s| s.kept(t).is_some())
     }
 
     /// The templates to fetch for the browser's page (the shell's work), oldest first; each is

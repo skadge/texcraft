@@ -179,22 +179,24 @@ impl Store {
     }
 
     /// The folder of `template`'s files when it has been downloaded.
-    /// A built-in template is always kept: its files are written from the build the first time.
     pub fn kept(&self, template: &Template) -> Option<PathBuf> {
         let dir = self.dir.join(&template.id);
-        if dir.join(COMPLETE).is_file() {
-            return Some(dir);
-        }
-        if template.is_builtin() {
-            return self.keep(template, &template.builtin_files()).ok();
-        }
-        None
+        dir.join(COMPLETE).is_file().then_some(dir)
+    }
+
+    /// Whether `template` can be used without a download: kept, or built in.
+    pub fn available(&self, template: &Template) -> bool {
+        template.is_builtin() || self.kept(template).is_some()
     }
 
     /// The folder of `template`'s files, downloading them first when they are not kept.
     pub fn fetch(&self, template: &Template) -> Result<PathBuf> {
         if let Some(dir) = self.kept(template) {
             return Ok(dir);
+        }
+        // Built in: written from the build, nothing to download.
+        if template.is_builtin() {
+            return self.keep(template, &template.builtin_files());
         }
         #[cfg(all(feature = "download", not(target_arch = "wasm32")))]
         {

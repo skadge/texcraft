@@ -94,7 +94,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn kept(s: &Session, t: &texcraft_templates::Template) -> bool {
-    s.template_files.contains_key(&t.id) || s.templates.as_ref().is_some_and(|store| store.kept(t).is_some())
+    s.template_files.contains_key(&t.id) || t.is_builtin() || s.templates.as_ref().is_some_and(|store| store.kept(t).is_some())
 }
 
 fn fetch(s: &mut Session, p: &Value) -> Result<Value> {
@@ -156,7 +156,9 @@ fn from_template_in_folder(s: &mut Session, p: &Value) -> Result<Value> {
     let store = s.templates.as_ref().ok_or("no template folder")?;
     let kept = match store.kept(template) {
         Some(dir) => dir,
-        None if s.roots.is_some() => return Err("This template has not been downloaded, and agent sessions cannot download.".to_owned()),
+        None if s.roots.is_some() && !template.is_builtin() => {
+            return Err("This template has not been downloaded, and agent sessions cannot download.".to_owned());
+        }
         None => store.fetch(template).map_err(|e| e.to_string())?,
     };
     let mut paths: Vec<String> = template.project_paths().into_iter().map(|(_, p)| p).collect();
