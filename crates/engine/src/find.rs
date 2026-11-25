@@ -70,3 +70,51 @@ impl Query {
         Ok(out)
     }
 }
+
+/// Where a match is: its line and column (from 1, in characters), and the rest of its line around
+/// it, clipped when the line is long (an ellipsis marks what was cut).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Place {
+    pub line: usize,
+    pub column: usize,
+    /// The line before the match.
+    pub before: String,
+    /// The line after the match (after its end, on the line where it ends).
+    pub after: String,
+}
+
+/// At most this many characters of a line are kept before a match, and after it.
+const CONTEXT_BEFORE: usize = 40;
+const CONTEXT_AFTER: usize = 120;
+
+/// The places of `ranges` (byte ranges in `text`, in order).
+pub fn places(text: &str, ranges: &[Range<usize>]) -> Vec<Place> {
+    let mut line = 1;
+    let mut line_start = 0;
+    let mut scanned = 0;
+    ranges
+        .iter()
+        .map(|r| {
+            for (i, c) in text[scanned..r.start].char_indices() {
+                if c == '\n' {
+                    line += 1;
+                    line_start = scanned + i + 1;
+                }
+            }
+            scanned = r.start;
+            let head = &text[line_start..r.start];
+            let column = head.chars().count() + 1;
+            let before = match head.char_indices().rev().nth(CONTEXT_BEFORE - 1) {
+                Some((i, _)) if i > 0 => format!("…{}", &head[i..]),
+                _ => head.to_owned(),
+            };
+            let tail = &text[r.end..];
+            let tail = tail.split_once('\n').map_or(tail, |(l, _)| l).trim_end_matches('\r');
+            let after = match tail.char_indices().nth(CONTEXT_AFTER) {
+                Some((i, _)) => format!("{}…", &tail[..i]),
+                None => tail.to_owned(),
+            };
+            Place { line, column, before, after }
+        })
+        .collect()
+}

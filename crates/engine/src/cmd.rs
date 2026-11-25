@@ -18,6 +18,7 @@ mod language;
 mod pdf;
 mod project;
 mod review;
+mod search;
 mod template;
 
 pub type Run = fn(&mut Session, &Value) -> Result<Value>;
@@ -72,6 +73,7 @@ pub fn all() -> &'static [CommandSpec] {
     ALL.get_or_init(|| {
         let mut v = project::specs();
         v.extend(file::specs());
+        v.extend(search::specs());
         v.extend(image::specs());
         v.extend(build::specs());
         v.extend(template::specs());

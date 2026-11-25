@@ -14,5 +14,6 @@ mod language;
 mod library;
 mod rename;
 mod review;
+mod search;
 mod sync;
 mod templates;
