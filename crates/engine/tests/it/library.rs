@@ -70,7 +70,8 @@ fn a_library_project_writes_nothing_to_disk() {
 fn a_template_the_page_fetched_becomes_a_saved_project_of_the_library() {
     let mut s = session();
     let catalog = texcraft_templates::Catalog::builtin().unwrap();
-    let template = &catalog.templates()[0];
+    // One the page fetches: not built into the program.
+    let template = catalog.templates().iter().find(|t| !t.is_builtin()).unwrap();
     let params = json!({"template": template.id, "folder": "Article"});
     assert!(s.execute("project.from_template", &params).is_err(), "not fetched yet");
     let mut files: Vec<(String, Vec<u8>)> = template.project_paths().into_iter().map(|(_, p)| (p, b"\\documentclass{article}".to_vec())).collect();
@@ -81,6 +82,25 @@ fn a_template_the_page_fetched_becomes_a_saved_project_of_the_library() {
     assert!(s.project().get(&ProjectPath::new("TEMPLATE-LICENSE").unwrap()).is_some(), "the licence note goes with the project");
     assert_eq!(s.library().unwrap().names(), ["Article"], "saved at once");
     assert!(s.execute("project.from_template", &params).is_err(), "the name is taken");
+}
+
+/// The page fetches only the templates that are not built in (the gallery counts the others as
+/// kept), so a built-in one makes a project from the program's own files (the browser's every
+/// built-in template once failed with "not fetched yet").
+#[test]
+fn a_built_in_template_becomes_a_library_project_without_being_fetched() {
+    let mut s = session();
+    let catalog = texcraft_templates::Catalog::builtin().unwrap();
+    let builtin: Vec<_> = catalog.templates().iter().filter(|t| t.is_builtin()).collect();
+    assert!(!builtin.is_empty(), "the catalogue has built-in templates");
+    for (i, template) in builtin.iter().enumerate() {
+        let name = format!("Project {i}");
+        s.execute("project.from_template", &json!({"template": template.id, "folder": name})).unwrap_or_else(|e| panic!("{}: {e}", template.id));
+        let main = ProjectPath::new(&template.main).unwrap();
+        assert_eq!(s.project().main(), Some(&main), "{}", template.id);
+        assert!(s.project().get(&main).is_some(), "{}: its main document is in the project", template.id);
+    }
+    assert_eq!(s.library().unwrap().names().len(), builtin.len(), "each saved at once");
 }
 
 fn reviewer() -> Result<Session, String> {

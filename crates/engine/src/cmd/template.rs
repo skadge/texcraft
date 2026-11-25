@@ -119,7 +119,16 @@ fn from_template_in_library(s: &mut Session, p: &Value) -> Result<Value> {
     if s.library.as_ref().is_some_and(|l| l.contains(&name)) {
         return Err(format!("There is already a project named {name}: choose another name."));
     }
-    let files = s.template_files.get(&template.id).ok_or("This template has not been fetched yet.")?;
+    // A built-in template's files are in the program: the page fetches only the others.
+    let builtin;
+    let files = match s.template_files.get(&template.id) {
+        Some(files) => files,
+        None if template.is_builtin() => {
+            builtin = template.builtin_files();
+            &builtin
+        }
+        None => return Err("This template has not been fetched yet.".to_owned()),
+    };
     let mut project = texcraft_project::Project::new();
     for (path, bytes) in files {
         let path = texcraft_project::ProjectPath::new(path).map_err(|e| e.to_string())?;
