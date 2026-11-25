@@ -561,12 +561,26 @@ fn the_history_s_versions_files_and_changes_are_reached_from_the_keyboard() -> R
 
 #[test]
 fn the_pdf_pane_s_toolbar_and_menus_are_walked_from_the_keyboard() {
-    let mut h = super::pdf_preview::built();
+    // More steps than the PDF tests' harness: the page thread asks for frames while it draws.
+    let mut h = window(Session::with_backend(Box::new(super::pdf_preview::Sample)));
+    run(&mut h, "build.compile");
+    for _ in 0..400 {
+        h.step();
+        if h.query_by_label("1 / 2").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    h.run();
     focus(&mut h, Role::Button, "Compile");
     let stops = tab_to(&mut h, Role::Button, "Zoom In", 20);
     // In the order they read, left to right (Previous page is disabled on the first page).
     let expected = [(Role::Button, "Build log"), (Role::Button, "Export…"), (Role::Button, "Next page"), (Role::Button, "Zoom Out")];
     assert_order(&stops, &expected, "the PDF pane's toolbar");
+    // Then the pages and their links.
+    let pages: Vec<Stop> = (0..3).map(|_| tab(&mut h)).collect();
+    assert_order(&pages, &[(Role::Document, "Page 1 of 2"), (Role::Link, "Link to page 2")], "the PDF's pages");
+    focus(&mut h, Role::Button, "Zoom In");
     let zoom = stops.iter().find(|s| s.name.ends_with('%') || s.name.starts_with("Fit")).cloned();
     assert!(zoom.is_some(), "the zoom menu's button is reached: {:?}", names(&stops));
     let zoom = zoom.unwrap_or_else(|| now(&h));
