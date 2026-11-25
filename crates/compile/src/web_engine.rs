@@ -605,8 +605,13 @@ impl Engine {
         let job = main.strip_suffix(".tex").unwrap_or(&main).to_owned();
         let pdf = format!("{cwd}/{job}.pdf");
         let synctex = format!("{cwd}/{job}.synctex");
+        // A print build's PDF/X, beside the PDF (`-output-format=pdf,pdf-x4`).
+        let pdfx: Vec<String> = ["pdf-x4", "pdf-x1a"].iter().map(|v| format!("{cwd}/{job}.{v}.pdf")).collect();
         self.fs.remove(&pdf);
         self.fs.remove(&synctex);
+        for p in &pdfx {
+            self.fs.remove(p);
+        }
         let mut args: Vec<String> =
             vec!["retex".into(), "--color=never".into(), "--message-format=json".into(), "--symbols".into(), "-synctex=-1".into()];
         args.extend(flags.iter().filter_map(|a| a.as_string()));
@@ -683,7 +688,8 @@ impl Engine {
         }
         let mut fields = vec![("code", JsValue::from(code)), ("output", out.text.into()), ("seconds", seconds.into()), ("stops", stops.into())];
         let mut transfer = Vec::new();
-        for (key, path) in [("pdf", &pdf), ("synctex", &synctex)] {
+        let pdfx = pdfx.iter().find(|p| self.fs.read(p).is_some()).cloned().unwrap_or_default();
+        for (key, path) in [("pdf", &pdf), ("synctex", &synctex), ("pdfx", &pdfx)] {
             if let Some(bytes) = self.fs.read(path) {
                 let arr = Uint8Array::from(bytes.as_slice());
                 transfer.push(arr.buffer().into());

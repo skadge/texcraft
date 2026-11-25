@@ -26,10 +26,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde_json::Value;
-use texcraft_compile::{Job, Outcome};
+use texcraft_compile::Job;
 use texcraft_project::{Project, ProjectPath};
 
-pub use texcraft_compile::{Diagnostic, Draft, Engine, Export, Options as BuildOptions, Progress, Severity, Status};
+pub use texcraft_compile::{
+    Diagnostic, Draft, Engine, Export, MAX_BLEED_MM, Options as BuildOptions, Outcome, Output, PdfX, Progress, Severity, Status,
+};
 pub use texcraft_project as project;
 
 /// What a command returns: a JSON value for automation, or a message for the user.
@@ -51,6 +53,9 @@ impl Default for Settings {
         Self { auto_compile: true, auto_compile_delay_ms: 800, build: texcraft_compile::Options::default() }
     }
 }
+
+/// A print build's PDF/X and its standard, or why it wrote none.
+type PrintPdf = std::result::Result<(texcraft_compile::PdfX, Arc<Vec<u8>>), String>;
 
 /// Where builds run.
 enum Builder {
@@ -82,6 +87,11 @@ pub struct Session {
     last: Option<Outcome>,
     /// The PDF of the last build that wrote one, kept when a later build fails.
     pdf: Option<Arc<Vec<u8>>>,
+    /// The PDF/X written beside `pdf`, when the build that wrote it was a print build, and its
+    /// standard; `Err` with why there is none for a print build that wrote none.
+    pdfx: Option<PrintPdf>,
+    /// The kind of PDF `pdf` is.
+    pdf_output: texcraft_compile::Output,
     pub settings: Settings,
     roots: Option<file_access::AutomationRoots>,
     /// The language server, over the project's text files.
@@ -150,6 +160,8 @@ impl Session {
             next_job: 1,
             last: None,
             pdf: None,
+            pdf_output: texcraft_compile::Output::Screen,
+            pdfx: None,
             settings: Settings::default(),
             roots: None,
             language: language::Language::new(None),
@@ -270,6 +282,18 @@ impl Session {
 
     pub fn pdf(&self) -> Option<&Arc<Vec<u8>>> {
         self.pdf.as_ref()
+    }
+
+    /// The PDF to save or export: a print build's PDF/X, or the PDF; and its kind (`screen`,
+    /// `PDF/UA`, `PDF/X-4`). A print build that wrote no PDF/X has nothing to save.
+    pub fn pdf_to_save(&self) -> Result<(Arc<Vec<u8>>, &'static str)> {
+        let pdf = self.pdf.clone().ok_or("There is no PDF yet: compile the project first.")?;
+        match &self.pdfx {
+            None if self.pdf_output == texcraft_compile::Output::Accessible => Ok((pdf, "PDF/UA")),
+            None => Ok((pdf, "screen")),
+            Some(Ok((standard, pdfx))) => Ok((pdfx.clone(), standard.name())),
+            Some(Err(why)) => Err(why.clone()),
+        }
     }
 
     pub fn is_building(&self) -> bool {
@@ -630,6 +654,7 @@ impl Session {
         self.dirty = false;
         self.last = None;
         self.pdf = None;
+        self.pdfx = None;
     }
 
     /// Starts a build of the current sources; returns its job id.
@@ -736,6 +761,11 @@ impl Session {
         }
         if let Some(pdf) = &outcome.pdf {
             self.pdf = Some(pdf.clone());
+            self.pdf_output = outcome.output;
+            self.pdfx = outcome.preflight.as_ref().map(|p| match &p.pdfx {
+                Some(x) => Ok((p.standard, x.clone())),
+                None => Err(format!("The print build wrote no {}: see the Print messages in the build log.", p.standard.name())),
+            });
         }
         self.last.insert(outcome)
     }

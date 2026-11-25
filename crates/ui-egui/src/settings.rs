@@ -3,7 +3,7 @@
 
 use egui::{Align, Layout, RichText};
 use serde_json::json;
-use texcraft_engine::Engine;
+use texcraft_engine::{Engine, Output, PdfX};
 
 use crate::dialogs::Dialog;
 use crate::prefs::ThemePref;
@@ -232,6 +232,65 @@ fn building(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         let r = ui.add(egui::Checkbox::without_text(&mut on));
         if r.changed() {
             app.run("build.options", json!({"draft_images": on}));
+        }
+        Some(r)
+    });
+    output(app, ui, t, options);
+}
+
+/// The kind of PDF a build makes, and for print its standard, bleed and crop marks.
+fn output(app: &mut App, ui: &mut egui::Ui, t: &Tokens, options: texcraft_engine::BuildOptions) {
+    let help = tl!(
+        "For reading on a screen; accessible (tagged, PDF/UA, checked for screen readers); or for print (a PDF/X, checked as printers check it)."
+    );
+    setting(ui, t, tl!("PDF for"), help, |ui| {
+        let kinds = [Output::Screen, Output::Accessible, Output::Print];
+        let labels = [(tl!("Screen"), None), (tl!("Accessible"), None), (tl!("Print"), None)];
+        let selected = kinds.iter().position(|k| *k == options.output).unwrap_or(0);
+        if let Some(i) = widgets::segmented(ui, t, "settings-output", &labels, selected) {
+            let kind = kinds.get(i).copied().unwrap_or_default();
+            app.run("build.options", json!({"output": kind}));
+        }
+        None
+    });
+    if options.output != Output::Print {
+        return;
+    }
+    setting(
+        ui,
+        t,
+        tl!("PDF/X standard"),
+        tl!("PDF/X-4 keeps colour profiles and transparency; PDF/X-1a is CMYK only, for older print workflows."),
+        |ui| {
+            let standards = [PdfX::X4, PdfX::X1a];
+            let mut chosen = None;
+            let combo = craft_ui::ComboBox::from_id_salt("settings-pdfx").width(200.0).selected_text(options.pdfx.name()).show_ui(ui, |ui| {
+                for standard in standards {
+                    if ui.selectable_label(options.pdfx == standard, standard.name()).clicked() {
+                        chosen = Some(standard);
+                    }
+                }
+            });
+            let _ = combo.response.accessible_name(tl!("PDF/X standard"));
+            if let Some(standard) = chosen {
+                app.run("build.options", json!({"pdfx": standard}));
+            }
+            None
+        },
+    );
+    setting(ui, t, tl!("Bleed"), tl!("How far the art may run past the page's edges, to be trimmed off; printers often ask for 3 mm."), |ui| {
+        let mut mm = options.bleed_mm;
+        let r = ui.add(egui::Slider::new(&mut mm, 0.0..=texcraft_engine::MAX_BLEED_MM).step_by(0.5).suffix(" mm"));
+        if r.changed() {
+            app.run("build.options", json!({"bleed_mm": mm}));
+        }
+        Some(r)
+    });
+    setting(ui, t, tl!("Crop marks"), tl!("Marks outside the bleed that show where to trim."), |ui| {
+        let mut on = options.crop_marks;
+        let r = ui.add(egui::Checkbox::without_text(&mut on));
+        if r.changed() {
+            app.run("build.options", json!({"crop_marks": on}));
         }
         Some(r)
     });

@@ -5,7 +5,7 @@ use egui::{Align, Layout, RichText, Sense, vec2};
 use serde_json::json;
 use texcraft_engine::Export;
 use texcraft_engine::project::ProjectPath;
-use texcraft_engine::{Diagnostic, Severity, Status};
+use texcraft_engine::{Diagnostic, Outcome, Output, PageRect, Severity, Status};
 
 use crate::pdf_view::Fit;
 use crate::theme::Tokens;
@@ -223,6 +223,18 @@ fn compile_menu(app: &mut App, ui: &mut egui::Ui) {
         app.run("build.options", json!({"halt_on_error": halt}));
     }
     ui.separator();
+    // The kind of PDF; Settings › Building has the print options.
+    let kinds = [
+        (Output::Screen, tl!("PDF for the screen")),
+        (Output::Accessible, tl!("Accessible PDF (PDF/UA)")),
+        (Output::Print, tl!("PDF for print (PDF/X)")),
+    ];
+    for (kind, label) in kinds {
+        if ui.radio(options.output == kind, label).clicked() && options.output != kind {
+            app.run("build.options", json!({"output": kind}));
+        }
+    }
+    ui.separator();
     if top_bar::item(ui, &t, Some("eraser"), tl!("Delete Build Files"), None, cmd_enabled(app, "build.clean"))
         && app.run("build.clean", json!({})).is_some()
     {
@@ -325,17 +337,67 @@ pub(crate) enum Filter {
     Errors,
     Warnings,
     Notes,
+    /// The accessibility checks' findings.
+    Accessibility,
+    /// The print checks and the PDF/X's messages.
+    Print,
 }
 
 impl Filter {
-    fn keeps(self, s: Severity) -> bool {
+    fn keeps(self, d: &Diagnostic) -> bool {
+        let s = d.severity;
         match self {
             Filter::All => true,
             Filter::Errors => s == Severity::Error,
             Filter::Warnings => s == Severity::Warning,
             Filter::Notes => s <= Severity::Note,
+            Filter::Accessibility => d.is_accessibility(),
+            Filter::Print => d.is_print(),
         }
     }
+
+    fn label(self) -> &'static str {
+        match self {
+            Filter::All => tl!("All"),
+            Filter::Errors => tl!("Errors"),
+            Filter::Warnings => tl!("Warnings"),
+            Filter::Notes => tl!("Notes"),
+            Filter::Accessibility => tl!("Accessibility"),
+            Filter::Print => tl!("Print"),
+        }
+    }
+}
+
+/// The filters the log offers for `outcome`: by severity, then Accessibility and Print for a
+/// build of that kind or one with such findings.
+pub(crate) fn filters(outcome: &Outcome) -> Vec<Filter> {
+    let mut filters = vec![Filter::All, Filter::Errors, Filter::Warnings, Filter::Notes];
+    if outcome.output == Output::Accessible || outcome.accessibility().next().is_some() {
+        filters.push(Filter::Accessibility);
+    }
+    if outcome.preflight.is_some() || outcome.diagnostics.iter().any(Diagnostic::is_print) {
+        filters.push(Filter::Print);
+    }
+    filters
+}
+
+/// A print build's summary, at the top of the log: ready for print, or how many problems.
+fn print_summary(ui: &mut egui::Ui, t: &Tokens, outcome: &Outcome) -> CardAction {
+    let (Some(preflight), Some(problems)) = (&outcome.preflight, outcome.print_problems()) else { return CardAction::None };
+    let standard = preflight.standard.name();
+    let (icon, color, title, message) = if problems == 0 {
+        let message = tl!("The {standard} meets its standard's rules, and the print checks found nothing to fix.").replace("{standard}", standard);
+        ("circle-check", t.success, tl!("Ready for print").to_owned(), message)
+    } else {
+        let title = if problems == 1 { tl!("1 problem").to_owned() } else { tl!("{n} problems").replace("{n}", &problems.to_string()) };
+        let message = if preflight.pdfx.is_none() {
+            tl!("No {standard} was written: see the Print messages.").replace("{standard}", standard)
+        } else {
+            tl!("Fix them before sending the {standard} to the printer: the Print filter lists them.").replace("{standard}", standard)
+        };
+        ("triangle-exclamation-point", t.warning, title, message)
+    };
+    card(ui, t, Card { icon, color, title: &title, message: &message, help: "" }, None, None)
 }
 
 fn logs(app: &mut App, ui: &mut egui::Ui) {
@@ -347,17 +409,21 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| ui.label(RichText::new(tl!("Nothing has been compiled yet.")).color(t.text_muted)));
         return;
     };
-    let count = |f: Filter| outcome.diagnostics.iter().filter(|d| f.keeps(d.severity)).count();
-    let filters = [Filter::All, Filter::Errors, Filter::Warnings, Filter::Notes];
-    let labels: Vec<String> =
-        filters.iter().zip([tl!("All"), tl!("Errors"), tl!("Warnings"), tl!("Notes")]).map(|(f, name)| format!("{name} {}", count(*f))).collect();
+    let count = |f: Filter| outcome.diagnostics.iter().filter(|d| f.keeps(d)).count();
+    let filters = filters(&outcome);
+    if !filters.contains(&app.view.log_filter) {
+        app.view.log_filter = Filter::All;
+    }
+    let labels: Vec<String> = filters.iter().map(|f| format!("{} {}", f.label(), count(*f))).collect();
     let mut goto = None;
+    // A print check's area, to show on its page.
+    let mut on_page = None;
     // Text to put on the clipboard, and what the status line says then.
     let mut copied: Option<(String, &str)> = None;
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         egui::Frame::new().inner_margin(egui::Margin::same(12)).show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(t.unit * 2.0, t.unit * 2.0);
-            let shown: Vec<&Diagnostic> = outcome.diagnostics.iter().filter(|d| app.view.log_filter.keeps(d.severity)).collect();
+            let shown: Vec<&Diagnostic> = outcome.diagnostics.iter().filter(|d| app.view.log_filter.keeps(d)).collect();
             ui.horizontal(|ui| {
                 let options: Vec<(&str, Option<&str>)> = labels.iter().map(|l| (l.as_str(), None)).collect();
                 let selected = filters.iter().position(|f| *f == app.view.log_filter).unwrap_or(0);
@@ -371,15 +437,18 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                     }
                 });
             });
+            if let CardAction::Copy = print_summary(ui, &t, &outcome) {
+                copied = Some((print_summary_text(&outcome), tl!("The message is copied.")));
+            }
             if let Status::Unavailable(reason) = &outcome.status {
                 let c = Card { icon: "circle-exclamation-point", color: t.error, title: tl!("Not compiled"), message: reason, help: "" };
-                if let CardAction::Copy = card(ui, &t, c, None) {
+                if let CardAction::Copy = card(ui, &t, c, None, None) {
                     copied = Some((reason.clone(), tl!("The message is copied.")));
                 }
             }
             if shown.is_empty() && !matches!(outcome.status, Status::Unavailable(_)) {
                 let message = tl!("The last build reported no messages of this kind.");
-                card(ui, &t, Card { icon: "circle-check", color: t.success, title: tl!("Nothing to report"), message, help: "" }, None);
+                card(ui, &t, Card { icon: "circle-check", color: t.success, title: tl!("Nothing to report"), message, help: "" }, None, None);
             }
             for d in shown.iter().copied() {
                 let (icon, color, word) = match d.severity {
@@ -394,8 +463,10 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                     Some(o) => format!("{word} · {o}"),
                     None => word.to_owned(),
                 };
-                match card(ui, &t, Card { icon, color, title: &title, message: &d.message, help: &help }, place.as_ref()) {
+                let page = outcome.place_on_page(d).map(|c| PageRect { page: c.page, x: c.x, y: c.y, width: c.width, height: c.height });
+                match card(ui, &t, Card { icon, color, title: &title, message: &d.message, help: &help }, place.as_ref(), page) {
                     CardAction::Open(target) => goto = Some(target),
+                    CardAction::ShowOnPage(rect) => on_page = Some(rect),
                     CardAction::Copy => copied = Some((diagnostic_text(d), tl!("The message is copied."))),
                     CardAction::None => {}
                 }
@@ -417,6 +488,9 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
     if let Some((text, said)) = copied {
         ui.ctx().copy_text(text);
         app.view.status = Some((said.to_owned(), false));
+    }
+    if let Some(rect) = on_page {
+        show_on_page(app, rect);
     }
     if let Some((file, line)) = goto
         && let Ok(path) = ProjectPath::new(&file)
@@ -445,10 +519,13 @@ enum CardAction {
     Open((String, Option<u32>)),
     /// Its copy button was clicked.
     Copy,
+    /// Its page was clicked: show its area there.
+    ShowOnPage(PageRect),
 }
 
 /// One message as a card: its text can be selected, and its button copies it.
-fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Option<u32>)>) -> CardAction {
+/// `page`: the area on the PDF's page it is about, for a print check.
+fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Option<u32>)>, page: Option<PageRect>) -> CardAction {
     let Card { icon, color, title, message, help } = c;
     let mut action = CardAction::None;
     egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner_large()).inner_margin(egui::Margin::same(12)).show(ui, |ui| {
@@ -475,6 +552,17 @@ fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Opti
                             }
                             if link.clicked() {
                                 action = CardAction::Open((file.clone(), *line));
+                            }
+                        }
+                        if let Some(rect) = page {
+                            let text = tl!("Page {n}").replace("{n}", &(rect.page + 1).to_string());
+                            let link = ui.add(egui::Label::new(RichText::new(text).font(t.small()).color(t.accent)).sense(Sense::click()));
+                            let link = link.on_hover_text(tl!("Show it on the page"));
+                            if link.hovered() {
+                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                            }
+                            if link.clicked() {
+                                action = CardAction::ShowOnPage(rect);
                             }
                         }
                     });
@@ -510,6 +598,26 @@ fn diagnostic_text(d: &Diagnostic) -> String {
         text.push_str(h);
     }
     text
+}
+
+/// The print summary as one copies it, untranslated as the messages are.
+fn print_summary_text(outcome: &Outcome) -> String {
+    let standard = outcome.preflight.as_ref().map_or("PDF/X", |p| p.standard.name());
+    match outcome.print_problems() {
+        Some(0) => format!("{standard}: ready for print"),
+        Some(n) => format!("{standard}: {n} problem{}", if n == 1 { "" } else { "s" }),
+        None => String::new(),
+    }
+}
+
+/// Shows a print check's area on its page of the PDF, marked for a moment.
+fn show_on_page(app: &mut App, rect: PageRect) {
+    if app.view.layout == crate::Layout::EditorOnly {
+        app.view.layout = crate::Layout::Split;
+    }
+    app.view.logs = false;
+    let now = app.ctx.input(|i| i.time);
+    app.pdf.show_place(vec![rect], now);
 }
 
 /// A point of the PDF double-clicked or Ctrl+clicked: its source line, shown in the editor.
