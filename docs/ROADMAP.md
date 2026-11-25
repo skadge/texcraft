@@ -71,10 +71,11 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | C1 | ✅ 0.2.2 | Comments | Threads on passages in a margin beside the text, replies, resolve, filters, kept in the project. |
 | C2 | ✅ 0.4.0 | Hiding the comments | The margin can be hidden; the Review panel still lists the comments. |
 | C3 | ⬜ | Suggested changes | Edits proposed in the margin, accepted or rejected one by one. |
-| C4 | ⬜ | History | Snapshots on save and on builds, a diff view, restoring a file or the project. |
-| C5 | ⬜ | Git | Open from a repository, commit, push, pull with a choice per conflict. |
+| C4 | ⬜ | Every project a git repository | As Overleaf does: a project's history is a git repository, whether or not it is ever pushed anywhere. A folder that is not in one becomes one on its first save, and each save is a commit; a folder already in a repository is used as it is, and commits only when asked. Browser projects keep the same history in the browser. |
+| C5 | ⬜ | History | The project's commits by date, a diff view, restoring a file or the whole project at a version (itself a new commit). |
+| C8 | ⬜ | Git forges | A project opened from GitLab or GitHub (their web APIs answer browsers), committed back, kept up with the branch with a three-way merge, a merge request when the branch cannot take a commit; push and pull for folders (retex's `docs/design/gitlab.md`). |
 | C6 | ⬜ | Cloud projects and sharing | Projects in cloud storage, shared with others. |
-| C7 | ⬜ | Real-time editing together | Waits for the suite's shared-text layer. |
+| C7 | ⬜ | Real-time editing together | Waits for the suite's shared-text layer; one participant commits for the session (retex's collaboration notes). |
 
 ## In the browser
 
