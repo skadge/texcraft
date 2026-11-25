@@ -18,6 +18,7 @@
 use std::path::PathBuf;
 
 use serde_json::{Value, json};
+use texcraft_forge::oauth::{self, Clients, Grant};
 use texcraft_forge::task::Pending;
 use texcraft_forge::{Address, Choice, Choices, Client, Committed, Link, Loaded, Pulled, Service, Skipped, Token, Update};
 use texcraft_project::{Contents, Project, ProjectPath};
@@ -25,11 +26,39 @@ use texcraft_project::{Contents, Project, ProjectPath};
 use super::{CommandSpec, always, no_params, string};
 use crate::{Result, Session};
 
-/// A forge operation running in the background.
+/// A forge operation running in the background, with the key it was given and the slot its
+/// sign-in, renewed on the way, is put in.
 pub(crate) enum Task {
-    Open { pending: Pending<Loaded>, token: Token },
-    Commit { pending: Pending<Committed>, token: Token, files: Vec<(String, Vec<u8>)> },
-    Pull { pending: Pending<Pulled>, token: Token, files: Vec<(String, Vec<u8>)> },
+    Open { pending: Pending<Loaded>, key: Key, renewed: Renewed },
+    Commit { pending: Pending<Committed>, key: Key, renewed: Renewed, files: Vec<(String, Vec<u8>)> },
+    Pull { pending: Pending<Pulled>, key: Key, renewed: Renewed, files: Vec<(String, Vec<u8>)> },
+}
+
+/// What an operation reaches the forge with: a personal access token, or a sign-in.
+#[derive(Clone)]
+pub(crate) enum Key {
+    Token(Token),
+    Grant(Box<Grant>),
+}
+
+/// A sign-in renewed while an operation ran (its access token had expired): kept whatever the
+/// operation's outcome, since GitLab's old refresh token no longer works.
+pub(crate) type Renewed = std::sync::Arc<std::sync::Mutex<Option<Grant>>>;
+
+impl Key {
+    /// The token to send, renewing the sign-in first when it has expired (into `renewed`).
+    async fn token(self, transport: &dyn texcraft_forge::Transport, clients: &Clients, renewed: &Renewed) -> texcraft_forge::Result<Token> {
+        match self {
+            Key::Token(t) => Ok(t),
+            Key::Grant(grant) => {
+                let (token, new) = oauth::fresh(transport, clients, &grant, oauth::now()).await?;
+                if let Some(new) = new {
+                    *renewed.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(new);
+                }
+                Ok(token)
+            }
+        }
+    }
 }
 
 /// The last forge operation's refusal the interface offers a way out of.
@@ -40,6 +69,9 @@ pub enum Problem {
     Conflicts(Vec<texcraft_forge::Conflict>),
     /// The branch does not take commits from this user: a new branch with a merge request.
     CannotPush,
+    /// Signed in to GitLab to read only: committing needs signing in again with the api scope
+    /// (`forge.sign_in {write: true}`).
+    NeedsWrite,
 }
 
 /// Makes the transport a forge operation sends its requests with (on the operation's thread).
@@ -151,16 +183,26 @@ fn background(p: &Value) -> bool {
     cfg!(target_arch = "wasm32") || p.get("background").and_then(Value::as_bool).unwrap_or(false)
 }
 
-/// The token given, or the one given earlier in this session for `address`'s instance.
-fn token_for(s: &Session, p: &Value, address: &Address) -> Result<Token> {
-    match p.get("token").and_then(Value::as_str).filter(|t| !t.trim().is_empty()) {
-        Some(t) => Token::new(t).map_err(|e| e.to_string()),
-        None => s
-            .forge_tokens
-            .get(&address.instance)
-            .cloned()
-            .ok_or_else(|| format!("Give a personal access token for {}: TeXCraft keeps it only while it runs, never on disk.", address.instance)),
+/// The token given, the one given earlier in this session for `address`'s instance, or the
+/// sign-in to it.
+fn key_for(s: &Session, p: &Value, address: &Address) -> Result<Key> {
+    if let Some(t) = p.get("token").and_then(Value::as_str).filter(|t| !t.trim().is_empty()) {
+        return Token::new(t).map(Key::Token).map_err(|e| e.to_string());
     }
+    if let Some(token) = s.forge_tokens.get(&address.instance) {
+        return Ok(Key::Token(token.clone()));
+    }
+    if let Some(grant) = s.forge_grant(&address.instance, address.service) {
+        return Ok(Key::Grant(Box::new(grant.clone())));
+    }
+    let service = address.service.name();
+    Err(match s.forge_sign_in_unavailable(address.service) {
+        None if address.instance == oauth::instance(address.service) => format!(
+            "Sign in to {service} (forge.sign_in), or give a personal access token for {}: TeXCraft keeps a token only while it runs, never on disk.",
+            address.instance
+        ),
+        _ => format!("Give a personal access token for {}: TeXCraft keeps it only while it runs, never on disk.", address.instance),
+    })
 }
 
 /// Runs the operation `make` returns: in the background (then `None`: [`Session::poll_forge`]
@@ -187,19 +229,24 @@ fn open(s: &mut Session, p: &Value) -> Result<Value> {
         None => None,
     };
     let address = Address::parse_as(string(p, "url")?, service).map_err(|e| e.to_string())?;
-    let token = token_for(s, p, &address)?;
+    let key = key_for(s, p, &address)?;
     let branch = p.get("ref").and_then(Value::as_str).map(str::trim).filter(|b| !b.is_empty()).map(str::to_owned);
-    let (connect, path, sent, service_id) = (s.forge_transport.clone(), address.path.clone(), token.clone(), address.service.id());
+    let (connect, path, sent, service_id) = (s.forge_transport.clone(), address.path.clone(), key.clone(), address.service.id());
+    let (clients, slot) = (s.forge_auth_clients(), Renewed::default());
+    let filled = slot.clone();
     let make = move || async move {
-        let client = Client::new(connect(), address, sent);
+        let token = sent.token(&*connect(), &clients, &filled).await?;
+        let client = Client::new(connect(), address, token);
         texcraft_forge::open(&client, branch.as_deref()).await
     };
-    match start(p, make).map_err(|e| e.to_string())? {
+    let started = start(p, make);
+    s.keep_renewed(&slot);
+    match started.map_err(|e| e.to_string())? {
         Ok(pending) => {
-            s.forge_task = Some(Task::Open { pending, token });
+            s.forge_task = Some(Task::Open { pending, key, renewed: slot });
             Ok(json!({"operation": "open", "started": true, "project": path, "service": service_id}))
         }
-        Err(loaded) => opened(s, loaded, token),
+        Err(loaded) => opened(s, loaded, key),
     }
 }
 
@@ -222,7 +269,7 @@ fn unused_name(library: &crate::library::Library, name: &str, service: Service) 
 }
 
 /// The project loaded: it becomes the session's, linked to its branch.
-fn opened(s: &mut Session, loaded: Loaded, token: Token) -> Result<Value> {
+fn opened(s: &mut Session, loaded: Loaded, key: Key) -> Result<Value> {
     let Loaded { mut link, files } = loaded;
     let mut project = Project::new();
     let (review, files): (Vec<_>, Vec<_>) = files.into_iter().partition(|(path, _)| texcraft_forge::is_review(path));
@@ -241,7 +288,7 @@ fn opened(s: &mut Session, loaded: Loaded, token: Token) -> Result<Value> {
     let name = s.library.as_ref().map(|library| unused_name(library, link.address.name(), link.address.service));
     s.replace_project(project, name.as_ref().map(PathBuf::from));
     s.load_forge_review(review);
-    s.forge_tokens.insert(link.address.instance.clone(), token);
+    s.keep_key(&link.address.instance, key);
     let result = json!({
         "operation": "open",
         "service": link.address.service.id(),
@@ -271,7 +318,16 @@ fn commit(s: &mut Session, p: &Value) -> Result<Value> {
     if message.is_empty() {
         return Err("Say what the commit changes: its message cannot be empty.".to_owned());
     }
-    let token = token_for(s, p, &link.address)?;
+    let key = key_for(s, p, &link.address)?;
+    if let Key::Grant(grant) = &key
+        && !grant.can_commit()
+    {
+        s.forge_problem = Some(Problem::NeedsWrite);
+        return Err(format!(
+            "TeXCraft is signed in to {} to read only: committing needs permission to write. Sign in again allowing commits (forge.sign_in with write), then commit.",
+            grant.service.name()
+        ));
+    }
     let choices = choices(p)?;
     let new_branch = p.get("new_branch").and_then(Value::as_str).map(str::trim).map(str::to_owned);
     if let Some(name) = &new_branch {
@@ -279,40 +335,50 @@ fn commit(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // The review's quotes are renewed from the text, as when the project is saved.
     let files = s.forge_files(true)?;
-    let (connect, sent, snapshot) = (s.forge_transport.clone(), token.clone(), files.clone());
+    let (connect, sent, snapshot) = (s.forge_transport.clone(), key.clone(), files.clone());
+    let (clients, slot) = (s.forge_auth_clients(), Renewed::default());
+    let filled = slot.clone();
     let make = move || async move {
-        let client = Client::new(connect(), link.address.clone(), sent);
+        let token = sent.token(&*connect(), &clients, &filled).await?;
+        let client = Client::new(connect(), link.address.clone(), token);
         match new_branch {
             Some(name) => texcraft_forge::commit_to_new_branch(&client, &link, &snapshot, &message, &name).await,
             None => texcraft_forge::commit(&client, &link, &snapshot, &message, &choices).await,
         }
     };
-    match start(p, make) {
+    let started = start(p, make);
+    s.keep_renewed(&slot);
+    match started {
         Ok(Ok(pending)) => {
-            s.forge_task = Some(Task::Commit { pending, token, files });
+            s.forge_task = Some(Task::Commit { pending, key, renewed: slot, files });
             Ok(json!({"operation": "commit", "started": true}))
         }
-        Ok(Err(done)) => committed(s, done, token, &files),
+        Ok(Err(done)) => committed(s, done, key, &files),
         Err(e) => Err(s.forge_failed(e)),
     }
 }
 
 fn pull(s: &mut Session, p: &Value) -> Result<Value> {
     let link = s.forge.clone().ok_or("This project was not opened from GitLab or GitHub.")?;
-    let token = token_for(s, p, &link.address)?;
+    let key = key_for(s, p, &link.address)?;
     let choices = choices(p)?;
     let files = s.forge_files(false)?;
-    let (connect, sent, snapshot) = (s.forge_transport.clone(), token.clone(), files.clone());
+    let (connect, sent, snapshot) = (s.forge_transport.clone(), key.clone(), files.clone());
+    let (clients, slot) = (s.forge_auth_clients(), Renewed::default());
+    let filled = slot.clone();
     let make = move || async move {
-        let client = Client::new(connect(), link.address.clone(), sent);
+        let token = sent.token(&*connect(), &clients, &filled).await?;
+        let client = Client::new(connect(), link.address.clone(), token);
         texcraft_forge::pull(&client, &link, &snapshot, &choices).await
     };
-    match start(p, make) {
+    let started = start(p, make);
+    s.keep_renewed(&slot);
+    match started {
         Ok(Ok(pending)) => {
-            s.forge_task = Some(Task::Pull { pending, token, files });
+            s.forge_task = Some(Task::Pull { pending, key, renewed: slot, files });
             Ok(json!({"operation": "pull", "started": true}))
         }
-        Ok(Err(done)) => pulled(s, done, token, &files),
+        Ok(Err(done)) => pulled(s, done, key, &files),
         Err(e) => Err(s.forge_failed(e)),
     }
 }
@@ -387,8 +453,8 @@ fn keep_link(s: &mut Session, link: Link) -> Result<()> {
 }
 
 /// The branch's new commits taken in.
-fn pulled(s: &mut Session, done: Pulled, token: Token, files: &[(String, Vec<u8>)]) -> Result<Value> {
-    s.forge_tokens.insert(done.link.address.instance.clone(), token);
+fn pulled(s: &mut Session, done: Pulled, key: Key, files: &[(String, Vec<u8>)]) -> Result<Value> {
+    s.keep_key(&done.link.address.instance, key);
     let TakenIn { taken, removed, kept } = take_in(s, &done.updates, files)?;
     let result = json!({
         "operation": "pull",
@@ -405,8 +471,8 @@ fn pulled(s: &mut Session, done: Pulled, token: Token, files: &[(String, Vec<u8>
 }
 
 /// The commit made: the link moves to it, and what others committed meanwhile is taken in.
-fn committed(s: &mut Session, done: Committed, token: Token, files: &[(String, Vec<u8>)]) -> Result<Value> {
-    s.forge_tokens.insert(done.link.address.instance.clone(), token);
+fn committed(s: &mut Session, done: Committed, key: Key, files: &[(String, Vec<u8>)]) -> Result<Value> {
+    s.keep_key(&done.link.address.instance, key);
     let TakenIn { taken, removed, kept } = take_in(s, &done.updates, files)?;
     let web_url = done.link.web_url.clone();
     let changes: Vec<Value> = done.changes.iter().map(change_json).collect();
@@ -447,7 +513,12 @@ fn status(s: &mut Session, _: &Value) -> Result<Value> {
         "base": link.base,
         "changes": changes,
         "skipped": skipped_json(&link.skipped),
-        "token": s.forge_tokens.contains_key(&link.address.instance),
+        "token": s.has_forge_token(),
+        "signed_in": s.forge_grant(&link.address.instance, link.address.service).map(|g| json!({
+            "name": g.user.as_ref().map(|u| u.name.clone()),
+            "username": g.user.as_ref().map(|u| u.username.clone()),
+            "can_commit": g.can_commit(),
+        })),
         "running": running,
         "conflicts": s.forge_conflicts().iter().map(|c| json!({"path": c.path, "why": c.kind.as_str()})).collect::<Vec<_>>(),
         "cannot_push": s.forge_problem == Some(Problem::CannotPush),
@@ -548,9 +619,43 @@ impl Session {
         self.project.remove(&pp).map(|_| ()).map_err(|e| e.to_string())
     }
 
-    /// Whether a token for the linked project's instance was given in this session.
+    /// Whether a token for the linked project's instance was given in this session, or the
+    /// session is signed in to it.
     pub fn has_forge_token(&self) -> bool {
-        self.forge.as_ref().is_some_and(|l| self.forge_tokens.contains_key(&l.address.instance))
+        self.forge.as_ref().is_some_and(|l| {
+            self.forge_tokens.contains_key(&l.address.instance) || self.forge_grant(&l.address.instance, l.address.service).is_some()
+        })
+    }
+
+    /// Whether the session reaches the linked project with a sign-in that can only read (GitLab's
+    /// read_api): committing then asks to sign in again, allowing commits.
+    pub fn forge_needs_write(&self) -> bool {
+        self.forge.as_ref().is_some_and(|l| {
+            !self.forge_tokens.contains_key(&l.address.instance)
+                && self.forge_grant(&l.address.instance, l.address.service).is_some_and(|g| !g.can_commit())
+        })
+    }
+
+    /// The applications this session signs in as.
+    fn forge_auth_clients(&self) -> Clients {
+        self.forge_auth_clients_ref().clone()
+    }
+
+    /// A personal access token given is kept for the session; a sign-in is kept already.
+    fn keep_key(&mut self, instance: &str, key: Key) {
+        if let Key::Token(token) = key {
+            self.forge_tokens.insert(instance.to_owned(), token);
+        }
+    }
+
+    /// Keeps the sign-in an operation renewed, if it did.
+    fn keep_renewed(&mut self, slot: &Renewed) {
+        let renewed = slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
+        if let Some(grant) = renewed
+            && let Some(warning) = self.keep_grant(grant)
+        {
+            log::warn!("{warning}");
+        }
     }
 
     /// The project's files changed since the forge branch's base, sorted by path; none for a
@@ -574,16 +679,22 @@ impl Session {
     /// `forge.open`, `forge.pull` or `forge.commit` returns when it waits (with `operation`), or
     /// why it failed.
     pub fn poll_forge(&mut self) -> Option<Result<Value>> {
+        if let Some(done) = self.poll_forge_auth() {
+            return Some(done);
+        }
         let outcome = match self.forge_task.as_mut()? {
             Task::Open { pending, .. } => pending.poll()?.map(Ended::Opened),
             Task::Commit { pending, .. } => pending.poll()?.map(Ended::Committed),
             Task::Pull { pending, .. } => pending.poll()?.map(Ended::Pulled),
         };
         let task = self.forge_task.take()?;
+        let (Task::Open { renewed, .. } | Task::Commit { renewed, .. } | Task::Pull { renewed, .. }) = &task;
+        let renewed = renewed.clone();
+        self.keep_renewed(&renewed);
         Some(match (outcome, task) {
-            (Ok(Ended::Opened(loaded)), Task::Open { token, .. }) => opened(self, loaded, token),
-            (Ok(Ended::Committed(done)), Task::Commit { token, files, .. }) => committed(self, done, token, &files),
-            (Ok(Ended::Pulled(done)), Task::Pull { token, files, .. }) => pulled(self, done, token, &files),
+            (Ok(Ended::Opened(loaded)), Task::Open { key, .. }) => opened(self, loaded, key),
+            (Ok(Ended::Committed(done)), Task::Commit { key, files, .. }) => committed(self, done, key, &files),
+            (Ok(Ended::Pulled(done)), Task::Pull { key, files, .. }) => pulled(self, done, key, &files),
             (Err(e), _) => Err(self.forge_failed(e)),
             _ => Err(texcraft_forge::Error::Stopped.to_string()),
         })

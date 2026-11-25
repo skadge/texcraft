@@ -618,6 +618,12 @@ impl App {
         &self.session
     }
 
+    /// The browser came back from signing in to GitLab, with the page's query (`code` and
+    /// `state`, or `error`): it is finished in the background (`forge.sign_in_return`).
+    pub fn forge_sign_in_returned(&mut self, params: Value) {
+        forge::returned(self, params);
+    }
+
     /// Runs an engine command and puts its error, if any, on the status line.
     pub(crate) fn run(&mut self, id: &str, params: Value) -> Option<Value> {
         match self.session.execute(id, &params) {

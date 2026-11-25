@@ -179,16 +179,92 @@ over the same commits; the forge tests of opening, pulling, merging, conflicts, 
 race, a new branch with a merge or pull request and a protected branch run against both.
 
 A changed or moved file keeps its mode (read from the parent's tree when the commit has one), so
-an executable file stays one. Limits: a pasted token only (GitHub's OAuth token endpoint does not
-answer browsers).
+an executable file stays one. Step 4 added signing in on the desktop (the device flow); in the
+browser GitHub keeps the pasted token (its OAuth token endpoint does not answer browsers).
 
-## Step 4: signing in
+## Step 4: signing in (done)
 
-OAuth with PKCE (a non-confidential application registered on gitlab.com), the token renewed with
-its refresh token and kept in the system's secret store (desktop) or the browser's storage;
-`read_api` first, `api` asked for at the first commit. The branch checked when a stored project
-opens again. GitHub's OAuth token endpoint does not answer browsers, so in the browser it needs a
-small token exchange, or the device flow on the desktop.
+What it does:
+
+- **Sign In with GitLab** (the Open and Commit dialogs, Settings › Accounts; `forge.sign_in
+  {service: "gitlab", write?}`): OAuth 2's authorization code with PKCE (RFC 7636, S256), as
+  TeXCraft's non-confidential application on gitlab.com: no client secret.
+  - **On the desktop** TeXCraft listens on `127.0.0.1:47321` for the one redirect
+    (`http://127.0.0.1:47321/callback`, RFC 8252's loopback redirection; std's TCP listener on a
+    thread, ten minutes at most, cancellable) and opens GitLab's page in the system's browser.
+    A request with another `state`, or to another path, is answered and ignored. The browser tab
+    then says TeXCraft is signed in. A port already in use is said, with the token as the way out.
+  - **In the browser** the whole page goes to GitLab (a popup would meet COOP and blockers) and
+    comes back to the page's own address (`https://texcraft-893d51.gitlab.io/`, or
+    `http://127.0.0.1:8768/` served locally). The `state` and the PKCE verifier wait in the tab's
+    session storage; on return the shell reads `?code=&state=` (or `?error=`), takes it out of the
+    address bar (`history.replaceState`) and hands it to `forge.sign_in_return`, which checks the
+    state (used once) and exchanges the code at `/oauth/token` (gitlab.com answers web pages there).
+    Projects in the library are kept in IndexedDB already; a project with unsaved changes makes the
+    browser ask before the page leaves.
+  - **Scopes**: signing in asks for `read_api read_user`. A commit with a sign-in that can only read
+    is refused before anything is sent (`forge.status`'s problem `NeedsWrite`), and the Commit dialog
+    offers "Allow Commits on GitLab", which signs in again with `api read_user`; the message is kept
+    and the dialog comes back once signed in (on the desktop).
+  - **Renewal**: access tokens last two hours. Before an operation an expired one (or one within a
+    minute of it) is renewed with the refresh token (`grant_type=refresh_token`, with the redirect URI
+    and the PKCE verifier GitLab's documentation lists); GitLab rotates the refresh token, so the
+    renewed sign-in is kept whatever the operation's outcome. A refused renewal says to sign in again.
+  - **Who**: `/api/v4/user` (name, username), shown in the dialogs and in Settings › Accounts.
+  - Other GitLab instances keep the personal access token: each needs an application of its own.
+- **Sign In with GitHub** (desktop only; `forge.sign_in {service: "github"}`): the device flow
+  (RFC 8628). `POST https://github.com/login/device/code` (`scope=repo`); the dialog shows the
+  code to enter, with Copy Code and Open GitHub's Page, and the page is opened once by itself.
+  TeXCraft polls `POST https://github.com/login/oauth/access_token`
+  (`grant_type=urn:ietf:params:oauth:grant-type:device_code`) every `interval`, slower from
+  `slow_down` on; `expired_token` and `access_denied` end it in words; Cancel stops it. Who is
+  signed in comes from `GET https://api.github.com/user`. In the browser GitHub keeps the personal
+  access token, and the dialog says why: GitHub's token endpoint does not answer web pages.
+- **The dialogs** offer Sign In first; "Use a personal access token instead" shows the token field
+  (step 1's path, unchanged). A build whose client id is still a placeholder (ending in `_PENDING`)
+  shows the button off, with "This build has no GitLab application yet" (or GitHub's), and the
+  token field.
+- **Where a sign-in is kept** (the access token, the refresh token, their expiry, scopes and user,
+  as one entry per instance: `texcraft.forge.gitlab.com`, `texcraft.forge.github.com`):
+  - the desktop: the system's keychain, through craft-suite-account's `Keychain` as the AI token
+    is, so a restart stays signed in;
+  - the browser: the tab's **session storage**, not IndexedDB. Any script of the page could read
+    either; session storage keeps the sign-in through a reload and GitLab's round trip but forgets
+    it when the tab closes, so a refresh token that works for months does not stay in the browser's
+    profile. Signing in again is a redirect and nothing more while the user is signed in to GitLab.
+  - the command line and agents: the session only.
+  Never in the preferences, the library, a log or a command's result (tokens do not print; tests
+  look for them in every result).
+- **Sign Out** (Settings › Accounts; `forge.sign_out {service}`): forgets the sign-in at once and,
+  on GitLab, revokes the token (`/oauth/revoke`) in the background; a failed revocation is said.
+  GitHub lets only an application's server revoke its tokens, so signing out of GitHub says to
+  remove TeXCraft under GitHub's Settings › Applications.
+- `forge.accounts` lists the sign-ins (no tokens), whether each service can be signed in to here
+  and why not, the sign-in under way (GitHub's code) and where sign-ins are kept;
+  `forge.cancel_sign_in` stops one.
+
+The applications (their client ids are public):
+
+- GitLab: `GITLAB_CLIENT_ID` in `crates/forge/src/oauth.rs` (gitlab.com, non-confidential, scopes
+  `api`, `read_api`, `read_user`; redirect URIs `https://texcraft-893d51.gitlab.io/`,
+  `http://127.0.0.1:8768/` and `http://127.0.0.1:47321/callback`).
+- GitHub: `GITHUB_CLIENT_ID` in the same file (an OAuth App with the device flow enabled; its
+  callback URL `http://127.0.0.1:47321/callback` is unused by the device flow).
+- A fork or another deployment sets its own there; an id ending in `_PENDING` turns signing in off.
+  A web build served from another address needs that address registered as a redirect URI.
+
+How it is built: `texcraft_forge::oauth` (PKCE, the authorize URL, the exchange, refresh and
+revocation, `/user`, the device flow over an injected `sleep`, and the desktop's `Loopback`), all
+over the `Transport`; `fake::Script` answers in tests. The engine's `cmd/forge_auth.rs` runs
+sign-ins in the background (`Session::poll_forge` gives their outcome), keeps them in the
+`Secrets` store the shell gives (`Session::set_forge_secrets`), and gives forge operations a key
+(a token, or a sign-in renewed on the operation's thread). The web shell's `TabStorage` and its
+return from GitLab are in `apps/texcraft-web/src/main.rs`.
+
+Not yet: GitHub in the browser (it needs a token exchange on a server); a sign-in for another
+GitLab instance (its own application: an instance address and a client id); the branch checked
+when a stored browser project opens again; in the browser, the dialog the user was in when the page
+left for GitLab is not opened again on return.
 
 ## Step 5: folders and more
 

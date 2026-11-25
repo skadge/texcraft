@@ -703,3 +703,50 @@ impl Transport for FakeGitLab {
         Box::pin(std::future::ready(Ok(response)))
     }
 }
+
+/// A transport that answers with the responses queued, in order (a status and a JSON body), and
+/// keeps the requests: for exchanges whose answers a test writes out (signing in).
+#[derive(Clone, Default)]
+pub struct Script {
+    answers: Arc<Mutex<std::collections::VecDeque<(u16, Value)>>>,
+    sent: Arc<Mutex<Vec<Request>>>,
+}
+
+impl Script {
+    pub fn new(answers: &[(u16, Value)]) -> Self {
+        Self { answers: Arc::new(Mutex::new(answers.iter().cloned().collect())), sent: Arc::default() }
+    }
+
+    /// Queues one more answer.
+    pub fn answer(&self, status: u16, body: Value) {
+        self.answers.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push_back((status, body));
+    }
+
+    /// The requests sent so far.
+    pub fn requests(&self) -> Vec<Request> {
+        self.sent.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
+    }
+
+    /// The form fields of request `i`.
+    pub fn form(&self, i: usize) -> Vec<(String, String)> {
+        let body = self.requests().get(i).and_then(|r| r.body.clone()).unwrap_or_default();
+        crate::oauth::parse_query(&String::from_utf8_lossy(&body))
+    }
+
+    /// A transport over this script.
+    pub fn transport(&self) -> Box<dyn Transport> {
+        Box::new(self.clone())
+    }
+}
+
+impl Transport for Script {
+    fn send(&self, request: Request) -> Sending<'_> {
+        self.sent.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(request);
+        let answer = self.answers.lock().unwrap_or_else(std::sync::PoisonError::into_inner).pop_front();
+        let response = match answer {
+            Some((status, body)) => Ok(Response { status, headers: Vec::new(), body: body.to_string().into_bytes(), too_large: false }),
+            None => Err("no answer scripted".to_owned()),
+        };
+        Box::pin(std::future::ready(response))
+    }
+}

@@ -5,6 +5,7 @@ mod commit;
 mod errors;
 mod github;
 mod merge;
+mod oauth;
 mod open;
 mod pull;
 

@@ -211,6 +211,8 @@ fn run() -> eframe::Result {
     let mut session = texcraft_engine::Session::new();
     // The AI token goes to the system's keychain (docs/ROADMAP.md, AI1).
     session.set_ai_secrets(Arc::new(texcraft_engine::ai::Keychain));
+    // Sign-ins to GitLab and GitHub too, so a restart stays signed in (docs/forges.md, step 4).
+    session.set_forge_secrets(Arc::new(texcraft_engine::ai::Keychain));
     if let Some(data) = dirs::data_dir() {
         session.set_template_store(data.join("TeXCraft").join("templates"));
     }

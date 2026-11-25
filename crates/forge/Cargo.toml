@@ -17,6 +17,9 @@ base64 = "0.22"
 serde = { workspace = true }
 serde_json = { workspace = true }
 # The line diff of the three-way merge (Apache-2.0), as the engine uses it.
+# Signing in (OAuth with PKCE): the challenge's SHA-256, and the verifier's and state's random bytes.
+sha2 = { workspace = true }
+getrandom = { workspace = true }
 similar = { version = "3", default-features = false, features = ["std", "text"] }
 
 # The desktop's HTTP client (MIT OR Apache-2.0), the one retex-texlive already downloads with.
@@ -27,5 +30,6 @@ ureq = { version = "3", default-features = false, features = ["rustls"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+getrandom = { workspace = true, features = ["wasm_js"] }
 js-sys = "0.3"
 web-sys = { version = "0.3", features = ["Window", "Request", "RequestInit", "RequestMode", "Response", "Headers"] }
