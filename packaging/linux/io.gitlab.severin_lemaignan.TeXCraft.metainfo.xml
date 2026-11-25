@@ -41,6 +41,19 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.10.0" date="2026-11-25" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.10.0</url>
+      <description>
+        <p>AI assistance, spell checking, a symbol palette, and a keyboard and screen-reader pass.</p>
+        <ul>
+          <li>Optional AI assistance with a model you choose, asked before anything is sent</li>
+          <li>Spell checking that skips commands, formulas and code</li>
+          <li>A symbol palette</li>
+          <li>Search in the raw log, and the build's files to save</li>
+          <li>Better keyboard navigation in every panel and dialog</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.9.0" date="2026-11-25" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.9.0</url>
       <description>

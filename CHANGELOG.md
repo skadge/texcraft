@@ -5,6 +5,45 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.10.0 (2026-11-25)
+
+AI assistance, spell checking, a symbol palette, and a keyboard and screen-reader pass.
+
+### AI assistance (desktop)
+
+- Off until you connect a model in Settings › AI: any OpenAI-compatible service, or one on your
+  own computer (llama.cpp, Ollama, vLLM). The token is kept in the system's keychain.
+- Before anything is sent, TeXCraft shows exactly what would go, and where, and asks once per
+  kind of request. A project can turn AI off for itself.
+- Explain on a build message: a plain explanation, and a proposed fix as a suggestion to accept
+  or reject.
+- Rewrite with AI (clearer, shorter, more formal, grammar, translated) on a selection, as a
+  suggestion; a rewrite that would change labels, references, citations or formulas is refused.
+- Optional next words as you type, in grey, taken with Tab.
+
+### Writing
+
+- Spell checking that skips commands, keys, formulas and code, in the document's language (from
+  babel or polyglossia): English everywhere, other languages with an installed Hunspell
+  dictionary. Spellings in the text's menu, Add to Dictionary, F7 for the next one.
+- A symbol palette (Insert › Symbols…, or Ω on the toolbar), searchable, inserting inside a
+  formula or as one.
+
+### Building
+
+- Search in the raw log, and the build's output files (PDF, print PDF, SyncTeX, log) to save.
+
+### Accessibility
+
+- Every panel and dialog has been walked through by keyboard: dialogs take the keyboard and give
+  it back, menus opened from the keyboard start on their first entry, the Tab order follows the
+  reading order, and F6 moves between regions from anywhere.
+
+Known limits:
+
+- No AI in the browser yet.
+- A screen-reader pass by a person is still to come.
+
 ## 0.9.0 (2026-11-25)
 
 GitHub projects, tables and figures in the formatted view, and the macOS menu bar.
