@@ -116,6 +116,8 @@ pub(crate) struct View {
     pub settings_tab: usize,
     /// Which messages the build log lists.
     pub log_filter: preview::Filter,
+    /// The raw log's search.
+    pub log_search: preview::LogSearch,
     /// Folders folded in the file tree.
     pub collapsed: std::collections::HashSet<String>,
     /// The caret's line and column (from 1) in the editor, for the status bar.
@@ -171,6 +173,10 @@ pub struct App {
     picks: Vec<picks::PickRequest>,
     /// Whether the shell shows native pickers; without them paths are typed.
     native_pickers: bool,
+    /// Whether the shell can show a file in the system's file manager ([`App::take_reveals`]).
+    file_manager: bool,
+    /// Files for the shell to show in the file manager.
+    reveals: Vec<std::path::PathBuf>,
     /// What to do once a Save As for unsaved changes has finished.
     after_save: Option<dialogs::Next>,
     /// The user chose to quit; the shell closes the window.
@@ -235,6 +241,7 @@ impl App {
                 dialog: None,
                 cursor: None,
                 log_filter: preview::Filter::All,
+                log_search: preview::LogSearch::default(),
                 settings_tab: 0,
                 regions: Vec::new(),
                 collapsed: std::collections::HashSet::new(),
@@ -269,6 +276,8 @@ impl App {
             quit: false,
             close_confirmed: false,
             native_pickers: false,
+            file_manager: false,
+            reveals: Vec::new(),
             ctx: egui::Context::default(),
             prefs_changed: false,
             desktop_window: false,
@@ -463,6 +472,17 @@ impl App {
             Some(library) => library.contains(path),
             None => std::path::Path::new(path).is_dir(),
         }
+    }
+
+    /// Whether the shell shows files in the system's file manager for [`App::take_reveals`]
+    /// (the desktop app); without it the build log offers no Show in Folder.
+    pub fn set_file_manager(&mut self, on: bool) {
+        self.file_manager = on;
+    }
+
+    /// Files to show in the system's file manager, oldest first.
+    pub fn take_reveals(&mut self) -> Vec<std::path::PathBuf> {
+        std::mem::take(&mut self.reveals)
     }
 
     /// The files an export made in the browser, for the shell to hand to the browser as downloads.

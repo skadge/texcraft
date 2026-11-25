@@ -152,6 +152,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                             }
                         }
                         "project.from_template" => app.template_project_opened(),
+                        "build.save_output" => {
+                            let said = tl!("Saved to {path}.").replace("{path}", done["path"].as_str().unwrap_or_default());
+                            app.view.status = Some((said, false));
+                        }
                         "history.commit" => {
                             let said = if done["commit"].is_string() { tl!("Committed.") } else { tl!("Nothing changed since the last commit.") };
                             app.view.status = Some((said.to_owned(), false));

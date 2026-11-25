@@ -17,6 +17,8 @@ pub enum Pick {
     /// The folder to make a folder named as the untitled project in, and save it there.
     SaveProjectIn,
     SavePdf,
+    /// Where to save one of the last build's files (`build.save_output`), by its kind.
+    SaveOutput(&'static str),
     /// Where to write an export of the project.
     Export(texcraft_engine::Export),
     AddFiles,
@@ -83,6 +85,7 @@ impl App {
                 self.run("build.save_pdf", json!({"path": first}));
             }
             Pick::Export(format) => self.export_to(format, &first),
+            Pick::SaveOutput(kind) => self.save_output(kind, &first),
             Pick::TemplateFolder => self.template_folder_chosen(first),
             Pick::AddFiles => {
                 for path in paths {
@@ -189,6 +192,19 @@ impl App {
         }
     }
 
+    /// Saves the last build's output of `kind` to `path` (in the browser, downloads it under that
+    /// name) and says so on the status line.
+    pub(crate) fn save_output(&mut self, kind: &str, path: &str) {
+        let Some(done) = self.run("build.save_output", json!({"output": kind, "path": path})) else { return };
+        let written = done["path"].as_str().unwrap_or(path);
+        let said = if done["download"].as_bool() == Some(true) {
+            tl!("Downloading {file}.").replace("{file}", written)
+        } else {
+            tl!("Saved to {path}.").replace("{path}", written)
+        };
+        self.view.status = Some((said, false));
+    }
+
     /// Queues `pick` with the project's folder as the starting place.
     pub(crate) fn request_pick(&mut self, pick: Pick) {
         let directory = self.session.dir().cloned();
@@ -209,9 +225,24 @@ impl App {
                     Some((crate::preview::export_label(format).to_owned(), vec![ext])),
                 )
             }
+            Pick::SaveOutput(kind) => {
+                let name = self.session.outputs().into_iter().find(|o| o.kind == kind).map(|o| o.name);
+                let ext = name.as_deref().and_then(|n| n.rsplit_once('.')).map(|(_, e)| e.to_owned()).unwrap_or_default();
+                let filter = (!ext.is_empty()).then(|| (tl!("Files of this kind").to_owned(), vec![output_extension(&ext)]));
+                (PickKind::SaveFile, tl!("Save Build Output As"), name, filter)
+            }
             Pick::AddFiles => (PickKind::OpenFiles, tl!("Add Files to the Project"), None, None),
             Pick::TemplateFolder => (PickKind::Folder, tl!("Choose a New or Empty Folder for the Project"), None, None),
         };
         self.picks.push(PickRequest { pick, kind, title: title.to_owned(), directory, file_name, filter });
+    }
+}
+
+/// An output's extension as a `'static` file-type filter.
+fn output_extension(ext: &str) -> &'static str {
+    match ext {
+        "pdf" => "pdf",
+        "synctex" => "synctex",
+        _ => "log",
     }
 }

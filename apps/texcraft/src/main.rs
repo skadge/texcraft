@@ -101,6 +101,12 @@ impl eframe::App for Shell {
             log::error!("frame: {e}");
         }
         self.pickers(frame);
+        for path in self.app.take_reveals() {
+            if let Err(e) = craft_update::process::reveal(&path) {
+                let what = texcraft_ui_egui::i18n::t("The file manager did not open: {error}");
+                self.app.report(what.replace("{error}", &e), true);
+            }
+        }
         for thumbnail in self.app.take_thumbnails() {
             thumbnails::store(&thumbnail);
         }
@@ -210,6 +216,7 @@ fn run() -> eframe::Result {
     }
     let mut app = texcraft_ui_egui::App::with_prefs(session, prefs);
     app.set_native_pickers(true);
+    app.set_file_manager(true);
     for project in &settings.get().0.recent {
         if let Some(thumbnail) = thumbnails::load(project) {
             app.set_thumbnail(thumbnail);

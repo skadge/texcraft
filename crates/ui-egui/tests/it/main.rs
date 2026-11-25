@@ -27,6 +27,7 @@ mod output_log;
 mod pdf_preview;
 mod pdf_window;
 mod progress;
+mod raw_log;
 mod recent;
 mod regions;
 mod rename;

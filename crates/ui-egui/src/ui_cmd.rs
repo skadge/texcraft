@@ -82,6 +82,9 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.side.hide", "Hide Side Panel", "View", "side", None),
     ui("view.comments", "Show or Hide the Comments Beside the Text", "View", "side", None),
     ui("view.logs", "Build Log", "View", "pdf", None),
+    // The build log's output files: `{"output": "pdf"}` (`build.outputs` lists them). Desktop only,
+    // once the file is saved: the build keeps its files in memory.
+    ui("view.show_output", "Show Build Output in Folder", "View", "pdf", None),
     // Desktop only; closing the window, or choosing a layout, puts the PDF back.
     ui("view.pdf_window", "PDF in Its Own Window", "View", "pdf", None),
     ui("view.zoom_in", "Zoom In", "View", "pdf", Some("Cmd+=")),
@@ -134,6 +137,9 @@ pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
         }
         "view.pdf_window" if cfg!(target_arch = "wasm32") => {
             Err(tl!("In the browser the PDF stays in the page: a web page cannot open a second window of the app.").to_owned())
+        }
+        "view.show_output" if !app.file_manager || app.session.library().is_some() => {
+            Err(tl!("This window cannot open the system's file manager.").to_owned())
         }
         "view.menu_bar" if app.has_system_menu() => {
             Err(tl!("The menus are in the menu bar at the top of the screen; Control+F2 reaches it from the keyboard.").to_owned())
@@ -190,6 +196,8 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "view.side.hide" => app.view.side = None,
         "view.comments" => crate::review::toggle_margin(app),
         "view.logs" => app.view.logs = !app.view.logs,
+        "view.show_output" => show_output(app, params),
+        "build.save_output" => save_output(app, params),
         "view.theme" => {
             let next = if app.tokens.scheme == Scheme::Dark { ThemePref::Light } else { ThemePref::Dark };
             let ctx = app.ctx.clone();
@@ -330,6 +338,61 @@ pub(crate) fn export(app: &mut App, format: texcraft_engine::Export) {
         focus: true,
     };
     app.view.dialog = Some(Dialog::Prompt(prompt));
+}
+
+/// The kind of build output `params` names (`{"output": "pdf"}`), as listed by `build.outputs`.
+fn output_kind(app: &mut App, params: &serde_json::Value) -> Option<&'static str> {
+    let asked = params.get("output").and_then(serde_json::Value::as_str).unwrap_or_default();
+    let kind = texcraft_engine::OUTPUT_KINDS.into_iter().find(|k| *k == asked);
+    if kind.is_none() {
+        app.view.status = Some((tl!("Name the build output: pdf, pdfx, synctex or log.").to_owned(), true));
+    }
+    kind
+}
+
+/// Saves one of the last build's files: downloaded in the browser, else where the user chooses.
+fn save_output(app: &mut App, params: &serde_json::Value) {
+    let Some(kind) = output_kind(app, params) else { return };
+    if let Some(path) = params.get("path").and_then(serde_json::Value::as_str) {
+        return app.save_output(kind, path);
+    }
+    let Some(name) = app.session.outputs().into_iter().find(|o| o.kind == kind).map(|o| o.name) else {
+        app.view.status = Some((tl!("The last build made no file of this kind: compile the project first.").to_owned(), true));
+        return;
+    };
+    if app.session.library().is_some() {
+        app.save_output(kind, &name);
+    } else if app.native_pickers {
+        app.request_pick(Pick::SaveOutput(kind));
+    } else {
+        let prompt = Prompt {
+            title: tl!("Save Build Output As"),
+            label: tl!("The file to write it to"),
+            value: name,
+            action: tl!("Save"),
+            command: "build.save_output",
+            params: Box::new(move |v| json!({"output": kind, "path": v})),
+            focus: true,
+        };
+        app.view.dialog = Some(Dialog::Prompt(prompt));
+    }
+}
+
+/// Shows the saved copy of one of the build's files in the system's file manager.
+fn show_output(app: &mut App, params: &serde_json::Value) {
+    if let Err(reason) = enabled(app, "view.show_output") {
+        app.view.status = Some((reason, true));
+        return;
+    }
+    let Some(kind) = output_kind(app, params) else { return };
+    match app.session.saved_output(kind) {
+        Some(path) => {
+            let path = path.to_path_buf();
+            app.view.status = Some((tl!("Showing {path} in its folder.").replace("{path}", &path.display().to_string()), false));
+            app.reveals.push(path);
+        }
+        None => app.view.status = Some((tl!("Save it first: the build keeps its files in memory.").to_owned(), true)),
+    }
 }
 
 fn ask(app: &mut App, title: &'static str, label: &'static str, action: &'static str, command: &'static str) {

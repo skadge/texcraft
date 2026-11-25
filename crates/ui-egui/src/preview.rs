@@ -455,6 +455,10 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
     let mut cancel_ai = false;
     let ai_offered = crate::ai::offered(app);
     let ai_busy = app.session.ai_busy();
+    let outputs = app.session.outputs();
+    let browser = app.session.library().is_some();
+    let file_manager = ui_cmd::enabled(app, "view.show_output").is_ok();
+    let mut output_action = None;
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         egui::Frame::new().inner_margin(egui::Margin::same(12)).show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(t.unit * 2.0, t.unit * 2.0);
@@ -516,20 +520,23 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                     CardAction::None => {}
                 }
             }
+            if !outputs.is_empty() {
+                egui::CollapsingHeader::new(RichText::new(tl!("Output files")).font(t.strong())).default_open(true).show(ui, |ui| {
+                    output_action = output_files(ui, &t, &outputs, browser, file_manager);
+                });
+            }
             egui::CollapsingHeader::new(RichText::new(tl!("Raw log")).font(t.strong())).show(ui, |ui| {
-                let has_log = !outcome.log.is_empty();
-                if widgets::text_button(ui, &t, tl!("Copy the Raw Log"), has_log).clicked() {
+                if raw_log(ui, &t, &mut app.view.log_search, &outcome.log) {
                     copied = Some((outcome.log.clone(), tl!("The raw log is copied.")));
                 }
-                egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner_large()).inner_margin(egui::Margin::same(10)).show(
-                    ui,
-                    |ui| {
-                        ui.add(egui::Label::new(RichText::new(outcome.log.as_str()).monospace().size(t.small_size)).wrap().selectable(true));
-                    },
-                );
             });
         });
     });
+    match output_action {
+        Some((kind, OutputAction::Save)) => ui_cmd::run_with(app, "build.save_output", &json!({"output": kind})),
+        Some((kind, OutputAction::Show)) => ui_cmd::run_with(app, "view.show_output", &json!({"output": kind})),
+        None => {}
+    }
     if let Some((text, said)) = copied {
         ui.ctx().copy_text(text);
         app.view.status = Some((said.to_owned(), false));
@@ -551,6 +558,185 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
             app.view.goto = Some((path, line));
         }
     }
+}
+
+/// The raw log's search: what is looked for, the match shown, and whether to scroll to it.
+#[derive(Debug, Default)]
+pub(crate) struct LogSearch {
+    pub query: String,
+    /// The match shown, from 0.
+    pub current: usize,
+    /// Scroll the match shown into view when the log is next drawn.
+    pub scroll: bool,
+}
+
+/// At most this many matches are marked in the raw log.
+const MAX_LOG_MATCHES: usize = 10_000;
+
+/// Where `needle` is in `log`, ignoring the case of ASCII letters: byte ranges, in order, not
+/// overlapping, at most [`MAX_LOG_MATCHES`].
+pub(crate) fn log_matches(log: &str, needle: &str) -> Vec<std::ops::Range<usize>> {
+    let (hay, pattern) = (log.as_bytes(), needle.as_bytes());
+    let mut found = Vec::new();
+    if pattern.is_empty() {
+        return found;
+    }
+    let mut i = 0;
+    while i + pattern.len() <= hay.len() && found.len() < MAX_LOG_MATCHES {
+        let end = i + pattern.len();
+        if hay.get(i..end).is_some_and(|w| w.eq_ignore_ascii_case(pattern)) && log.is_char_boundary(i) && log.is_char_boundary(end) {
+            found.push(i..end);
+            i = end;
+        } else {
+            i += 1;
+        }
+    }
+    found
+}
+
+/// The raw log: its search field, the count of matches and the buttons to go through them, a
+/// button to copy it, and the log with the matches marked. Returns whether Copy was clicked.
+fn raw_log(ui: &mut egui::Ui, t: &Tokens, search: &mut LogSearch, log: &str) -> bool {
+    let matches = log_matches(log, &search.query);
+    if search.current >= matches.len() {
+        search.current = 0;
+    }
+    let mut copy = false;
+    ui.horizontal(|ui| {
+        let (enter, shift) = ui.input(|i| (i.key_pressed(egui::Key::Enter), i.modifiers.shift));
+        let field = egui::TextEdit::singleline(&mut search.query).hint_text(tl!("Search the raw log")).desired_width(220.0).font(t.code_font());
+        let r = ui.add(field).accessible_name(tl!("Search the raw log"));
+        if r.changed() {
+            search.current = 0;
+            search.scroll = true;
+        }
+        let step = |search: &mut LogSearch, forward: bool| {
+            let n = log_matches(log, &search.query).len();
+            if n > 0 {
+                search.current = if forward { (search.current + 1) % n } else { (search.current + n - 1) % n };
+                search.scroll = true;
+            }
+        };
+        // Enter goes to the next match, Shift+Enter to the one before; the field keeps the keyboard.
+        if r.lost_focus() && enter {
+            step(search, !shift);
+            r.request_focus();
+        }
+        let count = match matches.len() {
+            0 if search.query.is_empty() => String::new(),
+            0 => tl!("No results").to_owned(),
+            n => tl!("{i} of {n}").replace("{i}", &(search.current + 1).to_string()).replace("{n}", &n.to_string()),
+        };
+        let label = ui.add(egui::Label::new(RichText::new(&count).font(t.small()).color(t.text_muted)));
+        crate::status::announce(ui, &label, &count);
+        let any = !matches.is_empty();
+        if widgets::icon_button(ui, t, "chevron-up", tl!("Previous Match"), any).clicked() {
+            step(search, false);
+        }
+        if widgets::icon_button(ui, t, "chevron-down", tl!("Next Match"), any).clicked() {
+            step(search, true);
+        }
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            copy = widgets::text_button(ui, t, tl!("Copy the Raw Log"), !log.is_empty()).clicked();
+        });
+    });
+    egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner_large()).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
+        let job = log_layout(t, log, &matches, search.current, ui.available_width());
+        let galley = ui.painter().layout_job(job);
+        let r = ui.add(egui::Label::new(galley.clone()).selectable(true));
+        if std::mem::take(&mut search.scroll)
+            && let Some(m) = matches.get(search.current)
+        {
+            let chars = log.get(..m.start).map_or(0, |s| s.chars().count());
+            let at = galley.pos_from_cursor(egui::text::CCursor::new(chars));
+            ui.scroll_to_rect(at.translate(r.rect.min.to_vec2()), Some(Align::Center));
+        }
+    });
+    copy
+}
+
+/// The raw log laid out with its matches marked: each on the search colour, the one shown on the
+/// selection colour and underlined (so it is told apart without colour).
+fn log_layout(t: &Tokens, log: &str, matches: &[std::ops::Range<usize>], current: usize, width: f32) -> egui::text::LayoutJob {
+    let font = egui::FontId::monospace(t.small_size);
+    let plain = egui::TextFormat { font_id: font.clone(), color: t.text, ..Default::default() };
+    let mut job = egui::text::LayoutJob::default();
+    job.wrap.max_width = width;
+    let mut at = 0;
+    for (i, m) in matches.iter().enumerate() {
+        job.append(log.get(at..m.start).unwrap_or_default(), 0.0, plain.clone());
+        let marked = if i == current {
+            egui::TextFormat { background: t.selection, underline: egui::Stroke::new(1.5, t.text), ..plain.clone() }
+        } else {
+            egui::TextFormat { background: t.search_match, ..plain.clone() }
+        };
+        job.append(log.get(m.clone()).unwrap_or_default(), 0.0, marked);
+        at = m.end;
+    }
+    job.append(log.get(at..).unwrap_or_default(), 0.0, plain);
+    job
+}
+
+/// What was asked of an output file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OutputAction {
+    Save,
+    Show,
+}
+
+/// A file size, for people: bytes, kB or MB.
+fn size_text(bytes: usize) -> String {
+    match bytes {
+        b if b < 1024 => format!("{b} B"),
+        b if b < 1024 * 1024 => format!("{:.0} kB", b as f64 / 1024.0),
+        b => format!("{:.1} MB", b as f64 / (1024.0 * 1024.0)),
+    }
+}
+
+/// The last build's files, each with Save As… (Download in the browser) and, on the desktop once
+/// saved, Show in Folder.
+fn output_files(
+    ui: &mut egui::Ui,
+    t: &Tokens,
+    outputs: &[texcraft_engine::BuildOutput],
+    browser: bool,
+    file_manager: bool,
+) -> Option<(&'static str, OutputAction)> {
+    let mut action = None;
+    for o in outputs {
+        let what = match o.kind {
+            "pdf" => tl!("PDF"),
+            "pdfx" => tl!("PDF for print"),
+            "synctex" => tl!("SyncTeX data"),
+            _ => tl!("Raw log"),
+        };
+        ui.horizontal(|ui| {
+            ui.add(icons::image(if o.kind == "log" { "scroll-text" } else { "file-text" }, t.icon_size, t.text_muted));
+            ui.label(RichText::new(&o.name).font(t.code_font()));
+            ui.label(RichText::new(format!("{what} · {}", size_text(o.bytes))).font(t.small()).color(t.text_muted));
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if file_manager && !browser {
+                    let label = tl!("Show in Folder");
+                    let saved = o.saved.is_some();
+                    let r = widgets::icon_button(ui, t, "folder-open", label, saved);
+                    let _ = r.clone().accessible_name(format!("{label} {}", o.name));
+                    if !saved {
+                        let _ = r.clone().on_disabled_hover_text(tl!("Save it first: the build keeps its files in memory."));
+                    }
+                    if r.clicked() {
+                        action = Some((o.kind, OutputAction::Show));
+                    }
+                }
+                let label = if browser { tl!("Download") } else { tl!("Save As…") };
+                let r = widgets::text_button(ui, t, label, true);
+                let _ = r.clone().accessible_name(format!("{label} {}", o.name));
+                if r.clicked() {
+                    action = Some((o.kind, OutputAction::Save));
+                }
+            });
+        });
+    }
+    action
 }
 
 /// What a log card shows.
