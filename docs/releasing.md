@@ -56,10 +56,11 @@ On `main`, `appimage`, `flatpak` and `web` can be started by hand; their files s
 for 30 days and nothing is uploaded or released. Branches and merge requests run `check` only.
 
 The packages embed the interface faces from storytold/craft-fonts (cloned inside the jobs at the
-pinned commit). They do not embed translations: there is no pinned craft-i18n commit yet, so the
-interface is English only. To embed them, clone storytold/craft-i18n at a pinned commit the same way
-and set `CRAFT_I18N_DIR` (absolute) and `CRAFT_I18N_REQUIRED=1` in the package jobs (and as a git
-source plus `build-options.env` in the Flatpak manifest).
+pinned commit) and the interface translations: until TeXCraft's cutover to storytold/craft-i18n,
+its catalogs are `i18n/<locale>.tsv` in this repository, so every build embeds them and no job
+clones craft-i18n for them. Setting `CRAFT_I18N_DIR` (absolute) to a craft-i18n checkout adds its
+shared catalogs (`locales/<locale>/common.tsv`); `CRAFT_I18N_REQUIRED=1` makes a missing checkout
+an error, for when the cutover moves the catalogs there.
 
 ## Pinned downloads
 
@@ -141,7 +142,7 @@ With the packages from step 8 (or from the release):
 
 - Only x86_64 Linux packages; macOS and Windows build from source.
 - In the browser, a document that needs a package outside the site's TeX tree does not build.
-- English only in the packages (no pinned craft-i18n).
+- The translation catalogs have their language names but few rows yet: what they lack shows in English.
 - The packages are not signed, and the AppImage carries no update information.
 - The Flatpak does not use a host TeX Live.
 - The Flatpak job needs a runner that runs containers privileged (bubblewrap's user namespaces).
