@@ -749,6 +749,24 @@ fn apply_wrap(app: &mut App, _ctx: &egui::Context, w: &Wrap) {
 }
 
 /// Lines (from 0) of `path` with warnings or errors.
+/// The problem popup's AI part: for a build message, when a model is connected, its explanation.
+fn explanation_in_popup(app: &mut App, path: &ProjectPath) {
+    let offered = crate::ai::offered(app);
+    let busy = app.session.ai_busy();
+    let Some(popup) = app.editor.source.popup.as_mut() else { return };
+    popup.ai = None;
+    if !(offered && popup.problem.build) {
+        return;
+    }
+    let line = u32::try_from(popup.problem.line + 1).ok();
+    let message = app.session.last_outcome().and_then(|o| {
+        o.diagnostics.iter().find(|d| d.file.as_deref() == Some(path.as_str()) && d.line == line && d.message == popup.problem.message).cloned()
+    });
+    if let Some(d) = message {
+        popup.ai = Some((app.session.ai_explanation(&d).cloned(), busy));
+    }
+}
+
 /// The problems in the shown file's text: the language server's hints, and the last build's
 /// errors and warnings, placed on the word at their column (or the line's text).
 fn problems(app: &mut App, path: &ProjectPath) -> Vec<crate::source::Problem> {
@@ -770,6 +788,7 @@ fn problems(app: &mut App, path: &ProjectPath) -> Vec<crate::source::Problem> {
             message: h.message.clone(),
             help: Vec::new(),
             fixes: Vec::new(),
+            build: false,
         })
         .collect();
     let b = &app.editor.source.doc.buffer;
@@ -822,6 +841,7 @@ fn problems(app: &mut App, path: &ProjectPath) -> Vec<crate::source::Problem> {
                 message: d.message.clone(),
                 help: d.help.clone(),
                 fixes,
+                build: true,
             });
         }
     }
@@ -949,6 +969,7 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         ui.memory_mut(|m| m.request_focus(id));
     }
     app.editor.source.problems = problems(app, path);
+    explanation_in_popup(app, path);
     app.editor.source.set_vim(app.prefs.vim);
     app.editor.source.auto_close = app.prefs.auto_close;
     vim_line(app, ui);
@@ -1023,6 +1044,12 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     }
     if let Some(fix) = out.apply_fix {
         app.editor.source.apply_fix(&fix);
+    }
+    if let Some(line) = out.explain {
+        crate::ai::explain(app, json!({"path": path.as_str(), "line": line + 1}));
+    }
+    if out.cancel_ai {
+        app.run("ai.cancel", json!({}));
     }
     for effect in out.effects {
         match effect {

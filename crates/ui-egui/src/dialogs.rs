@@ -55,6 +55,8 @@ pub(crate) enum Dialog {
     ForgeResolve(crate::forge::ResolveForm),
     ForgeMergeRequest(crate::forge::MergeRequestNote),
     Figure(Box<crate::figure_dialog::FigureForm>),
+    /// What explaining a message sends, before the first one goes.
+    AiConsent(Box<crate::ai::Consent>),
 }
 
 impl Dialog {
@@ -73,6 +75,7 @@ impl Dialog {
             Dialog::ForgeResolve(_) => "forge_resolve",
             Dialog::ForgeMergeRequest(_) => "forge_merge_request",
             Dialog::Figure(_) => "figure",
+            Dialog::AiConsent(_) => "ai_consent",
         }
     }
 }
@@ -85,6 +88,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     }
     if matches!(app.view.dialog, Some(Dialog::Settings)) {
         crate::settings::show(app, ctx);
+        return;
+    }
+    if matches!(app.view.dialog, Some(Dialog::AiConsent(_))) {
+        crate::ai::consent_dialog(app, ctx);
         return;
     }
     if matches!(app.view.dialog, Some(Dialog::GoToFile(_))) {
@@ -113,7 +120,8 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             | Dialog::ForgeOpen(_)
             | Dialog::ForgeCommit(_)
             | Dialog::ForgeResolve(_)
-            | Dialog::ForgeMergeRequest(_) => {}
+            | Dialog::ForgeMergeRequest(_)
+            | Dialog::AiConsent(_) => {}
             Dialog::Figure(f) => outcome = crate::figure_dialog::form(ui, &t, f),
             Dialog::About => outcome = about(ui, &t, &engine),
         }

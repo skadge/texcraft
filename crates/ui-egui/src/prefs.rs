@@ -49,6 +49,8 @@ pub struct Prefs {
     pub build: texcraft_engine::BuildOptions,
     /// Who the user's comments are from; made on the first comment.
     pub identity: Option<Identity>,
+    /// The AI connection (its token is in the keychain, never here), model and agreements.
+    pub ai: texcraft_engine::ai::Saved,
 }
 
 /// The name and key a person's comments carry (docs/collaboration-roadmap.md, R1). No accounts:
@@ -99,6 +101,7 @@ impl Default for Prefs {
             system_title_bar: false,
             build: texcraft_engine::BuildOptions::default(),
             identity: None,
+            ai: texcraft_engine::ai::Saved::default(),
         }
     }
 }

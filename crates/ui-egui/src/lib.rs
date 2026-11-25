@@ -11,6 +11,7 @@
 pub mod i18n;
 pub mod theme;
 
+mod ai;
 mod app_icon;
 pub mod control;
 mod dialogs;
@@ -195,6 +196,8 @@ pub struct App {
     alt: top_bar::AltTap,
     /// The system's menu bar (macOS), when the shell installed it; the in-window one is hidden then.
     system_menu: Option<craft_menu::NativeMenu>,
+    /// Settings › AI's form, and the AI settings last kept in the preferences.
+    ai: ai::AiView,
 }
 
 impl App {
@@ -208,6 +211,7 @@ impl App {
         session.settings.auto_compile_delay_ms = prefs.auto_compile_delay_ms.clamp(200, 10_000);
         session.settings.build = prefs.build;
         session.set_author(prefs.identity.as_ref().map(prefs::Identity::author));
+        session.restore_ai(prefs.ai.clone());
         let (layout, side) = (prefs.layout(), prefs.side());
         let keys = keys::Keys::new(prefs.shortcuts.clone());
         i18n::set_language(&prefs.language);
@@ -267,6 +271,7 @@ impl App {
             forge_check: forge::Check::default(),
             alt: top_bar::AltTap::default(),
             system_menu: None,
+            ai: ai::AiView::default(),
         };
         app.remember_project();
         app
@@ -609,6 +614,7 @@ impl App {
             None => {}
         }
         forge::poll(self, ctx);
+        ai::poll(self, ctx);
         if self.session.exporting() {
             // Look again until it ends.
             ctx.request_repaint_after(std::time::Duration::from_millis(200));

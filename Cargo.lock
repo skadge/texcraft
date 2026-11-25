@@ -6459,6 +6459,7 @@ version = "0.8.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
+ "craft-ai",
  "craft-fonts-build",
  "craft-i18n",
  "craft-keymap",

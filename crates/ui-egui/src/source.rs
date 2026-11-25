@@ -117,6 +117,10 @@ pub(crate) struct Output {
     pub fixes_for: Option<usize>,
     /// Apply this fix.
     pub apply_fix: Option<texcraft_engine::Fix>,
+    /// Explain the build's message on this line (from 0) with AI.
+    pub explain: Option<usize>,
+    /// Cancel the AI request in flight.
+    pub cancel_ai: bool,
     /// What was being dragged was let go over the text, at this position.
     pub dropped_at: Option<usize>,
     /// Something to tell the user (and announce): a fold or an unfold.
@@ -136,6 +140,8 @@ pub(crate) struct Problem {
     pub help: Vec<String>,
     /// The build's own fixes of it (a hint's come from the language server when asked).
     pub fixes: Vec<texcraft_engine::Fix>,
+    /// A build's message (AI can explain it), not the language server's hint.
+    pub build: bool,
 }
 
 /// The popup of a problem: its message, help and fixes.
@@ -148,6 +154,9 @@ pub(crate) struct ProblemPopup {
     /// Opened from the keyboard (Quick Fix): it stays until Escape or a fix, and Up/Down choose.
     pinned: bool,
     selected: usize,
+    /// For a build message, when a model is connected: its explanation, if asked for, and whether
+    /// a request is in flight. The editor pane sets it every frame.
+    pub ai: Option<(Option<texcraft_engine::ai::Explanation>, bool)>,
 }
 
 /// How a passage of the review is drawn. Struck and underlined text tell a suggestion apart
@@ -221,6 +230,8 @@ pub(crate) struct SourceEditor {
     /// Where the popup was last drawn, so the pointer can move into it.
     popup_rect: Option<Rect>,
     apply_fix: Option<texcraft_engine::Fix>,
+    /// What the popup's AI part asked for: explain (the message's line) or cancel.
+    ai_act: Option<Option<usize>>,
     /// A line just gone to (from the PDF, the log, the outline) and when, flashed for a moment.
     flash: Option<(usize, f64)>,
     /// The completion list, while it is open.
@@ -275,6 +286,7 @@ impl Default for SourceEditor {
             popup: None,
             popup_rect: None,
             apply_fix: None,
+            ai_act: None,
             flash: None,
             completion: None,
             wants_completion: false,
@@ -877,7 +889,7 @@ impl SourceEditor {
             && let Some(pointer) = ctx.pointer_hover_pos()
         {
             let fixes = (!problem.fixes.is_empty()).then(|| problem.fixes.clone());
-            self.popup = Some(ProblemPopup { problem, at: pointer + vec2(0.0, 14.0), fixes, pinned: false, selected: 0 });
+            self.popup = Some(ProblemPopup { problem, at: pointer + vec2(0.0, 14.0), fixes, pinned: false, selected: 0, ai: None });
         }
         if let Some(popup) = &self.popup
             && popup.fixes.is_none()
@@ -885,6 +897,11 @@ impl SourceEditor {
             out.fixes_for = Some(popup.problem.line);
         }
         out.apply_fix = self.apply_fix.take();
+        match self.ai_act.take() {
+            Some(Some(line)) => out.explain = Some(line),
+            Some(None) => out.cancel_ai = true,
+            None => {}
+        }
         out.announce = self.announce.take();
         if let Some((p, since)) = self.resting
             && now - since >= 0.6
@@ -1696,7 +1713,7 @@ impl SourceEditor {
         let Some(problem) = found else { return false };
         let at = self.caret_screen.map_or(Pos2::ZERO, |c| c.left_bottom() + vec2(0.0, 4.0));
         let fixes = (!problem.fixes.is_empty()).then(|| problem.fixes.clone());
-        self.popup = Some(ProblemPopup { problem, at, fixes, pinned: true, selected: 0 });
+        self.popup = Some(ProblemPopup { problem, at, fixes, pinned: true, selected: 0, ai: None });
         true
     }
 
@@ -1741,6 +1758,7 @@ impl SourceEditor {
         }
         let mut chosen = None;
         let mut close = false;
+        let mut ai_act = None;
         let (icon, color) = match popup.problem.severity {
             Severity::Error => ("circle-exclamation-point", t.error),
             Severity::Warning => ("triangle-exclamation-point", t.warning),
@@ -1778,6 +1796,14 @@ impl SourceEditor {
                         ui.label(egui::RichText::new(tl!("Looking for fixes…")).font(t.small()).color(t.text_muted));
                     }
                 }
+                if let Some((explanation, busy)) = &popup.ai {
+                    ui.add_space(t.unit);
+                    match crate::ai::explanation(ui, t, explanation.as_ref(), *busy) {
+                        crate::ai::Act::Explain => ai_act = Some(Some(popup.problem.line)),
+                        crate::ai::Act::Cancel => ai_act = Some(None),
+                        crate::ai::Act::None => {}
+                    }
+                }
                 if popup.pinned {
                     ui.add_space(t.unit);
                     let hint = tl!("Up and Down choose a fix, Enter applies it, Escape closes.");
@@ -1789,6 +1815,9 @@ impl SourceEditor {
             });
         });
         self.popup_rect = Some(area.response.rect);
+        if ai_act.is_some() {
+            self.ai_act = ai_act;
+        }
         if let Some(fix) = chosen {
             self.apply_fix = Some(fix);
             self.popup = None;
