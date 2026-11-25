@@ -19,3 +19,6 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 png = { workspace = true }
+# egui's bundled faces (Hack, Ubuntu), the fonts the browser build draws SVG text with when built
+# without craft-fonts.
+epaint_default_fonts = "0.37"

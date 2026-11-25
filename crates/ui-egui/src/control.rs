@@ -91,6 +91,9 @@ impl App {
             "log": self.view.logs,
             "focus_mode": self.view.focus_mode,
             "pdf_window": self.view.pdf_window,
+            // A narrow window (a phone) shows one of the editor and the PDF, as tabs.
+            "narrow": self.view.narrow,
+            "pane": if self.view.pane == crate::Pane::Pdf { "pdf" } else { "source" },
             "dialog": dialog,
             "theme": if self.tokens.scheme == crate::theme::Scheme::Dark { "dark" } else { "light" },
             "cursor": self.view.cursor.map(|(line, column)| json!({"line": line, "column": column})),

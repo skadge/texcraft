@@ -15,41 +15,112 @@ use crate::{App, Side, ui_cmd};
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     let frame = egui::Frame::new().fill(t.frame).inner_margin(egui::Margin { left: 4, right: 4, top: 0, bottom: 4 });
-    let shown = egui::Panel::left("side").resizable(true).default_size(248.0).min_size(180.0).max_size(480.0).frame(frame).show(ui, |ui| {
-        if app.view.side == Some(Side::Review) {
-            crate::review::panel(app, ui);
-            return;
-        }
-        if app.view.side == Some(Side::Search) {
-            crate::search::panel(app, ui);
-            return;
-        }
-        if app.view.side == Some(Side::History) {
-            crate::history::panel(app, ui);
-            return;
-        }
-        if app.view.side == Some(Side::Ask) {
-            crate::ai_ask::panel(app, ui);
-            return;
-        }
-        if app.view.side == Some(Side::Symbols) {
-            crate::symbols::panel(app, ui);
-            return;
-        }
-        // The files above the outline, in the order the keyboard visits them too.
-        let outline_first = app.view.side == Some(Side::Outline);
-        let height = ui.available_height();
-        egui::Panel::top("files")
-            .resizable(true)
-            .default_size(if outline_first { height * 0.3 } else { (height - 220.0).max(80.0) })
-            .min_size(80.0)
-            .frame(egui::Frame::new().fill(t.frame))
-            .show(ui, |ui| files(app, ui));
-        widgets::name_splitter(ui, "files", tl!("Resize the files and the outline"));
-        egui::CentralPanel::default().frame(egui::Frame::new().fill(t.frame)).show(ui, |ui| outline(app, ui));
-    });
+    let shown =
+        egui::Panel::left("side").resizable(true).default_size(248.0).min_size(180.0).max_size(480.0).frame(frame).show(ui, |ui| content(app, ui));
     widgets::name_splitter(ui, "side", tl!("Resize the side panel"));
     app.region_area(crate::Region::Side, shown.response.rect);
+}
+
+/// The side panel in a narrow window, while it is open: a drawer over the panes, beside the
+/// rail. It closes on Escape, on a tap outside it, and once a file or a place in one is chosen
+/// (the editor then shows it); the keyboard goes into it when it opens, and back when it closes.
+pub(crate) struct Drawer {
+    /// The control that had the keyboard before it opened (the rail's button).
+    return_to: Option<egui::Id>,
+    /// The file shown when it opened.
+    file: Option<ProjectPath>,
+    /// Frames since it opened.
+    frames: u8,
+}
+
+pub(crate) fn drawer(app: &mut App, ctx: &egui::Context) {
+    let t = app.tokens;
+    if app.view.side.is_none() {
+        if let Some(d) = app.view.drawer.take()
+            && let Some(id) = d.return_to
+        {
+            ctx.memory_mut(|m| m.request_focus(id));
+        }
+        return;
+    }
+    let return_to = app.view.focused_last.or(app.view.rail_active);
+    let file = app.session.current().cloned();
+    let state = app.view.drawer.get_or_insert(Drawer { return_to, file, frames: 0 });
+    state.frames = state.frames.saturating_add(1);
+    let first = state.frames == 2;
+    if state.frames < 2 {
+        // Once more, to give it the keyboard once it is drawn.
+        ctx.request_repaint();
+    }
+    let screen = ctx.content_rect();
+    let top = screen.top() + if app.view.focus_mode { 0.0 } else { t.top_bar_height };
+    let left = screen.left() + t.rail_width;
+    // A strip of the panes stays beside it, to tap to close it.
+    let width = t.drawer_width.min(screen.width() - t.rail_width - 12.0 * t.unit).max(160.0);
+    let rect = egui::Rect::from_min_max(egui::pos2(left, top), egui::pos2(left + width, screen.bottom() - t.status_height));
+    let margin = egui::Margin { left: 4, right: 4, top: 0, bottom: 4 };
+    let inner = egui::vec2(rect.width() - margin.sum().x, rect.height() - margin.sum().y);
+    let area = egui::Modal::default_area(egui::Id::unique("side-drawer")).anchor(egui::Align2::LEFT_TOP, rect.min - screen.min);
+    let frame = egui::Frame::new().fill(t.frame).inner_margin(margin).shadow(egui::Shadow { offset: [2, 0], blur: 16, spread: 0, color: t.shadow });
+    let modal =
+        egui::Modal::new(egui::Id::unique("side-drawer")).area(area).frame(frame).backdrop_color(t.shadow.gamma_multiply(0.6)).show(ctx, |ui| {
+            ui.set_min_size(inner);
+            ui.set_max_size(inner);
+            content(app, ui);
+        });
+    app.region_area(crate::Region::Side, rect);
+    let chosen = app.session.current() != app.view.drawer.as_ref().and_then(|d| d.file.as_ref()) || app.view.goto.is_some();
+    if chosen {
+        // The editor shows what was chosen, and takes the keyboard.
+        app.view.side = None;
+        app.view.pane = crate::Pane::Source;
+        app.editor.focus = true;
+        app.view.drawer = None;
+    } else if modal.should_close() {
+        app.view.side = None;
+    } else if first {
+        // Drawn once: its first control takes the keyboard, as a dialog's does.
+        let focused = ctx.memory(egui::Memory::focused);
+        if focused.is_none() || focused == return_to {
+            app.view.focus_into_modal = true;
+            ctx.request_repaint();
+        }
+    }
+}
+
+fn content(app: &mut App, ui: &mut egui::Ui) {
+    let t = app.tokens;
+    if app.view.side == Some(Side::Review) {
+        crate::review::panel(app, ui);
+        return;
+    }
+    if app.view.side == Some(Side::Search) {
+        crate::search::panel(app, ui);
+        return;
+    }
+    if app.view.side == Some(Side::History) {
+        crate::history::panel(app, ui);
+        return;
+    }
+    if app.view.side == Some(Side::Ask) {
+        crate::ai_ask::panel(app, ui);
+        return;
+    }
+    if app.view.side == Some(Side::Symbols) {
+        crate::symbols::panel(app, ui);
+        return;
+    }
+    // The files above the outline, in the order the keyboard visits them too.
+    let outline_first = app.view.side == Some(Side::Outline);
+    let height = ui.available_height();
+    egui::Panel::top("files")
+        .resizable(true)
+        .default_size(if outline_first { height * 0.3 } else { (height - 220.0).max(80.0) })
+        .min_size(80.0)
+        .frame(egui::Frame::new().fill(t.frame))
+        .show(ui, |ui| files(app, ui));
+    widgets::name_splitter(ui, "files", tl!("Resize the files and the outline"));
+    egui::CentralPanel::default().frame(egui::Frame::new().fill(t.frame)).show(ui, |ui| outline(app, ui));
 }
 
 fn header(ui: &mut egui::Ui, t: &Tokens, title: &str, actions: impl FnOnce(&mut egui::Ui)) {

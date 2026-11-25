@@ -41,6 +41,7 @@ mod symbols;
 pub use picks::{Pick, PickKind, PickRequest};
 pub use start::{THUMBNAIL_WIDTH, Thumbnail};
 mod history;
+mod panes;
 mod picks;
 mod preview;
 mod rail;
@@ -112,6 +113,13 @@ pub enum Layout {
     PreviewOnly,
 }
 
+/// Which of the editor and the PDF a narrow window shows (`view.pane.source`, `view.pane.pdf`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pane {
+    Source,
+    Pdf,
+}
+
 /// The view state the interface keeps for itself.
 pub(crate) struct View {
     pub side: Option<Side>,
@@ -172,6 +180,19 @@ pub(crate) struct View {
     /// The control with the keyboard at the end of the last frame (Escape clears the focus before
     /// a frame sees it).
     pub focused_last: Option<egui::Id>,
+    /// The window is narrower than the theme's `narrow_width` this frame (a phone): the side
+    /// panel is a drawer and the editor and the PDF are tabs.
+    pub narrow: bool,
+    /// Whether the window was narrow last frame (`None` before the first).
+    pub narrow_last: Option<bool>,
+    /// The side panel shown before the window became narrow, shown again when it widens.
+    pub side_wide: Option<Side>,
+    /// The tab a narrow window shows.
+    pub pane: Pane,
+    /// The side panel as a drawer, while it is open in a narrow window.
+    pub drawer: Option<side::Drawer>,
+    /// The rail's button of the open section, this frame.
+    pub rail_active: Option<egui::Id>,
 }
 
 pub struct App {
@@ -288,6 +309,12 @@ impl App {
                 focus_mode: false,
                 pdf_window: false,
                 focused_last: None,
+                narrow: false,
+                narrow_last: None,
+                side_wide: None,
+                pane: Pane::Source,
+                drawer: None,
+                rail_active: None,
             },
             editor: editor::Editor::default(),
             review: review::ReviewView::default(),
@@ -341,7 +368,9 @@ impl App {
     /// The preferences, when they changed since the last call; the shell stores them.
     pub fn take_changed_prefs(&mut self) -> Option<prefs::Prefs> {
         let mut current = self.prefs.clone();
-        current.set_view(self.view.layout, self.view.side);
+        // A narrow window's drawer is not the side panel the wide window keeps.
+        let side = if self.view.narrow { self.view.side_wide } else { self.view.side };
+        current.set_view(self.view.layout, side);
         current.auto_compile = self.session.settings.auto_compile;
         current.build = self.session.settings.build;
         current.spelling = self.session.settings.spelling.clone();
@@ -760,6 +789,8 @@ impl App {
         self.dropped_files(ctx);
         self.view.regions.clear();
         self.view.region_areas.clear();
+        self.view.rail_active = None;
+        self.narrow_check(ctx);
         // In focus mode the menu bar shows only while the keyboard is in it (F10, Alt).
         let focus_mode = self.view.focus_mode && !self.start;
         if !focus_mode || self.view.menu_nav.is_some() {
@@ -777,12 +808,19 @@ impl App {
         }
         if !focus_mode {
             rail::show(self, ui);
-            if self.view.side.is_some() {
+            if self.view.side.is_some() && !self.view.narrow {
                 side::show(self, ui);
             }
         }
         self.panes(ui);
         status::show(self, ui, status);
+        if self.view.narrow && !focus_mode {
+            side::drawer(self, ctx);
+        }
+        // A narrow window shows one pane: a line to go to is shown in the source.
+        if self.view.narrow && self.view.goto.is_some() {
+            self.view.pane = Pane::Source;
+        }
         if self.view.pdf_window {
             preview::window(self, ctx);
         }
@@ -856,9 +894,39 @@ impl App {
         }
     }
 
+    /// Notes whether the window is narrow this frame. Becoming narrow hides the side panel (it
+    /// opens as a drawer from the rail); widening again shows the one there was.
+    fn narrow_check(&mut self, ctx: &egui::Context) {
+        let narrow = ctx.content_rect().width() < self.tokens.narrow_width;
+        if self.view.narrow_last != Some(narrow) {
+            self.view.drawer = None;
+            if narrow {
+                self.view.side_wide = self.view.side.take();
+            } else if self.view.side.is_none() {
+                self.view.side = self.view.side_wide.take();
+            }
+            self.view.narrow_last = Some(narrow);
+        }
+        self.view.narrow = narrow;
+    }
+
     fn panes(&mut self, ui: &mut egui::Ui) {
         let t = self.tokens;
         let frame = egui::Frame::new().fill(t.frame);
+        if self.view.narrow && !self.view.pdf_window {
+            panes::tabs(self, ui);
+            match self.view.pane {
+                Pane::Source => {
+                    let editor = egui::CentralPanel::default().frame(egui::Frame::new()).show(ui, |ui| editor::show(self, ui));
+                    self.region_area(Region::Editor, editor.response.rect);
+                }
+                Pane::Pdf => {
+                    let preview = egui::CentralPanel::default().frame(frame).show(ui, |ui| preview::show(self, ui));
+                    self.region_area(Region::Preview, preview.response.rect);
+                }
+            }
+            return;
+        }
         let layout = if self.view.pdf_window { Layout::EditorOnly } else { self.view.layout };
         match layout {
             // The editor's pane first, so the keyboard reaches it before the PDF's, as it reads.

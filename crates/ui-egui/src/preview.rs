@@ -221,7 +221,7 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
                 ui.add(egui::Label::new(RichText::new(text).font(t.small()).color(t.text_muted)).truncate());
             }
         };
-        if app.view.logs || !app.pdf.has_pdf() {
+        if app.view.logs || !app.pdf.has_pdf() || app.view.narrow {
             show_progress(ui);
             return;
         }
@@ -231,27 +231,40 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
             ui.set_width(room);
             show_progress(ui);
         });
-        widgets::right_aligned(ui, "pdf-tools", |ui| {
-            let (page, count) = (app.pdf.page, app.pdf.page_count());
-            if widgets::icon_button(ui, &t, "chevron-left", tl!("Previous page"), page > 0).clicked() {
-                app.pdf.go_to_page(page.saturating_sub(1));
-            }
-            ui.label(RichText::new(format!("{} / {count}", page + 1)).font(t.small()).color(t.text_muted));
-            if widgets::icon_button(ui, &t, "chevron-right", tl!("Next page"), page + 1 < count).clicked() {
-                app.pdf.go_to_page(page + 1);
-            }
-            ui.add_space(t.unit * 2.0);
-            if widgets::icon_button(ui, &t, "zoom-out", tl!("Zoom Out"), true).clicked() {
-                ui_cmd::run(app, "view.zoom_out");
-            }
-            zoom_menu(app, ui);
-            if widgets::icon_button(ui, &t, "zoom-in", tl!("Zoom In"), true).clicked() {
-                ui_cmd::run(app, "view.zoom_in");
-            }
-            // The margin at the bar's end, counted in the controls' width.
-            ui.allocate_space(vec2(t.unit * 2.0 - ui.spacing().item_spacing.x, 1.0));
-        });
+        widgets::right_aligned(ui, "pdf-tools", |ui| page_tools(app, ui));
     });
+    // A narrow window has no room for them on the bar: they are a second row.
+    if app.view.narrow && !app.view.logs && app.pdf.has_pdf() {
+        ui.allocate_ui_with_layout(vec2(ui.available_width(), t.toolbar_height), Layout::left_to_right(Align::Center), |ui| {
+            ui.painter().rect_filled(ui.max_rect(), 0.0, t.frame);
+            ui.spacing_mut().item_spacing.x = 2.0;
+            ui.add_space(t.unit * 2.0);
+            page_tools(app, ui);
+        });
+    }
+}
+
+/// The pages and the zoom of the PDF's toolbar.
+fn page_tools(app: &mut App, ui: &mut egui::Ui) {
+    let t = app.tokens;
+    let (page, count) = (app.pdf.page, app.pdf.page_count());
+    if widgets::icon_button(ui, &t, "chevron-left", tl!("Previous page"), page > 0).clicked() {
+        app.pdf.go_to_page(page.saturating_sub(1));
+    }
+    ui.label(RichText::new(format!("{} / {count}", page + 1)).font(t.small()).color(t.text_muted));
+    if widgets::icon_button(ui, &t, "chevron-right", tl!("Next page"), page + 1 < count).clicked() {
+        app.pdf.go_to_page(page + 1);
+    }
+    ui.add_space(t.unit * 2.0);
+    if widgets::icon_button(ui, &t, "zoom-out", tl!("Zoom Out"), true).clicked() {
+        ui_cmd::run(app, "view.zoom_out");
+    }
+    zoom_menu(app, ui);
+    if widgets::icon_button(ui, &t, "zoom-in", tl!("Zoom In"), true).clicked() {
+        ui_cmd::run(app, "view.zoom_in");
+    }
+    // The margin at the bar's end, counted in the controls' width.
+    ui.allocate_space(vec2(t.unit * 2.0 - ui.spacing().item_spacing.x, 1.0));
 }
 
 fn cmd_enabled(app: &App, id: &str) -> Result<(), String> {
@@ -891,6 +904,8 @@ fn show_on_page(app: &mut App, rect: PageRect) {
 fn reveal(app: &mut App) {
     if app.view.pdf_window {
         app.ctx.send_viewport_cmd_to(egui::ViewportId::from_hash_of(WINDOW), egui::ViewportCommand::Focus);
+    } else if app.view.narrow {
+        app.view.pane = crate::Pane::Pdf;
     } else if app.view.layout == crate::Layout::EditorOnly {
         app.view.layout = crate::Layout::Split;
     }
