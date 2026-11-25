@@ -1,10 +1,11 @@
 //! The PDF preview: the pages of the last PDF a build wrote, stacked on the canvas with a soft
-//! shadow, drawn by texcraft-preview at the zoom and the screen's pixel density. Only the pages in
-//! view are drawn, and each is drawn again only when the zoom changes or a new PDF arrives. The
-//! scroll position is kept across builds.
+//! shadow, drawn by texcraft-preview at the zoom and the screen's pixel density. Pages are drawn
+//! off the window's thread (a page or so a frame in the browser), those in view first, then those
+//! around them; until a page is drawn it shows as drawn before, or blank at its size. Each is drawn
+//! again only when the zoom changes or a new PDF arrives. The scroll position is kept across builds.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use texcraft_preview::Document;
 
@@ -45,34 +46,92 @@ struct Request {
     doc: Arc<Document>,
 }
 
-/// A page drawn, or why not.
+/// A page drawn, or why not; `None` when it was no longer wanted (scrolled away, another zoom,
+/// a newer PDF) and was not drawn.
 struct Drawn {
     generation: u64,
     index: usize,
     scale: f32,
-    image: Result<texcraft_preview::Image, String>,
+    image: Option<Result<texcraft_preview::Image, String>>,
 }
 
-/// Draws pages on a thread of its own, so a slow page (a full-page photograph) never holds the
-/// window up. The newest request for a page wins over older ones still queued. The browser build
-/// has no threads: there the queue is drawn on the window's thread, when the view takes the pages.
-struct Renderer {
-    tx: std::sync::mpsc::Sender<Request>,
-    rx: std::sync::mpsc::Receiver<Drawn>,
-    #[cfg(target_arch = "wasm32")]
-    queue: (std::sync::mpsc::Receiver<Request>, std::sync::mpsc::Sender<Drawn>),
+/// What the view shows now. The renderer draws only these pages, at this scale, of this PDF, in
+/// this order (the pages in view first, then those around them); other requests are dropped.
+#[derive(Default)]
+struct Wanted {
+    generation: u64,
+    scale: f32,
+    pages: Vec<usize>,
 }
 
-/// Draws the newest request of each page of `queue`, in the order asked; stops when `done` refuses.
-fn draw_newest(queue: Vec<Request>, mut done: impl FnMut(Drawn) -> bool) {
+/// What a request is for: the PDF's generation, the page, the scale.
+trait Asked {
+    fn asked(&self) -> (u64, usize, f32);
+}
+
+impl Asked for Request {
+    fn asked(&self) -> (u64, usize, f32) {
+        (self.generation, self.index, self.scale)
+    }
+}
+
+impl Wanted {
+    fn rank(&self, r: &impl Asked) -> Option<usize> {
+        let (generation, index, scale) = r.asked();
+        if generation != self.generation || (scale - self.scale).abs() >= 0.01 {
+            return None;
+        }
+        self.pages.iter().position(|p| *p == index)
+    }
+}
+
+/// Takes from `queue` the request to draw next: the newest of each page, the first of those
+/// `wanted` lists. The requests no longer wanted go to `dropped`.
+fn next_request<R: Asked>(queue: &mut Vec<R>, wanted: &Mutex<Wanted>, mut dropped: impl FnMut(R)) -> Option<R> {
+    let Ok(wanted) = wanted.lock() else {
+        return queue.pop();
+    };
     let mut seen = std::collections::HashSet::new();
-    let newest: Vec<Request> = queue.into_iter().rev().filter(|r| seen.insert(r.index)).collect();
-    for r in newest.into_iter().rev() {
-        let image = r.doc.render(r.index, r.scale).map_err(|e| e.to_string());
-        if !done(Drawn { generation: r.generation, index: r.index, scale: r.scale, image }) {
-            return;
+    let mut keep = Vec::with_capacity(queue.len());
+    for r in std::mem::take(queue).into_iter().rev() {
+        if seen.insert(r.asked().1) && wanted.rank(&r).is_some() {
+            keep.push(r);
+        } else {
+            dropped(r);
         }
     }
+    keep.sort_by_key(|r| std::cmp::Reverse(wanted.rank(r)));
+    let next = keep.pop();
+    *queue = keep;
+    next
+}
+
+fn draw(r: &Request) -> Drawn {
+    let image = r.doc.render(r.index, r.scale).map_err(|e| e.to_string());
+    Drawn { generation: r.generation, index: r.index, scale: r.scale, image: Some(image) }
+}
+
+fn dropped(r: &Request) -> Drawn {
+    Drawn { generation: r.generation, index: r.index, scale: r.scale, image: None }
+}
+
+/// How many pages the browser draws in a frame: it has one thread, so a long queue is drawn over
+/// several frames and the window keeps answering.
+#[cfg(target_arch = "wasm32")]
+const PAGES_PER_FRAME: usize = 1;
+
+/// Draws pages on a thread of its own, so a slow page (a full-page photograph) never holds the
+/// window up. Before each page it takes the view's [`Wanted`]: the pages in view are drawn first,
+/// and pages scrolled away, drawings at a zoom left behind and pages of an older PDF are dropped.
+/// The browser build has no threads: there the queue is drawn on the window's thread, a page or
+/// so a frame, when the view takes the pages.
+struct Renderer {
+    tx: std::sync::mpsc::Sender<Request>,
+    #[cfg(not(target_arch = "wasm32"))]
+    rx: std::sync::mpsc::Receiver<Drawn>,
+    wanted: Arc<Mutex<Wanted>>,
+    #[cfg(target_arch = "wasm32")]
+    queue: (std::sync::mpsc::Receiver<Request>, Vec<Request>),
 }
 
 impl Renderer {
@@ -80,40 +139,65 @@ impl Renderer {
     fn start(ctx: &egui::Context) -> Option<Self> {
         let (tx, requests) = std::sync::mpsc::channel::<Request>();
         let (done, rx) = std::sync::mpsc::channel();
+        let wanted = Arc::new(Mutex::new(Wanted::default()));
         let ctx = ctx.clone();
+        let shared = wanted.clone();
         std::thread::Builder::new()
             .name("texcraft-pdf-pages".to_owned())
             .spawn(move || {
+                let mut queue = Vec::new();
                 while let Ok(first) = requests.recv() {
-                    let mut queue = vec![first];
-                    queue.extend(requests.try_iter());
-                    let mut open = true;
-                    draw_newest(queue, |d| {
-                        open = done.send(d).is_ok();
+                    queue.push(first);
+                    loop {
+                        queue.extend(requests.try_iter());
+                        let mut open = true;
+                        let next = next_request(&mut queue, &shared, |r| open &= done.send(dropped(&r)).is_ok());
+                        let Some(r) = next else { break };
+                        open &= done.send(draw(&r)).is_ok();
                         ctx.request_repaint();
-                        open
-                    });
-                    if !open {
-                        return;
+                        if !open {
+                            return;
+                        }
                     }
                 }
             })
             .ok()?;
-        Some(Self { tx, rx })
+        Some(Self { tx, rx, wanted })
     }
 
     #[cfg(target_arch = "wasm32")]
     fn start(_: &egui::Context) -> Option<Self> {
         let (tx, requests) = std::sync::mpsc::channel::<Request>();
-        let (done, rx) = std::sync::mpsc::channel();
-        Some(Self { tx, rx, queue: (requests, done) })
+        Some(Self { tx, wanted: Arc::new(Mutex::new(Wanted::default())), queue: (requests, Vec::new()) })
     }
 
     /// The pages drawn since last asked.
-    fn drawn(&self) -> Vec<Drawn> {
-        #[cfg(target_arch = "wasm32")]
-        draw_newest(self.queue.0.try_iter().collect(), |d| self.queue.1.send(d).is_ok());
+    #[cfg(not(target_arch = "wasm32"))]
+    fn drawn(&mut self, _: &egui::Context) -> Vec<Drawn> {
         self.rx.try_iter().collect()
+    }
+
+    /// The pages drawn since last asked: in the browser, drawn now, a few at most.
+    #[cfg(target_arch = "wasm32")]
+    fn drawn(&mut self, ctx: &egui::Context) -> Vec<Drawn> {
+        let (requests, queue) = &mut self.queue;
+        queue.extend(requests.try_iter());
+        let mut out = Vec::new();
+        for _ in 0..PAGES_PER_FRAME {
+            let Some(r) = next_request(queue, &self.wanted, |r| out.push(dropped(&r))) else { break };
+            out.push(draw(&r));
+        }
+        if !queue.is_empty() {
+            ctx.request_repaint();
+        }
+        out
+    }
+
+    /// Tells the renderer what the view shows now.
+    fn want(&self, generation: u64, scale: f32, pages: Vec<usize>) {
+        if let Ok(mut w) = self.wanted.lock() {
+            *w = Wanted { generation, scale, pages };
+        }
     }
 }
 
@@ -338,6 +422,12 @@ impl PdfView {
         let sizes = self.sizes.clone();
         area.show_viewport(ui, |ui, viewport| {
             let (outer, _) = ui.allocate_exact_size(total, egui::Sense::hover());
+            // The pages to draw: those in view, then those half a pane above and below it.
+            let span = |i: usize| egui::Rangef::new(tops[i], tops[i] + sizes[i][1] * zoom);
+            let mut wanted: Vec<usize> = (0..tops.len()).filter(|i| viewport.y_range().intersects(span(*i))).collect();
+            let near = viewport.y_range().expand(viewport.height() / 2.0);
+            wanted.extend((0..tops.len()).filter(|i| near.intersects(span(*i)) && !viewport.y_range().intersects(span(*i))));
+            self.request(ui.ctx(), &wanted, pixels);
             let mut first_visible = None;
             for (i, (size, top)) in sizes.iter().zip(&tops).enumerate() {
                 let page = egui::Rect::from_min_size(
@@ -352,7 +442,8 @@ impl PdfView {
                 }
                 ui.painter().add(shadow.as_shape(page, 2));
                 ui.painter().rect_filled(page, 2, egui::Color32::WHITE);
-                if let Some(texture) = self.texture(ui.ctx(), i, pixels) {
+                // Until the page is drawn: as drawn before (another zoom, the last PDF), or blank.
+                if let Some((_, _, texture)) = self.textures.get(&i) {
                     let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
                     ui.painter().image(texture.id(), page, uv, egui::Color32::WHITE);
                 }
@@ -387,41 +478,42 @@ impl PdfView {
         }
     }
 
-    fn texture(&mut self, ctx: &egui::Context, index: usize, scale: f32) -> Option<egui::TextureHandle> {
-        let shown = self.textures.get(&index).map(|(drawn, generation, handle)| (*drawn, *generation, handle.clone()));
-        let fresh = shown.as_ref().is_some_and(|(drawn, generation, _)| *generation == self.generation && (drawn - scale).abs() < 0.01);
-        if fresh {
-            return shown.map(|(_, _, h)| h);
-        }
-        let doc = self.doc.clone()?;
+    /// Asks for `pages` (in that order) at `scale`, those not drawn at it yet; the renderer drops
+    /// what it was asked before and is no longer wanted.
+    fn request(&mut self, ctx: &egui::Context, pages: &[usize], scale: f32) {
+        let Some(doc) = self.doc.clone() else { return };
         if self.renderer.is_none() {
             self.renderer = Renderer::start(ctx);
         }
-        match &self.renderer {
-            Some(renderer) => {
-                if self.pending.get(&index).is_none_or(|s| (s - scale).abs() >= 0.01) {
-                    let request = Request { generation: self.generation, index, scale, doc };
-                    if renderer.tx.send(request).is_ok() {
-                        self.pending.insert(index, scale);
-                        // The browser draws the queue next frame.
-                        #[cfg(target_arch = "wasm32")]
-                        ctx.request_repaint();
-                    }
-                }
-                // Until then, the page as it was drawn before (another scale, the last PDF).
-                shown.map(|(_, _, h)| h)
+        let fresh = |textures: &HashMap<usize, (f32, u64, egui::TextureHandle)>, generation: u64, i: &usize| {
+            textures.get(i).is_some_and(|(drawn, g, _)| *g == generation && (drawn - scale).abs() < 0.01)
+        };
+        let Some(renderer) = &self.renderer else {
+            // No thread to draw on: drawn here and now.
+            for i in pages.iter().filter(|i| !fresh(&self.textures, self.generation, i)).copied().collect::<Vec<_>>() {
+                let image = doc.render(i, scale).map_err(|e| e.to_string());
+                self.take(ctx, Drawn { generation: self.generation, index: i, scale, image: Some(image) });
             }
-            None => {
-                let image = doc.render(index, scale).map_err(|e| e.to_string());
-                self.take(ctx, Drawn { generation: self.generation, index, scale, image });
-                self.textures.get(&index).map(|(_, _, h)| h.clone())
+            return;
+        };
+        renderer.want(self.generation, scale, pages.to_vec());
+        for &i in pages {
+            if fresh(&self.textures, self.generation, &i) || self.pending.get(&i).is_some_and(|s| (s - scale).abs() < 0.01) {
+                continue;
+            }
+            let request = Request { generation: self.generation, index: i, scale, doc: doc.clone() };
+            if renderer.tx.send(request).is_ok() {
+                self.pending.insert(i, scale);
+                // The browser draws the queue next frame.
+                #[cfg(target_arch = "wasm32")]
+                ctx.request_repaint();
             }
         }
     }
 
     /// Takes the pages the renderer drew.
     fn receive(&mut self, ctx: &egui::Context) {
-        let drawn: Vec<Drawn> = self.renderer.as_ref().map(Renderer::drawn).unwrap_or_default();
+        let drawn: Vec<Drawn> = self.renderer.as_mut().map(|r| r.drawn(ctx)).unwrap_or_default();
         for d in drawn {
             self.take(ctx, d);
         }
@@ -435,12 +527,14 @@ impl PdfView {
             self.pending.remove(&d.index);
         }
         match d.image {
-            Ok(image) => {
+            // Dropped: asked again when it is in view.
+            None => {}
+            Some(Ok(image)) => {
                 let color = egui::ColorImage::from_rgba_premultiplied([image.width as usize, image.height as usize], &image.rgba);
                 let handle = ctx.load_texture(format!("pdf-page-{}", d.index), color, egui::TextureOptions::LINEAR);
                 self.textures.insert(d.index, (d.scale, d.generation, handle));
             }
-            Err(e) => log::warn!("page {}: {e}", d.index + 1),
+            Some(Err(e)) => log::warn!("page {}: {e}", d.index + 1),
         }
     }
 }
@@ -461,4 +555,36 @@ fn draft_badge(ui: &mut egui::Ui, t: &Tokens, pane: egui::Rect, pass: u32) {
             crate::status::announce(ui, &label, &text);
             label.on_hover_text(tl!("The PDF of an earlier pass, shown while the build goes on: its references may not be resolved yet."));
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::{Asked, Wanted, next_request};
+
+    impl Asked for (u64, usize, f32) {
+        fn asked(&self) -> (u64, usize, f32) {
+            *self
+        }
+    }
+
+    #[test]
+    fn the_pages_in_view_are_drawn_first_and_the_others_dropped() {
+        // In view: pages 7 then 8, at scale 2, of the PDF of generation 3.
+        let wanted = Mutex::new(Wanted { generation: 3, scale: 2.0, pages: vec![7, 8] });
+        let mut queue = vec![
+            (3, 8, 2.0),
+            (2, 7, 2.0), // an older PDF
+            (3, 1, 2.0), // scrolled away
+            (3, 7, 1.0), // another zoom
+            (3, 7, 2.0),
+        ];
+        let mut dropped = Vec::new();
+        let first = next_request(&mut queue, &wanted, |r| dropped.push(r));
+        assert_eq!(first, Some((3, 7, 2.0)), "the first page in view is not drawn first");
+        assert_eq!(next_request(&mut queue, &wanted, |r| dropped.push(r)), Some((3, 8, 2.0)));
+        assert_eq!(next_request(&mut queue, &wanted, |r| dropped.push(r)), None);
+        assert_eq!(dropped.len(), 3, "requests no longer wanted were kept: {dropped:?}");
+    }
 }
