@@ -41,6 +41,17 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.11.0" date="2026-11-25" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.11.0</url>
+      <description>
+        <p>Sign in to GitLab and GitHub, and more AI assistance.</p>
+        <ul>
+          <li>Sign in with GitLab or GitHub instead of pasting a token</li>
+          <li>Make tables, equations and diagrams with AI, previewed first</li>
+          <li>Ask AI about the project, and have a section reviewed in comments</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.10.0" date="2026-11-25" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.10.0</url>
       <description>

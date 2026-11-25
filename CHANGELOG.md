@@ -5,6 +5,33 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.11.0 (2026-11-25)
+
+Sign in to GitLab and GitHub, and more AI assistance.
+
+### Git forges
+
+- Sign in with GitLab (on the desktop and in the browser) or GitHub (on the desktop) instead of
+  pasting a personal access token. TeXCraft asks only to read at first, and for the right to
+  commit at the first commit. On the desktop the sign-in is kept in the system's keychain; in the
+  browser, for as long as the tab is open. Settings › Accounts shows who is signed in, and signs
+  out. A personal access token still works, and is the way for other GitLab or GitHub servers.
+
+### AI assistance (desktop)
+
+- Insert › Make with AI…: a table, an equation, a TikZ diagram or a figure from a description,
+  typeset and shown before it is offered as a suggestion.
+- Insert › Add a Reference with AI…: a BibTeX entry drafted from a title or DOI, marked as a draft
+  to check (models invent references).
+- Ask AI: questions about the open file or the whole project, with the lines it mentions as links.
+- Review This Section with AI: remarks left as comments on the passages they quote.
+
+Known limits:
+
+- GitHub sign-in is not available in the browser (GitHub's sign-in does not answer web pages); a
+  token works there.
+- No AI in the browser yet.
+
 ## 0.10.0 (2026-11-25)
 
 AI assistance, spell checking, a symbol palette, and a keyboard and screen-reader pass.
