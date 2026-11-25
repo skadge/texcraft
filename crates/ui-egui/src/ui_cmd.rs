@@ -92,6 +92,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.present.next", "Next Page", "View", "present", None),
     ui("view.present.previous", "Previous Page", "View", "present", None),
     ui("view.present.end", "Leave Presentation", "View", "present", None),
+    // Alt pressed and released alone does it too (not on a Mac, whose menus are the system's).
+    ui("view.menu_bar", "Go to the Menu Bar", "View", "regions", Some("F10")),
     ui("view.next_region", "Next Region", "View", "regions", Some("F6")),
     ui("view.previous_region", "Previous Region", "View", "regions", Some("Shift+F6")),
     ui("view.theme", "Switch Light and Dark", "View", "theme", None),
@@ -202,6 +204,7 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "help.about" => app.view.dialog = Some(Dialog::About),
         "app.settings" => app.view.dialog = Some(Dialog::Settings),
         "app.start" => app.start = true,
+        "view.menu_bar" => crate::top_bar::toggle_menu_bar(app),
         "view.next_region" => app.cycle_region(true),
         "view.previous_region" => app.cycle_region(false),
         "project.open" => app.guard(Next::PickProject),

@@ -126,6 +126,10 @@ pub(crate) struct View {
     pub identity_draft: String,
     /// The project's name being edited in the top bar.
     pub rename: Option<top_bar::Rename>,
+    /// The menu bar, while the keyboard is in it (F10, or Alt alone).
+    pub menu_nav: Option<top_bar::MenuNav>,
+    /// The menu bar's buttons, last frame, in order.
+    pub menu_ids: Vec<egui::Id>,
 }
 
 pub struct App {
@@ -175,6 +179,8 @@ pub struct App {
     forge_count: forge::Count,
     /// The GitLab branch checked for new commits.
     forge_check: forge::Check,
+    /// Alt pressed alone, to reach the menu bar when it is released.
+    alt: top_bar::AltTap,
 }
 
 impl App {
@@ -212,6 +218,8 @@ impl App {
                 draft: None,
                 identity_draft: prefs::system_user_name(),
                 rename: None,
+                menu_nav: None,
+                menu_ids: Vec::new(),
             },
             editor: editor::Editor::default(),
             review: review::ReviewView::default(),
@@ -240,6 +248,7 @@ impl App {
             recent_files: Vec::new(),
             forge_count: forge::Count::default(),
             forge_check: forge::Check::default(),
+            alt: top_bar::AltTap::default(),
         };
         app.remember_project();
         app
@@ -587,6 +596,9 @@ impl App {
         self.auto_compile(ctx);
         // Vim's own Ctrl keys go to the editor before the window's shortcuts see them.
         editor::claim_keys(self, ctx);
+        if self.alt.tapped(ctx) {
+            ui_cmd::run(self, "view.menu_bar");
+        }
         for id in self.keys.dispatch(ctx) {
             ui_cmd::run(self, &id);
         }

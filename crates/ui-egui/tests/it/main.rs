@@ -19,6 +19,7 @@ mod history;
 mod image_drop;
 mod insert;
 mod log_copy;
+mod menu_bar;
 mod output_log;
 mod pdf_preview;
 mod progress;

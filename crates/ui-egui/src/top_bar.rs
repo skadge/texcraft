@@ -21,11 +21,22 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui_cmd::run(app, "app.start");
             }
             ui.add_space(t.unit * 2.0);
+            navigate(app, ui.ctx());
+            let mut ids = Vec::with_capacity(MENUS.len());
+            let mut entered = None;
             egui::MenuBar::new().ui(ui, |ui| {
-                for menu in MENUS {
-                    ui.menu_button(crate::i18n::t(menu), |ui| menu_items(app, ui, menu));
+                for (i, menu) in MENUS.iter().enumerate() {
+                    let r = ui.menu_button(crate::i18n::t(menu), |ui| menu_items(app, ui, menu)).response;
+                    widgets::focus_ring(ui, &t, &r, r.rect, t.corner());
+                    // Enter or Space on a menu's button opens it with its first entry focused.
+                    if r.clicked() && !r.clicked_by(egui::PointerButton::Primary) && egui::Popup::is_id_open(ui.ctx(), popup_id(r.id)) {
+                        entered = Some(i);
+                    }
+                    ids.push(r.id);
                 }
             });
+            app.view.menu_ids = ids;
+            settle(app, ui.ctx(), entered);
         });
         if !app.start {
             project_title(app, ui, bar);
@@ -47,6 +58,169 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             }
         });
     });
+}
+
+/// The menu bar while the keyboard is in it: reached with F10 (`view.menu_bar`) or Alt alone; Left
+/// and Right move between the menus, Down, Enter or Space open one with its first entry focused,
+/// and Escape closes the open menu, then gives the keyboard back to where it was.
+#[derive(Debug, Default)]
+pub(crate) struct MenuNav {
+    /// The control that had the keyboard before; it gets it back on leaving.
+    return_to: Option<egui::Id>,
+    /// Focus this menu's button this frame.
+    focus: Option<usize>,
+    /// Move the keyboard into this open menu's first entry.
+    enter: Option<usize>,
+    /// Last frame: the menu whose button had the keyboard, and the open menu. Escape takes the
+    /// focus away before the frame sees it, so the keys go by these.
+    focused: Option<usize>,
+    open: Option<usize>,
+}
+
+/// `view.menu_bar`: the keyboard goes to the first menu, or back to where it was when it is in
+/// the menu bar already.
+pub(crate) fn toggle_menu_bar(app: &mut App) {
+    if app.view.dialog.is_some() || app.pdf.presenting().is_some() {
+        return;
+    }
+    if let Some(nav) = app.view.menu_nav.take() {
+        leave(app, nav.return_to);
+        return;
+    }
+    let return_to = app.ctx.memory(egui::Memory::focused);
+    app.view.menu_nav = Some(MenuNav { return_to, focus: Some(0), ..MenuNav::default() });
+    app.view.status = Some((tl!("Menu bar").to_owned(), false));
+}
+
+/// Closes the menus and gives the keyboard back to `to`.
+fn leave(app: &mut App, to: Option<egui::Id>) {
+    for id in &app.view.menu_ids {
+        egui::Popup::close_id(&app.ctx, popup_id(*id));
+    }
+    if let Some(id) = to {
+        app.ctx.memory_mut(|m| m.request_focus(id));
+    }
+}
+
+/// The popup of the menu whose button is `button`.
+fn popup_id(button: egui::Id) -> egui::Id {
+    button.with("popup")
+}
+
+/// The menu bar's keys, before it is drawn, from where the keyboard was last frame.
+fn navigate(app: &mut App, ctx: &egui::Context) {
+    let ids = app.view.menu_ids.clone();
+    let Some(nav) = app.view.menu_nav.as_mut() else { return };
+    let n = ids.len();
+    if n == 0 {
+        return;
+    }
+    let none = egui::Modifiers::NONE;
+    let key = |k| ctx.input_mut(|i| i.consume_key(none, k));
+    let stay = |ctx: &egui::Context| ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+    if key(egui::Key::Escape) {
+        if let Some(i) = nav.open {
+            egui::Popup::close_id(ctx, popup_id(ids[i]));
+            nav.focus = Some(i);
+            nav.enter = None;
+        } else if nav.focused.is_some() {
+            let to = nav.return_to;
+            app.view.menu_nav = None;
+            leave(app, to);
+        }
+        return;
+    }
+    let focused = ctx.memory(egui::Memory::focused);
+    // The menu just opened was shown once: its entries can take the keyboard.
+    if let Some(i) = nav.enter {
+        if focused == Some(ids[i]) && nav.open == Some(i) {
+            ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::Down));
+            nav.enter = None;
+        } else if focused != Some(ids[i]) {
+            nav.enter = None;
+        }
+    }
+    let Some(i) = nav.focused.filter(|i| focused == Some(ids[*i])) else { return };
+    let (left, right) = (key(egui::Key::ArrowLeft), key(egui::Key::ArrowRight));
+    if left || right {
+        let j = if right { (i + 1) % n } else { (i + n - 1) % n };
+        stay(ctx);
+        nav.focus = Some(j);
+        if nav.open.is_some() {
+            egui::Popup::open_id(ctx, popup_id(ids[j]));
+            nav.enter = Some(j);
+        }
+    } else if nav.open != Some(i) && key(egui::Key::ArrowDown) {
+        stay(ctx);
+        egui::Popup::open_id(ctx, popup_id(ids[i]));
+        nav.enter = Some(i);
+    }
+}
+
+/// After the menu bar is drawn: moves the keyboard where [`navigate`] asked, and notes where it
+/// is. Once it has left the menu bar and its menus, the menu bar lets go of it, giving it back to
+/// where it was when nothing else took it (a command chosen in a menu).
+fn settle(app: &mut App, ctx: &egui::Context, entered: Option<usize>) {
+    let ids = &app.view.menu_ids;
+    let Some(nav) = app.view.menu_nav.as_mut() else { return };
+    if let Some(i) = nav.focus.take().filter(|i| *i < ids.len()) {
+        ctx.memory_mut(|m| m.request_focus(ids[i]));
+    }
+    if entered.is_some() {
+        nav.enter = entered;
+    }
+    let focused = ctx.memory(egui::Memory::focused);
+    nav.focused = ids.iter().position(|id| focused == Some(*id));
+    nav.open = ids.iter().position(|id| egui::Popup::is_id_open(ctx, popup_id(*id)));
+    if nav.focused.is_none() && nav.open.is_none() && nav.enter.is_none() {
+        let to = nav.return_to.filter(|_| focused.is_none());
+        app.view.menu_nav = None;
+        if let Some(id) = to {
+            ctx.memory_mut(|m| m.request_focus(id));
+        }
+    }
+}
+
+/// Alt pressed and released with nothing between (no key, click or other modifier) goes to the
+/// menu bar, as F10 does. Not on a Mac, where Option is for typing and the menus are the system's.
+#[derive(Debug, Default)]
+pub(crate) struct AltTap {
+    armed: bool,
+    held: egui::Modifiers,
+}
+
+impl AltTap {
+    /// Whether this frame's input completes an Alt tap.
+    pub fn tapped(&mut self, ctx: &egui::Context) -> bool {
+        if ctx.os() == egui::os::OperatingSystem::Mac {
+            return false;
+        }
+        let mut tapped = false;
+        ctx.input(|i| {
+            for event in &i.events {
+                match event {
+                    egui::Event::ModifiersChanged(m) => {
+                        if *m == egui::Modifiers::ALT {
+                            self.armed = !self.held.alt;
+                        } else if !m.any() && self.armed && self.held.alt {
+                            tapped = true;
+                            self.armed = false;
+                        } else {
+                            self.armed = false;
+                        }
+                        self.held = *m;
+                    }
+                    egui::Event::Key { .. }
+                    | egui::Event::Text(_)
+                    | egui::Event::PointerButton { .. }
+                    | egui::Event::MouseWheel { .. }
+                    | egui::Event::WindowFocused(_) => self.armed = false,
+                    _ => {}
+                }
+            }
+        });
+        tapped
+    }
 }
 
 /// The app mark: the app icon, small. It is a button to the start page (the projects); returns
