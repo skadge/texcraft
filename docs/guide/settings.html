@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Every tab of TeXCraft&#x27;s Settings dialog: appearance, the editor, building, the keyboard, review, AI and accounts.">
+  <title>Settings · TeXCraft User Guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+  <header class="site">
+    <p class="brand"><a href="index.html">TeXCraft <span>User Guide</span></a></p>
+    <ul class="site-links">
+      <li><a href="https://texcraft-893d51.gitlab.io/">Open in the browser</a></li>
+      <li><a href="index.html#download">Download</a></li>
+      <li><a href="https://gitlab.com/severin-lemaignan/texcraft">Source</a></li>
+    </ul>
+  </header>
+  <div class="layout">
+    <nav class="guide-nav" aria-label="Guide">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="writing.html">Writing</a></li>
+        <li><a href="building.html">Building and exporting</a></li>
+        <li><a href="projects.html">Projects, files and history</a></li>
+        <li><a href="forges.html">GitLab and GitHub</a></li>
+        <li><a href="review.html">Comments and suggestions</a></li>
+        <li><a href="ai.html">AI assistance</a></li>
+        <li><a href="keyboard.html">Keyboard and accessibility</a></li>
+        <li><a href="settings.html" aria-current="page">Settings</a></li>
+        <li><a href="agents.html">Agents and automation</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+      </ul>
+    </nav>
+    <main id="main" tabindex="-1">
+      <h1>Settings</h1>
+      <p class="lead">Open the Settings dialog with <span class="ui">Edit › Settings…</span> (<kbd>Ctrl</kbd>+<kbd>,</kbd>), or the <span class="ui">Settings</span> button at the bottom of the rail. Changes apply at once; there is nothing to confirm.</p>
+      <p>Your settings are kept on your computer (<a href="troubleshooting.html#files">where</a>), or in the browser for the browser version. A few things belong to a project rather than to you, and are kept in its <code>.texcraft</code> folder: its own spellings and whether AI may be used for it.</p>
+
+      <h2 id="appearance">Appearance</h2>
+      <!-- screenshot: the Settings dialog on its Building tab -->
+      <dl>
+        <dt>Theme</dt>
+        <dd><span class="ui">System</span> (light or dark as your system is set), <span class="ui">Light</span> or <span class="ui">Dark</span>.</dd>
+        <dt>System title bar <span class="tag">Desktop only</span></dt>
+        <dd>TeXCraft draws its own title bar, with the window's buttons in the top bar. Tick this to have your system's title bar instead.</dd>
+        <dt>Interface language</dt>
+        <dd>The language of the menus and messages, or as the system is set. The interface is in English for now; translations will come.</dd>
+      </dl>
+
+      <h2 id="editor">Editor</h2>
+      <dl>
+        <dt>Font size</dt>
+        <dd>The size of the source text, in points.</dd>
+        <dt>Editor key bindings</dt>
+        <dd><span class="ui">Standard</span> editing keys, or <span class="ui">Vim</span> (<a href="writing.html#vim">Vim mode</a>).</dd>
+        <dt>Close brackets and environments</dt>
+        <dd>Typing <code>(</code>, <code>[</code> or <code>{</code> adds the closing one, and <code>\begin{…}</code> its <code>\end{…}</code>.</dd>
+        <dt>Check spelling</dt>
+        <dd>Underline misspelled words. Commands, math and verbatim text are skipped (<a href="writing.html#spelling">Spelling</a>).</dd>
+        <dt>Spelling language</dt>
+        <dd><span class="ui">From the document</span> (its <code>babel</code> or <code>polyglossia</code> language, or the interface's when it names none), or a language of your choice. The setting says which language is checked now.</dd>
+        <dt>Check comments</dt>
+        <dd>Also check the text after <code>%</code> in the source.</dd>
+      </dl>
+
+      <h2 id="building">Building</h2>
+      <dl>
+        <dt>Compile automatically</dt>
+        <dd>Build the PDF when typing pauses.</dd>
+        <dt>Pause before building</dt>
+        <dd>How long typing must stop before an automatic build.</dd>
+        <dt>Engine</dt>
+        <dd>How the document is typeset: <span class="ui">Chosen from the document</span>, <span class="ui">LuaLaTeX</span> or <span class="ui">pdfLaTeX</span>.</dd>
+        <dt>Stop at the first error</dt>
+        <dd>Otherwise the build goes on and reports every error.</dd>
+        <dt>Draft images</dt>
+        <dd>Draw images as framed boxes with their names, for faster builds.</dd>
+        <dt>PDF for</dt>
+        <dd><span class="ui">Screen</span>; <span class="ui">Accessible</span> (tagged, PDF/UA, checked for screen readers); or <span class="ui">Print</span> (a PDF/X, checked as printers check it). See <a href="building.html#accessible">Building</a>.</dd>
+        <dt>PDF/X standard, Bleed, Crop marks</dt>
+        <dd>Shown for <span class="ui">Print</span>: PDF/X-4 or PDF/X-1a, how far the art runs past the page's edges (printers often ask for 3 mm), and marks outside the bleed that show where to trim.</dd>
+      </dl>
+      <p>The Compile button's menu has the most used of these too.</p>
+
+      <h2 id="keyboard">Keyboard</h2>
+      <dl>
+        <dt>Editor key bindings</dt>
+        <dd>The same choice as in the Editor tab.</dd>
+        <dt>Keyboard shortcuts</dt>
+        <dd><span class="ui">Change Shortcuts…</span> opens the list of every command and its shortcut (<a href="keyboard.html#change">Changing shortcuts</a>).</dd>
+      </dl>
+
+      <h2 id="review">Review</h2>
+      <dl>
+        <dt>Your name</dt>
+        <dd>Shown with your comments, replies and suggestions. Suggest mode needs it.</dd>
+        <dt>Your key</dt>
+        <dd>Made on this computer with your first comment (or now, with <span class="ui">Make Key</span>). It tells your comments from those of someone else with the same name; others see a short form of it.</dd>
+      </dl>
+
+      <h2 id="ai">AI <span class="tag">Desktop only</span></h2>
+      <p>The connection to a model (endpoint, token, model), what may be sent with a switch for each kind of request, the prompts, the log of what was sent, the next words as you type, and the project's own switch. All of it is described on the <a href="ai.html">AI assistance</a> page. In the browser this tab says AI is not available there yet.</p>
+
+      <h2 id="accounts">Accounts</h2>
+      <p>Who you are signed in as on GitLab, GitHub and your organisation's servers, with <span class="ui">Sign In</span> and <span class="ui">Sign Out</span> for each, <span class="ui">Add a GitLab Server…</span>, <span class="ui">Add a GitHub Enterprise Server…</span> and <span class="ui">Remove Server</span>. Servers your organisation provides are marked so and cannot be removed. See <a href="forges.html#sign-in">Signing in</a> and <a href="forges.html#servers">Your organisation's servers</a>.</p>
+      <nav class="pager" aria-label="Previous and next page">
+        <a class="prev" href="keyboard.html" rel="prev"><span class="dir">Previous</span> Keyboard and accessibility</a>
+        <a class="next" href="agents.html" rel="next"><span class="dir">Next</span> Agents and automation</a>
+      </nav>
+    </main>
+  </div>
+  <footer class="site">
+    <p>Describes TeXCraft 0.12.0 and the changes made since. What changed in each release is in the <a href="https://gitlab.com/severin-lemaignan/texcraft/-/blob/main/CHANGELOG.md">changelog</a>.</p>
+    <p><a href="https://gitlab.com/severin-lemaignan/texcraft/-/edit/main/docs/guide/settings.html">Edit this page</a> · <a href="https://gitlab.com/severin-lemaignan/texcraft/-/issues">Report a problem</a> · The guide is licensed MIT OR Apache-2.0, like TeXCraft.</p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Every default keyboard shortcut of TeXCraft, how to change them, moving between the window&#x27;s regions, and how TeXCraft works with screen readers.">
+  <title>Keyboard and accessibility · TeXCraft User Guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+  <header class="site">
+    <p class="brand"><a href="index.html">TeXCraft <span>User Guide</span></a></p>
+    <ul class="site-links">
+      <li><a href="https://texcraft-893d51.gitlab.io/">Open in the browser</a></li>
+      <li><a href="index.html#download">Download</a></li>
+      <li><a href="https://gitlab.com/severin-lemaignan/texcraft">Source</a></li>
+    </ul>
+  </header>
+  <div class="layout">
+    <nav class="guide-nav" aria-label="Guide">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="writing.html">Writing</a></li>
+        <li><a href="building.html">Building and exporting</a></li>
+        <li><a href="projects.html">Projects, files and history</a></li>
+        <li><a href="forges.html">GitLab and GitHub</a></li>
+        <li><a href="review.html">Comments and suggestions</a></li>
+        <li><a href="ai.html">AI assistance</a></li>
+        <li><a href="keyboard.html" aria-current="page">Keyboard and accessibility</a></li>
+        <li><a href="settings.html">Settings</a></li>
+        <li><a href="agents.html">Agents and automation</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+      </ul>
+    </nav>
+    <main id="main" tabindex="-1">
+      <h1>Keyboard and accessibility</h1>
+      <p class="lead">Everything in TeXCraft can be done from the keyboard. Every command has an entry you can bind to a key, and <kbd>F6</kbd> moves between the parts of the window.</p>
+
+      <h2 id="change">Changing shortcuts</h2>
+      <p><span class="ui">Help › Keyboard Shortcuts</span> (also the <span class="ui">Keyboard Shortcuts</span> button at the bottom of the rail, and <span class="ui">Change Shortcuts…</span> in <a href="settings.html#keyboard">Settings › Keyboard</a>) lists every command with its shortcut. Give a command a new key, or take one away. Your changes are kept with your settings.</p>
+      <p>The tables below are the defaults. On macOS, <kbd>Ctrl</kbd> is <kbd>Cmd</kbd> and <kbd>Alt</kbd> is <kbd>Option</kbd>.</p>
+
+      <h2 id="shortcuts">Default shortcuts</h2>
+      <div class="table-wrap" role="region" aria-label="Shortcuts of the File menu and building" tabindex="0">
+      <table>
+        <caption>Projects, files and building</caption>
+        <thead><tr><th scope="col">Command</th><th scope="col">Where</th><th scope="col">Shortcut</th></tr></thead>
+        <tbody>
+          <tr><td>Open Project Folder…</td><td>File</td><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td></tr>
+          <tr><td>Save</td><td>File</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td></tr>
+          <tr><td>Save Project As…</td><td>File</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td></tr>
+          <tr><td>Close File</td><td>File</td><td><kbd>Ctrl</kbd>+<kbd>W</kbd></td></tr>
+          <tr><td>Compile</td><td>Compile button</td><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div class="table-wrap" role="region" aria-label="Shortcuts of the Edit menu" tabindex="0">
+      <table>
+        <caption>Editing</caption>
+        <thead><tr><th scope="col">Command</th><th scope="col">Where</th><th scope="col">Shortcut</th></tr></thead>
+        <tbody>
+          <tr><td>Undo</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td></tr>
+          <tr><td>Redo</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td></tr>
+          <tr><td>Cut, Copy, Paste</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>X</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>Ctrl</kbd>+<kbd>V</kbd></td></tr>
+          <tr><td>Select All</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>A</kbd></td></tr>
+          <tr><td>Find</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td></tr>
+          <tr><td>Replace</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd></td></tr>
+          <tr><td>Go to Line…</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd></td></tr>
+          <tr><td>Go to File…</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td></tr>
+          <tr><td>Find in Project</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></td></tr>
+          <tr><td>Show in PDF</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd></td></tr>
+          <tr><td>Quick Fix</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>.</kbd></td></tr>
+          <tr><td>Next Misspelling</td><td>Edit</td><td><kbd>F7</kbd></td></tr>
+          <tr><td>Fold, Unfold</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>]</kbd></td></tr>
+          <tr><td>Fold All, Unfold All</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd>, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>]</kbd></td></tr>
+          <tr><td>Comment</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd></td></tr>
+          <tr><td>Next Comment, Previous Comment</td><td>Edit</td><td><kbd>F8</kbd>, <kbd>Shift</kbd>+<kbd>F8</kbd></td></tr>
+          <tr><td>Suggest Changes</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td></tr>
+          <tr><td>Settings…</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>,</kbd></td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div class="table-wrap" role="region" aria-label="Shortcuts of the Insert menu" tabindex="0">
+      <table>
+        <caption>Inserting</caption>
+        <thead><tr><th scope="col">Command</th><th scope="col">Where</th><th scope="col">Shortcut</th></tr></thead>
+        <tbody>
+          <tr><td>Bold</td><td>Insert</td><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td></tr>
+          <tr><td>Italic</td><td>Insert</td><td><kbd>Ctrl</kbd>+<kbd>I</kbd></td></tr>
+          <tr><td>Inline Formula</td><td>Insert</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div class="table-wrap" role="region" aria-label="Shortcuts of the window and the PDF" tabindex="0">
+      <table>
+        <caption>The window and the PDF</caption>
+        <thead><tr><th scope="col">Command</th><th scope="col">Where</th><th scope="col">Shortcut</th></tr></thead>
+        <tbody>
+          <tr><td>Zoom In, Zoom Out</td><td>PDF pane</td><td><kbd>Ctrl</kbd>+<kbd>=</kbd>, <kbd>Ctrl</kbd>+<kbd>-</kbd></td></tr>
+          <tr><td>Actual Size</td><td>PDF pane</td><td><kbd>Ctrl</kbd>+<kbd>0</kbd></td></tr>
+          <tr><td>Present the PDF</td><td>PDF pane</td><td><kbd>F5</kbd></td></tr>
+          <tr><td>Go to the Menu Bar</td><td>Window</td><td><kbd>F10</kbd>, or <kbd>Alt</kbd> pressed and released alone</td></tr>
+          <tr><td>Next Region, Previous Region</td><td>Window</td><td><kbd>F6</kbd>, <kbd>Shift</kbd>+<kbd>F6</kbd></td></tr>
+          <tr><td>Focus Mode</td><td>Window</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td></tr>
+          <tr><td>User Guide</td><td>Help</td><td><kbd>F1</kbd></td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <h3 id="editor-keys">Keys of the editor</h3>
+      <p>These belong to the source editor and are not in the shortcuts list:</p>
+      <ul>
+        <li><kbd>Ctrl</kbd>+<kbd>Space</kbd>: completions at the caret. <kbd>F12</kbd>: go to the definition.</li>
+        <li><kbd>Alt</kbd>+click: add or remove a caret. <kbd>Ctrl</kbd>+<kbd>D</kbd>: select the word, then add the next occurrence. <kbd>Escape</kbd>: back to one caret.</li>
+        <li><kbd>Shift</kbd>+<kbd>F10</kbd> or the <kbd>Menu</kbd> key: the text's menu.</li>
+        <li><kbd>Tab</kbd>: take the next words the AI suggests, when shown.</li>
+        <li><kbd>Escape</kbd> (standard bindings): leave the editor, so <kbd>Tab</kbd> moves on to the next control.</li>
+      </ul>
+      <p>In <a href="writing.html#vim">Vim mode</a>, Vim's keys apply, and Vim keeps its own <kbd>Ctrl</kbd> keys; the window's other shortcuts still work.</p>
+      <p>Many commands have no default shortcut, such as <span class="ui">Section</span>, <span class="ui">Numbered Equation</span>, <span class="ui">Accept All Suggestions</span> or the layouts (<span class="ui">Editor and PDF</span>, <span class="ui">Editor Only</span>, <span class="ui">PDF Only</span>); you can give them one.</p>
+
+      <h2 id="regions">Moving around the window</h2>
+      <p><kbd>F6</kbd> moves the keyboard to the next region of the window and <kbd>Shift</kbd>+<kbd>F6</kbd> to the previous one, from anywhere, including from inside the editor:</p>
+      <ol>
+        <li>Menu bar and project</li>
+        <li>Sections (the rail)</li>
+        <li>Project files and outline (the side panel)</li>
+        <li>Editor</li>
+        <li>Comments (the margin)</li>
+        <li>PDF and build log</li>
+      </ol>
+      <p>Within a region, <kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd> move between controls in reading order, and the arrow keys move within lists, trees and menus. A menu opened from the keyboard starts on its first entry. Dialogs take the keyboard when they open, <kbd>Escape</kbd> closes them, and the keyboard goes back where it was.</p>
+      <p><kbd>F10</kbd>, or <kbd>Alt</kbd> pressed and released alone, goes to the menu bar. On macOS, where the menus are in the system's menu bar, use <kbd>Control</kbd>+<kbd>F2</kbd>.</p>
+      <p class="note">The comments in the margin are reached with <kbd>F6</kbd>, not <kbd>Tab</kbd>, because the editor keeps <kbd>Tab</kbd> for indenting.</p>
+
+      <h2 id="screen-readers">Screen readers</h2>
+      <ul>
+        <li>Every control has a name that starts with its visible label, its role and its state. The source editor and the formatted view are editable text areas with their text, caret and selection.</li>
+        <li>Build results, and other changes away from the keyboard's place, are announced.</li>
+        <li>Colour is never the only sign: errors and warnings have their words and icons, and suggestions are struck through or underlined.</li>
+        <li>The light and dark themes are checked for contrast on every pair of colours. The theme can follow your system's (<a href="settings.html#appearance">Settings › Appearance</a>).</li>
+        <li>For readers of your documents, TeXCraft can make <a href="building.html#accessible">accessible PDFs</a> (PDF/UA) and list what keeps them from being read.</li>
+      </ul>
+      <p class="not-yet"><strong>Not yet:</strong> a full pass with a screen reader by a person; the Keyboard Shortcuts table has one item that does not say its role yet. Reports from screen-reader users are very welcome.</p>
+      <nav class="pager" aria-label="Previous and next page">
+        <a class="prev" href="ai.html" rel="prev"><span class="dir">Previous</span> AI assistance</a>
+        <a class="next" href="settings.html" rel="next"><span class="dir">Next</span> Settings</a>
+      </nav>
+    </main>
+  </div>
+  <footer class="site">
+    <p>Describes TeXCraft 0.12.0 and the changes made since. What changed in each release is in the <a href="https://gitlab.com/severin-lemaignan/texcraft/-/blob/main/CHANGELOG.md">changelog</a>.</p>
+    <p><a href="https://gitlab.com/severin-lemaignan/texcraft/-/edit/main/docs/guide/keyboard.html">Edit this page</a> · <a href="https://gitlab.com/severin-lemaignan/texcraft/-/issues">Report a problem</a> · The guide is licensed MIT OR Apache-2.0, like TeXCraft.</p>
+  </footer>
+</body>
+</html>

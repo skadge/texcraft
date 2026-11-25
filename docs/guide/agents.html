@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Let AI agents and scripts work on TeXCraft projects through its MCP server or the control channel of an open window, confined to the folders you allow.">
+  <title>Agents and automation · TeXCraft User Guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+  <header class="site">
+    <p class="brand"><a href="index.html">TeXCraft <span>User Guide</span></a></p>
+    <ul class="site-links">
+      <li><a href="https://texcraft-893d51.gitlab.io/">Open in the browser</a></li>
+      <li><a href="index.html#download">Download</a></li>
+      <li><a href="https://gitlab.com/severin-lemaignan/texcraft">Source</a></li>
+    </ul>
+  </header>
+  <div class="layout">
+    <nav class="guide-nav" aria-label="Guide">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="writing.html">Writing</a></li>
+        <li><a href="building.html">Building and exporting</a></li>
+        <li><a href="projects.html">Projects, files and history</a></li>
+        <li><a href="forges.html">GitLab and GitHub</a></li>
+        <li><a href="review.html">Comments and suggestions</a></li>
+        <li><a href="ai.html">AI assistance</a></li>
+        <li><a href="keyboard.html">Keyboard and accessibility</a></li>
+        <li><a href="settings.html">Settings</a></li>
+        <li><a href="agents.html" aria-current="page">Agents and automation</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+      </ul>
+    </nav>
+    <main id="main" tabindex="-1">
+      <h1>Agents and automation <span class="tag">Desktop only</span></h1>
+      <p class="lead">Every action of TeXCraft's menus is a command, and agents and scripts can run the same commands. They reach what the interface reaches, and nothing else.</p>
+
+      <h2 id="mcp">The MCP server</h2>
+      <p>The command-line tool includes a server for the Model Context Protocol (MCP), which many AI agents and coding assistants speak. It works without a window, on project folders:</p>
+<pre><code>texcraft-cli mcp --automation-read-root DIR --automation-write-root DIR</code></pre>
+      <ul>
+        <li><code>--automation-read-root</code> names a folder the agent may read, and <code>--automation-write-root</code> one it may change. Both can be given more than once.</li>
+        <li>It refuses to start without both, and refuses any file outside them, so an agent cannot wander through your disk.</li>
+        <li>It talks over its standard input and output, as MCP clients expect: register it in your agent's settings as a command to run. For example, with Claude Code:
+<pre><code>claude mcp add texcraft -- /path/to/texcraft-cli mcp --automation-read-root /work/thesis --automation-write-root /work/thesis</code></pre></li>
+      </ul>
+      <p>The server offers two tools: <code>command_list</code>, which describes every command with its parameters and whether it can run now, and <code>command_run</code>, which runs one. An agent opens a project with <code>project.open</code>, edits with <code>file.edit</code>, builds with <code>build.compile</code> and reads the messages, and can comment with <code>review.comment</code> or propose a change with <code>review.suggest</code>, which you then <a href="review.html#suggest">accept or reject</a> as any suggestion.</p>
+      <p>From the AppImage, make a link named <code>texcraft-cli</code> to it and run that: <code>ln -s TeXCraft-*.AppImage texcraft-cli</code>, then <code>./texcraft-cli mcp …</code>.</p>
+
+      <h2 id="control">The control channel of an open window</h2>
+      <p>Started with <code>texcraft --control</code>, the desktop app also listens on this computer only (from port 7841) for requests to run its commands, so scripts and tests can drive the window you are looking at. A connection must first give a token that each start writes to a file only you can read. The protocol is described in <a href="https://gitlab.com/severin-lemaignan/texcraft/-/blob/main/docs/control-protocol.md">docs/control-protocol.md</a>.</p>
+
+      <h2 id="limits">What agents cannot do</h2>
+      <ul>
+        <li>Reach files outside the folders they are given.</li>
+        <li>Turn on AI requests or agree to send text on your behalf: they can only switch kinds of request off (<a href="ai.html#privacy">AI privacy</a>).</li>
+        <li>See your tokens or sign-ins: these never appear in a command's result.</li>
+      </ul>
+      <nav class="pager" aria-label="Previous and next page">
+        <a class="prev" href="settings.html" rel="prev"><span class="dir">Previous</span> Settings</a>
+        <a class="next" href="troubleshooting.html" rel="next"><span class="dir">Next</span> Troubleshooting</a>
+      </nav>
+    </main>
+  </div>
+  <footer class="site">
+    <p>Describes TeXCraft 0.12.0 and the changes made since. What changed in each release is in the <a href="https://gitlab.com/severin-lemaignan/texcraft/-/blob/main/CHANGELOG.md">changelog</a>.</p>
+    <p><a href="https://gitlab.com/severin-lemaignan/texcraft/-/edit/main/docs/guide/agents.html">Edit this page</a> · <a href="https://gitlab.com/severin-lemaignan/texcraft/-/issues">Report a problem</a> · The guide is licensed MIT OR Apache-2.0, like TeXCraft.</p>
+  </footer>
+</body>
+</html>
