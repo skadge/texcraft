@@ -1,5 +1,5 @@
-//! AI4 and AI5 in the window: Make with AI previews the model's LaTeX typeset and inserts it as a
-//! suggestion; Add a Reference with AI says models invent references and suggests the entry in a
+//! AI4 and AI5 in the window: Make with AI previews the model's LaTeX typeset and inserts it at the
+//! caret; Add a Reference with AI says models invent references and suggests the entry in a
 //! `.bib`; the Ask panel shows answers with links to the lines they name; Review This Section
 //! leaves comments. A fake model answers; nothing reaches a network.
 
@@ -38,11 +38,15 @@ fn caret_on_line_4(h: &mut Harness<'_, App>) {
     h.run();
 }
 
+/// As on the desktop by default: the editor beside the PDF, too narrow for the margin of
+/// suggestions. Insert puts the LaTeX in the text at the caret, where it is seen, and Undo takes it
+/// out (issue #13: a suggestion there was nowhere to be seen).
 #[test]
-fn make_with_ai_asks_first_previews_the_typeset_latex_and_inserts_a_suggestion() -> Result<(), String> {
+fn make_with_ai_asks_first_previews_the_typeset_latex_and_insert_puts_it_at_the_caret() -> Result<(), String> {
     let prompts = Arc::new(Mutex::new(Vec::new()));
     let reply = "<<<LATEX\n\\begin{tabular}{cc}\nA & B\\\\\n1 & 2\n\\end{tabular}\nLATEX>>>";
     let mut h = editor(reply, DOC, &prompts, false, false)?;
+    ui_cmd::run(h.state_mut(), "view.layout.split");
     caret_on_line_4(&mut h);
     ui_cmd::run(h.state_mut(), "edit.ai_make");
     h.run();
@@ -63,8 +67,18 @@ fn make_with_ai_asks_first_previews_the_typeset_latex_and_inserts_a_suggestion()
     // The menu bar's Insert menu comes first; the dialog's button last.
     h.get_all_by_label("Insert").last().ok_or("no Insert button")?.click();
     h.run();
-    assert_eq!(main_text(&h), DOC, "Insert edited the file");
-    assert_eq!(open_suggestions(&mut h), 1, "Insert made no suggestion");
+    h.run();
+    let text = main_text(&h);
+    let table = text.find("\\begin{tabular}").ok_or("Insert put nothing in the file")?;
+    let line = text.find("The values grow fast.").ok_or("the line at the caret is gone")?;
+    assert!(table < line && text.find("\\section{Results}").is_some_and(|s| s < table), "not inserted at the caret: {text}");
+    assert_eq!(open_suggestions(&mut h), 0, "Insert made a suggestion as well");
+    assert!(h.query_by_label_contains("Undo takes it out").is_some(), "the status line does not say what Insert did");
+    // The editor shows it: the edit is the editor's to undo.
+    ui_cmd::run(h.state_mut(), "edit.undo");
+    h.run();
+    h.run();
+    assert_eq!(main_text(&h), DOC, "Undo did not take the inserted LaTeX out");
     Ok(())
 }
 

@@ -152,6 +152,21 @@ pub(crate) fn send_edits(app: &mut App) -> bool {
     sent
 }
 
+/// After the session edited `path` (an edit the user asked for, such as made LaTeX inserted):
+/// the editor takes the edit now, undoable, and selects characters `start..end` of the file.
+pub(crate) fn select_after_edit(app: &mut App, path: &ProjectPath, start: usize, end: usize) {
+    if app.editor.path.as_ref() != Some(path) {
+        return;
+    }
+    let current = app.session.current().cloned();
+    app.editor.sync(current.as_ref(), &app.session);
+    let (from, to) = (crate::suggest::to_view(app, path, start), crate::suggest::to_view_end(app, path, end));
+    let len = app.editor.source.doc.buffer.len_chars();
+    app.editor.source.select(from.min(len), to.min(len));
+    app.editor.source.reveal = true;
+    app.editor.focus = true;
+}
+
 /// Whether an image can go into the shown file now ([`insert_image`]), or why not.
 pub(crate) fn can_insert(app: &App) -> Result<(), String> {
     if app.editor.suggest {

@@ -110,8 +110,9 @@ and the packages it needs a second one before \\begin{document}; never an edit. 
 }
 
 fn insert_made_schema() -> Value {
-    json!({"type": "object", "description": "Inserts the last thing ai.make made, at its caret, as a suggested change (and its packages before \\begin{document} as another).", "properties": {
-        "anyway": {"type": "boolean", "description": "Insert it even though it did not typeset. Default: false."}
+    json!({"type": "object", "description": "Inserts the last thing ai.make made, at its caret, and the packages it needs before \\begin{document}: as suggested changes, or with `edit` as an edit (Undo takes it out).", "properties": {
+        "anyway": {"type": "boolean", "description": "Insert it even though it did not typeset. Default: false."},
+        "edit": {"type": "boolean", "description": "Insert it as an edit, not as suggested changes: for when the person saw it and chose to insert it (the window's Insert). Default: false."}
     }, "additionalProperties": false})
 }
 
@@ -254,7 +255,7 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn insert_made(s: &mut Session, p: &Value) -> Result<Value> {
-    s.ai_insert_made(flag(p, "anyway"))
+    s.ai_insert_made(flag(p, "anyway"), flag(p, "edit"))
 }
 
 fn reference(s: &mut Session, p: &Value) -> Result<Value> {

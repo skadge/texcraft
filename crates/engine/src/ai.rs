@@ -67,7 +67,9 @@ pub use ask::{
     Answered, Link, MAX_ASK_CHARS, MAX_QUESTION_CHARS, MAX_REVIEW_CHARS, Question, Remark, Reviewed, Scope, Section, find_quote, links, remarks,
     section_at,
 };
-pub use make::{MAX_DESCRIPTION_CHARS, Made, MakeKind, Making, Preview, Referenced, Scratch, Typeset, UNVERIFIED, entry, made, retex_typeset};
+pub use make::{
+    Inserted, MAX_DESCRIPTION_CHARS, Made, MakeKind, Making, Preview, Referenced, Scratch, Typeset, UNVERIFIED, entry, made, retex_typeset,
+};
 pub use write::{
     COMPLETE_EVERY_MS, Ghost, How, MAX_PARAGRAPH_CHARS, MAX_REWRITE_CHARS, Paragraph, Passage, REWRITE_CONTEXT_CHARS, Rewritten, continuation,
     rewritten,

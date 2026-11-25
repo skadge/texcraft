@@ -569,6 +569,37 @@ fn making_sends_what_was_disclosed_and_a_typeset_answer_becomes_suggestions_neve
     Ok(())
 }
 
+/// What the person saw and chose to insert goes in as one edit of the file: the packages before
+/// `\begin{document}` and the LaTeX at the caret, its place given back with the packages counted.
+#[test]
+fn inserting_as_an_edit_puts_the_latex_at_the_caret_and_its_packages_in_the_preamble_at_once() -> R {
+    let seen = Seen::default();
+    let mut s = session(
+        20,
+        "<<<LATEX\n\\begin{tikzpicture}\\draw (0,0) -- (1,1);\\end{tikzpicture}\nLATEX>>>\n<<<PACKAGES\n\\usepackage{tikz}\nPACKAGES>>>",
+        &seen,
+    )?;
+    typesetter(&mut s);
+    s.execute("ai.connect", &json!({"endpoint": "http://127.0.0.1:11434/v1", "model": "small"}))?;
+    let p = json!({"kind": "tikz", "description": "a line", "path": "main.tex", "at": caret(&s), "insert": false});
+    s.execute("ai.make", &p)?;
+    let main = texcraft_engine::project::ProjectPath::new("main.tex")?;
+    let before = s.revision();
+    let r = s.execute("ai.insert_made", &json!({"edit": true}))?;
+    assert_eq!(r["edited"], true, "{r}");
+    assert_eq!(suggestions(&mut s)?["openSuggestions"], 0, "an edit made suggestions too");
+    let after = text(&s);
+    let (pkg, doc, pic, line10) =
+        (after.find("\\usepackage{tikz}"), after.find("\\begin{document}"), after.find("\\begin{tikzpicture}"), after.find("Line 10 of"));
+    assert!(pkg.is_some() && pkg < doc && doc < pic && pic < line10, "not in their places:\n{after}");
+    let start = r["start"].as_u64().and_then(|n| usize::try_from(n).ok()).unwrap_or_default();
+    let shown: String = after.chars().skip(start).take("\\begin{tikzpicture}".len()).collect();
+    assert_eq!(shown, "\\begin{tikzpicture}", "`start` is not where the LaTeX went");
+    assert_eq!(s.edits_since(&main, before).map(|e| e.len()), Some(1), "the packages and the LaTeX are not one edit");
+    assert!(s.execute("ai.insert_made", &json!({"edit": true})).is_err(), "inserted twice");
+    Ok(())
+}
+
 #[test]
 fn an_answer_that_does_not_typeset_is_reported_and_asking_again_sends_the_error() -> R {
     let seen = Seen::default();
