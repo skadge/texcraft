@@ -12,6 +12,10 @@
 //!   their gutter marker, the Fold commands or Vim's `z` keys. A folded region keeps its first line,
 //!   with a "…" chip, and its other lines take no room; folds follow edits through buffer marks,
 //!   and open when the caret lands inside or the region's structure breaks.
+//! - **Several carets** (outside Vim mode): Alt+click adds or removes a caret, Cmd+D selects the
+//!   word at the caret and then each next occurrence of it. Typing, Backspace, Delete, Enter, Tab
+//!   and the arrows, Home and End act at every caret, an edit at all of them undone as one; Escape
+//!   returns to one caret. Other commands act on the primary caret.
 //! - **Accessibility:** the editor is an editable multi-line text node with its value, caret and
 //!   selection, one text run per line. Escape leaves the editor in the standard bindings, and F6
 //!   moves between regions in both, so the keyboard is never trapped.
@@ -24,7 +28,7 @@ use std::sync::Arc;
 use craft_ui::ime::{Composer, Edit};
 use egui::text::{CCursor, LayoutJob, TextFormat};
 use egui::{Align2, Galley, Pos2, Rect, Sense, Vec2, pos2, vec2};
-use texcraft_buffer::{Bias, Buffer, EditKind, MarkId, Selection, Transaction};
+use texcraft_buffer::{Bias, Buffer, Change, EditKind, MarkId, Range, Selection, Transaction};
 use texcraft_engine::Severity;
 use texcraft_latex::fold::{FoldKind, FoldRegion};
 use texcraft_vim::{Ctx, Effect, Fold, Key, Mode, Vim};
@@ -385,7 +389,12 @@ impl SourceEditor {
 
     pub fn set_vim(&mut self, on: bool) {
         match (on, self.vim.is_some()) {
-            (true, false) => self.vim = Some(Vim::new()),
+            (true, false) => {
+                // Vim mode has one caret.
+                let r = self.doc.selection.primary();
+                self.doc.selection = Selection::single(r.anchor, r.head);
+                self.vim = Some(Vim::new());
+            }
             (false, true) => self.vim = None,
             _ => {}
         }
@@ -743,7 +752,8 @@ impl SourceEditor {
                     tab: true,
                     horizontal_arrows: true,
                     vertical_arrows: true,
-                    escape: vim_mode.is_some() || self.completion.is_some(),
+                    // Escape returns several carets to one before it leaves the editor.
+                    escape: vim_mode.is_some() || self.completion.is_some() || self.multi(),
                 },
             );
         });
@@ -900,7 +910,7 @@ impl SourceEditor {
                     for c in text.chars() {
                         self.vim_key(Key::Char(c), now, indent, ctx, out);
                     }
-                } else if self.auto_close && text.chars().count() == 1 {
+                } else if self.auto_close && text.chars().count() == 1 && !self.multi() {
                     let c = text.chars().next().unwrap_or(' ');
                     self.type_char(c, now, indent);
                 } else {
@@ -908,7 +918,7 @@ impl SourceEditor {
                 }
                 // A command, a reference, a citation, an environment being typed: ask what fits.
                 let trigger = text.chars().last().is_some_and(|c| c.is_alphanumeric() || matches!(c, '\\' | '{' | ',' | ':' | '-' | '_'));
-                if inserting && (trigger || self.completion.is_some()) {
+                if inserting && !self.multi() && (trigger || self.completion.is_some()) {
                     self.wants_completion = true;
                 } else {
                     self.completion = None;
@@ -938,11 +948,13 @@ impl SourceEditor {
                     self.vim_key(Key::Ctrl(key), now, indent, ctx, out);
                     return;
                 }
-                let r = self.doc.selection.primary();
-                if r.is_empty() {
+                let ranges = self.doc.selection.ranges();
+                if ranges.iter().all(Range::is_empty) {
                     return;
                 }
-                ctx.copy_text(self.doc.buffer.slice(r.start(), r.end()));
+                // With several selections, their texts one per line.
+                let texts: Vec<String> = ranges.iter().filter(|r| !r.is_empty()).map(|r| self.doc.buffer.slice(r.start(), r.end())).collect();
+                ctx.copy_text(texts.join("\n"));
                 if edit == Edit::Cut {
                     self.replace_selection("", EditKind::Other);
                 }
@@ -1015,6 +1027,180 @@ impl SourceEditor {
         self.reveal = true;
     }
 
+    // ----- Several carets -----
+
+    /// More than one caret or selection.
+    fn multi(&self) -> bool {
+        self.doc.selection.ranges().len() > 1
+    }
+
+    fn announce_carets(&mut self) {
+        let n = self.doc.selection.ranges().len();
+        self.announce = Some(if n > 1 { crate::i18n::trn(n, "{n} caret", "{n} carets") } else { tl!("One caret").to_owned() });
+    }
+
+    /// One edit at every caret or selection, undone as one: `f` gives what each range's change
+    /// replaces and with what (none: that range changes nothing). Each range becomes a caret after
+    /// its change.
+    fn edit_each(&mut self, kind: EditKind, f: impl Fn(&Buffer, Range) -> Option<(usize, usize, String)>) {
+        let before = self.doc.selection.clone();
+        let b = &self.doc.buffer;
+        let mut changes: Vec<Change> =
+            before.ranges().iter().filter_map(|r| f(b, *r)).map(|(start, end, text)| Change { start, end, text }).collect();
+        changes.sort_by_key(|c| (c.start, c.end));
+        // Two carets whose changes overlap (Backspace at both ends of a character) make one.
+        let mut merged: Vec<Change> = Vec::with_capacity(changes.len());
+        for c in changes {
+            match merged.last_mut() {
+                Some(last) if c.start < last.end => last.end = last.end.max(c.end),
+                _ => merged.push(c),
+            }
+        }
+        let Ok(tx) = Transaction::new(merged) else { return };
+        let ranges = before.ranges().iter().map(|r| Range::point(tx.map(r.end(), Bias::Right))).collect();
+        let after = Selection::with_primary(ranges, before.primary_index()).merged();
+        if self.doc.buffer.edit(tx, &before, &after, kind).is_ok() {
+            self.doc.selection = after;
+        }
+        self.want_x = None;
+        self.reveal = true;
+    }
+
+    /// Moves every range with `f`.
+    fn move_each(&mut self, f: impl Fn(&mut Self, Range) -> Range) {
+        let before = self.doc.selection.clone();
+        let ranges = before.ranges().iter().map(|r| f(self, *r)).collect();
+        self.doc.selection = Selection::with_primary(ranges, before.primary_index()).merged();
+        self.doc.buffer.seal();
+        self.reveal = true;
+    }
+
+    /// The keys that act on every caret; false for the others, which act on the primary one.
+    fn multi_key(&mut self, key: egui::Key, m: egui::Modifiers, now: f64, indent: &str) -> bool {
+        use egui::Key as K;
+        let word = m.command || m.alt;
+        let to = |r: Range, pos: usize| if m.shift { Range::new(r.anchor, pos) } else { Range::point(pos) };
+        match key {
+            K::Escape => {
+                let r = self.doc.selection.primary();
+                self.doc.selection = Selection::single(r.anchor, r.head);
+                self.announce_carets();
+            }
+            K::ArrowLeft | K::ArrowRight => {
+                let left = key == K::ArrowLeft;
+                self.move_each(|me, r| {
+                    if !r.is_empty() && !m.shift {
+                        return Range::point(if left { r.start() } else { r.end() });
+                    }
+                    let pos = match (left, word) {
+                        (true, true) => me.word_left(r.head),
+                        (false, true) => me.word_right(r.head),
+                        (true, false) => r.head.saturating_sub(1),
+                        (false, false) => (r.head + 1).min(me.doc.buffer.len_chars()),
+                    };
+                    to(r, pos)
+                });
+            }
+            K::ArrowUp | K::ArrowDown => {
+                let rows = if key == K::ArrowUp { -1.0 } else { 1.0 };
+                self.move_each(|me, r| {
+                    me.want_x = None;
+                    let pos = me.row_step(r.head, rows);
+                    to(r, pos)
+                });
+                self.want_x = None;
+            }
+            K::Home | K::End => {
+                self.move_each(|me, r| {
+                    let b = &me.doc.buffer;
+                    let line = b.char_to_line(r.head);
+                    let pos = if key == K::End {
+                        b.line_end(line)
+                    } else {
+                        let start = b.line_to_char(line);
+                        let first = start + b.line(line).chars().take_while(|c| *c == ' ' || *c == '\t').count();
+                        if r.head == first { start } else { first }
+                    };
+                    to(r, pos)
+                });
+            }
+            K::Backspace | K::Delete => {
+                let back = key == K::Backspace;
+                let len = self.doc.buffer.len_chars();
+                let (left, right): (Vec<usize>, Vec<usize>) = if word {
+                    self.doc.selection.ranges().iter().map(|r| (self.word_left(r.head), self.word_right(r.head))).unzip()
+                } else {
+                    self.doc.selection.ranges().iter().map(|r| (r.head.saturating_sub(1), (r.head + 1).min(len))).unzip()
+                };
+                let ranges = self.doc.selection.ranges().to_vec();
+                self.edit_each(EditKind::Deleting { at: now }, |_, r| {
+                    let i = ranges.iter().position(|x| *x == r)?;
+                    match (r.is_empty(), back) {
+                        (false, _) => Some((r.start(), r.end(), String::new())),
+                        (true, true) => Some((left[i], r.head, String::new())).filter(|(s, e, _)| s < e),
+                        (true, false) => Some((r.head, right[i], String::new())).filter(|(s, e, _)| s < e),
+                    }
+                });
+            }
+            K::Enter => self.edit_each(EditKind::Typing { at: now }, |b, r| {
+                let line = b.char_to_line(r.start());
+                let lead: String = b.line(line).chars().take(r.start() - b.line_to_char(line)).take_while(|c| *c == ' ' || *c == '\t').collect();
+                Some((r.start(), r.end(), format!("\n{lead}")))
+            }),
+            K::Tab if !m.shift => {
+                let indent = indent.to_owned();
+                self.edit_each(EditKind::Typing { at: now }, |_, r| Some((r.start(), r.end(), indent.clone())));
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    /// Cmd+D: selects the word at the caret, or adds the next occurrence of the selected text as
+    /// one more selection (after the last, from the start again at the end).
+    fn add_next_occurrence(&mut self) {
+        let sel = self.doc.selection.clone();
+        let p = sel.primary();
+        let b = &self.doc.buffer;
+        if p.is_empty() {
+            let (mut s, mut e) = (p.head, p.head);
+            while s > 0 && b.char_at(s - 1).is_some_and(is_word) {
+                s -= 1;
+            }
+            while b.char_at(e).is_some_and(is_word) {
+                e += 1;
+            }
+            if s < e {
+                let mut ranges = sel.ranges().to_vec();
+                if let Some(r) = ranges.get_mut(sel.primary_index()) {
+                    *r = Range::new(s, e);
+                }
+                self.doc.selection = Selection::with_primary(ranges, sel.primary_index()).merged();
+                self.doc.buffer.seal();
+            }
+            return;
+        }
+        let needle = b.slice(p.start(), p.end());
+        let text = b.text();
+        let from = b.char_to_byte(sel.ranges().iter().map(Range::end).max().unwrap_or(p.end()));
+        let taken = |s: usize, e: usize| sel.ranges().iter().any(|r| s < r.end() && r.start() < e);
+        let after = text.get(from..).unwrap_or("").match_indices(needle.as_str()).map(|(i, _)| from + i);
+        let before = text.match_indices(needle.as_str()).map(|(i, _)| i).take_while(|i| *i < from);
+        let n = needle.chars().count();
+        let found = after.chain(before).map(|i| b.byte_to_char(i)).find(|s| !taken(*s, s + n));
+        match found {
+            Some(s) => {
+                let mut ranges = sel.ranges().to_vec();
+                ranges.push(Range::new(s, s + n));
+                self.doc.selection = Selection::many(ranges).merged();
+                self.doc.buffer.seal();
+                self.reveal = true;
+                self.announce_carets();
+            }
+            None => self.announce = Some(tl!("There is no other occurrence.").to_owned()),
+        }
+    }
+
     /// After a line motion from line `from` that landed inside a fold: the caret goes on to the
     /// line after the fold going down, or to its first line going up.
     fn step_over_fold(&mut self, from: usize) {
@@ -1043,6 +1229,11 @@ impl SourceEditor {
     }
 
     fn replace_selection(&mut self, text: &str, kind: EditKind) {
+        if self.multi() {
+            let text = text.to_owned();
+            self.edit_each(kind, |_, r| Some((r.start(), r.end(), text.clone())));
+            return;
+        }
         let r = self.doc.selection.primary();
         // Typing over a selection is its own undo step.
         if !r.is_empty() {
@@ -1105,6 +1296,13 @@ impl SourceEditor {
 
     fn standard_key(&mut self, key: egui::Key, m: egui::Modifiers, now: f64, indent: &str, ctx: &egui::Context) {
         use egui::Key as K;
+        if key == K::D && m.command {
+            self.add_next_occurrence();
+            return;
+        }
+        if self.multi() && self.multi_key(key, m, now, indent) {
+            return;
+        }
         let b = &self.doc.buffer;
         let r = self.doc.selection.primary();
         let pos = r.head;
@@ -1668,6 +1866,27 @@ impl SourceEditor {
             self.wants_definition = Some(self.pos_at(p - origin));
             return;
         }
+        // Alt+click adds a caret, or takes one away (outside Vim mode).
+        if self.vim.is_none()
+            && response.clicked()
+            && ctx.input(|i| i.modifiers.alt)
+            && let Some(p) = response.interact_pointer_pos()
+        {
+            let pos = self.pos_at(p - origin);
+            let mut ranges = self.doc.selection.ranges().to_vec();
+            match ranges.iter().position(|r| r.is_empty() && r.head == pos) {
+                Some(i) if ranges.len() > 1 => {
+                    ranges.remove(i);
+                }
+                Some(_) => {}
+                None => ranges.push(Range::point(pos)),
+            }
+            self.doc.selection = Selection::many(ranges).merged();
+            self.doc.buffer.seal();
+            self.completion = None;
+            self.announce_carets();
+            return;
+        }
         self.rest(response, origin, ctx);
         let before = self.doc.selection.clone();
         // A right-click outside the selection places the caret there, for the context menu.
@@ -1756,7 +1975,7 @@ impl SourceEditor {
             let band = Rect::from_min_max(pos2(rect.left(), y0), pos2(rect.right(), origin.y + bottom));
             if matches!(markers.get(&(line as u32)), Some((Severity::Error, _))) {
                 painter.rect_filled(band, 0.0, t.error_line);
-            } else if focused && line == caret_line && sel.is_empty() {
+            } else if focused && line == caret_line && sel.is_empty() && !self.multi() {
                 painter.rect_filled(band, 0.0, t.current_line);
             }
             let line_start = b.line_to_char(line);
@@ -1797,11 +2016,11 @@ impl SourceEditor {
                     paint_span(painter, galley, origin + vec2(0.0, *top), (s, e.max(s + 1).min(line_len.max(s + 1))), t.search_match, false);
                 }
             }
-            // The selection.
-            if !sel.is_empty() && sel.start() <= line_start + line_len && sel.end() > line_start {
-                let s = sel.start().saturating_sub(line_start);
-                let e = (sel.end() - line_start).min(line_len);
-                let through_break = sel.end() > line_start + line_len;
+            // The selection, or the selections.
+            for r in self.doc.selection.ranges().iter().filter(|r| !r.is_empty() && r.start() <= line_start + line_len && r.end() > line_start) {
+                let s = r.start().saturating_sub(line_start);
+                let e = (r.end() - line_start).min(line_len);
+                let through_break = r.end() > line_start + line_len;
                 paint_span(painter, galley, origin + vec2(0.0, *top), (s, e), t.selection, through_break);
             }
             painter.galley(origin + vec2(0.0, *top), galley.clone(), t.text);
@@ -1876,6 +2095,14 @@ impl SourceEditor {
                     let _ = painter.rect_filled(Rect::from_min_max(pos2(c.left(), c.bottom() - 2.0), pos2(c.left() + 8.0, c.bottom())), 0.0, t.text);
                 }
                 _ => {
+                    let _ = painter.rect_filled(Rect::from_min_size(c.min, vec2(2.0, c.height())), 0.0, t.text);
+                }
+            }
+            // The other carets.
+            let ranges = self.doc.selection.ranges();
+            if ranges.len() > 1 {
+                for r in ranges.iter().filter(|r| r.head != caret && !self.is_hidden(b.char_to_line(r.head))) {
+                    let c = self.rect_at(r.head).translate(origin.to_vec2());
                     let _ = painter.rect_filled(Rect::from_min_size(c.min, vec2(2.0, c.height())), 0.0, t.text);
                 }
             }
