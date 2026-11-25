@@ -24,6 +24,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = t.unit * 4.0;
                 let small = |s: String| egui::RichText::new(s).font(t.small()).color(t.text_muted);
+                if app.view.focus_mode && !app.start {
+                    leave_focus_mode(app, ui);
+                }
                 ui.label(small(app.session.backend_name()));
                 // The file's language, the comments and the caret belong to the editor, not the start page.
                 if app.start {
@@ -37,6 +40,22 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             });
         });
     });
+}
+
+/// Focus mode's way out, at the status bar's right end: a button, with its shortcut beside it.
+fn leave_focus_mode(app: &mut App, ui: &mut egui::Ui) {
+    let t = app.tokens;
+    let shortcut = app.keys.shortcut_text("view.focus_mode");
+    if let Some(keys) = &shortcut {
+        ui.label(egui::RichText::new(keys).font(t.small()).color(t.text_muted));
+    }
+    let button = egui::Button::new(egui::RichText::new(tl!("Leave Focus Mode")).font(t.small()).color(t.text)).frame_when_inactive(false);
+    let r = ui.add(button);
+    widgets::focus_ring(ui, &t, &r, r.rect, t.corner());
+    let tip = tl!("Back to the menu bar, the sections and the side panel. Escape does it too when no field has the keyboard.");
+    if r.on_hover_text(tip).clicked() {
+        crate::ui_cmd::run(app, "view.focus_mode");
+    }
 }
 
 /// The icon (`None` while building), its colour and the text describing the build.

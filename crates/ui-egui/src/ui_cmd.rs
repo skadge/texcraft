@@ -96,6 +96,9 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.menu_bar", "Go to the Menu Bar", "View", "regions", Some("F10")),
     ui("view.next_region", "Next Region", "View", "regions", Some("F6")),
     ui("view.previous_region", "Previous Region", "View", "regions", Some("Shift+F6")),
+    // Hides the menu bar, the rail and the side panel; Escape, when no field has the keyboard,
+    // leaves it too.
+    ui("view.focus_mode", "Focus Mode", "View", "focus", Some("Cmd+Shift+Enter")),
     ui("view.theme", "Switch Light and Dark", "View", "theme", None),
     ui("app.start", "Start Page", "View", "settings", None),
     ui("help.shortcuts", "Keyboard Shortcuts", "Help", "help", None),
@@ -205,6 +208,15 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "app.settings" => app.view.dialog = Some(Dialog::Settings),
         "app.start" => app.start = true,
         "view.menu_bar" => crate::top_bar::toggle_menu_bar(app),
+        "view.focus_mode" => {
+            app.view.focus_mode = !app.view.focus_mode;
+            let said = if app.view.focus_mode {
+                tl!("Focus mode: only the text and its PDF. Escape, when no field has the keyboard, leaves it.")
+            } else {
+                tl!("Focus mode is off.")
+            };
+            app.view.status = Some((said.to_owned(), false));
+        }
         "view.next_region" => app.cycle_region(true),
         "view.previous_region" => app.cycle_region(false),
         "project.open" => app.guard(Next::PickProject),

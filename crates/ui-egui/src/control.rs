@@ -86,6 +86,7 @@ impl App {
             "layout": layout,
             "side": side,
             "log": self.view.logs,
+            "focus_mode": self.view.focus_mode,
             "dialog": dialog,
             "theme": if self.tokens.scheme == crate::theme::Scheme::Dark { "dark" } else { "light" },
             "cursor": self.view.cursor.map(|(line, column)| json!({"line": line, "column": column})),

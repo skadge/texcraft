@@ -130,6 +130,12 @@ pub(crate) struct View {
     pub menu_nav: Option<top_bar::MenuNav>,
     /// The menu bar's buttons, last frame, in order.
     pub menu_ids: Vec<egui::Id>,
+    /// Focus mode (`view.focus_mode`): the menu bar, the rail and the side panel are hidden, for
+    /// this session only.
+    pub focus_mode: bool,
+    /// The control with the keyboard at the end of the last frame (Escape clears the focus before
+    /// a frame sees it).
+    pub focused_last: Option<egui::Id>,
 }
 
 pub struct App {
@@ -220,6 +226,8 @@ impl App {
                 rename: None,
                 menu_nav: None,
                 menu_ids: Vec::new(),
+                focus_mode: false,
+                focused_last: None,
             },
             editor: editor::Editor::default(),
             review: review::ReviewView::default(),
@@ -602,6 +610,7 @@ impl App {
         for id in self.keys.dispatch(ctx) {
             ui_cmd::run(self, &id);
         }
+        self.escape_focus_mode(ctx);
         // Presentation mode: the PDF's page takes the whole window.
         if self.pdf.presenting().is_some() {
             preview::present(self, ui);
@@ -617,7 +626,11 @@ impl App {
         }
         self.dropped_files(ctx);
         self.view.regions.clear();
-        top_bar::show(self, ui);
+        // In focus mode the menu bar shows only while the keyboard is in it (F10, Alt).
+        let focus_mode = self.view.focus_mode && !self.start;
+        if !focus_mode || self.view.menu_nav.is_some() {
+            top_bar::show(self, ui);
+        }
         status::show(self, ui);
         if self.start {
             start::show(self, ui);
@@ -626,9 +639,11 @@ impl App {
             window::edges(self, ctx);
             return;
         }
-        rail::show(self, ui);
-        if self.view.side.is_some() {
-            side::show(self, ui);
+        if !focus_mode {
+            rail::show(self, ui);
+            if self.view.side.is_some() {
+                side::show(self, ui);
+            }
         }
         self.panes(ui);
         gallery::show(self, ctx);
@@ -636,6 +651,27 @@ impl App {
         window::edges(self, ctx);
         if self.session.is_building() {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+        self.view.focused_last = ctx.memory(egui::Memory::focused);
+    }
+
+    /// Focus mode: Escape leaves it when nothing had the keyboard (in the standard bindings, the
+    /// first Escape leaves the editor, the second focus mode) and nothing else is open to close.
+    fn escape_focus_mode(&mut self, ctx: &egui::Context) {
+        if !self.view.focus_mode
+            || self.start
+            || self.view.dialog.is_some()
+            || self.view.menu_nav.is_some()
+            || self.view.focused_last.is_some()
+            || self.pdf.presenting().is_some()
+        {
+            return;
+        }
+        if egui::Popup::is_any_open(ctx) {
+            return;
+        }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+            ui_cmd::run(self, "view.focus_mode");
         }
     }
 

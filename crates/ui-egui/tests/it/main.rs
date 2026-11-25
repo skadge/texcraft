@@ -8,6 +8,7 @@ mod control;
 mod editor_menu;
 mod export_menu;
 mod find;
+mod focus_mode;
 mod folders;
 mod folding;
 mod forge;
