@@ -2,8 +2,9 @@
 
 Roadmap item C5 (docs/ROADMAP.md). TeXCraft follows the design retex worked out for its browser
 editor (retex's `docs/design/gitlab.md`): no server of ours and no git client in the page. The
-forge's own web API is enough to read a branch and commit to it, and GitLab's answers browsers
-(CORS) as well as the desktop. GitLab comes first; GitHub later.
+forge's own web API is enough to read a branch and commit to it, and GitLab's and GitHub's answer
+browsers (CORS) as well as the desktop. GitLab came first (steps 1 and 2), GitHub second (step 3);
+the sync logic is written once, over a `Forge` trait.
 
 ## Step 1: GitLab with a personal access token (done)
 
@@ -118,23 +119,79 @@ fake GitLab has protected branches, `start_sha` and merge requests. The engine k
 refusal with a way out (`Session::forge_problem`), reads and writes the review's thread files
 through the forge's paths, and the window's `forge::check` runs the periodic pull.
 
-Limits: merges are by line; a change on the branch made between the check and the commit is
-written over by the commit's actions for the files it sends (GitLab's commit API has no
+Limits: merges are by line; on GitLab a change on the branch made between the check and the
+commit is written over by the commit's actions for the files it sends (GitLab's commit API has no
 compare-and-swap that was checked against gitlab.com; the commit's parent says it happened); the
 choice is per file, not per change.
 
-## Step 3: signing in
+## Step 3: GitHub with a personal access token (done)
+
+What it does — everything steps 1 and 2 do, on GitHub:
+
+- **Open from GitLab or GitHub…** (the start page, File menu; `forge.open {url, service?, token,
+  ref?}`): the dialog has a GitLab / GitHub choice, set by itself when the address is on
+  gitlab.com or github.com. github.com's addresses are GitHub's: the repository's page or any page
+  under it (`/tree/main/…`), `.git` and `git@github.com:owner/repository.git` clone addresses,
+  `github.com/owner/repository`. A bare `owner/repository` is GitLab's unless GitHub is chosen
+  (`service: "github"`); another host chosen as GitHub is a GitHub Enterprise Server (its API at
+  `/api/v3`). gitlab.com's and github.com's addresses are refused for the other service. The
+  link remembers its service (`Address::service`); a link saved before is GitLab's.
+- **The token**: a fine-grained personal access token given access to the repository, with
+  Contents read-only to open it, read and write to commit, and Pull requests read and write to
+  open a pull request (a classic token: the repo scope). The dialog says so, per service; it is
+  kept as GitLab's is, per instance, for the session only.
+- **Reading**: `GET /repos/{owner}/{repo}` (its default branch, and `permissions.push`),
+  `GET …/branches/{branch}` (its head, and `protected`), `GET …/git/trees/{commit}?recursive=1`
+  (the whole tree in one answer; a tree GitHub says is `truncated`, over 100 000 entries or 7 MB,
+  is refused in words rather than opened in part) and `GET …/git/blobs/{sha}` (base64, checked
+  against the blob id; one over 10 MB by its `size` is skipped). Requests carry
+  `Authorization: Bearer`, `Accept: application/vnd.github+json` and
+  `X-GitHub-Api-Version: 2022-11-28`.
+- **Committing** through the Git Data API: the parent's tree (`GET …/git/commits/{head}`), a blob
+  for each added or changed file (`POST …/git/blobs`, eight at a time, each id checked against
+  ours; a moved file's blob is already there), a tree on the parent's (`POST …/git/trees` with
+  `base_tree`; `sha: null` deletes a path), the commit (`POST …/git/commits` with the head as its
+  parent), then the branch moved to it without forcing (`PATCH …/git/refs/heads/{branch}`,
+  `force: false`). That last step is a compare-and-swap: when it is refused (422) and the branch's
+  head moved, the new commits are taken in as a pull does (merged, or conflicts) and the commit
+  made again on the new head, up to three times; nothing anyone committed is written over. When it
+  is refused with the head unchanged (a rule the branch does not show), it is "cannot push".
+- **A protected branch** (the branch's `protected`), or no push permission, refuses the commit
+  before anything is sent, and the dialog offers a new branch with a pull request, as on GitLab.
+  GitHub shows a branch's protection rules only to administrators, so a protected branch counts as
+  one the user cannot push to even when its rules would let them; the pull request always works.
+- **A new branch with a pull request**: the commit is made on the base, `POST …/git/refs` creates
+  the branch (an existing one is refused by GitHub), `POST …/pulls` opens the pull request, and
+  its link is shown ("Open the pull request on GitHub").
+- **Labels and words say which service**: the menu's Commit to GitHub… and Update from GitHub
+  when the open project is GitHub's (Commit to GitLab or GitHub… with none), the dialogs, the
+  status line, the top bar's button, the errors. Errors in words: 401, 403 (with the permissions
+  needed), GitHub's rate limit (a 403 or 429 with `X-RateLimit-Remaining: 0`, with the minutes
+  until `X-RateLimit-Reset`, or `Retry-After`), 404 (a fine-grained token sees only the
+  repositories it was given), and GitHub's own message for 409 and 422.
+
+How it is built: `texcraft_forge::Forge` is what the sync needs (project, branch, tree, blob, one
+commit to a branch or a new branch, a request to merge); `GitLab` and `GitHub` implement it and
+`Client` is either, as the address says. A forge may answer `Made::Moved`, and `commit` then
+catches up and tries again (`Error::Busy` after three tries). The transport learned `PATCH`, and
+the browser reads GitHub's rate-limit headers. The fake (`fake::Fake`) is a GitLab or a GitHub
+over the same commits; the forge tests of opening, pulling, merging, conflicts, committing, a
+race, a new branch with a merge or pull request and a protected branch run against both.
+
+A changed or moved file keeps its mode (read from the parent's tree when the commit has one), so
+an executable file stays one. Limits: a pasted token only (GitHub's OAuth token endpoint does not
+answer browsers).
+
+## Step 4: signing in
 
 OAuth with PKCE (a non-confidential application registered on gitlab.com), the token renewed with
 its refresh token and kept in the system's secret store (desktop) or the browser's storage;
 `read_api` first, `api` asked for at the first commit. The branch checked when a stored project
-opens again.
+opens again. GitHub's OAuth token endpoint does not answer browsers, so in the browser it needs a
+small token exchange, or the device flow on the desktop.
 
-## Step 4: more forges and folders
+## Step 5: folders and more
 
-- GitHub: its API has the same calls (trees, blobs, the Git Data API for commits) and answers
-  browsers, but its OAuth token endpoint does not, so either tokens pasted by the user or a small
-  token exchange.
 - Push and pull for project folders (real git, on the desktop).
 - Files over the limits fetched when the engine reads them; a diff of the changes before
   committing; conflict markers or a side-by-side view to merge a file by hand.
