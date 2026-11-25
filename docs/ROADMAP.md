@@ -39,7 +39,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | E8 | ✅ 0.5.0 | Selections in Vim mode | The mouse and Visual mode's selection usable by commands such as commenting. |
 | E9 | ✅ 0.7.0 | Folding and several carets | Folding environments, sections and the preamble from the gutter, Edit › Fold and Vim's `z` keys; several carets with Alt+click and Cmd+D. |
 | E10 | ✅ 0.5.0 | Project-wide search | Search and replace across files, results grouped by file. |
-| E11 | ⬜ | Writing aids | A symbol palette, and spell checking that skips commands, math and verbatim. |
+| E11 | 🚧 | Writing aids | A symbol palette, and spell checking that skips commands, math and verbatim. |
 
 ## Formatted view
 
