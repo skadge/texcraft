@@ -42,6 +42,8 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             }
             if !app.start {
                 layout_switch(app, ui);
+                ui.add_space(t.unit * 2.0);
+                crate::forge::badge(app, ui);
             }
         });
     });
@@ -105,6 +107,8 @@ pub(crate) fn icon_for(id: &str) -> Option<&'static str> {
         "edit.redo" => "redo-2",
         "edit.find" => "search",
         "project.open" => "folder-open",
+        "forge.open" => "download",
+        "forge.commit" => "git-commit-horizontal",
         "project.save" => "download",
         "file.import" => "upload",
         "file.new" => "file-code",

@@ -42,6 +42,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
 /// The icon (`None` while building), its colour and the text describing the build.
 fn state(app: &App) -> (Option<&'static str>, egui::Color32, String) {
     let t = &app.tokens;
+    if let Some(text) = crate::forge::busy_text(app) {
+        return (None, t.text_muted, text);
+    }
     if app.session.is_building() {
         let text = app.view.progress.as_ref().map_or_else(|| tl!("Compiling…").to_owned(), |(p, s)| progress_text(p, *s));
         return (None, t.text_muted, text);

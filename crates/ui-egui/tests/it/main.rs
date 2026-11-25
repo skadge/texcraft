@@ -8,6 +8,7 @@ mod editor_menu;
 mod export_menu;
 mod find;
 mod folders;
+mod forge;
 mod formatted;
 mod frame;
 mod gallery;

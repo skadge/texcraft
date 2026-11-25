@@ -18,6 +18,7 @@ mod editor;
 mod figure_view;
 mod find_bar;
 pub mod fonts;
+mod forge;
 mod formatted;
 mod gallery;
 mod goto_file;
@@ -170,6 +171,8 @@ pub struct App {
     pending_name: Option<String>,
     /// The files opened in this session, the latest first, for Go to File.
     recent_files: Vec<ProjectPath>,
+    /// The files changed since the GitLab branch's base, as the top bar last counted them.
+    forge_count: forge::Count,
 }
 
 impl App {
@@ -233,6 +236,7 @@ impl App {
             dropped: Vec::new(),
             pending_name: None,
             recent_files: Vec::new(),
+            forge_count: forge::Count::default(),
         };
         app.remember_project();
         app
@@ -262,9 +266,13 @@ impl App {
         if std::mem::take(&mut self.prefs_changed) { Some(self.prefs.clone()) } else { None }
     }
 
-    /// The project's name: its folder's, or "Untitled project".
+    /// The project's name: its folder's, the GitLab project's for one opened from GitLab in no
+    /// folder, or "Untitled project".
     pub(crate) fn project_name(&self) -> String {
-        self.session.dir().and_then(|d| d.file_name()).map_or_else(|| tl!("Untitled project").to_owned(), |n| n.to_string_lossy().into_owned())
+        if let Some(name) = self.session.dir().and_then(|d| d.file_name()) {
+            return name.to_string_lossy().into_owned();
+        }
+        self.session.forge().map_or_else(|| tl!("Untitled project").to_owned(), |l| l.address.name().to_owned())
     }
 
     /// Gives the project the name `name` typed in the top bar. An untitled project is saved under
@@ -336,6 +344,7 @@ impl App {
             }
             dialogs::Next::OpenProject(folder) => self.open_project(&folder),
             dialogs::Next::PickProject => ui_cmd::pick_project(self),
+            dialogs::Next::OpenFromForge => forge::ask_open(self),
         }
     }
 
@@ -559,6 +568,7 @@ impl App {
             Some(Err(e)) => self.view.status = Some((e, true)),
             None => {}
         }
+        forge::poll(self, ctx);
         if self.session.exporting() {
             // Look again until it ends.
             ctx.request_repaint_after(std::time::Duration::from_millis(200));
