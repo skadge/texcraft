@@ -3,11 +3,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use base64::Engine as _;
-use serde_json::{Value, json};
-
+use crate::forge::{Forge, Made, Target};
 use crate::gitlab::is_object_id;
-use crate::{Address, Error, GitLab, MAX_PROJECT, PARALLEL, Result, TreeEntry};
+use crate::{Address, Error, MAX_PROJECT, PARALLEL, Result, TreeEntry};
 
 /// Where a project opened from GitLab came from, and the state of its files there.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -204,7 +202,7 @@ fn tracked(tree: &[TreeEntry], skip: &BTreeSet<&str>, local: &BTreeMap<String, S
 
 /// Fetches the blobs `wanted` (paths and ids), [`PARALLEL`] at a time: the files loaded, and those
 /// over [`crate::MAX_FILE`], skipped. Refuses when the files add up to more than [`MAX_PROJECT`].
-async fn fetch(client: &GitLab, wanted: &[(String, String)]) -> Result<(Vec<(String, Vec<u8>)>, Vec<Skipped>)> {
+async fn fetch(client: &impl Forge, wanted: &[(String, String)]) -> Result<(Vec<(String, Vec<u8>)>, Vec<Skipped>)> {
     let mut files = Vec::new();
     let mut skipped = Vec::new();
     let mut total: u64 = 0;
@@ -230,7 +228,7 @@ async fn fetch(client: &GitLab, wanted: &[(String, String)]) -> Result<(Vec<(Str
 /// those at the branch's head (the base); hidden files, symbolic links and submodules are left
 /// on the branch (the review threads in [`REVIEW_DIR`] apart), and files over [`crate::MAX_FILE`]
 /// skipped.
-pub async fn open(client: &GitLab, branch: Option<&str>) -> Result<Loaded> {
+pub async fn open(client: &impl Forge, branch: Option<&str>) -> Result<Loaded> {
     let info = client.project().await?;
     let name = match branch.map(str::trim).filter(|b| !b.is_empty()) {
         Some(b) => b.to_owned(),
@@ -297,21 +295,6 @@ fn blob_ids(files: &[(String, Vec<u8>)]) -> Result<BTreeMap<String, String>> {
     files.iter().map(|(p, b)| Ok((p.clone(), texcraft_history::store::blob_id(b).map_err(Error::Invalid)?))).collect()
 }
 
-/// The commit API's actions for `changes`, the contents from `files`, in base64.
-pub(crate) fn actions(changes: &[FileChange], files: &[(String, Vec<u8>)]) -> Vec<Value> {
-    let bytes: BTreeMap<&str, &[u8]> = files.iter().map(|(p, b)| (p.as_str(), b.as_slice())).collect();
-    let content = |path: &str| base64::engine::general_purpose::STANDARD.encode(bytes.get(path).copied().unwrap_or_default());
-    changes
-        .iter()
-        .map(|c| match c.kind {
-            ChangeKind::Added => json!({"action": "create", "file_path": c.path, "content": content(&c.path), "encoding": "base64"}),
-            ChangeKind::Modified => json!({"action": "update", "file_path": c.path, "content": content(&c.path), "encoding": "base64"}),
-            ChangeKind::Deleted => json!({"action": "delete", "file_path": c.path}),
-            ChangeKind::Moved => json!({"action": "move", "file_path": c.path, "previous_path": c.from}),
-        })
-        .collect()
-}
-
 /// The branch's state at `head` against the project's `files`, with what the branch changed since
 /// `link`'s base taken in: files changed only there are taken, files changed on both sides merged
 /// ([`crate::merge::merge3`]), or decided by `choices`. Any file that does not merge is a conflict,
@@ -324,7 +307,7 @@ struct CaughtUp {
     merged: Vec<String>,
 }
 
-async fn catch_up(client: &GitLab, link: &Link, head: &str, files: &[(String, Vec<u8>)], choices: &Choices) -> Result<CaughtUp> {
+async fn catch_up(client: &impl Forge, link: &Link, head: &str, files: &[(String, Vec<u8>)], choices: &Choices) -> Result<CaughtUp> {
     let mut now: BTreeMap<String, Vec<u8>> = files.iter().cloned().collect();
     if head == link.base {
         return Ok(CaughtUp { link: link.clone(), files: now, merged: Vec::new() });
@@ -400,7 +383,7 @@ async fn catch_up(client: &GitLab, link: &Link, head: &str, files: &[(String, Ve
 }
 
 /// The blobs `ids`, [`PARALLEL`] at a time, by id; none for one over [`crate::MAX_FILE`].
-async fn blobs(client: &GitLab, ids: &[String]) -> Result<BTreeMap<String, Option<Vec<u8>>>> {
+async fn blobs(client: &impl Forge, ids: &[String]) -> Result<BTreeMap<String, Option<Vec<u8>>>> {
     let mut out = BTreeMap::new();
     for chunk in ids.chunks(PARALLEL) {
         let results = crate::task::join_all(chunk.iter().map(|id| client.blob(id)).collect()).await;
@@ -424,7 +407,7 @@ fn updates(before: &[(String, Vec<u8>)], after: &BTreeMap<String, Vec<u8>>) -> V
 /// are taken, files changed on both sides merged line by line. When a file does not merge
 /// ([`Error::Conflict`]) nothing is taken, unless `choices` says for it whether to keep the
 /// project's version or take the branch's.
-pub async fn pull(client: &GitLab, link: &Link, files: &[(String, Vec<u8>)], choices: &Choices) -> Result<Pulled> {
+pub async fn pull(client: &impl Forge, link: &Link, files: &[(String, Vec<u8>)], choices: &Choices) -> Result<Pulled> {
     let head = client.branch(&link.branch).await?;
     let up = catch_up(client, link, &head.commit, files, choices).await?;
     Ok(Pulled { moved: up.link.base != link.base, updates: updates(files, &up.files), merged: up.merged, link: up.link })
@@ -438,7 +421,7 @@ pub async fn pull(client: &GitLab, link: &Link, files: &[(String, Vec<u8>)], cho
 /// since the base, its new commits are taken in first as [`pull`] does (conflicts refuse the
 /// commit unless `choices` decides them), and the commit goes on top of them; what they changed
 /// comes back in [`Committed::updates`].
-pub async fn commit(client: &GitLab, link: &Link, files: &[(String, Vec<u8>)], message: &str, choices: &Choices) -> Result<Committed> {
+pub async fn commit(client: &impl Forge, link: &Link, files: &[(String, Vec<u8>)], message: &str, choices: &Choices) -> Result<Committed> {
     let ours = changes(link, files)?;
     if ours.is_empty() {
         return Ok(Committed {
@@ -452,23 +435,35 @@ pub async fn commit(client: &GitLab, link: &Link, files: &[(String, Vec<u8>)], m
             merge_request_error: None,
         });
     }
-    let head = client.branch(&link.branch).await?;
-    if !head.can_push {
-        return Err(Error::CannotPush { branch: link.branch.clone() });
-    }
-    let up = catch_up(client, link, &head.commit, files, choices).await?;
-    let integrated: Vec<(String, Vec<u8>)> = up.files.iter().map(|(p, b)| (p.clone(), b.clone())).collect();
-    let to_commit = changes(&up.link, &integrated)?;
-    let (id, raced) = if to_commit.is_empty() {
-        (head.commit.clone(), false)
-    } else {
-        let made = client.create_commit(&link.branch, message, actions(&to_commit, &integrated), None).await;
-        let (id, parents) = made.map_err(|e| match e {
+    // A forge that refuses a commit on a head that moved meanwhile ([`Made::Moved`]) gets the
+    // branch's new commits taken in again, a few times.
+    let mut attempts = 0;
+    let (up, integrated, to_commit, id, raced) = loop {
+        attempts += 1;
+        let head = client.branch(&link.branch).await?;
+        if !head.can_push {
+            return Err(Error::CannotPush { branch: link.branch.clone() });
+        }
+        let up = catch_up(client, link, &head.commit, files, choices).await?;
+        let integrated: Vec<(String, Vec<u8>)> = up.files.iter().map(|(p, b)| (p.clone(), b.clone())).collect();
+        let to_commit = changes(&up.link, &integrated)?;
+        if to_commit.is_empty() {
+            let id = head.commit.clone();
+            break (up, integrated, to_commit, id, false);
+        }
+        let target = Target::Branch { name: &link.branch, head: &head.commit };
+        let made = client.commit(target, message, &to_commit, &integrated).await.map_err(|e| match e {
             Error::Forbidden { .. } => Error::CannotPush { branch: link.branch.clone() },
             e => e,
         })?;
-        let raced = parents.first() != Some(&head.commit);
-        (id, raced)
+        match made {
+            Made::Commit { id, parents } => {
+                let raced = attempts > 1 || parents.first() != Some(&head.commit);
+                break (up, integrated, to_commit, id, raced);
+            }
+            Made::Moved if attempts < MAX_ATTEMPTS => continue,
+            Made::Moved => return Err(Error::Busy { branch: link.branch.clone() }),
+        }
     };
     // The project as the new commit has it: what others committed meanwhile is taken in.
     let local = blob_ids(&integrated)?;
@@ -500,6 +495,9 @@ pub async fn commit(client: &GitLab, link: &Link, files: &[(String, Vec<u8>)], m
     })
 }
 
+/// Commits tried on a branch that keeps moving before giving up ([`Error::Busy`]).
+const MAX_ATTEMPTS: usize = 3;
+
 /// Whether `name` can be a new branch's name (git's rules, simplified).
 pub fn check_branch_name(name: &str) -> Result<()> {
     let bad = |why: &str| Err(Error::BranchName(format!("{name}: {why}")));
@@ -526,7 +524,7 @@ pub fn check_branch_name(name: &str) -> Result<()> {
 /// base (so they need no merge), opens a merge request of it into `link`'s branch, and moves the
 /// link to the new branch: the way when the branch cannot take the commit (protected, a role
 /// that cannot push, or a conflict), where GitLab shows the conflict.
-pub async fn commit_to_new_branch(client: &GitLab, link: &Link, files: &[(String, Vec<u8>)], message: &str, branch: &str) -> Result<Committed> {
+pub async fn commit_to_new_branch(client: &impl Forge, link: &Link, files: &[(String, Vec<u8>)], message: &str, branch: &str) -> Result<Committed> {
     let branch = branch.trim();
     check_branch_name(branch)?;
     if branch == link.branch {
@@ -536,9 +534,10 @@ pub async fn commit_to_new_branch(client: &GitLab, link: &Link, files: &[(String
     if ours.is_empty() {
         return Err(Error::Nothing);
     }
-    let (id, _) = client.create_commit(branch, message, actions(&ours, files), Some(&link.base)).await?;
+    let made = client.commit(Target::NewBranch { name: branch, start: &link.base }, message, &ours, files).await?;
+    let Made::Commit { id, .. } = made else { return Err(Error::Invalid(format!("the new branch {branch} was not made"))) };
     let title = message.lines().find(|l| !l.trim().is_empty()).unwrap_or(message).trim();
-    let (merge_request, merge_request_error) = match client.create_merge_request(branch, &link.branch, title).await {
+    let (merge_request, merge_request_error) = match client.request_merge(branch, &link.branch, title).await {
         Ok(mr) => (Some(mr), None),
         Err(e) => (None, Some(e.to_string())),
     };

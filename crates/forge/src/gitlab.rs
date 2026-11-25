@@ -3,7 +3,12 @@
 
 use serde_json::{Value, json};
 
-use crate::{Address, Error, MAX_FILE, Request, Response, Result, Token, Transport, encode};
+use std::collections::BTreeMap;
+
+use base64::Engine as _;
+
+use crate::forge::{Forge, Made, Target};
+use crate::{Address, ChangeKind, Error, FileChange, MAX_FILE, Request, Response, Result, Token, Transport, encode};
 
 /// Largest answer of the API read (a page of the tree, a commit), apart from files' contents.
 const MAX_JSON: u64 = 16 * 1024 * 1024;
@@ -212,6 +217,58 @@ impl GitLab {
             .map_or_else(|| format!("{}/-/merge_requests/{iid}", self.address.web_url()), str::to_owned);
         Ok(crate::MergeRequest { iid, web_url })
     }
+}
+
+impl Forge for GitLab {
+    fn address(&self) -> &Address {
+        &self.address
+    }
+
+    async fn project(&self) -> Result<ProjectInfo> {
+        GitLab::project(self).await
+    }
+
+    async fn branch(&self, name: &str) -> Result<Branch> {
+        GitLab::branch(self, name).await
+    }
+
+    async fn tree(&self, commit: &str) -> Result<Vec<TreeEntry>> {
+        GitLab::tree(self, commit).await
+    }
+
+    async fn blob(&self, id: &str) -> Result<Option<Vec<u8>>> {
+        GitLab::blob(self, id).await
+    }
+
+    /// GitLab puts a commit to an existing branch on top of its head whatever it is: the branch
+    /// never [`Made::Moved`], and a commit made meanwhile shows as the parent.
+    async fn commit(&self, target: Target<'_>, message: &str, changes: &[FileChange], files: &[(String, Vec<u8>)]) -> Result<Made> {
+        let (branch, start) = match target {
+            Target::Branch { name, .. } => (name, None),
+            Target::NewBranch { name, start } => (name, Some(start)),
+        };
+        let (id, parents) = self.create_commit(branch, message, actions(changes, files), start).await?;
+        Ok(Made::Commit { id, parents })
+    }
+
+    async fn request_merge(&self, source: &str, target: &str, title: &str) -> Result<crate::MergeRequest> {
+        self.create_merge_request(source, target, title).await
+    }
+}
+
+/// The commit API's actions for `changes`, the contents from `files`, in base64.
+fn actions(changes: &[FileChange], files: &[(String, Vec<u8>)]) -> Vec<Value> {
+    let bytes: BTreeMap<&str, &[u8]> = files.iter().map(|(p, b)| (p.as_str(), b.as_slice())).collect();
+    let content = |path: &str| base64::engine::general_purpose::STANDARD.encode(bytes.get(path).copied().unwrap_or_default());
+    changes
+        .iter()
+        .map(|c| match c.kind {
+            ChangeKind::Added => json!({"action": "create", "file_path": c.path, "content": content(&c.path), "encoding": "base64"}),
+            ChangeKind::Modified => json!({"action": "update", "file_path": c.path, "content": content(&c.path), "encoding": "base64"}),
+            ChangeKind::Deleted => json!({"action": "delete", "file_path": c.path}),
+            ChangeKind::Moved => json!({"action": "move", "file_path": c.path, "previous_path": c.from}),
+        })
+        .collect()
 }
 
 /// `response` when it is a success; otherwise the error its status means, about `what`.

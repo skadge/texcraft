@@ -15,6 +15,7 @@
 
 mod address;
 pub mod fake;
+mod forge;
 mod gitlab;
 mod http;
 pub mod merge;
@@ -22,6 +23,7 @@ mod sync;
 pub mod task;
 
 pub use address::{Address, GITLAB_COM, encode};
+pub use forge::{Forge, Made, Target};
 pub use gitlab::{Branch, GitLab, ProjectInfo, TreeEntry};
 pub use http::{Request, Response, Sending, Transport, transport};
 pub use sync::{
@@ -96,6 +98,8 @@ pub enum Error {
     Conflict { branch: String, files: Vec<Conflict> },
     /// The branch does not take commits from this user: it is protected, or their role cannot push.
     CannotPush { branch: String },
+    /// The branch kept moving while the commit was made: others are committing to it.
+    Busy { branch: String },
     /// A new branch's name git does not accept.
     BranchName(String),
     /// There is nothing to commit.
@@ -143,6 +147,9 @@ impl std::fmt::Display for Error {
                 f,
                 "Nothing was committed: the branch {branch} is protected, or your role in the project cannot push to it. Commit to a new branch and open a merge request instead."
             ),
+            Error::Busy { branch } => {
+                write!(f, "Nothing was committed: the branch {branch} kept getting new commits while yours was made. Try again in a moment.")
+            }
             Error::BranchName(why) => write!(f, "This cannot be a branch's name: {why}."),
             Error::Nothing => f.write_str("Nothing to commit: the files are as on the branch."),
             Error::Stopped => f.write_str("The GitLab operation stopped unexpectedly."),
