@@ -87,7 +87,21 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         } else {
             egui::Popup::menu(&save).show(|ui| export_menu(app, ui));
         }
+        // What the build does now, dim, in the room the buttons leave: beside the PDF it builds.
+        // The status bar announces it, so it is not announced here too.
+        let progress = building.then(|| app.view.progress.as_ref().map(|(p, _)| crate::status::progress_line(p))).flatten();
+        // Without a PDF yet, the pane's middle says it (`pdf_view::Building`).
+        let progress = progress.filter(|_| app.view.logs || app.pdf.has_pdf());
+        let show_progress = |ui: &mut egui::Ui| {
+            if let Some(text) = &progress
+                && ui.available_width() > 4.0 * t.unit
+            {
+                ui.add_space(t.unit * 2.0);
+                ui.add(egui::Label::new(RichText::new(text).font(t.small()).color(t.text_muted)).truncate());
+            }
+        };
         if app.view.logs || !app.pdf.has_pdf() {
+            show_progress(ui);
             return;
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -108,6 +122,7 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
             if widgets::icon_button(ui, &t, "chevron-left", tl!("Previous page"), page > 0).clicked() {
                 app.pdf.go_to_page(page.saturating_sub(1));
             }
+            ui.with_layout(Layout::left_to_right(Align::Center), show_progress);
         });
     });
 }

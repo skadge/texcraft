@@ -114,12 +114,19 @@ pub(crate) fn progress_detail(p: &texcraft_engine::Progress, seconds: f64) -> St
     parts.join(" · ")
 }
 
-/// A running build's progress on one line, for the status bar.
-pub(crate) fn progress_text(p: &texcraft_engine::Progress, seconds: f64) -> String {
+/// The page being built and the pass ("Compiling page 3 of 7 · pass 2"), for the PDF pane's
+/// toolbar.
+pub(crate) fn progress_line(p: &texcraft_engine::Progress) -> String {
     let mut text = progress_now(p);
     if p.pass > 1 {
         text.push_str(&tl!(" · pass {n}").replace("{n}", &p.pass.to_string()));
     }
+    text
+}
+
+/// A running build's progress on one line, for the status bar: [`progress_line`] and the time.
+pub(crate) fn progress_text(p: &texcraft_engine::Progress, seconds: f64) -> String {
+    let mut text = progress_line(p);
     if seconds >= 1.0 {
         text.push_str(&format!(" · {seconds:.0} s"));
     }

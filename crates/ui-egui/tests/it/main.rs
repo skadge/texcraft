@@ -15,6 +15,7 @@ mod goto_file;
 mod image_drop;
 mod insert;
 mod log_copy;
+mod progress;
 mod recent;
 mod regions;
 mod rename;
