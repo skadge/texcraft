@@ -1,6 +1,6 @@
 [package]
 name = "texcraft-history"
-description = "A project's history as a git repository: made on the first save, a commit per save, the versions of its files"
+description = "A project's history: a git repository on disk (made on the first save, a commit per save), or the same versions kept as values in the browser"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,6 +12,8 @@ workspace = true
 
 [dependencies]
 chrono = { workspace = true }
+# Git's object ids (SHA-1) for the history kept without git (the browser).
+gix-hash = { version = "0.29", default-features = false, features = ["sha1"] }
 
 # Git on disk (desktop): no network, no work-tree status; trees, commits, refs, the index and .gitignore rules only.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

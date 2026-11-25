@@ -7,7 +7,8 @@
 //! have no folder (the browser, later). What a project does not load is kept as it is in the
 //! repository: hidden files and folders (`.gitignore`, `.github/`), symbolic links and submodules.
 //!
-//! Git on disk is desktop-only for now; in the browser every call says so.
+//! Git on disk is desktop-only; in the browser, where projects have no folder, [`store`] keeps
+//! the same history as values (git's blob ids, versions that share unchanged files).
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
@@ -20,6 +21,35 @@ pub use git::History;
 mod stub;
 #[cfg(target_arch = "wasm32")]
 pub use stub::History;
+
+pub mod store;
+
+/// A project's history as it is read: a repository on disk, or the versions a shell keeps.
+pub trait Versioned {
+    /// The versions that changed the project, newest first, at most `limit`.
+    fn log(&self, limit: usize) -> Result<Vec<Entry>>;
+    /// File `path` of the project at version `commit` (a full id); none when it had no such file.
+    fn file_at(&self, commit: &str, path: &str) -> Result<Option<Vec<u8>>>;
+    /// The project's files at version `commit`: those a project loads, not hidden ones.
+    fn files_at(&self, commit: &str) -> Result<Vec<(String, Vec<u8>)>>;
+    /// The version before `commit`; none for a first one.
+    fn parent_of(&self, commit: &str) -> Result<Option<String>>;
+}
+
+impl Versioned for History {
+    fn log(&self, limit: usize) -> Result<Vec<Entry>> {
+        History::log(self, limit)
+    }
+    fn file_at(&self, commit: &str, path: &str) -> Result<Option<Vec<u8>>> {
+        History::file_at(self, commit, path)
+    }
+    fn files_at(&self, commit: &str) -> Result<Vec<(String, Vec<u8>)>> {
+        History::files_at(self, commit)
+    }
+    fn parent_of(&self, commit: &str) -> Result<Option<String>> {
+        History::parent_of(self, commit)
+    }
+}
 
 /// What a call returns: the value, or an English message saying what went wrong.
 pub type Result<T> = std::result::Result<T, String>;

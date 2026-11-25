@@ -1,10 +1,11 @@
-//! The browser has no git yet: every call says so.
+//! The browser has no git on disk: a folder is never in a repository there (projects of the
+//! library keep their history in [`crate::store`]).
 
 use std::path::Path;
 
 use crate::{Entry, Owner, Person, Result, Snapshot};
 
-const NOT_YET: &str = "A project's history is not kept in the browser yet.";
+const NOT_YET: &str = "A folder's git repository cannot be reached in the browser.";
 
 /// Never made in the browser: [`History::find`] finds none and the rest refuse.
 pub struct History(());

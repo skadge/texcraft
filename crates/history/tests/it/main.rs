@@ -2,7 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
-use texcraft_history::{ChangeKind, History, Owner, Person, Snapshot};
+use texcraft_history::store::{Versions, blob_id};
+use texcraft_history::{ChangeKind, History, Owner, Person, Snapshot, Versioned};
 
 type R = Result<(), String>;
 
@@ -133,5 +134,31 @@ fn review_files_follow_the_snapshot_other_hidden_files_keep_their_version() -> R
     let head = h.head()?.ok_or("no head")?;
     assert_eq!(h.file_at(&head, ".texcraft/review/a.json")?, None, "a thread gone from the snapshot is gone");
     assert_eq!(h.file_at(&head, ".latexmkrc")?.as_deref(), Some(&b"x\n"[..]), "another hidden file keeps its version");
+    Ok(())
+}
+
+// The history kept as values (the browser).
+
+#[test]
+fn kept_files_have_the_ids_git_gives_them() -> R {
+    // So the history can be pushed to a git forge as it is (C5): what `git hash-object` says.
+    assert_eq!(blob_id(b"")?, "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391");
+    assert_eq!(blob_id(b"hello\n")?, "ce013625030ba8dba906f756967f9e9ca394464a");
+    Ok(())
+}
+
+#[test]
+fn kept_versions_share_unchanged_files_and_come_back_in_order() -> R {
+    let mut h = Versions::default();
+    h.record(&snapshot(&[("main.tex", "a"), ("big.png", "picture")]), "1", "Ada", now())?;
+    let second = h.record(&snapshot(&[("main.tex", "b"), ("big.png", "picture")]), "2", "Ada", now())?.ok_or("no version")?;
+    assert_eq!(second.blobs.len(), 1, "only the changed file's bytes are new");
+    h.record(&snapshot(&[("main.tex", "c"), ("big.png", "picture")]), "3", "Ada", now())?;
+    let mut shuffled = h.versions().to_vec();
+    shuffled.swap(0, 2);
+    let back = Versions::from_parts(shuffled, h.blobs().clone());
+    assert_eq!(back, h, "the order comes from the parents, not from how they were stored");
+    let messages: Vec<String> = back.log(10)?.into_iter().map(|e| e.message).collect();
+    assert_eq!(messages, ["3", "2", "1"]);
     Ok(())
 }
