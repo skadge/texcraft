@@ -77,3 +77,22 @@ fn the_margin_of_comments_can_be_hidden_and_shown_again() {
     h.run();
     assert!(h.query_by_label_contains("Comment by Ada").is_some(), "the View command did not show it again");
 }
+
+#[test]
+fn hiding_the_margin_while_writing_a_comment_hides_it_and_keeps_the_comment_in_the_review_panel() {
+    let mut h = harness("one two three\n").unwrap();
+    h.run();
+    ui_cmd::run(h.state_mut(), "edit.select_all");
+    ui_cmd::run(h.state_mut(), "edit.comment");
+    h.run();
+    let margin = h.get_by_role_and_label(Role::MultilineTextInput, "Comment").rect();
+    h.get_by_role_and_label(Role::MultilineTextInput, "Comment").type_text("Draft");
+    h.run();
+    h.get_by_role_and_label(Role::Button, "Hide the comments beside the text").click();
+    h.run();
+    h.run();
+    assert!(h.query_by_role_and_label(Role::Button, "Hide the comments beside the text").is_none(), "the margin is still shown");
+    let field = h.get_by_role_and_label(Role::MultilineTextInput, "Comment");
+    assert!(field.rect().right() < margin.left(), "the comment being written is not in the Review panel, left of the text");
+    assert_eq!(field.value().as_deref(), Some("Draft"), "the comment being written was lost");
+}

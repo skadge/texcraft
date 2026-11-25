@@ -158,13 +158,19 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         ui.spacing_mut().item_spacing.x = 2.0;
         ui.add_space(t.unit * 2.0);
         let building = app.session.is_building();
-        let label = if building { tl!("Compiling…") } else { tl!("Compile") };
-        let (main, menu) = widgets::primary_split(ui, &t, "play", label, building);
+        let auto = app.session.settings.auto_compile;
+        // Compiling automatically, the pill says so; clicking it still compiles now.
+        let (label, name, tip) = match (building, auto) {
+            (true, _) => (tl!("Compiling…"), tl!("Compiling…"), tl!("Compiling…")),
+            (false, true) => (tl!("Auto-Compile"), tl!("Auto-Compile: compile now"), tl!("Compiles as you type; click to compile now")),
+            (false, false) => (tl!("Compile"), tl!("Compile"), tl!("Compile")),
+        };
+        let (main, menu) = widgets::primary_split(ui, &t, "play", label, name, building);
         app.region(crate::Region::Preview, main.id);
         if main.clicked() {
             app.run("build.compile", json!({}));
         }
-        let tip = app.keys.shortcut_text("build.compile").map_or_else(|| label.to_owned(), |k| format!("{label} ({k})"));
+        let tip = app.keys.shortcut_text("build.compile").map_or_else(|| tip.to_owned(), |k| format!("{tip} ({k})"));
         let _ = main.on_hover_text(tip);
         crate::widgets::keyboard_menu(ui, &menu);
         egui::Popup::menu(&menu).show(|ui| compile_menu(app, ui));
@@ -185,13 +191,22 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
                 ui_cmd::run(app, "view.pdf_window");
             }
         }
+        ui.add_space(t.unit * 2.0);
         let ready = cmd_enabled(app, "build.save_pdf").or_else(|_| cmd_enabled(app, "build.export"));
-        let save = widgets::icon_button(ui, &t, "download", tl!("Export…"), ready.is_ok());
-        if let Err(reason) = &ready {
-            let _ = save.on_disabled_hover_text(reason.as_str());
-        } else {
-            crate::widgets::keyboard_menu(ui, &save);
-            egui::Popup::menu(&save).show(|ui| export_menu(app, ui));
+        // While a file is exported, the pill turns and says so; the status line says when it is done.
+        let exporting = app.session.exporting();
+        let label = if exporting { tl!("Exporting…") } else { tl!("Export") };
+        let save = widgets::pill_menu(ui, &t, "download", label, exporting, ready.is_ok());
+        match &ready {
+            Err(reason) => {
+                let _ = save.on_hover_text(reason.as_str());
+            }
+            Ok(()) if exporting => {}
+            Ok(()) => {
+                let save = save.on_hover_text(tl!("Export the document as PDF or another format"));
+                crate::widgets::keyboard_menu(ui, &save);
+                egui::Popup::menu(&save).show(|ui| export_menu(app, ui));
+            }
         }
         // What the build does now, dim, in the room the buttons leave: beside the PDF it builds.
         // The status bar announces it, so it is not announced here too.

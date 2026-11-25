@@ -79,6 +79,10 @@ fn state(app: &App) -> (Option<&'static str>, egui::Color32, String) {
         let text = app.view.progress.as_ref().map_or_else(|| tl!("Compiling…").to_owned(), |(p, s)| progress_text(p, *s));
         return (None, t.text_muted, text);
     }
+    // A build that ended during an export cleared its message: the export is still said.
+    if app.session.exporting() && app.view.status.is_none() {
+        return (None, t.text_muted, tl!("Exporting…").to_owned());
+    }
     // A message from the last command (an error, or where the focus went) until the next build.
     if let Some((message, error)) = &app.view.status {
         return if *error { (Some("circle-exclamation-point"), t.error, message.clone()) } else { (Some("info"), t.text_muted, message.clone()) };

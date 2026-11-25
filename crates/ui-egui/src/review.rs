@@ -248,9 +248,15 @@ fn open_composer(app: &mut App, path: ProjectPath, start: usize, end: usize, quo
     let name = crate::prefs::system_user_name();
     app.review.composer = Some(Composer { path, start, end, quote, text: String::new(), name, focus: true });
     app.review.selected = None;
-    if !app.review.wide {
+    if !in_margin(app) {
         app.view.side = Some(crate::Side::Review);
     }
+}
+
+/// Whether the margin shows the comments and the one being written: the pane is wide enough and
+/// the user did not hide it. Otherwise the Review panel has them.
+fn in_margin(app: &App) -> bool {
+    app.review.wide && app.prefs.review_margin
 }
 
 /// `:comment [text]` in Vim: on `start..end`, posted at once when there is a text.
@@ -395,10 +401,13 @@ pub(crate) fn announce_changes(app: &mut App) {
 }
 
 /// Shows or hides the margin of comments (the View command; the margin's own button hides it). The
-/// comments stay in the Review panel, and writing one shows the margin again.
+/// comments stay in the Review panel, and a comment being written moves there with the margin.
 pub(crate) fn toggle_margin(app: &mut App) {
     app.prefs.review_margin = !app.prefs.review_margin;
     app.prefs_changed = true;
+    if app.review.composer.is_some() && !in_margin(app) {
+        app.view.side = Some(crate::Side::Review);
+    }
     let message = if app.prefs.review_margin {
         tl!("Comments are shown beside the text.")
     } else {
@@ -407,8 +416,8 @@ pub(crate) fn toggle_margin(app: &mut App) {
     app.view.status = Some((message.to_owned(), false));
 }
 
-/// Shows the source editor, with the margin at its right when the pane is wide enough and the file
-/// has threads (unless the user hid the margin) or a comment being written.
+/// Shows the source editor, with the margin at its right when the pane is wide enough, the user did
+/// not hide the margin, and the file has threads or a comment being written.
 pub(crate) fn with_margin<T>(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, show: impl FnOnce(&mut App, &mut egui::Ui) -> T) -> T {
     announce_changes(app);
     app.editor.source.passages = passages(app, path);
@@ -416,7 +425,7 @@ pub(crate) fn with_margin<T>(app: &mut App, ui: &mut egui::Ui, path: &ProjectPat
     app.review.wide = full.width() >= MARGIN_MIN_PANE;
     let composing = app.review.composer.as_ref().is_some_and(|c| &c.path == path);
     let any = app.session.review().threads().iter().any(|t| t.anchor.path == path.as_str());
-    if !app.review.wide || !(composing || (any && app.prefs.review_margin)) {
+    if !in_margin(app) || !(composing || any) {
         return show(app, ui);
     }
     let split = full.right() - MARGIN_WIDTH;
@@ -571,7 +580,7 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
     egui::ScrollArea::vertical().id_salt("review-panel").auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = GAP;
         let width = ui.available_width() - 2.0 * t.unit;
-        if app.review.composer.is_some() && !app.review.wide {
+        if app.review.composer.is_some() && !in_margin(app) {
             let mut child = ui.new_child(UiBuilder::new().max_rect(Rect::from_min_size(ui.cursor().min + vec2(t.unit, 0.0), vec2(width, 4000.0))));
             let r = composer(app, &mut child, &mut actions);
             ui.allocate_space(vec2(width, r.height()));

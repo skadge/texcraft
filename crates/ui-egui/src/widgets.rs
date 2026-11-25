@@ -162,9 +162,9 @@ pub fn segmented(ui: &mut Ui, t: &Tokens, id: &str, options: &[(&str, Option<&st
     clicked
 }
 
-/// The round primary button with an icon, a label, and a separate menu segment. Returns the
-/// main part's and the menu part's responses.
-pub fn primary_split(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, busy: bool) -> (Response, Response) {
+/// The round primary button with an icon, a label, and a separate menu segment; `name`, its
+/// accessible name, starts with the label. Returns the main part's and the menu part's responses.
+pub fn primary_split(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, name: &str, busy: bool) -> (Response, Response) {
     let height = t.toolbar_height - 2.0 * t.unit;
     let text = ui.painter().layout_no_wrap(label.to_owned(), t.strong(), t.on_accent);
     let main_w = 3.0 * t.unit + t.icon_size + 2.0 * t.unit + text.size().x + 3.0 * t.unit;
@@ -174,7 +174,7 @@ pub fn primary_split(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, busy: boo
     let menu_rect = Rect::from_min_size(outer.min + vec2(main_w, 0.0), vec2(menu_w, height));
     let main = ui.interact(main_rect, ui.scope_id().with(("primary", label)), if busy { Sense::hover() } else { Sense::click() });
     let menu = ui.interact(menu_rect, ui.scope_id().with(("primary-menu", label)), Sense::click());
-    main.widget_info(|| WidgetInfo::labeled(Role::Button, !busy, label));
+    main.widget_info(|| WidgetInfo::labeled(Role::Button, !busy, name));
     menu.widget_info(|| WidgetInfo::labeled(Role::Button, true, format!("{label} {}", tl!("options"))));
     let round = (height / 2.0) as u8;
     let fill = |r: &Response| {
@@ -205,6 +205,38 @@ pub fn primary_split(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, busy: boo
     focus_ring(ui, t, &main, main_rect, CornerRadius::same(round));
     focus_ring(ui, t, &menu, menu_rect, CornerRadius::same(round));
     (main, menu)
+}
+
+/// A round button with an icon, a label and a menu's chevron, in the neutral style beside the
+/// accent of the primary one. While `busy`, a spinner takes the icon's place and it does not
+/// react to clicks.
+pub fn pill_menu(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, busy: bool, enabled: bool) -> Response {
+    let height = t.toolbar_height - 2.0 * t.unit;
+    let active = enabled && !busy;
+    let color = if enabled { t.text } else { t.text_muted.gamma_multiply(0.55) };
+    let text = ui.painter().layout_no_wrap(label.to_owned(), t.strong(), color);
+    let chevron = t.icon_size - 2.0;
+    let width = 3.0 * t.unit + t.icon_size + 2.0 * t.unit + text.size().x + t.unit + chevron + 2.0 * t.unit;
+    let (rect, r) = ui.allocate_exact_size(vec2(width, height), if active { Sense::click() } else { Sense::hover() });
+    r.widget_info(|| WidgetInfo::labeled(Role::Button, active, label));
+    if ui.is_rect_visible(rect) {
+        let round = CornerRadius::same((height / 2.0) as u8);
+        let fill = if active { state_fill(t, &r, t.surface) } else { t.surface };
+        ui.painter().rect(rect, round, fill, Stroke::new(1.0, t.control_border), StrokeKind::Inside);
+        let icon_rect = Rect::from_center_size(egui::pos2(rect.left() + 3.0 * t.unit + t.icon_size / 2.0, rect.center().y), Vec2::splat(t.icon_size));
+        if busy {
+            spinner(ui, icon_rect.center(), t.icon_size / 2.0 - 1.0, t.text_muted);
+        } else {
+            icons::paint(ui, icon_rect, icon, t.icon_size, color);
+        }
+        let text_at = egui::pos2(icon_rect.right() + 2.0 * t.unit, rect.center().y - text.size().y / 2.0);
+        let chevron_rect =
+            Rect::from_center_size(egui::pos2(text_at.x + text.size().x + t.unit + chevron / 2.0, rect.center().y), Vec2::splat(chevron));
+        ui.painter().galley(text_at, text, color);
+        icons::paint(ui, chevron_rect, "chevron-down", chevron, if active { t.text_muted } else { color });
+        focus_ring(ui, t, &r, rect, round);
+    }
+    r
 }
 
 /// A turning arc, for work in progress. Asks for the next frame while shown.

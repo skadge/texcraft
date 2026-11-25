@@ -347,9 +347,8 @@ pub(crate) fn export(app: &mut App, format: texcraft_engine::Export) {
     // In the browser there is no file to choose: the shell downloads what the export makes.
     if app.session.library().is_some() {
         let name = format!("{}.{}", app.main_stem(), format.extension());
-        if app.run("build.export", json!({"format": format, "path": name, "background": true})).is_some() && format != texcraft_engine::Export::Pdf {
-            let label = crate::preview::export_label(format);
-            app.view.status = Some((tl!("Exporting as {format}…").replace("{format}", label), false));
+        if let Some(done) = app.run("build.export", json!({"format": format, "path": name, "background": true})) {
+            export_started(app, &done);
         }
         return;
     }
@@ -365,10 +364,22 @@ pub(crate) fn export(app: &mut App, format: texcraft_engine::Export) {
         value: String::new(),
         action: tl!("Export"),
         command: "build.export",
-        params: Box::new(move |v| json!({"format": format, "path": v})),
+        // On its thread, as from the system's file dialog: the window shows the export running.
+        params: Box::new(move |v| json!({"format": format, "path": v, "background": true})),
         focus: true,
     };
     app.view.dialog = Some(Dialog::Prompt(prompt));
+}
+
+/// After `build.export`: an export started on its thread is said on the status line, which says
+/// again when it ends (`App::draw`).
+pub(crate) fn export_started(app: &mut App, done: &serde_json::Value) {
+    if done["started"] != true {
+        return;
+    }
+    let Ok(format) = serde_json::from_value::<texcraft_engine::Export>(done["format"].clone()) else { return };
+    let label = crate::preview::export_label(format);
+    app.view.status = Some((tl!("Exporting as {format}…").replace("{format}", label), false));
 }
 
 /// The kind of build output `params` names (`{"output": "pdf"}`), as listed by `build.outputs`.

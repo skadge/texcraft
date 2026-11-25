@@ -73,3 +73,37 @@ fn ctrl_arrows_move_vims_caret_by_words() {
     harness.run();
     assert_eq!(text(&mut harness), "one wo Xthree", "Ctrl+Right in Insert mode");
 }
+
+#[test]
+fn colon_w_saves_the_file_and_compiles() -> std::io::Result<()> {
+    let dir = std::env::temp_dir().join(format!("texcraft-vim-write-{}", std::process::id()));
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("main.tex"), "")?;
+    let mut app = App::with_prefs(
+        Session::with_backend(Box::new(Unavailable("No engine in this test.".into()))),
+        Prefs { auto_compile: false, vim: true, ..Prefs::default() },
+    );
+    app.open_project(&dir.display().to_string());
+    let mut h = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    h.run();
+    h.get_by_label("main.tex source").focus();
+    h.run();
+    h.get_by_label("main.tex source").type_text("ihello");
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.get_by_label("main.tex source").type_text(":w");
+    h.key_press(egui::Key::Enter);
+    // The build runs on a thread, and its spinner repaints until it ends.
+    for _ in 0..400 {
+        h.step();
+        if h.query_all_by_label_contains("No engine in this test.").next().is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let written = std::fs::read_to_string(dir.join("main.tex"));
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(written?, "hello", ":w did not save the file");
+    assert!(h.query_all_by_label_contains("No engine in this test.").next().is_some(), ":w did not compile");
+    Ok(())
+}
