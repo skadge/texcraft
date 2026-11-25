@@ -501,31 +501,6 @@ fn the_forge_commit_dialog_is_walked_and_left_from_the_keyboard() {
 }
 
 #[test]
-fn the_ai_consent_dialog_is_walked_and_left_from_the_keyboard() -> Result<(), String> {
-    let sent = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let mut s = super::ai::session(&sent)?;
-    s.execute("ai.connect", &json!({"endpoint": "https://api.example.com/v1", "token": "t", "model": "small"}))?;
-    s.execute("build.compile", &json!({}))?;
-    s.wait();
-    let mut h = super::ai::harness(s);
-    h.run();
-    run(&mut h, "view.logs");
-    let explain = h
-        .query_all_by_role(Role::Button)
-        .find(|n| n.accesskit_node().label().is_some_and(|l| l.starts_with("Explain")))
-        .map(|n| n.accesskit_node().label().unwrap_or_default());
-    let explain = explain.ok_or("no Explain button")?;
-    let from = focus(&mut h, Role::Button, &explain);
-    let open = |h: &mut Harness<'_, App>| {
-        h.key_press(egui::Key::Enter);
-        h.run();
-    };
-    dialog_path(&mut h, &from, open, &[(Role::Button, "Agree and Explain")]);
-    assert!(sent.lock().is_ok_and(|s| s.is_empty()), "Escape sent nothing");
-    Ok(())
-}
-
-#[test]
 fn a_folder_says_whether_it_is_open_and_enter_opens_and_closes_it() {
     let mut h = blank();
     h.state_mut().control("engine.execute", &json!({"command": "file.new", "params": {"path": "chapters/one.tex"}}));

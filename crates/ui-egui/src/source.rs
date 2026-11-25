@@ -160,7 +160,7 @@ pub(crate) struct ProblemPopup {
     selected: usize,
     /// For a build message, when a model is connected: its explanation, if asked for, and whether
     /// a request is in flight. The editor pane sets it every frame.
-    pub ai: Option<(Option<texcraft_engine::ai::Explanation>, bool)>,
+    pub ai: Option<(Option<texcraft_engine::ai::Explanation>, Option<String>)>,
 }
 
 /// How a passage of the review is drawn. Struck and underlined text tell a suggestion apart
@@ -1845,9 +1845,9 @@ impl SourceEditor {
                         ui.label(egui::RichText::new(tl!("Looking for fixes…")).font(t.small()).color(t.text_muted));
                     }
                 }
-                if let Some((explanation, busy)) = &popup.ai {
+                if let Some((explanation, blocked)) = &popup.ai {
                     ui.add_space(t.unit);
-                    match crate::ai::explanation(ui, t, explanation.as_ref(), *busy) {
+                    match crate::ai::explanation(ui, t, explanation.as_ref(), blocked.as_deref()) {
                         crate::ai::Act::Explain => ai_act = Some(Some(popup.problem.line)),
                         crate::ai::Act::Cancel => ai_act = Some(None),
                         crate::ai::Act::None => {}

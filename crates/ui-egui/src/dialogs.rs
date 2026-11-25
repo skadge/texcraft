@@ -63,7 +63,6 @@ pub(crate) enum Dialog {
     ForgeProposal(crate::forge_server::ProposalForm),
     Figure(Box<crate::figure_dialog::FigureForm>),
     /// What explaining a message sends, before the first one goes.
-    AiConsent(Box<crate::ai::Consent>),
     /// Make with AI: a description, the model's LaTeX typeset, Insert.
     AiMake(Box<crate::ai_make::MakeForm>),
     /// Add a Reference with AI: a title or DOI, the drafted entry.
@@ -93,7 +92,6 @@ impl Dialog {
             Dialog::ForgeServer(_) => "forge_server",
             Dialog::ForgeProposal(_) => "forge_proposal",
             Dialog::Figure(_) => "figure",
-            Dialog::AiConsent(_) => "ai_consent",
             Dialog::AiMake(_) => "ai_make",
             Dialog::AiReference(_) => "ai_reference",
             Dialog::AiInstruct(_) => "ai_instruct",
@@ -107,7 +105,6 @@ fn own_window(app: &mut App, ctx: &egui::Context) -> bool {
     let draw: fn(&mut App, &egui::Context) = match app.view.dialog {
         Some(Dialog::Shortcuts) => shortcuts,
         Some(Dialog::Settings) => crate::settings::show,
-        Some(Dialog::AiConsent(_)) => crate::ai::consent_dialog,
         Some(Dialog::AiMake(_)) => crate::ai_make::make_dialog,
         Some(Dialog::AiReference(_)) => crate::ai_make::reference_dialog,
         Some(Dialog::AiInstruct(_)) => crate::ai::instruct_dialog,
@@ -149,7 +146,6 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             | Dialog::ForgeSave(_)
             | Dialog::ForgeServer(_)
             | Dialog::ForgeProposal(_)
-            | Dialog::AiConsent(_)
             | Dialog::AiMake(_)
             | Dialog::AiReference(_)
             | Dialog::AiInstruct(_)

@@ -357,6 +357,7 @@ pub(crate) fn icon_for(id: &str) -> Option<&'static str> {
         "edit.enumerate" => "list-ordered",
         "edit.italic" => "italic",
         "edit.section" => "heading-1",
+        "edit.ai_make" | "edit.ai_reference" | "edit.ai_review" | "edit.instruct" | "edit.rewrite" => crate::ai::ICON,
         _ => return None,
     })
 }
@@ -386,7 +387,7 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
         }
         // Rewrite with AI, before Settings, when a model is connected.
         if menu == "Edit" && c.group == "settings" && last_group != "settings" && crate::ai::offered(app) {
-            ui.menu_button(tl!("Rewrite with AI"), |ui| {
+            ui.menu_image_text_button(crate::icons::image(crate::ai::ICON, 14.0, t.text_muted), tl!("Rewrite with AI"), |ui| {
                 ui.set_min_width(220.0);
                 rewrite = crate::ai::rewrite_menu(app, ui);
             });

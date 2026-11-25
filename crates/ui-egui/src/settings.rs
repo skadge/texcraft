@@ -16,7 +16,7 @@ const TABS: &[(&str, &str)] = &[
     ("Building", "play"),
     ("Keyboard", "text-cursor-input"),
     ("Review", "message-square-text"),
-    ("AI", "circle-question-mark"),
+    ("AI", crate::ai::ICON),
     ("Accounts", "link"),
 ];
 

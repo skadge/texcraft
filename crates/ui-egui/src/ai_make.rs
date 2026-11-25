@@ -5,7 +5,7 @@
 //! narrow editor); Insert › Add a Reference
 //! with AI… drafts a BibTeX entry from a title or DOI into a `.bib`, as a suggested change, and
 //! says plainly that models invent references. Both go through `ai.make`, `ai.insert_made` and
-//! `ai.reference`; the first request of each kind asks first ([`crate::ai::request`]).
+//! `ai.reference`; refused, saying why, when its kind is switched off ([`crate::ai::request`]).
 
 use std::sync::Arc;
 
@@ -57,10 +57,8 @@ pub(crate) struct ReferenceForm {
 }
 
 /// Why LaTeX cannot be made or a reference drafted now, if it cannot.
-pub(crate) fn can_make(app: &App) -> Result<(), String> {
-    if !crate::ai::offered(app) {
-        return Err(tl!("Connect a model first (Settings › AI).").to_owned());
-    }
+pub(crate) fn can_make(app: &App, kind: Kind) -> Result<(), String> {
+    crate::ai::allowed(app, kind)?;
     match app.session.current() {
         Some(p) if app.session.project().text(p).is_ok() => Ok(()),
         _ => Err(tl!("Open a text file first.").to_owned()),
@@ -69,7 +67,7 @@ pub(crate) fn can_make(app: &App) -> Result<(), String> {
 
 /// `edit.ai_make`: opens the dialog for the caret of the file shown.
 pub(crate) fn open_make(app: &mut App) {
-    if let Err(why) = can_make(app) {
+    if let Err(why) = can_make(app, Kind::Make) {
         app.view.status = Some((why, true));
         return;
     }
@@ -82,7 +80,7 @@ pub(crate) fn open_make(app: &mut App) {
 
 /// `edit.ai_reference`: opens the dialog, on the project's first `.bib`.
 pub(crate) fn open_reference(app: &mut App) {
-    if let Err(why) = can_make(app) {
+    if let Err(why) = can_make(app, Kind::Reference) {
         app.view.status = Some((why, true));
         return;
     }

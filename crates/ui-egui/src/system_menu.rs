@@ -94,7 +94,8 @@ impl App {
     /// Rewrite with AI: each way of rewriting the selection, then Translate to… its languages,
     /// each entry `edit.rewrite` with its parameters.
     fn rewrite_submenu(&self) -> Node {
-        let enabled = crate::ai::can_rewrite(self).is_ok();
+        let enabled = crate::ai::can_rewrite(self, crate::ai::Kind::Rewrite).is_ok();
+        let instruct = crate::ai::can_rewrite(self, crate::ai::Kind::Instruct).is_ok();
         let mut children: Vec<Node> = crate::ai::REWRITES
             .iter()
             .map(|(how, label)| Item::new(CommandRef::with_params("edit.rewrite", json!({"how": how})), t(label)).enabled(enabled).into())
@@ -104,7 +105,7 @@ impl App {
             .map(|l| Item::new(CommandRef::with_params("edit.rewrite", json!({"how": "translate", "language": l})), t(l)).enabled(enabled).into())
             .collect();
         children.push(Node::submenu(t("Translate to…"), languages));
-        children.push(Item::new("edit.instruct", t("Ask AI to Change This…")).enabled(enabled).into());
+        children.push(Item::new("edit.instruct", t("Ask AI to Change This…")).enabled(instruct).into());
         Node::submenu(t("Rewrite with AI"), children)
     }
 

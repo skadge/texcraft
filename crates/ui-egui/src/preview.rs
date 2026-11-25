@@ -491,7 +491,7 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
     let mut explain = None;
     let mut cancel_ai = false;
     let ai_offered = crate::ai::offered(app);
-    let ai_busy = app.session.ai_busy();
+    let ai_blocked = crate::ai::explain_blocked(app);
     let outputs = app.session.outputs();
     let browser = app.session.library().is_some();
     let file_manager = ui_cmd::enabled(app, "view.show_output").is_ok();
@@ -547,7 +547,7 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                 };
                 let page = outcome.place_on_page(d).map(|c| PageRect { page: c.page, x: c.x, y: c.y, width: c.width, height: c.height });
                 // Errors and warnings can be explained, when a model is connected.
-                let ai = (ai_offered && d.severity >= Severity::Warning).then(|| (app.session.ai_explanation(d), ai_busy));
+                let ai = (ai_offered && d.severity >= Severity::Warning).then(|| (app.session.ai_explanation(d), ai_blocked.clone()));
                 match card(ui, &t, Card { icon, color, title: &title, message: &d.message, help: &help, ai }, place.as_ref(), page) {
                     CardAction::Explain => explain = outcome.diagnostics.iter().position(|x| std::ptr::eq(x, d)),
                     CardAction::CancelAi => cancel_ai = true,
@@ -786,7 +786,7 @@ struct Card<'a> {
     help: &'a str,
     /// For a message AI can explain: its explanation, if asked for, and whether a request is in
     /// flight.
-    ai: Option<(Option<&'a texcraft_engine::ai::Explanation>, bool)>,
+    ai: Option<(Option<&'a texcraft_engine::ai::Explanation>, Option<String>)>,
 }
 
 /// What was done with a log card.
@@ -846,8 +846,8 @@ fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Opti
                 if !help.is_empty() {
                     ui.add(egui::Label::new(RichText::new(help).font(t.small()).color(t.text_muted)).selectable(true));
                 }
-                if let Some((explanation, busy)) = ai {
-                    match crate::ai::explanation(ui, t, explanation, busy) {
+                if let Some((explanation, blocked)) = ai {
+                    match crate::ai::explanation(ui, t, explanation, blocked.as_deref()) {
                         crate::ai::Act::Explain => action = CardAction::Explain,
                         crate::ai::Act::Cancel => action = CardAction::CancelAi,
                         crate::ai::Act::None => {}
