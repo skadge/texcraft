@@ -53,6 +53,8 @@ pub const APP: &str = "texcraft";
 pub const EXPLAIN: &str = "text.explain";
 /// The kind of request a rewrite is.
 pub const REWRITE: &str = "text.rewrite";
+/// The kind of request changing a selection as the user asked, in their words, is.
+pub const INSTRUCT: &str = "text.instruct";
 /// The kind of request a continuation is.
 pub const COMPLETE: &str = "text.complete";
 /// The kind of request making LaTeX from a description is.
@@ -71,8 +73,8 @@ pub use make::{
     Inserted, MAX_DESCRIPTION_CHARS, Made, MakeKind, Making, Preview, Referenced, Scratch, Typeset, UNVERIFIED, entry, made, retex_typeset,
 };
 pub use write::{
-    COMPLETE_EVERY_MS, Ghost, How, MAX_PARAGRAPH_CHARS, MAX_REWRITE_CHARS, Paragraph, Passage, REWRITE_CONTEXT_CHARS, Rewritten, continuation,
-    rewritten,
+    COMPLETE_EVERY_MS, Ghost, How, MAX_INSTRUCTION_CHARS, MAX_PARAGRAPH_CHARS, MAX_REWRITE_CHARS, Paragraph, Passage, REWRITE_CONTEXT_CHARS,
+    Rewritten, continuation, rewritten,
 };
 /// Lines of source sent on each side of the message's line.
 pub const CONTEXT_LINES: usize = 6;
@@ -505,7 +507,7 @@ fn destination(c: &Connection) -> String {
 }
 
 /// The kinds of request, as `ai.disclose` and `ai.consent` name them.
-pub const REQUESTS: [&str; 7] = ["explain", "rewrite", "complete", "make", "reference", "ask", "review"];
+pub const REQUESTS: [&str; 8] = ["explain", "rewrite", "instruct", "complete", "make", "reference", "ask", "review"];
 
 /// The name `ai.disclose` and `ai.consent` give a kind of request (its capability id).
 fn request_name(capability: &str) -> Option<&'static str> {
@@ -521,6 +523,7 @@ fn capability(name: &str) -> Result<&'static str> {
     match name {
         "explain" | EXPLAIN => Ok(EXPLAIN),
         "rewrite" | REWRITE => Ok(REWRITE),
+        "instruct" | INSTRUCT => Ok(INSTRUCT),
         "complete" | COMPLETE => Ok(COMPLETE),
         "make" | MAKE => Ok(MAKE),
         "reference" | REFERENCE => Ok(REFERENCE),
@@ -643,6 +646,7 @@ impl Session {
             "busy": a.task.as_ref().map(|t| match t.work {
                 Work::Models { .. } => "models",
                 Work::Explain { .. } => "explain",
+                Work::Rewrite { ref passage, .. } if matches!(passage.how, How::Instruct(_)) => "instruct",
                 Work::Rewrite { .. } => "rewrite",
                 Work::Complete { .. } => "complete",
                 Work::Make { .. } => "make",
@@ -785,8 +789,11 @@ impl Session {
         self.ai_ready()?;
         let kind = capability(p.get("request").and_then(Value::as_str).unwrap_or("explain"))?;
         let (request, sends) = match kind {
-            REWRITE => {
+            REWRITE | INSTRUCT => {
                 let passage = self.ai_passage(p)?;
+                if (kind == INSTRUCT) != matches!(passage.how, How::Instruct(_)) {
+                    return Err("A change as asked takes an `instruction`; a rewrite takes `how`.".to_owned());
+                }
                 (passage.request()?, passage.describe())
             }
             COMPLETE => {

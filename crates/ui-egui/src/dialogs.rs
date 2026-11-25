@@ -66,6 +66,8 @@ pub(crate) enum Dialog {
     AiMake(Box<crate::ai_make::MakeForm>),
     /// Add a Reference with AI: a title or DOI, the drafted entry.
     AiReference(Box<crate::ai_make::ReferenceForm>),
+    /// Ask AI to Change This: how to change the selection, in the user's words.
+    AiInstruct(Box<crate::ai::InstructForm>),
     /// A dropped zip file, or files already in the project: what to do with them.
     Drop(Box<crate::drop::DropForm>),
 }
@@ -91,9 +93,22 @@ impl Dialog {
             Dialog::AiConsent(_) => "ai_consent",
             Dialog::AiMake(_) => "ai_make",
             Dialog::AiReference(_) => "ai_reference",
+            Dialog::AiInstruct(_) => "ai_instruct",
             Dialog::Drop(_) => "drop",
         }
     }
+}
+
+/// The AI dialogs, each drawn by its own module; false when none is open.
+fn ai_dialog(app: &mut App, ctx: &egui::Context) -> bool {
+    match app.view.dialog {
+        Some(Dialog::AiConsent(_)) => crate::ai::consent_dialog(app, ctx),
+        Some(Dialog::AiMake(_)) => crate::ai_make::make_dialog(app, ctx),
+        Some(Dialog::AiReference(_)) => crate::ai_make::reference_dialog(app, ctx),
+        Some(Dialog::AiInstruct(_)) => crate::ai::instruct_dialog(app, ctx),
+        _ => return false,
+    }
+    true
 }
 
 /// The window's open dialog, if any.
@@ -106,16 +121,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         crate::settings::show(app, ctx);
         return;
     }
-    if matches!(app.view.dialog, Some(Dialog::AiConsent(_))) {
-        crate::ai::consent_dialog(app, ctx);
-        return;
-    }
-    if matches!(app.view.dialog, Some(Dialog::AiMake(_))) {
-        crate::ai_make::make_dialog(app, ctx);
-        return;
-    }
-    if matches!(app.view.dialog, Some(Dialog::AiReference(_))) {
-        crate::ai_make::reference_dialog(app, ctx);
+    if ai_dialog(app, ctx) {
         return;
     }
     if matches!(app.view.dialog, Some(Dialog::Drop(_))) {
@@ -158,6 +164,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             | Dialog::AiConsent(_)
             | Dialog::AiMake(_)
             | Dialog::AiReference(_)
+            | Dialog::AiInstruct(_)
             | Dialog::Drop(_) => {}
             Dialog::Figure(f) => outcome = crate::figure_dialog::form(ui, &t, f),
             Dialog::About => outcome = about(ui, &t, &engine),

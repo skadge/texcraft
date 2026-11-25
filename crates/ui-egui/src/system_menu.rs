@@ -104,6 +104,7 @@ impl App {
             .map(|l| Item::new(CommandRef::with_params("edit.rewrite", json!({"how": "translate", "language": l})), t(l)).enabled(enabled).into())
             .collect();
         children.push(Node::submenu(t("Translate to…"), languages));
+        children.push(Item::new("edit.instruct", t("Ask AI to Change This…")).enabled(enabled).into());
         Node::submenu(t("Rewrite with AI"), children)
     }
 

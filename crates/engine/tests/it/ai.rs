@@ -552,6 +552,40 @@ fn cancelling_a_continuation_leaves_an_explanation_in_flight_alone() -> R {
     Ok(())
 }
 
+/// Issue #14: a change in the user's words is its own kind of request, sends the instruction,
+/// may grow the passage, and is refused when it drops a reference or alters a formula.
+#[test]
+fn a_change_as_asked_needs_its_own_consent_may_add_text_and_keeps_references_and_formulas() -> R {
+    let seen = Seen::default();
+    let longer = "<<<TEXT\nAs Section~\\ref{sec:a} shows, the value $x^2$ is very large: it grows with $n$, as \\cite{knuth84} found.\nTEXT>>>";
+    let (mut s, start, end) = paper(&seen, longer)?;
+    connect_remote(&mut s)?;
+    let p = json!({"path": "main.tex", "start": start, "end": end, "instruction": "Flesh this out"});
+    s.execute("ai.consent", &json!({"request": "rewrite"}))?;
+    let e = s.execute("ai.instruct", &p).err().ok_or("changed with a rewrite's consent")?;
+    assert!(e.contains("instruction") && e.contains("Agree"), "{e}");
+    let mut d = p.clone();
+    d["request"] = json!("instruct");
+    let disclosed = s.execute("ai.disclose", &d)?;
+    assert_eq!(disclosed["needs_consent"], true);
+    s.execute("ai.consent", &json!({"request": "instruct"}))?;
+    let before = text(&s);
+    s.execute("ai.instruct", &p)?;
+    let prompt = seen.prompts().first().cloned().unwrap_or_default();
+    assert_eq!(Some(prompt.as_str()), disclosed["sends"]["prompt"].as_str(), "the request differs from its disclosure");
+    assert!(prompt.contains("Flesh this out") && prompt.contains(SELECTED), "the instruction or the selection is missing");
+    assert_eq!(text(&s), before, "the change was made, not suggested");
+    assert_eq!(suggestions(&mut s)?["openSuggestions"], 1, "the longer passage is not a suggestion");
+    // Shorter and without its reference, or with its formula changed: refused.
+    for answer in ["<<<TEXT\nThe value $x^2$ is large.\nTEXT>>>", "<<<TEXT\nAs Section~\\ref{sec:a} shows, $x^3$ is large and more.\nTEXT>>>"] {
+        seen.answer(answer);
+        let e = s.execute("ai.instruct", &p).err().ok_or("a change that lost LaTeX was offered")?;
+        assert!(e.contains("not offered"), "{e}");
+    }
+    assert_eq!(suggestions(&mut s)?["openSuggestions"], 1);
+    Ok(())
+}
+
 // ----- AI4: making LaTeX and drafting references -----
 
 /// A typesetter that records what it was given and refuses `\bad`.

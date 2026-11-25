@@ -4,6 +4,10 @@
 //! change only its words; [`compare`] says what else it changed, so the rewrite can be refused
 //! with the reason.
 //!
+//! A passage changed as the user asked (fleshed out, extended) may gain text and LaTeX, and change
+//! its markup, but not lose or alter its labels, references, citations or formulas: [`dropped`]
+//! says what it lost.
+//!
 //! Comments are ignored. Formulas are compared whole, delimiters included: `$x$` and `\(x\)` are
 //! different spellings, and a formula is one item however many commands are in it.
 
@@ -64,6 +68,15 @@ pub fn compare(original: &str, rewritten: &str) -> Vec<Change> {
     out.extend(left.into_iter().map(|m| Change { part: Part::Math, item: shorten(&m.1), dropped: false }));
     out.extend(a.commands.difference(&b.commands).map(|c| Change { part: Part::Command, item: c.clone(), dropped: true }));
     out
+}
+
+/// What `changed` dropped or altered of `original`'s labels, references, citations and formulas,
+/// when the passage was changed as the user asked (bullet points fleshed out into paragraphs):
+/// new text and LaTeX may be added, and its markup may change (a list may become prose), but every
+/// label, reference and citation key and every formula, as written up to spacing, must still be
+/// there. An altered formula counts as dropped; additions never count.
+pub fn dropped(original: &str, changed: &str) -> Vec<Change> {
+    compare(original, changed).into_iter().filter(|c| c.dropped && c.part != Part::Command).collect()
 }
 
 /// A formula as shown in a message: at most 60 characters.
@@ -261,6 +274,22 @@ mod tests {
             let _ = compare(a, PASSAGE);
         }
         assert!(compare("\\label{a}", "\\label{a}}").is_empty());
+    }
+
+    #[test]
+    fn a_passage_may_grow_but_not_lose_or_alter_its_latex() {
+        let bullets = "\\begin{itemize}\n\\item fast, see \\ref{sec:speed}\n\\item $O(n)$ \\cite{knuth84}\n\\end{itemize}\n";
+        let fleshed = "The method is fast, as Section~\\ref{sec:speed} shows: it runs in $O(n)$ \\cite{knuth84}, \\emph{far} below the $O(n^2)$ of \\cite{lamport94}.\\label{p:fast}\n";
+        // The list became prose that keeps its reference, formula and citation, and adds others.
+        assert_eq!(dropped(bullets, fleshed), Vec::new());
+        assert!(!compare(bullets, fleshed).is_empty(), "a rewrite would refuse it");
+        // Kept as a list and grown.
+        let grown = format!("{}More: $O(n^2)$ in \\cite{{lamport94}}\\label{{p:more}}, \\emph{{slower}}.\n", bullets);
+        assert_eq!(dropped(bullets, &grown), Vec::new());
+        // An altered formula or a dropped citation is not.
+        let altered = bullets.replace("$O(n)$", "$O(n \\log n)$").replace(" \\cite{knuth84}", "");
+        let parts: BTreeSet<Part> = dropped(bullets, &altered).iter().map(|c| c.part).collect();
+        assert_eq!(parts, BTreeSet::from([Part::Math, Part::Citation]));
     }
 
     #[test]

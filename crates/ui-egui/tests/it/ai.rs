@@ -280,6 +280,51 @@ fn rewrite_shorter_on_a_selection_asks_first_and_makes_a_suggestion_card() -> Re
     Ok(())
 }
 
+/// Issue #14: bullet points selected, Ask AI to Change This… in the context menu, an instruction:
+/// the longer text arrives as a suggestion, and the instruction is offered again next time.
+#[test]
+fn ask_ai_to_change_this_sends_the_instruction_and_the_change_is_a_suggestion() -> Result<(), String> {
+    let prompts = Arc::new(Mutex::new(Vec::new()));
+    let text = "\\begin{itemize}\n\\item fast\n\\item small\n\\end{itemize}\n";
+    let reply = "<<<TEXT\nThe method is fast, much faster than the others, and small enough to fit anywhere.\nTEXT>>>";
+    let mut h = editor(reply, text, &prompts, false, false)?;
+    h.run();
+    h.get_by_label("main.tex source").focus();
+    h.run();
+    ui_cmd::run(h.state_mut(), "edit.select_all");
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F10);
+    h.run();
+    h.run();
+    h.get_by_label("Rewrite with AI").click();
+    h.run();
+    h.get_by_label("Ask AI to Change This…").click();
+    h.run();
+    h.get_by_label("How to change the selection").type_text("Flesh out these bullet points");
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(sent(&prompts), 0, "sent before the user agreed");
+    h.get_by_label("Agree and Send").click();
+    h.run();
+    assert!(settle(&mut h), "the change did not arrive");
+    assert!(prompts.lock().map(|p| p[0].contains("Flesh out these bullet points")).unwrap_or(false), "the instruction was not sent");
+    let file =
+        h.state().session().project().text(&texcraft_engine::project::ProjectPath::new("main.tex").map_err(|e| e.to_string())?).map(str::to_owned);
+    assert_eq!(file.ok().as_deref(), Some(text), "the change was applied directly");
+    h.run();
+    assert!(h.query_by_label_contains("Suggestion by AI (small)").is_some(), "no suggestion card for the change");
+    // Asked again: the instruction is offered, and Escape leaves.
+    ui_cmd::run(h.state_mut(), "edit.select_all");
+    ui_cmd::run(h.state_mut(), "edit.instruct");
+    h.run();
+    assert!(h.query_by_label("Flesh out these bullet points").is_some(), "the last instruction is not offered");
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(h.query_by_label("How to change the selection").is_none(), "Escape did not close the dialog");
+    Ok(())
+}
+
 /// Types `typed` at the end of the first line, waits for the next words and takes them with Tab:
 /// the file's text after.
 fn take_the_next_words(vim: bool, typed: &str) -> Result<String, String> {

@@ -23,6 +23,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         spec("ai.sent", "What an AI Request Sent", sent_schema, connected, sent, false),
         spec("ai.explain", "Explain", explain_schema, connected, explain, true),
         spec("ai.rewrite", "Rewrite with AI", rewrite_schema, connected, rewrite, true),
+        spec("ai.instruct", "Ask AI to Change This", instruct_schema, connected, instruct, true),
         spec("ai.complete", "Suggest the Next Words", complete_schema, connected, complete, true),
         spec("ai.make", "Make with AI", make_schema, connected, make, true),
         spec("ai.insert_made", "Insert What AI Made", insert_made_schema, connected, insert_made, true),
@@ -73,7 +74,7 @@ const MESSAGE: &str = "The message: `index` in build.result's diagnostics (from 
 
 fn disclose_schema() -> Value {
     json!({"type": "object", "description": "What a request would send, where, and whether the user must agree to its kind first. \
-explain: the message (`index`, or `path` and `line`); rewrite: as ai.rewrite; complete: as ai.complete (without `path`, an example); \
+explain: the message (`index`, or `path` and `line`); rewrite: as ai.rewrite; instruct: as ai.instruct; complete: as ai.complete (without `path`, an example); \
 make: as ai.make; reference: as ai.reference; ask: as ai.ask; review: as ai.review.", "properties": {
         "request": {"type": "string", "enum": crate::ai::REQUESTS, "description": "Default: explain."},
         "kind": {"type": "string", "enum": KINDS},
@@ -90,6 +91,7 @@ make: as ai.make; reference: as ai.reference; ask: as ai.ask; review: as ai.revi
         "end": {"type": "integer", "minimum": 0},
         "how": {"type": "string", "enum": HOWS},
         "language": {"type": "string"},
+        "instruction": {"type": "string"},
         "at": {"type": "integer", "minimum": 0}
     }, "additionalProperties": false})
 }
@@ -156,6 +158,18 @@ fn rewrite_schema() -> Value {
         "language": {"type": "string", "description": "For translate: the language, in English words (French, Brazilian Portuguese)."},
         "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_ai` and `Session::ai_rewritten`. Default: wait for it."}
     }, "required": ["path", "start", "end", "how"], "additionalProperties": false})
+}
+
+fn instruct_schema() -> Value {
+    json!({"type": "object", "description": "Changes characters `start..end` of `path` (from 0) as `instruction` says, in the user's words (\"flesh out these bullet points\"). \
+Sends the instruction, the selection and a few lines around it. The change arrives as a suggested change on exactly them, by \"AI (<model>)\", never as an edit. \
+It may add text and LaTeX, and change markup, but is refused, saying why, when it dropped or altered a label, reference, citation or formula. Its own kind of request for consent (instruct).", "properties": {
+        "path": {"type": "string"},
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 0},
+        "instruction": {"type": "string", "description": "How to change the selection: one line, at most 500 characters."},
+        "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_ai` and `Session::ai_rewritten`. Default: wait for it."}
+    }, "required": ["path", "start", "end", "instruction"], "additionalProperties": false})
 }
 
 fn complete_schema() -> Value {
@@ -266,6 +280,11 @@ fn explain(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn rewrite(s: &mut Session, p: &Value) -> Result<Value> {
+    s.ai_rewrite(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+}
+
+fn instruct(s: &mut Session, p: &Value) -> Result<Value> {
+    string(p, "instruction")?;
     s.ai_rewrite(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
 }
 
