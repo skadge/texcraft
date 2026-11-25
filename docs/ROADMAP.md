@@ -117,6 +117,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | A8 | ⬜ | Updates and translations | In-app updates (craft-update), translations (craft-i18n). |
 | A9 | 🚧 | More of the window | The PDF in its own window, a distraction-free mode (focus mode), Alt or F10 for the menus: done. The macOS menu bar (craft-menu, the in-window menus hidden there): built, not tried on a Mac. |
 | A10 | 🚧 | Accessibility pass | ✅ 0.10.0: keyboard-path tests for every region, panel and dialog (focus moves in the accessibility tree, reading order, no trap, Escape gives the keyboard back, roles and names), and the fixes they found. Still to do: a screen-reader pass by a person; the Keyboard Shortcuts table's focusable node without a role (craft-keymap); the review margin's controls reached only by F6 (the source editor keeps Tab). |
+| A11 | 🚧 | User guide | Help pages for people who use TeXCraft. Done: `docs/guide/`, static HTML pages for every area of the app (desktop and browser differences marked, unfinished features said), Help › User Guide (F1) and a link from Settings › AI, published beside the web editor, `cargo xtask guide-check`. Still to do: a copy in the packages for offline reading, screenshots for more pages, translations. |
 
 ## AI assistance
 

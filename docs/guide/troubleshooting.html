@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Common LaTeX build errors in TeXCraft, packages missing in the browser, installation problems, and where TeXCraft keeps its settings, caches and logs on each system.">
+  <title>Troubleshooting · TeXCraft User Guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+  <header class="site">
+    <p class="brand"><a href="index.html">TeXCraft <span>User Guide</span></a></p>
+    <ul class="site-links">
+      <li><a href="https://texcraft-893d51.gitlab.io/">Open in the browser</a></li>
+      <li><a href="index.html#download">Download</a></li>
+      <li><a href="https://gitlab.com/severin-lemaignan/texcraft">Source</a></li>
+    </ul>
+  </header>
+  <div class="layout">
+    <nav class="guide-nav" aria-label="Guide">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="writing.html">Writing</a></li>
+        <li><a href="building.html">Building and exporting</a></li>
+        <li><a href="projects.html">Projects, files and history</a></li>
+        <li><a href="forges.html">GitLab and GitHub</a></li>
+        <li><a href="review.html">Comments and suggestions</a></li>
+        <li><a href="ai.html">AI assistance</a></li>
+        <li><a href="keyboard.html">Keyboard and accessibility</a></li>
+        <li><a href="settings.html">Settings</a></li>
+        <li><a href="agents.html">Agents and automation</a></li>
+        <li><a href="troubleshooting.html" aria-current="page">Troubleshooting</a></li>
+      </ul>
+    </nav>
+    <main id="main" tabindex="-1">
+      <h1>Troubleshooting</h1>
+      <p class="lead">What to do when a build fails, when the browser version lacks a package, and where to look when something else goes wrong.</p>
+
+      <h2 id="build-errors">Common build errors</h2>
+      <p>Open the <a href="building.html#log">build log</a>: each message says what went wrong in words, with help and a link to its line. The first error is usually the one to fix; later ones often follow from it. With a model connected, <span class="ui">Explain</span> gives a second opinion <span class="tag">Desktop only</span>.</p>
+      <dl>
+        <dt>Undefined control sequence</dt>
+        <dd>A command TeX does not know: a typo, or a command from a package the preamble does not load. <span class="ui">Quick Fix</span> (<kbd>Ctrl</kbd>+<kbd>.</kbd>) on the underlined command offers the <code>\usepackage</code> line when the engine knows which package defines it.</dd>
+        <dt>Missing $ inserted</dt>
+        <dd>Something that only works in a formula, such as <code>_</code>, <code>^</code> or <code>\alpha</code>, is outside one. Put it in <code>$…$</code>, or write <code>\_</code> for a plain underscore.</dd>
+        <dt>File not found</dt>
+        <dd>An <code>\input</code>, <code>\include</code> or <code>\includegraphics</code> names a file that is not in the project, or not at that path. Paths are relative to the main document's folder, and their case matters.</dd>
+        <dt>Runaway argument, or a paragraph ended before something was complete</dt>
+        <dd>A brace <code>{</code> or an environment is not closed. The line the message points to is where TeX noticed, which can be after the place to fix.</dd>
+        <dt>"??" in place of a reference or citation</dt>
+        <dd>While a build is still running its passes, the draft PDF shows "??"; wait for the build to end. If they stay, the label or the citation key does not exist (the log says which), or the bibliography file is not named in <code>\bibliography</code> or <code>\addbibresource</code>.</dd>
+        <dt>A build that seems stuck, or results that make no sense</dt>
+        <dd>Use <span class="ui">Stop Compiling</span>, then <span class="ui">Delete Build Files</span> in the Compile button's menu, and compile again: the next build starts from scratch.</dd>
+      </dl>
+
+      <h2 id="packages">Packages</h2>
+      <p>On the desktop, TeXCraft uses your TeX Live (2025 or 2026) when one is installed. A package your document needs and your TeX Live lacks is downloaded from TeX Live the first time; without any TeX Live, TeXCraft keeps a TeX tree of its own and fills it as documents need it. Either way the first build of a new package needs the network.</p>
+
+      <h3 id="browser-packages">Packages in the browser <span class="tag">Browser only</span></h3>
+      <p>The browser version serves its own TeX tree: the common classes and packages, and those of every template. A document that needs a package outside it fails to build, and the log names the file it could not find.</p>
+      <ul>
+        <li>If the package is a single file (a <code>.sty</code> or <code>.cls</code>), adding that file to the project usually works.</li>
+        <li>Otherwise, build the project in the desktop app, which downloads what it needs.</li>
+      </ul>
+      <p class="not-yet"><strong>Not yet:</strong> downloading missing packages during the build in the browser.</p>
+      <p>The first build of each visit downloads the TeX files the project reads, which can take a few seconds; they are kept for the next visit.</p>
+
+      <h2 id="install">Installing and starting</h2>
+      <dl>
+        <dt>The AppImage does not start</dt>
+        <dd>It needs glibc 2.36 or newer (Debian 12, Ubuntu 24.04, Fedora 37 and later; not Ubuntu 22.04) and FUSE 3 (<code>fusermount3</code>). Without FUSE, run it with <code>--appimage-extract-and-run</code>. Make sure it is executable (<code>chmod +x</code>).</dd>
+        <dt>The Flatpak does not use my TeX Live</dt>
+        <dd>The sandbox cannot see it. The Flatpak keeps its own TeX tree inside its sandbox and downloads packages into it, so its first build needs the network. It can open projects in your home folder.</dd>
+        <dt>Windows or macOS refuses to open it</dt>
+        <dd>These builds are not signed yet. On Windows choose <span class="ui">More info › Run anyway</span>; on macOS, right-click the app and choose <span class="ui">Open</span> the first time.</dd>
+        <dt>"The preferences cannot be saved"</dt>
+        <dd>TeXCraft could not write its settings folder (below); changes are kept for this session only. Check that the folder exists and is yours.</dd>
+        <dt>A sign-in or the AI token is forgotten at each start</dt>
+        <dd>They are kept in your system's keychain (the Secret Service on Linux, the Keychain on macOS, the Credential Manager on Windows). Without a working keychain they last only while TeXCraft runs.</dd>
+      </dl>
+
+      <h3 id="browser-problems">In the browser</h3>
+      <ul>
+        <li><strong>My projects are gone:</strong> projects live in the browser's storage for the site; clearing the site's data, or using a private window, removes them. Save projects you care about to <a href="forges.html#save-to">GitLab or GitHub</a>.</li>
+        <li><strong>Paste from the menu does not work:</strong> a web page can read the clipboard only with the keys; use <kbd>Ctrl</kbd>+<kbd>V</kbd> (<kbd>Cmd</kbd>+<kbd>V</kbd> on a Mac).</li>
+        <li><strong>A dropped file is not added:</strong> some drops carry no file; the status line says so. <span class="ui">File › Add Files…</span> always works.</li>
+      </ul>
+
+      <h2 id="files">Where TeXCraft keeps its files</h2>
+      <div class="table-wrap" role="region" aria-label="Where TeXCraft keeps its files" tabindex="0">
+      <table>
+        <caption>Settings, data and caches by system</caption>
+        <thead>
+          <tr><th scope="col">What</th><th scope="col">Linux</th><th scope="col">Flatpak</th><th scope="col">macOS</th><th scope="col">Windows</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Settings (<code>config.toml</code>), and an organisation's <code>texcraft-forges.toml</code></th>
+            <td><code>~/.config/texcraft/</code></td>
+            <td><code>~/.var/app/io.gitlab.severin_lemaignan.TeXCraft/config/texcraft/</code></td>
+            <td><code>~/Library/Application Support/texcraft/</code></td>
+            <td><code>%APPDATA%\texcraft\</code></td>
+          </tr>
+          <tr>
+            <th scope="row">Kept templates, start-page thumbnails, control-channel tokens</th>
+            <td><code>~/.local/share/TeXCraft/</code></td>
+            <td><code>~/.var/app/io.gitlab.severin_lemaignan.TeXCraft/data/TeXCraft/</code></td>
+            <td><code>~/Library/Application Support/TeXCraft/</code></td>
+            <td><code>%APPDATA%\TeXCraft\</code></td>
+          </tr>
+          <tr>
+            <th scope="row">The engine's caches and its own TeX tree</th>
+            <td><code>~/.cache/retex/</code></td>
+            <td><code>~/.var/app/io.gitlab.severin_lemaignan.TeXCraft/cache/retex/</code></td>
+            <td><code>~/Library/Caches/retex/</code></td>
+            <td><code>%LOCALAPPDATA%\retex\</code></td>
+          </tr>
+          <tr>
+            <th scope="row">Sign-ins and the AI token</th>
+            <td colspan="4">The system's keychain, never a file of TeXCraft's</td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+      <ul>
+        <li><code>TEXCRAFT_CONFIG_DIR</code> chooses another settings folder; set but empty, nothing is read or written. A file named <code>portable</code> beside the program keeps the settings in a <code>config</code> folder beside it instead.</li>
+        <li>Your projects are where you put them. Each has a <code>.git</code> folder (its <a href="projects.html#history">history</a>) and a <code>.texcraft</code> folder (its review, its spellings, its AI switch).</li>
+        <li>In the browser everything, projects included, is in the browser's storage for the site.</li>
+      </ul>
+
+      <h2 id="logs">Logs and reporting a problem</h2>
+      <p>The desktop app writes its warnings and errors to the terminal it was started from. For more detail, start it from a terminal with <code>RUST_LOG=info</code> (or <code>debug</code>):</p>
+<pre><code>RUST_LOG=info texcraft
+RUST_LOG=info ./TeXCraft-*.AppImage
+flatpak run --env=RUST_LOG=info io.gitlab.severin_lemaignan.TeXCraft</code></pre>
+      <p>A build's own log is in the build log's <span class="ui">Raw log</span>, which you can copy or save. An internal error in a command is caught and shown as a message instead of closing the window.</p>
+      <p>Report problems on the <a href="https://gitlab.com/severin-lemaignan/texcraft/-/issues">issue tracker</a>, with the version (<span class="ui">Help › About TeXCraft</span>), your system, what you did and what happened. Leave out private text and any token. A security problem goes through the project's private security reporting, never a public issue.</p>
+      <nav class="pager" aria-label="Previous and next page">
+        <a class="prev" href="agents.html" rel="prev"><span class="dir">Previous</span> Agents and automation</a>
+        
+      </nav>
+    </main>
+  </div>
+  <footer class="site">
+    <p>Describes TeXCraft 0.12.0 and the changes made since. What changed in each release is in the <a href="https://gitlab.com/severin-lemaignan/texcraft/-/blob/main/CHANGELOG.md">changelog</a>.</p>
+    <p><a href="https://gitlab.com/severin-lemaignan/texcraft/-/edit/main/docs/guide/troubleshooting.html">Edit this page</a> · <a href="https://gitlab.com/severin-lemaignan/texcraft/-/issues">Report a problem</a> · The guide is licensed MIT OR Apache-2.0, like TeXCraft.</p>
+  </footer>
+</body>
+</html>

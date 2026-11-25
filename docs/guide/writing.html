@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="The source editor, the formatted view, tables and figures, symbols, spelling, search, folding, several carets and Vim mode in TeXCraft.">
+  <title>Writing · TeXCraft User Guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+  <header class="site">
+    <p class="brand"><a href="index.html">TeXCraft <span>User Guide</span></a></p>
+    <ul class="site-links">
+      <li><a href="https://texcraft-893d51.gitlab.io/">Open in the browser</a></li>
+      <li><a href="index.html#download">Download</a></li>
+      <li><a href="https://gitlab.com/severin-lemaignan/texcraft">Source</a></li>
+    </ul>
+  </header>
+  <div class="layout">
+    <nav class="guide-nav" aria-label="Guide">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="writing.html" aria-current="page">Writing</a></li>
+        <li><a href="building.html">Building and exporting</a></li>
+        <li><a href="projects.html">Projects, files and history</a></li>
+        <li><a href="forges.html">GitLab and GitHub</a></li>
+        <li><a href="review.html">Comments and suggestions</a></li>
+        <li><a href="ai.html">AI assistance</a></li>
+        <li><a href="keyboard.html">Keyboard and accessibility</a></li>
+        <li><a href="settings.html">Settings</a></li>
+        <li><a href="agents.html">Agents and automation</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+      </ul>
+    </nav>
+    <main id="main" tabindex="-1">
+      <h1>Writing</h1>
+      <p class="lead">TeXCraft has its own source editor, made for LaTeX, and a formatted view that shows a file as a document. Both edit the same text.</p>
+
+      <h2 id="source-editor">The source editor</h2>
+      <p>The editor highlights LaTeX, numbers the lines and marks the lines with errors and warnings from the last build. It understands the document as it is built, so it can help:</p>
+      <dl>
+        <dt>Completion</dt>
+        <dd>As you type, the editor offers labels inside <code>\ref{…}</code>, and the commands, environments and citation keys of your document once it has been built. <kbd>Ctrl</kbd>+<kbd>Space</kbd> asks for completions at the caret.</dd>
+        <dt>Errors and quick fixes</dt>
+        <dd>An error is underlined on its exact span. Hover it to read the engine's explanation. <span class="ui">Edit › Quick Fix</span> (<kbd>Ctrl</kbd>+<kbd>.</kbd>) lists the fixes the engine offers there, such as adding the <code>\usepackage</code> a command needs; <kbd>Up</kbd> and <kbd>Down</kbd> choose, <kbd>Enter</kbd> applies.</dd>
+        <dt>Go to definition</dt>
+        <dd><kbd>F12</kbd> on a reference or a command goes to where it is defined.</dd>
+        <dt>Closing brackets and environments</dt>
+        <dd>Typing <code>(</code>, <code>[</code> or <code>{</code> adds the closing one, and <code>\begin{…}</code> its <code>\end{…}</code>. Turn it off in <a href="settings.html#editor">Settings › Editor</a>.</dd>
+        <dt>Undo</dt>
+        <dd><kbd>Ctrl</kbd>+<kbd>Z</kbd> and <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>, in steps of what you typed. Undo takes back only your own changes: a change made to the file outside TeXCraft stays.</dd>
+      </dl>
+      <p>A right-click in the text (or <kbd>Shift</kbd>+<kbd>F10</kbd>, or the <kbd>Menu</kbd> key) opens a menu with <span class="ui">Cut</span>, <span class="ui">Copy</span>, <span class="ui">Paste</span>, <span class="ui">Select All</span>, <span class="ui">Add a Comment</span> on a selection, <span class="ui">Quick Fix</span> and <span class="ui">Show in PDF</span>, plus the spellings of a misspelled word and, with a model connected, <span class="ui">Rewrite with AI</span>.</p>
+      <p>On Linux, selecting text also sets the primary selection, and a middle click pastes it where you click.</p>
+
+      <h3 id="insert">The Insert menu and the toolbar</h3>
+      <p>The editor's toolbar and the <span class="ui">Insert</span> menu add the usual markup around the selection or at the caret: <span class="ui">Section</span>, <span class="ui">Subsection</span>, <span class="ui">Subsubsection</span>, <span class="ui">Paragraph Heading</span>, <span class="ui">Bold</span> (<kbd>Ctrl</kbd>+<kbd>B</kbd>), <span class="ui">Italic</span> (<kbd>Ctrl</kbd>+<kbd>I</kbd>), <span class="ui">Figure</span>, <span class="ui">Table</span>, <span class="ui">Inline Formula</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>), <span class="ui">Displayed Formula</span>, <span class="ui">Numbered Equation</span>, <span class="ui">Symbols…</span>, <span class="ui">Cross-Reference</span>, <span class="ui">Citation</span>, <span class="ui">Link</span>, <span class="ui">Bulleted List</span> and <span class="ui">Numbered List</span>. When the toolbar is narrow, the buttons that do not fit go into its <span class="ui">More formatting</span> menu.</p>
+      <p>To place an image, drag it from the project's files onto the source: TeXCraft writes the <code>\includegraphics</code> line there. The image's menu in the file tree has <span class="ui">Insert in Document</span> too. If the main document does not load <code>graphicx</code>, the status line says so.</p>
+
+      <h2 id="formatted">The formatted view</h2>
+      <p>The <span class="ui">Source</span> / <span class="ui">Formatted</span> switch above the editor shows a <code>.tex</code> file as a document: headings in a serif face, bold and italic text, lists, the abstract, figure cards with their images, chips for references and citations, and typographic quotes and dashes. The preamble is folded into one bar. Anything the view does not know yet is shown as its source, and says so.</p>
+      <figure>
+        <img src="../images/formatted.png" width="1440" height="900" alt="The formatted view of an article: the preamble folded into a bar, the title and abstract, headings in a serif face, a formula shown as its source in a rounded box and references as small chips, with the typeset PDF beside it.">
+        <figcaption>The formatted view beside the PDF.</figcaption>
+      </figure>
+      <h3 id="formatted-editing">Editing in the formatted view</h3>
+      <ul>
+        <li>Type, delete and paste in paragraphs, headings, list items and captions. What you type is escaped, so a <code>%</code> or <code>&amp;</code> stays a character.</li>
+        <li><kbd>Enter</kbd> ends a paragraph, or starts a new item in a list.</li>
+        <li><span class="ui">Bold</span>, <span class="ui">Italic</span>, the headings and the lists of the <span class="ui">Insert</span> menu (and their shortcuts) act on the selection.</li>
+        <li>A chip, a formula or a part shown as source is one unit: <kbd>Backspace</kbd> or <kbd>Delete</kbd> next to it selects it, a second press deletes it. Double-click it to edit its source.</li>
+        <li>Each change is a small edit of the source, and undo is shared with the source view.</li>
+      </ul>
+      <p>On the desktop, formulas are typeset by the engine with your document's own preamble, in the colour of the text; a formula with an error is underlined with the message. <span class="tag">Desktop only</span> In the browser, formulas show as their source.</p>
+      <div class="not-yet">
+        <p><strong>Not yet:</strong> editing a formula in place (double-click to edit its source instead), the input method's composing text in other scripts (only the committed text shows), leaving a list from an empty item, and suggesting changes from the formatted view (in Suggest mode the view is read-only; suggest in the source). The view's toolbar still shows an older hint, "Read-only for now"; the view is editable as described here.</p>
+      </div>
+
+      <h3 id="tables">Tables</h3>
+      <!-- screenshot: a tabular as a grid in the formatted view, its toolbar open (light theme) -->
+      <p>A <code>tabular</code> shows as a grid. Click a cell and type; <kbd>Tab</kbd> and the arrow keys move between cells. The table's toolbar adds a <span class="ui">Row above</span>, <span class="ui">Row below</span>, <span class="ui">Column left</span> or <span class="ui">Column right</span>, deletes a row or a column, sets a column's alignment (<span class="ui">Left</span>, <span class="ui">Center</span>, <span class="ui">Right</span>) and the rules: <span class="ui">No borders</span>, <span class="ui">All borders</span> or <span class="ui">Booktabs rules</span> (which need the <code>booktabs</code> package; TeXCraft tells you if the preamble lacks it). <kbd>Escape</kbd> in a cell moves to the toolbar, and <kbd>Escape</kbd> again back to the text.</p>
+      <p>A table the grid cannot show faithfully (cells spanning rows, a cell holding another table, and so on) stays as source, with the reason.</p>
+      <p class="not-yet"><strong>Not yet:</strong> merging and splitting cells, the caption's position, <code>tabularx</code> and <code>longtable</code>.</p>
+
+      <h3 id="figures">Figures</h3>
+      <p>A figure's card has <span class="ui">Edit Figure…</span>: a dialog for the image (from the project's files), its width, the placement, the caption and the label. On the desktop, an image file dropped on the formatted view becomes a new figure. <span class="tag">Desktop only</span></p>
+
+      <h2 id="symbols">Symbols</h2>
+      <!-- screenshot: the symbol palette, searched for "arrow" -->
+      <p><span class="ui">Insert › Symbols…</span>, or the <span class="ui">Symbols</span> button (Ω) on the toolbar, opens a palette of mathematical symbols, searchable by name or by command. A symbol goes in as a formula, or into the formula the caret is in. If it needs a package, the palette says which, and so does the status line once it is inserted. The symbols you used last are listed first.</p>
+
+      <h2 id="spelling">Spelling</h2>
+      <p>Misspelled words are underlined as you type. Commands, their keys and labels, formulas, code and verbatim text are skipped; the text after <code>%</code> is checked only if you ask for it in <a href="settings.html#editor">Settings › Editor</a>.</p>
+      <ul>
+        <li>The language is the document's, as set by <code>babel</code> or <code>polyglossia</code>, unless you choose one in Settings. English is always available. On the desktop, other languages work once their Hunspell dictionary (<code>.aff</code> and <code>.dic</code> files) is installed on your system; without one, TeXCraft says which to install rather than checking against another language.</li>
+        <li>Right-click a misspelled word for its spellings, <span class="ui">Add to Dictionary</span> (your own word list, kept with your settings) and <span class="ui">Ignore</span> (until TeXCraft closes).</li>
+        <li><span class="ui">Edit › Next Misspelling</span> (<kbd>F7</kbd>) goes to the next one.</li>
+        <li>A project can carry its own words in <code>.texcraft/words.txt</code>, one per line, shared with everyone who has the project.</li>
+      </ul>
+
+      <h2 id="find">Finding and replacing</h2>
+      <dl>
+        <dt>In the file</dt>
+        <dd><span class="ui">Edit › Find</span> (<kbd>Ctrl</kbd>+<kbd>F</kbd>) opens the find bar; <span class="ui">Edit › Replace</span> (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd>) opens it with the replace field. Options: <span class="ui">Match Case</span>, <span class="ui">Whole Word</span>, <span class="ui">Regular Expression</span> and <span class="ui">In Selection</span>. <span class="ui">Replace All</span> is one step to undo.</dd>
+        <dt>In the whole project</dt>
+        <dd><span class="ui">Edit › Find in Project</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>) opens the <span class="ui">Search</span> section of the side panel, with the same options. Results are grouped by file; click one to go there. <span class="ui">Replace All</span> asks first and says how many matches in how many files; in a file open in the editor, Undo takes back its replacements in one step.</dd>
+        <dt>Going somewhere</dt>
+        <dd><span class="ui">Edit › Go to Line…</span> (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd>) and <span class="ui">Edit › Go to File…</span> (<kbd>Ctrl</kbd>+<kbd>P</kbd>), a list of the project's files filtered as you type, with the recent ones first. The <span class="ui">Outline</span> lists the sections of the file shown.</dd>
+      </dl>
+
+      <h2 id="folding">Folding</h2>
+      <p>Sections, environments and the preamble can be folded from the marker in the gutter, or with <span class="ui">Edit › Fold</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd>) and <span class="ui">Unfold</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>]</kbd>) at the caret, and <span class="ui">Fold All</span> and <span class="ui">Unfold All</span> (add <kbd>Alt</kbd>). A folded region keeps its first line with a "…" chip, and opens again when the caret lands inside it.</p>
+
+      <h2 id="carets">Several carets</h2>
+      <p><kbd>Alt</kbd>+click adds a caret (or removes one). <kbd>Ctrl</kbd>+<kbd>D</kbd> selects the word at the caret, then adds the next occurrence of the selection each time you press it. Typing, <kbd>Backspace</kbd>, <kbd>Delete</kbd>, <kbd>Enter</kbd>, <kbd>Tab</kbd>, the arrows, <kbd>Home</kbd> and <kbd>End</kbd> act at every caret, and one Undo takes the edit back everywhere. <kbd>Escape</kbd> returns to one caret.</p>
+      <p class="not-yet"><strong>Not yet:</strong> other commands act at the first caret only, and several carets are not available in Vim mode.</p>
+
+      <h2 id="vim">Vim mode</h2>
+      <p>Choose <span class="ui">Vim</span> under <span class="ui">Editor key bindings</span> in <a href="settings.html#editor">Settings › Editor</a> (or Settings › Keyboard). The mode shows in the status bar.</p>
+      <ul>
+        <li><strong>Modes:</strong> Normal, Insert, Visual and Visual line, with counts, motions, operators, registers, marks, macros, search with <kbd>/</kbd>, <kbd>?</kbd>, <kbd>n</kbd> and <kbd>N</kbd>, and <code>.</code> to repeat.</li>
+        <li><strong>Text objects for LaTeX</strong>, besides the usual words, brackets and quotes: <code>ie</code> / <code>ae</code> an environment, <code>i$</code> / <code>a$</code> inline math, <code>ic</code> / <code>ac</code> a command's argument (or the whole command).</li>
+        <li><strong>Folding</strong> with <code>zc</code>, <code>zo</code>, <code>za</code>, <code>zM</code> and <code>zR</code>.</li>
+        <li><strong>Commands:</strong> <code>:w</code> (save, which also compiles), <code>:wa</code>, <code>:q</code>, <code>:wq</code> or <code>:x</code>, <code>:e</code>, <code>:s</code> and <code>:%s</code> with flags, <code>:d</code>, <code>:y</code>, <code>:j</code>, <code>:u</code>, <code>:red</code>, <code>:norm</code>, <code>:noh</code>, <code>:set ic</code>, <code>scs</code> and <code>hls</code> (and their <code>no</code> forms), and TeXCraft's own <code>:comment</code> (comment on the selection) and <code>:suggest</code> / <code>:nosuggest</code> (<a href="review.html#suggest">Suggest mode</a>).</li>
+        <li>Vim's own <kbd>Ctrl</kbd> keys stay with Vim; the window's other shortcuts, such as <kbd>Ctrl</kbd>+<kbd>S</kbd>, still work. A selection made in Visual mode or with the mouse can be commented on, as in the standard bindings.</li>
+        <li>The formatted view always uses the standard keys, and says so.</li>
+      </ul>
+      <p class="not-yet"><strong>Not yet:</strong> Visual block mode, <code>=</code>, back-references in search patterns, case changes in replacements, and <code>:s</code> with confirmation. Each says it is not supported rather than doing something else.</p>
+      <nav class="pager" aria-label="Previous and next page">
+        <a class="prev" href="getting-started.html" rel="prev"><span class="dir">Previous</span> Getting started</a>
+        <a class="next" href="building.html" rel="next"><span class="dir">Next</span> Building and exporting</a>
+      </nav>
+    </main>
+  </div>
+  <footer class="site">
+    <p>Describes TeXCraft 0.12.0 and the changes made since. What changed in each release is in the <a href="https://gitlab.com/severin-lemaignan/texcraft/-/blob/main/CHANGELOG.md">changelog</a>.</p>
+    <p><a href="https://gitlab.com/severin-lemaignan/texcraft/-/edit/main/docs/guide/writing.html">Edit this page</a> · <a href="https://gitlab.com/severin-lemaignan/texcraft/-/issues">Report a problem</a> · The guide is licensed MIT OR Apache-2.0, like TeXCraft.</p>
+  </footer>
+</body>
+</html>

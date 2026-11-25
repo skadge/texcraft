@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Comment on passages of a TeXCraft project, and suggest changes that the author accepts or rejects.">
+  <title>Comments and suggestions · TeXCraft User Guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+  <header class="site">
+    <p class="brand"><a href="index.html">TeXCraft <span>User Guide</span></a></p>
+    <ul class="site-links">
+      <li><a href="https://texcraft-893d51.gitlab.io/">Open in the browser</a></li>
+      <li><a href="index.html#download">Download</a></li>
+      <li><a href="https://gitlab.com/severin-lemaignan/texcraft">Source</a></li>
+    </ul>
+  </header>
+  <div class="layout">
+    <nav class="guide-nav" aria-label="Guide">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="writing.html">Writing</a></li>
+        <li><a href="building.html">Building and exporting</a></li>
+        <li><a href="projects.html">Projects, files and history</a></li>
+        <li><a href="forges.html">GitLab and GitHub</a></li>
+        <li><a href="review.html" aria-current="page">Comments and suggestions</a></li>
+        <li><a href="ai.html">AI assistance</a></li>
+        <li><a href="keyboard.html">Keyboard and accessibility</a></li>
+        <li><a href="settings.html">Settings</a></li>
+        <li><a href="agents.html">Agents and automation</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+      </ul>
+    </nav>
+    <main id="main" tabindex="-1">
+      <h1>Comments and suggestions</h1>
+      <p class="lead">Discuss a passage with a comment, or propose a change without making it. Both are kept in the project, so they travel with it through its history and through GitLab or GitHub.</p>
+
+      <h2 id="name">Your name</h2>
+      <p>Comments and suggestions carry a name. Set yours in <a href="settings.html#review">Settings › Review</a> before your first one. TeXCraft also makes a key on your computer that tells your comments from those of someone else with the same name; others see a short form of it.</p>
+
+      <h2 id="comments">Comments</h2>
+      <figure>
+        <img src="../images/review.png" width="1440" height="900" alt="A passage of the source highlighted, and beside it in the margin a comment thread: one person asks for a citation and another answers, with Reply and Resolve buttons below.">
+        <figcaption>A thread in the margin beside its passage.</figcaption>
+      </figure>
+      <ul>
+        <li><strong>To comment</strong>, select some text and choose <span class="ui">Edit › Comment</span> (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd>), or <span class="ui">Add a Comment</span> in the text's right-click menu. In Vim mode, <code>:comment</code> comments on the Visual selection.</li>
+        <li>A thread sits in the margin beside its passage, with <span class="ui">Reply…</span> and <span class="ui">Resolve</span>. A resolved thread can be reopened. You can edit or delete what you wrote; the thread's menu has <span class="ui">Delete Thread</span>.</li>
+        <li>The <span class="ui">Review</span> section of the side panel lists every thread, filtered by <span class="ui">All</span>, <span class="ui">Open</span>, <span class="ui">Resolved</span> or <span class="ui">Mine</span>. <span class="ui">Edit › Next Comment</span> (<kbd>F8</kbd>) and <span class="ui">Previous Comment</span> (<kbd>Shift</kbd>+<kbd>F8</kbd>) go from one to the next.</li>
+        <li>Comments follow their passage as the text is edited. When a passage changes beyond recognition or is deleted, its thread says so.</li>
+        <li>The margin can be hidden with its <span class="ui">Hide</span> button; the Review section still lists the comments. When the editor is too narrow for the margin, the comments are shown in the Review section.</li>
+      </ul>
+
+      <h2 id="suggest">Suggested changes</h2>
+      <p>In Suggest mode, what you type is proposed instead of made. Turn it on with the <span class="ui">Suggest</span> switch above the editor, <span class="ui">Edit › Suggest Changes</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>), or <code>:suggest</code> in Vim mode; the same turns it off.</p>
+      <ul>
+        <li>Text you delete is struck through and text you add is underlined, in your colour; each change also has a card in the margin.</li>
+        <li>On a card, <span class="ui">Accept</span> makes the change in the file and <span class="ui">Reject</span> leaves the text as it is; both can be undone. Replies work as on comments. You can withdraw your own suggestion.</li>
+        <li><span class="ui">Edit › Accept All Suggestions</span> and <span class="ui">Reject All Suggestions</span> act on every open suggestion in the file, as one step to undo.</li>
+        <li>A suggestion whose passage changed since is marked as outdated: reject it, or suggest again.</li>
+      </ul>
+      <p>By default the PDF shows the text as it is. <span class="ui">Show suggestions in the PDF</span> builds it with the open suggestions applied, without changing the files: useful to see a proposal typeset.</p>
+      <p>Changes proposed by <a href="ai.html">AI assistance</a> and by <a href="agents.html">agents</a> arrive as suggestions too, under their own name, for you to accept or reject.</p>
+      <div class="not-yet">
+        <p><strong>Not yet:</strong> while a file shows suggestions, completion and hover are off in it; the formatted view is read-only in Suggest mode (suggest in the source); and outside Suggest mode, a suggested replacement shows only in its card, not in the text.</p>
+      </div>
+
+      <h2 id="sharing">How reviews are shared</h2>
+      <p>Each thread is a small file in the project's <code>.texcraft/review/</code> folder. They are saved with the project, kept in its <a href="projects.html#history">history</a>, and committed, updated, pushed and pulled with it on <a href="forges.html">GitLab and GitHub</a>, so everyone who has the project sees the same review.</p>
+      <p class="not-yet"><strong>Not yet:</strong> working on the same text at the same time as others. Today, reviews are exchanged when the project is.</p>
+      <nav class="pager" aria-label="Previous and next page">
+        <a class="prev" href="forges.html" rel="prev"><span class="dir">Previous</span> GitLab and GitHub</a>
+        <a class="next" href="ai.html" rel="next"><span class="dir">Next</span> AI assistance</a>
+      </nav>
+    </main>
+  </div>
+  <footer class="site">
+    <p>Describes TeXCraft 0.12.0 and the changes made since. What changed in each release is in the <a href="https://gitlab.com/severin-lemaignan/texcraft/-/blob/main/CHANGELOG.md">changelog</a>.</p>
+    <p><a href="https://gitlab.com/severin-lemaignan/texcraft/-/edit/main/docs/guide/review.html">Edit this page</a> · <a href="https://gitlab.com/severin-lemaignan/texcraft/-/issues">Report a problem</a> · The guide is licensed MIT OR Apache-2.0, like TeXCraft.</p>
+  </footer>
+</body>
+</html>

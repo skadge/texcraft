@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Connect a language model of your choice to TeXCraft, see exactly what may be sent, and use it to explain errors, rewrite, make LaTeX, draft references, answer questions and review.">
+  <title>AI assistance · TeXCraft User Guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+  <header class="site">
+    <p class="brand"><a href="index.html">TeXCraft <span>User Guide</span></a></p>
+    <ul class="site-links">
+      <li><a href="https://texcraft-893d51.gitlab.io/">Open in the browser</a></li>
+      <li><a href="index.html#download">Download</a></li>
+      <li><a href="https://gitlab.com/severin-lemaignan/texcraft">Source</a></li>
+    </ul>
+  </header>
+  <div class="layout">
+    <nav class="guide-nav" aria-label="Guide">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="writing.html">Writing</a></li>
+        <li><a href="building.html">Building and exporting</a></li>
+        <li><a href="projects.html">Projects, files and history</a></li>
+        <li><a href="forges.html">GitLab and GitHub</a></li>
+        <li><a href="review.html">Comments and suggestions</a></li>
+        <li><a href="ai.html" aria-current="page">AI assistance</a></li>
+        <li><a href="keyboard.html">Keyboard and accessibility</a></li>
+        <li><a href="settings.html">Settings</a></li>
+        <li><a href="agents.html">Agents and automation</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+      </ul>
+    </nav>
+    <main id="main" tabindex="-1">
+      <h1>AI assistance <span class="tag">Desktop only</span></h1>
+      <p class="lead">TeXCraft can use a language model to explain build errors, rewrite a passage, write a table or a diagram, draft a reference, answer questions about your project and review a section. It is off until you connect a model, and every change it proposes arrives as a suggestion for you to accept or reject.</p>
+      <p class="not-yet"><strong>Not yet in the browser:</strong> a web page cannot reach a model's endpoint through the suite's AI layer yet. Use the desktop app for AI assistance.</p>
+
+      <h2 id="connect">Connecting a model</h2>
+      <!-- screenshot: Settings › AI with a local endpoint, the list of kinds of request and their switches -->
+      <p>TeXCraft works with any service that offers an OpenAI-compatible API, including a server on your own computer (such as llama.cpp, Ollama or vLLM). Open <a href="settings.html#ai">Settings › AI</a>:</p>
+      <ol>
+        <li><span class="ui">Endpoint</span>: the API's base address, such as <code>https://api.example.com/v1</code>. It must be <code>https://</code>, or <code>http://</code> for this computer only. TeXCraft says which: "On this computer: nothing leaves it", or "Another computer: what is sent leaves this one".</li>
+        <li><span class="ui">Token</span>: the key the service gave you, if it needs one (a local server usually does not). It is kept in your system's keychain, never in the preferences. <span class="ui">Hide the token</span> masks it while you type.</li>
+        <li><span class="ui">List Models</span>, then choose the <span class="ui">Model</span> that answers. <span class="ui">Test Connection</span> checks that it answers.</li>
+        <li>Look at <a href="#what-is-sent">What may be sent</a>, switch off any kind of request you do not want, then choose <span class="ui">Connect</span>.</li>
+      </ol>
+      <p>Connecting agrees to send the kinds of request switched on to that address and that model, without asking again each time. Another address or another model asks again (<span class="ui">Agree to Send</span>). <span class="ui">Forget</span> removes the connection, its token and the agreements.</p>
+
+      <h2 id="what-is-sent">What may be sent</h2>
+      <p>Settings › AI lists each kind of request, what it sends and where, with a switch. A kind switched off is never sent: its menu entries and buttons are disabled, and say where to switch it back on.</p>
+      <div class="table-wrap" role="region" aria-label="Kinds of AI request" tabindex="0">
+      <table>
+        <caption>The kinds of request and what each sends</caption>
+        <thead><tr><th scope="col">Kind</th><th scope="col">Used by</th><th scope="col">What is sent</th></tr></thead>
+        <tbody>
+          <tr><td>Explain</td><td><span class="ui">Explain</span> on a build message</td><td>The build message, its help and the source lines around it (and the preamble when the message is in it).</td></tr>
+          <tr><td>Rewrite</td><td><span class="ui">Rewrite with AI</span></td><td>The selected text and a few lines around it.</td></tr>
+          <tr><td>Change as asked</td><td><span class="ui">Ask AI to Change This…</span></td><td>Your instruction, the selected text and a few lines around it.</td></tr>
+          <tr><td>Next words</td><td>Suggesting the next words as you type</td><td>The text before the caret in the current paragraph, after each pause in typing.</td></tr>
+          <tr><td>Make LaTeX</td><td><span class="ui">Insert › Make with AI…</span></td><td>Your description, the main document's preamble and, for a figure, the names of the project's images.</td></tr>
+          <tr><td>Draft a reference</td><td><span class="ui">Insert › Add a Reference with AI…</span></td><td>The title or DOI you type, and nothing of the project.</td></tr>
+          <tr><td>Ask</td><td>The <span class="ui">Ask AI</span> panel</td><td>Your question and the open file, or every text file of the project when you choose it.</td></tr>
+          <tr><td>Review</td><td><span class="ui">Edit › Review This Section with AI</span></td><td>The section at the caret.</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>Each kind's instructions to the model are a prompt you can change, under <span class="ui">Prompts</span> in Settings › AI. Its placeholders (such as <code>{passage}</code> or <code>{instruction}</code>) are explained beside it, and <span class="ui">Reset to Default</span> brings back TeXCraft's own. A prompt that lost a placeholder it needs is kept but not used: TeXCraft sends its own and says so. Whatever the prompt says, the answer is checked in the same way.</p>
+      <p><span class="ui">Show What Was Sent</span> lists this session's last requests: when, how many bytes, to which address and model, and how each ended, with the text that went.</p>
+
+      <h3 id="project-switch">Turning AI off for a project</h3>
+      <p>Untick <span class="ui">Use AI in this project</span> in Settings › AI: the project's sources are then never sent, whatever the other settings. The choice is kept in the project's <code>.texcraft</code> folder, so it travels with the project.</p>
+
+      <h2 id="features">What it can do</h2>
+      <h3 id="explain">Explain a build message</h3>
+      <p><span class="ui">Explain</span> on a card of the <a href="building.html#log">build log</a>, or in the message's popup in the editor, asks the model what the message means and how to fix it. The explanation appears in the log, marked "Explained by AI" with the model's name; a proposed fix arrives as a suggested change.</p>
+
+      <h3 id="rewrite">Rewrite a selection</h3>
+      <p>Select a passage, then <span class="ui">Edit › Rewrite with AI</span> (also in the text's right-click menu): <span class="ui">Clearer</span>, <span class="ui">Shorter</span>, <span class="ui">More Formal</span>, <span class="ui">Fix Grammar and Spelling</span>, or <span class="ui">Translate to…</span> a language. The rewrite arrives as a suggestion on the selection. A rewrite that drops or alters a label, a reference, a citation, a formula or a command is refused, saying why, so your LaTeX stays intact.</p>
+      <p><span class="ui">Ask AI to Change This…</span>, in the same submenu, takes an instruction in your own words, such as "flesh out these bullet points". The change may add text and markup, but is refused if it drops or alters a label, reference, citation or formula. Your recent instructions are offered again.</p>
+
+      <h3 id="next-words">The next words as you type</h3>
+      <p>With <span class="ui">Suggest the next words as I type</span> ticked in Settings › AI (off by default), the model's guess at the next words appears in grey after the caret when you pause. <kbd>Tab</kbd> takes them; <kbd>Escape</kbd> dismisses them. This works in Vim's Insert mode too.</p>
+
+      <h3 id="make">Make LaTeX from a description</h3>
+      <p><span class="ui">Insert › Make with AI…</span> writes a <span class="ui">Table</span>, an <span class="ui">Equation</span>, a <span class="ui">TikZ Diagram</span> or a <span class="ui">Figure</span> for one of the project's images, from your description. The result is typeset with your preamble and shown in the dialog before anything changes. <span class="ui">Insert</span> puts it at the caret, selected, as one edit that Undo takes out, with any package it needs added before <code>\begin{document}</code>. When it does not typeset, the dialog shows the engine's messages, and <span class="ui">Ask Again with the Error</span> sends them back to the model.</p>
+
+      <h3 id="reference">Draft a bibliography entry</h3>
+      <p><span class="ui">Insert › Add a Reference with AI…</span> drafts a BibTeX entry from a work's title or DOI. The entry arrives as a suggested change in a <code>.bib</code> file of your choice, under a line saying it was drafted by AI and must be checked. Models invent references: check every field before you accept it.</p>
+
+      <h3 id="ask">Ask about the project</h3>
+      <p>The <span class="ui">Ask AI</span> section of the side panel (in the rail) answers questions about <span class="ui">This file</span> or <span class="ui">The whole project</span>. Places in the answer, such as <code>chapters/intro.tex:42</code>, are links to the line. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> in the question sends it.</p>
+
+      <h3 id="review">Review a section</h3>
+      <p><span class="ui">Edit › Review This Section with AI</span> sends the section at the caret. Each remark arrives as a <a href="review.html">comment</a> by "AI" with the model's name, on the words it quotes. Remarks that quote words not in the text are dropped, and the status line says how many.</p>
+
+      <p>One request runs at a time; <span class="ui">Cancel the AI Request</span> stops it.</p>
+      <p class="not-yet"><strong>Not yet:</strong> answers appear when they are complete, not word by word; and the next words are not offered in the formatted view.</p>
+
+      <h2 id="privacy">Privacy in short</h2>
+      <ul>
+        <li>Nothing is sent until you connect a model, and then only the kinds of request you left switched on, to the address and model you agreed to.</li>
+        <li>With a model on your own computer, nothing leaves it.</li>
+        <li>The token stays in your system's keychain. The preferences keep the connection and what you agreed to, never any of your text.</li>
+        <li>A project can turn AI off for itself.</li>
+        <li><a href="agents.html">Agents</a> driving TeXCraft can switch kinds of request off, but never on, and cannot agree for you.</li>
+        <li>What the service does with what it receives is up to the service: read its terms, or use a local model.</li>
+      </ul>
+      <nav class="pager" aria-label="Previous and next page">
+        <a class="prev" href="review.html" rel="prev"><span class="dir">Previous</span> Comments and suggestions</a>
+        <a class="next" href="keyboard.html" rel="next"><span class="dir">Next</span> Keyboard and accessibility</a>
+      </nav>
+    </main>
+  </div>
+  <footer class="site">
+    <p>Describes TeXCraft 0.12.0 and the changes made since. What changed in each release is in the <a href="https://gitlab.com/severin-lemaignan/texcraft/-/blob/main/CHANGELOG.md">changelog</a>.</p>
+    <p><a href="https://gitlab.com/severin-lemaignan/texcraft/-/edit/main/docs/guide/ai.html">Edit this page</a> · <a href="https://gitlab.com/severin-lemaignan/texcraft/-/issues">Report a problem</a> · The guide is licensed MIT OR Apache-2.0, like TeXCraft.</p>
+  </footer>
+</body>
+</html>

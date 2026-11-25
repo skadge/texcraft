@@ -131,10 +131,25 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("edit.spelling.ignore", "Ignore Word", "Spelling", "spelling", None),
     // The palette's symbols: `{"command": "\\alpha"}`.
     ui("edit.insert_symbol", "Insert Symbol", "Symbols", "symbols", None),
+    // The user guide online; `{"page": "ai.html"}` opens one of its pages (docs/guide/).
+    ui("help.guide", "User Guide", "Help", "help", Some("F1")),
     ui("help.shortcuts", "Keyboard Shortcuts", "Help", "help", None),
     ui("help.manual", "retex User Manual", "Help", "help", None),
     ui("help.about", "About TeXCraft", "Help", "about", None),
 ];
+
+/// TeXCraft's user guide, published with the browser version (docs/guide/). The packages do not
+/// carry a copy yet, so the desktop opens it online too.
+pub const USER_GUIDE: &str = "https://texcraft-893d51.gitlab.io/guide/";
+
+/// The address of the guide's `page` (`ai.html`, `forges.html#servers`): the guide's start when
+/// `page` is not the name of one of its pages, so a parameter cannot open another site.
+pub fn guide_page(page: &str) -> String {
+    let plain = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    let (file, anchor) = page.split_once('#').map_or((page, None), |(f, a)| (f, Some(a)));
+    let ok = file.strip_suffix(".html").is_some_and(plain) && anchor.is_none_or(plain);
+    if ok { format!("{USER_GUIDE}{page}") } else { USER_GUIDE.to_owned() }
+}
 
 /// retex's user manual: the engine's options, its packages and fonts, and its messages.
 pub const RETEX_MANUAL: &str = "https://severin-lemaignan.gitlab.io/retex/retex-manual.pdf";
@@ -284,6 +299,11 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             }
         }
         "view.go_to_file" => crate::goto_file::open(app),
+        "help.guide" => {
+            let page = params.get("page").and_then(serde_json::Value::as_str).unwrap_or_default();
+            app.ctx.open_url(egui::OpenUrl::new_tab(guide_page(page)));
+            app.view.status = Some((tl!("Opening the user guide in your browser.").to_owned(), false));
+        }
         "help.shortcuts" => app.view.dialog = Some(Dialog::Shortcuts),
         "help.manual" => {
             app.ctx.open_url(egui::OpenUrl::new_tab(RETEX_MANUAL));

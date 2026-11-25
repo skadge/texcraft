@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="The TeXCraft user guide: what TeXCraft is, the desktop app and the browser version, and where to get them.">
+  <title>TeXCraft User Guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+  <header class="site">
+    <p class="brand"><a href="index.html">TeXCraft <span>User Guide</span></a></p>
+    <ul class="site-links">
+      <li><a href="https://texcraft-893d51.gitlab.io/">Open in the browser</a></li>
+      <li><a href="index.html#download">Download</a></li>
+      <li><a href="https://gitlab.com/severin-lemaignan/texcraft">Source</a></li>
+    </ul>
+  </header>
+  <div class="layout">
+    <nav class="guide-nav" aria-label="Guide">
+      <ul>
+        <li><a href="index.html" aria-current="page">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="writing.html">Writing</a></li>
+        <li><a href="building.html">Building and exporting</a></li>
+        <li><a href="projects.html">Projects, files and history</a></li>
+        <li><a href="forges.html">GitLab and GitHub</a></li>
+        <li><a href="review.html">Comments and suggestions</a></li>
+        <li><a href="ai.html">AI assistance</a></li>
+        <li><a href="keyboard.html">Keyboard and accessibility</a></li>
+        <li><a href="settings.html">Settings</a></li>
+        <li><a href="agents.html">Agents and automation</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+      </ul>
+    </nav>
+    <main id="main" tabindex="-1">
+      <h1>TeXCraft User Guide</h1>
+      <p class="lead">TeXCraft is a LaTeX editor that shows the PDF as you type. Your project's files are on the left, the source in the middle and the PDF on the right; a build starts by itself when you pause.</p>
+
+      <figure>
+        <img src="../images/editor-magazine.jpg" width="1440" height="900" alt="The TeXCraft window: the project's fonts, images and files in the side panel on the left, the file magazine.tex in the editor in the middle, and on the right the PDF of a magazine cover showing a lion drawn in tiny text over a photograph of a city.">
+        <figcaption>A four-page magazine built inside TeXCraft (retex's <code>magazine</code> sample).</figcaption>
+      </figure>
+
+      <p>TeXCraft typesets with <a href="https://gitlab.com/severin-lemaignan/retex">retex</a>, a TeX engine written in Rust that runs inside the app. You do not need to install a TeX distribution: a package your document needs is fetched when it is first used. retex also brings a few things a LaTeX setup usually needs extra programs for: SVG, WebP, JPEG XL, GIF and TIFF images in <code>\includegraphics</code>, BibTeX, biber and makeindex built in, and code listings with <code>minted</code> without Python.</p>
+
+      <p>TeXCraft is early software. It works for everyday writing, but expect rough edges, and keep your projects under version control (TeXCraft does that for you: every project is a git repository, see <a href="projects.html#history">History</a>).</p>
+
+      <h2 id="editions">The desktop app and the browser version</h2>
+      <p>TeXCraft is one program with two homes. Most of this guide applies to both; where a feature works in only one, the guide says so with a label: <span class="tag">Desktop only</span> or <span class="tag">Browser only</span>.</p>
+
+      <div class="table-wrap" role="region" aria-label="Desktop and browser compared" tabindex="0">
+      <table>
+        <caption>What differs between the two</caption>
+        <thead>
+          <tr><td></td><th scope="col">Desktop (Linux, Windows, macOS)</th><th scope="col">Browser</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Projects</th><td>Folders on your disk</td><td>Kept in your browser, by name</td></tr>
+          <tr><th scope="row">History</th><td>A git repository in the folder</td><td>Versions kept in the browser</td></tr>
+          <tr><th scope="row">TeX packages</th><td>Your TeX Live, or downloaded as needed</td><td>The site's own set of common packages; others are <a href="troubleshooting.html#browser-packages">not available yet</a></td></tr>
+          <tr><th scope="row">Formulas in the formatted view</th><td>Typeset</td><td>Shown as their source</td></tr>
+          <tr><th scope="row">AI assistance</th><td>Yes, once you connect a model</td><td>Not yet</td></tr>
+          <tr><th scope="row">GitLab and GitHub</th><td>Sign in to both; push and pull folders</td><td>Sign in to GitLab; a token for GitHub; no push and pull of folders</td></tr>
+          <tr><th scope="row">PDF in its own window</th><td>Yes</td><td>No</td></tr>
+          <tr><th scope="row">Saving files</th><td>Where you choose</td><td>As downloads</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <h2 id="download">Getting TeXCraft</h2>
+      <dl>
+        <dt>In the browser</dt>
+        <dd>Open <a href="https://texcraft-893d51.gitlab.io/">texcraft-893d51.gitlab.io</a>. Nothing to install; the engine runs in the page and your projects stay in your browser. The first build of a visit downloads the TeX files it needs; later builds take a moment.</dd>
+        <dt>Linux</dt>
+        <dd>An AppImage and a Flatpak bundle (x86_64) are on the <a href="https://gitlab.com/severin-lemaignan/texcraft/-/releases">releases page</a>.
+          <ul>
+            <li><strong>AppImage:</strong> make it executable and run it: <code>chmod +x TeXCraft-*.AppImage</code>, then <code>./TeXCraft-*.AppImage</code>. It needs glibc 2.36 or newer (Debian 12, Ubuntu 24.04, Fedora 37 and later) and FUSE 3; without FUSE, run it with <code>--appimage-extract-and-run</code>.</li>
+            <li><strong>Flatpak:</strong> <code>flatpak install --user TeXCraft-*.flatpak</code>, then start TeXCraft from your applications menu or with <code>flatpak run io.gitlab.severin_lemaignan.TeXCraft</code>. The Flatpak does not see a TeX Live installed on your system: it keeps its own, downloaded as documents need it, so its first build needs the network.</li>
+          </ul>
+        </dd>
+        <dt>Windows and macOS <span class="tag">Experimental</span></dt>
+        <dd>A zip for Windows (x86_64) and an app for macOS (Apple Silicon) are attached to the releases on the <a href="https://github.com/skadge/texcraft/releases">GitHub mirror</a>. They are not signed: on Windows, the first start asks before running it (<span class="ui">More info › Run anyway</span>); on macOS, open it the first time with a right-click and <span class="ui">Open</span>. They have had little testing, so please report what goes wrong.</dd>
+        <dt>From source</dt>
+        <dd>With Rust installed: <code>git clone https://gitlab.com/severin-lemaignan/texcraft</code>, then <code>cargo run --release -p texcraft</code> in the folder. See the <a href="https://gitlab.com/severin-lemaignan/texcraft#quick-start">README</a>.</dd>
+      </dl>
+
+      <h2 id="contents">In this guide</h2>
+      <ul class="cards">
+        <li><a href="getting-started.html">Getting started</a><p>Your first project, templates, and a tour of the window.</p></li>
+        <li><a href="writing.html">Writing</a><p>The source editor, the formatted view, tables, symbols, spelling, search, Vim mode.</p></li>
+        <li><a href="building.html">Building and exporting</a><p>Compiling, the build log, jumping between source and PDF, export formats.</p></li>
+        <li><a href="projects.html">Projects, files and history</a><p>Folders, importing files and zips, versions and restoring them.</p></li>
+        <li><a href="forges.html">GitLab and GitHub</a><p>Open, commit, update, push and pull, merge requests.</p></li>
+        <li><a href="review.html">Comments and suggestions</a><p>Discuss passages and propose changes to accept or reject.</p></li>
+        <li><a href="ai.html">AI assistance</a><p>Connect a model of your choice; what is sent, and when.</p></li>
+        <li><a href="keyboard.html">Keyboard and accessibility</a><p>Every shortcut, moving between regions, screen readers.</p></li>
+        <li><a href="settings.html">Settings</a><p>Each tab of the Settings dialog.</p></li>
+        <li><a href="agents.html">Agents and automation</a><p>The MCP server and the control channel.</p></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a><p>Build errors, missing packages, where files are kept.</p></li>
+      </ul>
+
+      <h2 id="conventions">How this guide writes things</h2>
+      <ul>
+        <li>Menu entries and buttons are written as the interface shows them, a path with <span class="ui">›</span>: <span class="ui">File › Save Project As…</span>.</li>
+        <li>Shortcuts are written for Linux and Windows: <kbd>Ctrl</kbd>+<kbd>S</kbd>. On macOS, <kbd>Ctrl</kbd> is <kbd>Cmd</kbd> and <kbd>Alt</kbd> is <kbd>Option</kbd>. Every shortcut can be changed (<a href="keyboard.html#change">how</a>).</li>
+        <li>The interface is in English for now; translations will come.</li>
+      </ul>
+      <nav class="pager" aria-label="Previous and next page">
+        
+        <a class="next" href="getting-started.html" rel="next"><span class="dir">Next</span> Getting started</a>
+      </nav>
+    </main>
+  </div>
+  <footer class="site">
+    <p>Describes TeXCraft 0.12.0 and the changes made since. What changed in each release is in the <a href="https://gitlab.com/severin-lemaignan/texcraft/-/blob/main/CHANGELOG.md">changelog</a>.</p>
+    <p><a href="https://gitlab.com/severin-lemaignan/texcraft/-/edit/main/docs/guide/index.html">Edit this page</a> · <a href="https://gitlab.com/severin-lemaignan/texcraft/-/issues">Report a problem</a> · The guide is licensed MIT OR Apache-2.0, like TeXCraft.</p>
+  </footer>
+</body>
+</html>

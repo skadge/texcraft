@@ -15,7 +15,7 @@
 # Tags vX.Y.Z (docs/releasing.md): `check`, then the packages (AppImage, Flatpak bundle, browser
 # build), then `publish` uploads them to the project's generic package registry and `release`
 # makes the GitLab release from the version's CHANGELOG.md section. `pages` puts the browser build
-# on GitLab Pages once `web` succeeds. Nothing publishes from a branch: on the default branch the package
+# on GitLab Pages once `web` succeeds, with the user guide (docs/guide/) at /guide/. Nothing publishes from a branch: on the default branch the package
 # jobs can be started by hand, and their files stay job artifacts.
 
 stages:
@@ -401,6 +401,10 @@ pages:
   script:
     - rm -rf public
     - cp -r dist/web public
+    # The user guide (static HTML and CSS) at /guide/, next to the editor; its pictures are the
+    # README's, referenced as ../images/ from the guide, so they go to /images/.
+    - cp -r docs/guide public/guide
+    - cp -r docs/images public/images
   artifacts:
     paths:
       - public

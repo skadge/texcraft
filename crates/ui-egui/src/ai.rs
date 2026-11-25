@@ -620,6 +620,9 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         .font(t.small())
         .color(t.text_muted),
     );
+    if ui.link(tl!("What is sent, and when: the user guide's AI page")).clicked() {
+        crate::ui_cmd::run_with(app, "help.guide", &json!({"page": "ai.html"}));
+    }
     let endpoint = field(ui, t, tl!("Endpoint"), &mut app.ai.endpoint, "https://api.example.com/v1", false);
     let local = texcraft_engine::ai::is_local(&app.ai.endpoint);
     let place = match local {

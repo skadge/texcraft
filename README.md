@@ -43,6 +43,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#features">Features</a> ·
   <a href="#status">Status</a> ·
+  <a href="#user-guide">User guide</a> ·
   <a href="#downloads">Downloads</a> ·
   <a href="#license-and-credits">License</a>
 </p>
@@ -181,6 +182,10 @@ egui (`cargo xtask layers`). The interface's look is described in [`docs/design.
 
 Agent and contributor rules are in [`AGENTS.md`](AGENTS.md), which also lists the checks for the
 crates you change.
+
+## User guide
+
+The [user guide](https://texcraft-893d51.gitlab.io/guide/) explains every part of TeXCraft, on the desktop and in the browser; in the app it is Help › User Guide (F1). Its pages are in [`docs/guide/`](docs/guide/index.html).
 
 ## Downloads
 

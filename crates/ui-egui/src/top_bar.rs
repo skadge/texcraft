@@ -345,6 +345,7 @@ pub(crate) fn icon_for(id: &str) -> Option<&'static str> {
         "view.zoom_in" => "zoom-in",
         "view.zoom_out" => "zoom-out",
         "help.shortcuts" => "text-cursor-input",
+        "help.guide" => "circle-question-mark",
         "help.manual" => "book-open",
         "help.about" => "info",
         "edit.figure" => "image",

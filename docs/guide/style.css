@@ -1,0 +1,499 @@
+/* The TeXCraft user guide: one stylesheet for every page, no scripts.
+   Colours are tokens, redefined for the dark scheme; every text colour has 4.5:1 contrast or more
+   on the backgrounds it is used on, and controls (focus rings, borders that carry meaning) 3:1. */
+
+:root {
+  --bg: #fbfaf6;
+  --surface: #ffffff;
+  --text: #1f1d18;
+  --muted: #57524a;
+  --link: #5f4c00;
+  --link-hover: #3d3100;
+  --accent: #d6bc25; /* TeXCraft gold: decoration only, never text on the light background */
+  --border: #d9d4c5;
+  --code-bg: #f1eee4;
+  --note-bg: #f7f2dd;
+  --note-border: #8a7500;
+  --notyet-bg: #f6eeec;
+  --notyet-border: #9b3a2c;
+  --focus: #1a56c4;
+  --tag-text: #2f2a1f;
+  --tag-bg: #ece6d0;
+  --measure: 46rem;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17160f;
+    --surface: #201f18;
+    --text: #ece8dc;
+    --muted: #b8b19f;
+    --link: #ecd35a;
+    --link-hover: #fff0a6;
+    --accent: #d6bc25;
+    --border: #3d3a2f;
+    --code-bg: #2a2820;
+    --note-bg: #26241a;
+    --note-border: #c9ad1d;
+    --notyet-bg: #2a1d1a;
+    --notyet-border: #e07c69;
+    --focus: #8fb4ff;
+    --tag-text: #ece8dc;
+    --tag-bg: #35322a;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #17160f;
+  --surface: #201f18;
+  --text: #ece8dc;
+  --muted: #b8b19f;
+  --link: #ecd35a;
+  --link-hover: #fff0a6;
+  --border: #3d3a2f;
+  --code-bg: #2a2820;
+  --note-bg: #26241a;
+  --note-border: #c9ad1d;
+  --notyet-bg: #2a1d1a;
+  --notyet-border: #e07c69;
+  --focus: #8fb4ff;
+  --tag-text: #ece8dc;
+  --tag-bg: #35322a;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Ubuntu, Cantarell, sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+a {
+  color: var(--link);
+  text-underline-offset: 0.15em;
+}
+
+a:hover {
+  color: var(--link-hover);
+}
+
+a:focus-visible,
+main:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+main:focus {
+  outline: none;
+}
+
+.skip {
+  position: absolute;
+  left: 1rem;
+  top: -10rem;
+  background: var(--surface);
+  color: var(--link);
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--focus);
+  z-index: 10;
+}
+
+.skip:focus {
+  top: 1rem;
+}
+
+/* The header and footer */
+
+header.site {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 3px solid var(--accent);
+  background: var(--surface);
+}
+
+.brand {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+.brand a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.brand span {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.site-links,
+.guide-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.site-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  font-size: 0.95rem;
+}
+
+footer.site {
+  border-top: 1px solid var(--border);
+  padding: 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+footer.site p {
+  max-width: var(--measure);
+  margin: 0.25rem auto;
+}
+
+/* The layout: the guide's pages as a sidebar on wide screens, a list above the text on narrow
+   ones. Plain links, so it needs no script. */
+
+.layout {
+  padding: 0 1rem;
+}
+
+.guide-nav {
+  margin: 1rem 0;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.guide-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+.guide-nav a {
+  display: inline-block;
+  padding: 0.2rem 0;
+  text-decoration: none;
+}
+
+.guide-nav a:hover {
+  text-decoration: underline;
+}
+
+.guide-nav a[aria-current="page"] {
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 3px;
+}
+
+main {
+  max-width: var(--measure);
+  margin: 0 auto 3rem;
+  min-width: 0;
+}
+
+@media (min-width: 60rem) {
+  .layout {
+    display: grid;
+    grid-template-columns: 15rem minmax(0, 1fr);
+    gap: 2.5rem;
+    max-width: 66rem;
+    margin: 0 auto;
+  }
+
+  .guide-nav {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    border-bottom: 0;
+    border-right: 1px solid var(--border);
+    margin: 2rem 0;
+    padding: 0 1rem 0 0;
+  }
+
+  .guide-nav ul {
+    display: block;
+  }
+
+  .guide-nav li + li {
+    margin-top: 0.15rem;
+  }
+
+  main {
+    margin: 2rem 0 4rem;
+  }
+}
+
+/* Text */
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+  margin: 2rem 0 0.75rem;
+}
+
+h1 {
+  font-size: 2rem;
+  margin-top: 1rem;
+}
+
+h2 {
+  font-size: 1.45rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+h3 {
+  font-size: 1.15rem;
+}
+
+.lead {
+  font-size: 1.15rem;
+  color: var(--muted);
+}
+
+code,
+kbd,
+pre {
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+code {
+  background: var(--code-bg);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  overflow-wrap: anywhere;
+}
+
+pre {
+  background: var(--code-bg);
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  line-height: 1.45;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  overflow-wrap: normal;
+}
+
+kbd {
+  display: inline-block;
+  padding: 0 0.35em;
+  border: 1px solid var(--muted);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: var(--surface);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* A menu path such as File › Save: the words as the interface shows them. */
+.ui {
+  font-weight: 600;
+}
+
+dl dt {
+  font-weight: 700;
+  margin-top: 0.75rem;
+}
+
+dl dd {
+  margin-left: 1.25rem;
+}
+
+/* Notes, "Not yet" and where a feature works */
+
+.note,
+.not-yet {
+  border-left: 4px solid var(--note-border);
+  background: var(--note-bg);
+  padding: 0.6rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.not-yet {
+  border-left-color: var(--notyet-border);
+  background: var(--notyet-bg);
+}
+
+.note > :first-child,
+.not-yet > :first-child {
+  margin-top: 0;
+}
+
+.note > :last-child,
+.not-yet > :last-child {
+  margin-bottom: 0;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0 0.5em;
+  border-radius: 999px;
+  border: 1px solid var(--muted);
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  vertical-align: 0.1em;
+  white-space: nowrap;
+}
+
+/* Tables scroll inside their frame on a phone, not the page. */
+
+.table-wrap {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95rem;
+}
+
+caption {
+  text-align: left;
+  font-weight: 700;
+  padding: 0.25rem 0;
+}
+
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+thead th {
+  border-bottom: 2px solid var(--muted);
+}
+
+/* Pictures */
+
+figure {
+  margin: 1.5rem 0;
+}
+
+figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+figcaption {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 0.4rem;
+}
+
+/* The cards of the overview */
+
+.cards {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.75rem;
+}
+
+.cards li {
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 0.6rem 0.9rem;
+  background: var(--surface);
+}
+
+.cards a {
+  font-weight: 700;
+}
+
+.cards p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+/* Previous and next */
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.pager a {
+  text-decoration: none;
+}
+
+.pager a:hover {
+  text-decoration: underline;
+}
+
+.pager .next {
+  margin-left: auto;
+  text-align: right;
+}
+
+.pager .dir {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+@media print {
+  .guide-nav,
+  .pager,
+  .skip,
+  .site-links {
+    display: none;
+  }
+
+  .layout {
+    display: block;
+  }
+}

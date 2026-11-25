@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Compiling in TeXCraft, the build log, jumping between the source and the PDF, PDFs for screen readers and for print, and exporting to other formats.">
+  <title>Building and exporting · TeXCraft User Guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+  <header class="site">
+    <p class="brand"><a href="index.html">TeXCraft <span>User Guide</span></a></p>
+    <ul class="site-links">
+      <li><a href="https://texcraft-893d51.gitlab.io/">Open in the browser</a></li>
+      <li><a href="index.html#download">Download</a></li>
+      <li><a href="https://gitlab.com/severin-lemaignan/texcraft">Source</a></li>
+    </ul>
+  </header>
+  <div class="layout">
+    <nav class="guide-nav" aria-label="Guide">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="writing.html">Writing</a></li>
+        <li><a href="building.html" aria-current="page">Building and exporting</a></li>
+        <li><a href="projects.html">Projects, files and history</a></li>
+        <li><a href="forges.html">GitLab and GitHub</a></li>
+        <li><a href="review.html">Comments and suggestions</a></li>
+        <li><a href="ai.html">AI assistance</a></li>
+        <li><a href="keyboard.html">Keyboard and accessibility</a></li>
+        <li><a href="settings.html">Settings</a></li>
+        <li><a href="agents.html">Agents and automation</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+      </ul>
+    </nav>
+    <main id="main" tabindex="-1">
+      <h1>Building and exporting</h1>
+      <p class="lead">A build turns your sources into a PDF. TeXCraft runs it for you as you type, explains what went wrong, and exports the result to other formats.</p>
+
+      <h2 id="compile">Compiling</h2>
+      <p>The <span class="ui">Compile</span> button at the top of the PDF pane builds the project now (<kbd>Ctrl</kbd>+<kbd>Enter</kbd>). With automatic builds on, it reads <span class="ui">Auto-Compile</span>, and a build starts each time typing pauses (see <a href="getting-started.html#auto-compile">Automatic builds</a>). While a build runs, the status bar and the PDF pane's header show the pass and the page being built.</p>
+      <p>The button's menu half (the arrow on its right) opens its options:</p>
+      <ul>
+        <li><span class="ui">Compile automatically</span>: on or off.</li>
+        <li><span class="ui">Draft images (framed boxes)</span>: images drawn as boxes with their names, for faster builds.</li>
+        <li><span class="ui">Stop at the first error</span>: otherwise the build goes on and reports every error.</li>
+        <li>The kind of PDF: <span class="ui">PDF for the screen</span>, <span class="ui">Accessible PDF (PDF/UA)</span> or <span class="ui">PDF for print (PDF/X)</span> (below).</li>
+        <li><span class="ui">Delete Build Files</span>: the next build starts from scratch.</li>
+        <li><span class="ui">Stop Compiling</span>.</li>
+      </ul>
+      <p>The engine (LuaLaTeX or pdfLaTeX, or chosen from the document) is set in <a href="settings.html#building">Settings › Building</a>.</p>
+      <p>On the desktop, the build runs in a helper that keeps the preamble ready between builds, so a rebuild after an edit usually takes under a second, even with a heavy preamble. In the browser, the first build of a visit fetches the TeX files the document reads; they are kept for the next visit.</p>
+      <p>Bibliographies (BibTeX and biber) and indexes (makeindex) run inside the build, as many times as the document needs: there is nothing else to run.</p>
+
+      <h2 id="log">The build log</h2>
+      <p><span class="ui">Build log</span> in the PDF pane shows the last build's messages in the PDF's place; <span class="ui">Back to PDF</span> returns.</p>
+      <figure>
+        <img src="../images/log-dark.png" width="1440" height="900" alt="The build log in the dark theme, in the place of the PDF: one error and two warnings as cards, each with its message, an explanation and a link to its line; in the editor, the same lines are marked in the gutter.">
+        <figcaption>Messages as cards, each linked to its line.</figcaption>
+      </figure>
+      <ul>
+        <li>Each message is a card: its kind (error, warning, note or hint), what it means in words, help on how to fix it, and a link to the line. The same lines are marked in the editor's gutter, and errors are underlined in the text.</li>
+        <li>The filters at the top show <span class="ui">All</span>, <span class="ui">Errors</span>, <span class="ui">Warnings</span> or <span class="ui">Notes</span>, and for accessible and print builds <span class="ui">Accessibility</span> and <span class="ui">Print</span>.</li>
+        <li>Messages can be selected and copied; <span class="ui">Copy the message</span> on a card, or <span class="ui">Copy the messages shown</span> for all of them.</li>
+        <li>With a model connected, <span class="ui">Explain</span> on a card asks it for a plain explanation and a fix (<a href="ai.html#explain">AI assistance</a>). <span class="tag">Desktop only</span></li>
+      </ul>
+      <h3 id="raw-log">The raw log and the output files</h3>
+      <p>The log also has two sections you can fold: the engine's <span class="ui">Raw log</span>, with a search field (<span class="ui">Previous Match</span>, <span class="ui">Next Match</span> and the count of matches) and <span class="ui">Copy the Raw Log</span>, and the <span class="ui">Output files</span> of the build: the PDF, the PDF for print when one was made, the SyncTeX data and the log.</p>
+      <ul>
+        <li>On the desktop, <span class="ui">Save As…</span> writes one where you choose; then <span class="ui">Show in Folder</span> shows it in your file manager. The build keeps its files in memory until you save them.</li>
+        <li>In the browser, <span class="ui">Download</span> saves it through the browser.</li>
+      </ul>
+      <p>For what common messages mean, see <a href="troubleshooting.html#build-errors">Troubleshooting</a>.</p>
+
+      <h2 id="synctex">Between the source and the PDF</h2>
+      <dl>
+        <dt>From the PDF to the source</dt>
+        <dd>Double-click (or <kbd>Ctrl</kbd>+click) a place in the PDF: the editor opens the file and line that wrote it, which flashes briefly. This works across files included with <code>\input</code> and <code>\include</code>.</dd>
+        <dt>From the source to the PDF</dt>
+        <dd><span class="ui">Edit › Show in PDF</span> (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd>), or the text's right-click menu, marks the caret's line in the PDF and scrolls to it.</dd>
+      </dl>
+      <p>A line not in the PDF yet (written since the last build) says so: compile first.</p>
+
+      <h2 id="preview">The PDF preview</h2>
+      <ul>
+        <li><strong>Pages and zoom:</strong> the arrows go to the previous and next page; the zoom menu has <span class="ui">Fit width</span>, <span class="ui">Fit page</span> and fixed zooms from 50 % to 400 %. <span class="ui">Zoom In</span> <kbd>Ctrl</kbd>+<kbd>=</kbd>, <span class="ui">Zoom Out</span> <kbd>Ctrl</kbd>+<kbd>-</kbd>, <span class="ui">Actual Size</span> <kbd>Ctrl</kbd>+<kbd>0</kbd>.</li>
+        <li><strong>Links</strong> in the PDF work: to a place in the document, or to a web or mail address, which opens in your browser.</li>
+        <li><strong>Text</strong> can be selected and copied, on one page at a time.</li>
+        <li><strong>Presenting:</strong> <span class="ui">Present</span> in the zoom menu, or <kbd>F5</kbd>, shows a page at a time in the whole window. The arrow keys, <kbd>Space</kbd>, <kbd>Page Up</kbd> and <kbd>Page Down</kbd> move between pages, and <kbd>Escape</kbd> leaves.</li>
+        <li><strong>A window of its own:</strong> <span class="ui">Open the PDF in its own window</span>, in the PDF pane, moves the PDF to a second window, for a second screen; close it, or choose a layout, to put it back. <span class="tag">Desktop only</span></li>
+      </ul>
+      <p class="not-yet"><strong>Not yet:</strong> a presentation fills the window, not the whole screen (make the window full screen first).</p>
+
+      <h2 id="accessible">PDFs for screen readers</h2>
+      <p>With <span class="ui">Accessible PDF (PDF/UA)</span> chosen, the build makes a tagged PDF following the PDF/UA standard, and checks it the way a screen reader would need it: a figure without alternative text, for example. Each finding is listed under the log's <span class="ui">Accessibility</span> filter with a link to its source line.</p>
+      <p class="not-yet"><strong>Not yet:</strong> accessible builds do not reuse the prepared preamble, so their rebuilds are slower.</p>
+
+      <h2 id="print">PDFs for print</h2>
+      <p>With <span class="ui">PDF for print (PDF/X)</span> chosen, the build also makes a PDF/X file as printers expect it. In <a href="settings.html#building">Settings › Building</a>, choose the standard (PDF/X-4 keeps colour profiles and transparency; PDF/X-1a is CMYK only, for older workflows), the bleed (how far the art runs past the page's edges, often 3 mm) and crop marks.</p>
+      <p>The build checks the file as a printer would (image resolution, ink coverage, fonts…). The log then starts with <span class="ui">Ready for print</span> or the number of problems, lists them under the <span class="ui">Print</span> filter, and <span class="ui">Show it on the page</span> marks where each one is. The print PDF is one of the <a href="#raw-log">output files</a>, to save from the log.</p>
+
+      <h2 id="export">Exporting to other formats</h2>
+      <!-- screenshot: the Export menu open over the PDF pane -->
+      <p><span class="ui">Export</span>, in the PDF pane, saves the document in another format:</p>
+      <div class="table-wrap" role="region" aria-label="Export formats" tabindex="0">
+      <table>
+        <caption>The Export menu</caption>
+        <thead><tr><th scope="col">Entry</th><th scope="col">What you get</th></tr></thead>
+        <tbody>
+          <tr><td><span class="ui">PDF</span></td><td>The last build's PDF (the same as <span class="ui">File › Save PDF As…</span>).</td></tr>
+          <tr><td><span class="ui">Word Document (.docx)</span></td><td>A word-processor document of the text.</td></tr>
+          <tr><td><span class="ui">OpenDocument Text (.odt)</span></td><td>The same, in the OpenDocument format.</td></tr>
+          <tr><td><span class="ui">PowerPoint Presentation (.pptx)</span></td><td>Slides, one per frame of a beamer presentation.</td></tr>
+          <tr><td><span class="ui">OpenDocument Presentation (.odp)</span></td><td>The same, in the OpenDocument format.</td></tr>
+          <tr><td><span class="ui">Web Page (.html)</span></td><td>An HTML page of the document.</td></tr>
+          <tr><td><span class="ui">Markdown (.md)</span></td><td>A Markdown file of the document.</td></tr>
+          <tr><td><span class="ui">SVG Image (.svg)</span></td><td>The document as an SVG image.</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>For a beamer presentation the presentation formats come first in the menu. On the desktop TeXCraft asks where to save; in the browser the file is downloaded. The button reads <span class="ui">Exporting…</span> while the file is made, and the status line says when it is done. The PDF pane always shows the PDF: the other formats are exports only.</p>
+      <p>The conversions are retex's: a document using packages the converter does not know comes out simpler than its PDF. Check an export before sending it.</p>
+
+      <h2 id="command-line">Building without a window</h2>
+      <p>The command-line tool builds a project folder: <code>texcraft-cli compile FOLDER</code>, or <code>texcraft-cli compile FOLDER --output paper.pdf</code> to choose where the PDF goes. The AppImage is the command-line tool too when run through a link named <code>texcraft-cli</code>. <span class="tag">Desktop only</span></p>
+      <nav class="pager" aria-label="Previous and next page">
+        <a class="prev" href="writing.html" rel="prev"><span class="dir">Previous</span> Writing</a>
+        <a class="next" href="projects.html" rel="next"><span class="dir">Next</span> Projects, files and history</a>
+      </nav>
+    </main>
+  </div>
+  <footer class="site">
+    <p>Describes TeXCraft 0.12.0 and the changes made since. What changed in each release is in the <a href="https://gitlab.com/severin-lemaignan/texcraft/-/blob/main/CHANGELOG.md">changelog</a>.</p>
+    <p><a href="https://gitlab.com/severin-lemaignan/texcraft/-/edit/main/docs/guide/building.html">Edit this page</a> · <a href="https://gitlab.com/severin-lemaignan/texcraft/-/issues">Report a problem</a> · The guide is licensed MIT OR Apache-2.0, like TeXCraft.</p>
+  </footer>
+</body>
+</html>
