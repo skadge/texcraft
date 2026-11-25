@@ -184,3 +184,132 @@ fn errors_are_said_and_change_nothing() -> Result<(), String> {
     assert!(s.execute("forge.commit", &json!({"message": "x"})).is_err(), "a project from no forge was committed");
     Ok(())
 }
+
+fn conflicts(s: &mut Session) -> Result<Vec<String>, String> {
+    let status = s.execute("forge.status", &json!({}))?;
+    Ok(status["conflicts"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|c| format!("{} {}", c["path"].as_str().unwrap_or(""), c["why"].as_str().unwrap_or("")))
+        .collect())
+}
+
+const PAPER: &str = "\\documentclass{article}\n\\begin{document}\nOne.\n\nTwo.\n\nThree.\n\\end{document}\n";
+
+/// A session on the fake's branch, with `main.tex` holding [`PAPER`].
+fn on_paper(fake: &FakeGitLab) -> Result<Session, String> {
+    let mut s = session(fake);
+    s.execute("forge.open", &json!({"url": URL, "token": TOKEN}))?;
+    write(&mut s, "main.tex", PAPER)?;
+    s.execute("forge.commit", &json!({"message": "Paper"}))?;
+    Ok(s)
+}
+
+#[test]
+fn a_pull_takes_in_the_branch_and_merges_edits_to_other_lines() -> Result<(), String> {
+    let fake = fake();
+    let mut s = on_paper(&fake)?;
+    fake.push("main", &[("main.tex", Some(PAPER.replace("Three.", "Their three.").as_bytes())), ("intro.tex", Some(b"Their intro\n".as_slice()))]);
+    write(&mut s, "main.tex", &PAPER.replace("One.", "My one."))?;
+    let done = s.execute("forge.pull", &json!({}))?;
+    assert_eq!(done["moved"], true);
+    assert_eq!(done["merged"], json!(["main.tex"]));
+    assert_eq!(text(&s, "intro.tex").as_deref(), Some("Their intro\n"));
+    let merged = text(&s, "main.tex").unwrap_or_default();
+    assert!(merged.contains("My one.") && merged.contains("Their three."), "{merged}");
+    assert_eq!(changed(&mut s)?, ["modified main.tex"], "only the edit made here is left to commit");
+    assert_eq!(s.forge().map(|l| l.base.clone()), fake.head("main"));
+    Ok(())
+}
+
+#[test]
+fn a_conflict_is_listed_and_keeping_mine_commits_it() -> Result<(), String> {
+    let fake = fake();
+    let mut s = on_paper(&fake)?;
+    fake.push("main", &[("main.tex", Some(PAPER.replace("Two.", "Their two.").as_bytes()))]);
+    write(&mut s, "main.tex", &PAPER.replace("Two.", "My two."))?;
+    let head = fake.head("main");
+    let refused = s.execute("forge.commit", &json!({"message": "Mine"}));
+    assert!(refused.as_ref().is_err_and(|e| e.contains("main.tex")), "{refused:?}");
+    assert_eq!(conflicts(&mut s)?, ["main.tex overlap"]);
+    assert_eq!(fake.head("main"), head, "something was committed");
+    assert_eq!(text(&s, "main.tex"), Some(PAPER.replace("Two.", "My two.")), "the edits were touched");
+
+    s.execute("forge.commit", &json!({"message": "Mine", "resolve": {"main.tex": "mine"}}))?;
+    assert_eq!(fake.files("main")["main.tex"], PAPER.replace("Two.", "My two.").into_bytes());
+    assert!(conflicts(&mut s)?.is_empty() && changed(&mut s)?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn taking_theirs_in_a_pull_drops_the_edits() -> Result<(), String> {
+    let fake = fake();
+    let mut s = on_paper(&fake)?;
+    fake.push("main", &[("main.tex", Some(PAPER.replace("Two.", "Their two.").as_bytes()))]);
+    write(&mut s, "main.tex", &PAPER.replace("Two.", "My two."))?;
+    assert!(s.execute("forge.pull", &json!({})).is_err());
+    assert_eq!(conflicts(&mut s)?, ["main.tex overlap"]);
+    let bad = s.execute("forge.pull", &json!({"resolve": {"main.tex": "both"}}));
+    assert!(bad.is_err_and(|e| e.contains("mine")));
+    s.execute("forge.pull", &json!({"resolve": {"main.tex": "theirs"}}))?;
+    assert_eq!(text(&s, "main.tex"), Some(PAPER.replace("Two.", "Their two.")));
+    assert!(conflicts(&mut s)?.is_empty() && changed(&mut s)?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn a_protected_branch_offers_a_new_branch_and_a_merge_request() -> Result<(), String> {
+    let fake = fake();
+    let mut s = session(&fake);
+    s.execute("forge.open", &json!({"url": URL, "token": TOKEN}))?;
+    fake.protect("main");
+    write(&mut s, "intro.tex", "My intro\n")?;
+    let refused = s.execute("forge.commit", &json!({"message": "Mine"}));
+    assert!(refused.is_err_and(|e| e.contains("merge request")));
+    assert_eq!(s.forge_problem(), Some(&texcraft_engine::ForgeProblem::CannotPush));
+    assert_eq!(s.execute("forge.status", &json!({}))?["cannot_push"], true);
+
+    let done = s.execute("forge.commit", &json!({"message": "Mine", "new_branch": "my-intro"}))?;
+    assert!(done["merge_request"]["web_url"].as_str().is_some_and(|u| u.starts_with("https://gitlab.example/")), "{done}");
+    assert_eq!(done["branch"], "my-intro");
+    assert_eq!(s.forge().map(|l| l.branch.as_str()), Some("my-intro"), "the project follows the new branch");
+    assert!(s.forge_problem().is_none() && changed(&mut s)?.is_empty());
+    assert_eq!(fake.files("my-intro")["intro.tex"], b"My intro\n");
+    assert_eq!(fake.files("main")["intro.tex"], b"Intro\n");
+    let mrs = fake.merge_requests();
+    assert_eq!((mrs.len(), mrs[0].source.as_str(), mrs[0].target.as_str()), (1, "my-intro", "main"));
+    Ok(())
+}
+
+#[test]
+fn review_threads_go_to_the_branch_and_come_back_from_it() -> Result<(), String> {
+    let fake = fake();
+    let mut alice = session(&fake);
+    alice.set_author(Some(texcraft_engine::review::Author::new("Alice", "alice-key")));
+    alice.execute("forge.open", &json!({"url": URL, "token": TOKEN}))?;
+    let id = alice.execute("review.comment", &json!({"path": "intro.tex", "start": 0, "end": 5, "text": "Longer?"}))?["id"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert_eq!(changed(&mut alice)?.len(), 1, "the new thread is a change to commit");
+    alice.execute("forge.commit", &json!({"message": "A comment"}))?;
+    let on_branch: Vec<String> = fake.files("main").into_keys().filter(|p| p.starts_with(".texcraft/review/")).collect();
+    assert_eq!(on_branch.len(), 1);
+
+    // Bob opens the branch: the thread comes with it, not as a file of the project.
+    let mut bob = session(&fake);
+    bob.set_author(Some(texcraft_engine::review::Author::new("Bob", "bob-key")));
+    bob.execute("forge.open", &json!({"url": URL, "token": TOKEN}))?;
+    assert_eq!(bob.review().threads().len(), 1);
+    assert!(bob.project().paths().all(|p| !p.as_str().starts_with('.')));
+    bob.execute("review.reply", &json!({"id": id, "text": "Yes."}))?;
+    bob.execute("forge.commit", &json!({"message": "A reply"}))?;
+
+    // Alice pulls the reply.
+    let done = alice.execute("forge.pull", &json!({}))?;
+    assert_eq!(done["taken"].as_array().map(Vec::len), Some(1), "{done}");
+    assert_eq!(alice.review().threads().first().map(|t| t.messages.len()), Some(2));
+    assert!(changed(&mut alice)?.is_empty());
+    Ok(())
+}

@@ -6,15 +6,20 @@
 //! the library with its link, so it can be committed from after a reload. Tokens are kept for the
 //! session only, by instance: never in the library, the preferences or a log.
 //!
-//! The forge's API is reached over the network, so `forge.open` and `forge.commit` take
-//! `background`: they return at once and [`Session::poll_forge`] gives their outcome (the browser
-//! always works so). Without it they wait (the command line, agents).
+//! `forge.pull` takes in the branch's new commits, merging files changed on both sides line by
+//! line; a file that does not merge is a conflict, listed by `forge.status`, which a pull or a
+//! commit with `resolve` (keep mine, take theirs) settles, or a commit to a new branch with a merge
+//! request (`new_branch`) avoids. The review threads (`.texcraft/review/`) go with the files.
+//!
+//! The forge's API is reached over the network, so `forge.open`, `forge.pull` and `forge.commit`
+//! take `background`: they return at once and [`Session::poll_forge`] gives their outcome (the
+//! browser always works so). Without it they wait (the command line, agents).
 
 use std::path::PathBuf;
 
 use serde_json::{Value, json};
 use texcraft_forge::task::Pending;
-use texcraft_forge::{Address, Committed, GitLab, Link, Loaded, Skipped, Token};
+use texcraft_forge::{Address, Choice, Choices, Committed, GitLab, Link, Loaded, Pulled, Skipped, Token, Update};
 use texcraft_project::{Contents, Project, ProjectPath};
 
 use super::{CommandSpec, always, no_params, string};
@@ -24,6 +29,17 @@ use crate::{Result, Session};
 pub(crate) enum Task {
     Open { pending: Pending<Loaded>, token: Token },
     Commit { pending: Pending<Committed>, token: Token, files: Vec<(String, Vec<u8>)> },
+    Pull { pending: Pending<Pulled>, token: Token, files: Vec<(String, Vec<u8>)> },
+}
+
+/// The last forge operation's refusal the interface offers a way out of.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Problem {
+    /// Files that do not merge with the branch's new commits: keep mine or take theirs for each,
+    /// or commit to a new branch with a merge request.
+    Conflicts(Vec<texcraft_forge::Conflict>),
+    /// The branch does not take commits from this user: a new branch with a merge request.
+    CannotPush,
 }
 
 /// Makes the transport a forge operation sends its requests with (on the operation's thread).
@@ -52,6 +68,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "forge.pull",
+            label: "Update from GitLab",
+            menu: &["File"],
+            shortcut: None,
+            params: pull_schema,
+            enabled: can_commit,
+            run: pull,
+            changes: true,
+        },
+        CommandSpec {
             id: "forge.status",
             label: "GitLab Status",
             menu: &[],
@@ -73,12 +99,37 @@ fn open_schema() -> Value {
     }, "required": ["url"], "additionalProperties": false})
 }
 
+const RESOLVE: &str =
+    "For files in conflict (forge.status lists them): \"mine\" keeps the project's version, \"theirs\" takes the branch's, by path.";
+
 fn commit_schema() -> Value {
     json!({"type": "object", "properties": {
         "message": {"type": "string", "description": "The commit's message."},
         "token": {"type": "string", "description": "A personal access token with the api scope; may be left out when one was given for the project's instance in this session."},
+        "resolve": {"type": "object", "additionalProperties": {"enum": ["mine", "theirs"]}, "description": RESOLVE},
+        "new_branch": {"type": "string", "description": "Commit to this new branch, from the base (no merge needed), and open a merge request of it into the project's branch; the project then follows the new branch. For a protected branch, one the user cannot push to, or conflicts left to GitLab."},
         "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_forge`. Default: wait for it (not in the browser)."}
     }, "required": ["message"], "additionalProperties": false})
+}
+
+fn pull_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "token": {"type": "string", "description": "A personal access token with the read_api scope; may be left out when one was given for the project's instance in this session."},
+        "resolve": {"type": "object", "additionalProperties": {"enum": ["mine", "theirs"]}, "description": RESOLVE},
+        "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_forge`. Default: wait for it (not in the browser)."}
+    }, "additionalProperties": false})
+}
+
+/// The `resolve` parameter.
+fn choices(p: &Value) -> Result<Choices> {
+    let Some(map) = p.get("resolve") else { return Ok(Choices::new()) };
+    let map = map.as_object().ok_or("resolve: give an object of paths and \"mine\" or \"theirs\".")?;
+    map.iter()
+        .map(|(path, c)| {
+            let choice = c.as_str().and_then(Choice::parse).ok_or_else(|| format!("resolve: {path}: say \"mine\" or \"theirs\"."))?;
+            Ok((path.clone(), choice))
+        })
+        .collect()
 }
 
 fn idle(s: &Session) -> Result<()> {
@@ -113,19 +164,20 @@ fn token_for(s: &Session, p: &Value, address: &Address) -> Result<Token> {
 
 /// Runs the operation `make` returns: in the background (then `None`: [`Session::poll_forge`]
 /// gives its outcome), or at once.
-fn start<T, F, Fut>(p: &Value, make: F) -> Result<std::result::Result<Pending<T>, T>>
+fn start<T, F, Fut>(p: &Value, make: F) -> texcraft_forge::Result<std::result::Result<Pending<T>, T>>
 where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = texcraft_forge::Result<T>> + 'static,
     T: Send + 'static,
 {
+    let spawn = |make| texcraft_forge::task::spawn(make).map(Ok).map_err(|_| texcraft_forge::Error::Stopped);
     if background(p) {
-        return texcraft_forge::task::spawn(make).map(Ok);
+        return spawn(make);
     }
     #[cfg(not(target_arch = "wasm32"))]
-    return texcraft_forge::task::block_on(make()).map(Err).map_err(|e| e.to_string());
+    return texcraft_forge::task::block_on(make()).map(Err);
     #[cfg(target_arch = "wasm32")]
-    texcraft_forge::task::spawn(make).map(Ok)
+    spawn(make)
 }
 
 fn open(s: &mut Session, p: &Value) -> Result<Value> {
@@ -137,7 +189,7 @@ fn open(s: &mut Session, p: &Value) -> Result<Value> {
         let client = GitLab::new(connect(), address, sent);
         texcraft_forge::open(&client, branch.as_deref()).await
     };
-    match start(p, make)? {
+    match start(p, make).map_err(|e| e.to_string())? {
         Ok(pending) => {
             s.forge_task = Some(Task::Open { pending, token });
             Ok(json!({"operation": "open", "started": true, "project": path}))
@@ -168,6 +220,7 @@ fn unused_name(library: &crate::library::Library, name: &str) -> String {
 fn opened(s: &mut Session, loaded: Loaded, token: Token) -> Result<Value> {
     let Loaded { mut link, files } = loaded;
     let mut project = Project::new();
+    let (review, files): (Vec<_>, Vec<_>) = files.into_iter().partition(|(path, _)| texcraft_forge::is_review(path));
     for (path, bytes) in files {
         let added = ProjectPath::new(&path).and_then(|pp| project.add(pp, Contents::from_bytes(bytes)));
         if let Err(e) = added {
@@ -182,6 +235,7 @@ fn opened(s: &mut Session, loaded: Loaded, token: Token) -> Result<Value> {
     let count = project.len();
     let name = s.library.as_ref().map(|library| unused_name(library, link.address.name()));
     s.replace_project(project, name.as_ref().map(PathBuf::from));
+    s.load_forge_review(review);
     s.forge_tokens.insert(link.address.instance.clone(), token);
     let result = json!({
         "operation": "open",
@@ -212,79 +266,159 @@ fn commit(s: &mut Session, p: &Value) -> Result<Value> {
         return Err("Say what the commit changes: its message cannot be empty.".to_owned());
     }
     let token = token_for(s, p, &link.address)?;
-    let files: Vec<(String, Vec<u8>)> = s.project.files().map(|(p, c)| (p.as_str().to_owned(), c.as_bytes().to_vec())).collect();
+    let choices = choices(p)?;
+    let new_branch = p.get("new_branch").and_then(Value::as_str).map(str::trim).map(str::to_owned);
+    if let Some(name) = &new_branch {
+        texcraft_forge::check_branch_name(name).map_err(|e| e.to_string())?;
+    }
+    // The review's quotes are renewed from the text, as when the project is saved.
+    let files = s.forge_files(true)?;
     let (connect, sent, snapshot) = (s.forge_transport.clone(), token.clone(), files.clone());
     let make = move || async move {
         let client = GitLab::new(connect(), link.address.clone(), sent);
-        texcraft_forge::commit(&client, &link, &snapshot, &message, &texcraft_forge::Choices::new()).await
+        match new_branch {
+            Some(name) => texcraft_forge::commit_to_new_branch(&client, &link, &snapshot, &message, &name).await,
+            None => texcraft_forge::commit(&client, &link, &snapshot, &message, &choices).await,
+        }
     };
-    match start(p, make)? {
-        Ok(pending) => {
+    match start(p, make) {
+        Ok(Ok(pending)) => {
             s.forge_task = Some(Task::Commit { pending, token, files });
             Ok(json!({"operation": "commit", "started": true}))
         }
-        Err(done) => committed(s, done, token, &files),
+        Ok(Err(done)) => committed(s, done, token, &files),
+        Err(e) => Err(s.forge_failed(e)),
     }
 }
 
-/// The commit made: the link moves to it, and what others committed meanwhile is taken in, for
-/// each file the user has not changed since the commit started.
-fn committed(s: &mut Session, done: Committed, token: Token, files: &[(String, Vec<u8>)]) -> Result<Value> {
-    s.forge_tokens.insert(done.link.address.instance.clone(), token);
-    let then: std::collections::BTreeMap<&str, &[u8]> = files.iter().map(|(p, b)| (p.as_str(), b.as_slice())).collect();
-    let (mut taken, mut removed, mut kept) = (Vec::new(), Vec::new(), Vec::new());
-    for (path, bytes) in done.updates.iter().filter_map(|(p, b)| Some((p, b.as_ref()?))) {
-        let Ok(pp) = ProjectPath::new(path) else { continue };
-        if s.project.get(&pp).map(Contents::as_bytes) != then.get(path.as_str()).copied() {
-            kept.push(path.clone());
-            continue;
+fn pull(s: &mut Session, p: &Value) -> Result<Value> {
+    let link = s.forge.clone().ok_or("This project was not opened from GitLab.")?;
+    let token = token_for(s, p, &link.address)?;
+    let choices = choices(p)?;
+    let files = s.forge_files(false)?;
+    let (connect, sent, snapshot) = (s.forge_transport.clone(), token.clone(), files.clone());
+    let make = move || async move {
+        let client = GitLab::new(connect(), link.address.clone(), sent);
+        texcraft_forge::pull(&client, &link, &snapshot, &choices).await
+    };
+    match start(p, make) {
+        Ok(Ok(pending)) => {
+            s.forge_task = Some(Task::Pull { pending, token, files });
+            Ok(json!({"operation": "pull", "started": true}))
         }
-        let contents = Contents::from_bytes(bytes.clone());
-        let put = if s.project.get(&pp).is_some() { s.project.set(&pp, contents) } else { s.project.add(pp, contents) };
-        match put {
-            Ok(()) => taken.push(path.clone()),
-            Err(e) => kept.push(format!("{path} ({e})")),
-        }
+        Ok(Err(done)) => pulled(s, done, token, &files),
+        Err(e) => Err(s.forge_failed(e)),
     }
-    for path in done.updates.iter().filter(|(_, b)| b.is_none()).map(|(p, _)| p) {
-        let Ok(pp) = ProjectPath::new(path) else { continue };
-        if s.project.get(&pp).map(Contents::as_bytes) == then.get(path.as_str()).copied() && s.project.remove(&pp).is_ok() {
-            removed.push(path.clone());
-        } else {
-            kept.push(path.clone());
+}
+
+/// What taking in a forge operation's updates did: files taken, removed, merged with edits made
+/// while it ran, or kept as edited.
+#[derive(Default)]
+struct TakenIn {
+    taken: Vec<String>,
+    removed: Vec<String>,
+    kept: Vec<String>,
+}
+
+/// Puts `updates` (computed from the project's files as they were, `snapshot`) into the project
+/// and its review. A file edited since the snapshot gets the update merged into the edits, or,
+/// when they do not merge, keeps the edits (`kept`).
+fn take_in(s: &mut Session, updates: &[Update], snapshot: &[(String, Vec<u8>)]) -> Result<TakenIn> {
+    let then: std::collections::BTreeMap<&str, &[u8]> = snapshot.iter().map(|(p, b)| (p.as_str(), b.as_slice())).collect();
+    let now: std::collections::BTreeMap<String, Vec<u8>> = s.forge_files(false)?.into_iter().collect();
+    let mut out = TakenIn::default();
+    let mut touched = false;
+    for (path, new) in updates {
+        let (was, is) = (then.get(path.as_str()).copied(), now.get(path).map(Vec::as_slice));
+        let put: Option<Vec<u8>> = match (was == is, was, is, new) {
+            (true, ..) => new.clone(),
+            (false, _, is, new) if is == new.as_deref() => continue,
+            (false, Some(was), Some(is), Some(new)) => match texcraft_forge::merge::merge3(was, is, new) {
+                Some(merged) => Some(merged),
+                None => {
+                    out.kept.push(path.clone());
+                    continue;
+                }
+            },
+            _ => {
+                out.kept.push(path.clone());
+                continue;
+            }
+        };
+        let done = match &put {
+            Some(bytes) => s.put_forge_file(path, bytes.clone()),
+            None => s.remove_forge_file(path),
+        };
+        match done {
+            Ok(()) if put.is_some() => out.taken.push(path.clone()),
+            Ok(()) => out.removed.push(path.clone()),
+            Err(e) => out.kept.push(format!("{path} ({e})")),
         }
+        touched |= !texcraft_forge::is_review(path);
     }
-    if !taken.is_empty() || !removed.is_empty() {
+    if touched {
         s.touch();
         if s.current.as_ref().is_some_and(|c| s.project.get(c).is_none()) {
             s.current = s.project.main().cloned();
         }
         s.open.retain(|p| s.project.get(p).is_some());
     }
+    Ok(out)
+}
+
+/// The link moved: the browser keeps the project with its new base, so a reload counts changes
+/// from it; a project in memory only has nothing unsaved once the branch has it all.
+fn keep_link(s: &mut Session, link: Link) -> Result<()> {
+    s.set_forge(Some(link));
+    match s.dir.clone() {
+        Some(dir) if s.library.is_some() => {
+            super::project::save_to(s, &dir)?;
+        }
+        None => s.dirty = !s.forge_changes()?.is_empty(),
+        Some(_) => {}
+    }
+    Ok(())
+}
+
+/// The branch's new commits taken in.
+fn pulled(s: &mut Session, done: Pulled, token: Token, files: &[(String, Vec<u8>)]) -> Result<Value> {
+    s.forge_tokens.insert(done.link.address.instance.clone(), token);
+    let TakenIn { taken, removed, kept } = take_in(s, &done.updates, files)?;
+    let result = json!({
+        "operation": "pull",
+        "moved": done.moved,
+        "branch": done.link.branch,
+        "commit": done.link.base,
+        "taken": taken,
+        "removed": removed,
+        "merged": done.merged,
+        "kept": kept,
+    });
+    keep_link(s, done.link)?;
+    Ok(result)
+}
+
+/// The commit made: the link moves to it, and what others committed meanwhile is taken in.
+fn committed(s: &mut Session, done: Committed, token: Token, files: &[(String, Vec<u8>)]) -> Result<Value> {
+    s.forge_tokens.insert(done.link.address.instance.clone(), token);
+    let TakenIn { taken, removed, kept } = take_in(s, &done.updates, files)?;
     let web_url = done.link.web_url.clone();
-    let branch = done.link.branch.clone();
-    s.set_forge(Some(done.link));
     let changes: Vec<Value> = done.changes.iter().map(change_json).collect();
     let result = json!({
         "operation": "commit",
         "commit": done.commit,
         "web_url": done.commit.as_ref().map(|id| format!("{web_url}/-/commit/{id}")),
-        "branch": branch,
+        "branch": done.link.branch,
         "changes": changes,
         "taken": taken,
         "removed": removed,
+        "merged": done.merged,
         "kept": kept,
         "raced": done.raced,
+        "merge_request": done.merge_request.as_ref().map(|mr| json!({"iid": mr.iid, "web_url": mr.web_url})),
+        "merge_request_error": done.merge_request_error,
     });
-    match s.dir.clone() {
-        // The browser keeps the project with its new base, so a reload counts changes from it.
-        Some(dir) if s.library.is_some() => {
-            super::project::save_to(s, &dir)?;
-        }
-        // In memory only: nothing is unsaved once the branch has it all.
-        None => s.dirty = !s.forge_changes()?.is_empty(),
-        Some(_) => {}
-    }
+    keep_link(s, done.link)?;
     Ok(result)
 }
 
@@ -307,6 +441,8 @@ fn status(s: &mut Session, _: &Value) -> Result<Value> {
         "skipped": skipped_json(&link.skipped),
         "token": s.forge_tokens.contains_key(&link.address.instance),
         "running": running,
+        "conflicts": s.forge_conflicts().iter().map(|c| json!({"path": c.path, "why": c.kind.as_str()})).collect::<Vec<_>>(),
+        "cannot_push": s.forge_problem == Some(Problem::CannotPush),
     }))
 }
 
@@ -324,14 +460,84 @@ impl Session {
     pub(crate) fn set_forge(&mut self, link: Option<Link>) {
         self.forge = link;
         self.forge_changes = None;
+        self.forge_problem = None;
     }
 
-    /// The forge operation running in the background: `open` or `commit`.
+    /// The forge operation running in the background: `open`, `pull` or `commit`.
     pub fn forge_busy(&self) -> Option<&'static str> {
         self.forge_task.as_ref().map(|t| match t {
             Task::Open { .. } => "open",
             Task::Commit { .. } => "commit",
+            Task::Pull { .. } => "pull",
         })
+    }
+
+    /// Why the last pull or commit was refused, when there is a way out: files in conflict, or a
+    /// branch that does not take this user's commits. Cleared by the next one that succeeds.
+    pub fn forge_problem(&self) -> Option<&Problem> {
+        self.forge_problem.as_ref()
+    }
+
+    /// The files in conflict with the branch's new commits, as the last pull or commit found them.
+    pub fn forge_conflicts(&self) -> &[texcraft_forge::Conflict] {
+        match &self.forge_problem {
+            Some(Problem::Conflicts(c)) => c,
+            _ => &[],
+        }
+    }
+
+    /// Keeps what the interface offers for `e` and puts it in words.
+    fn forge_failed(&mut self, e: texcraft_forge::Error) -> String {
+        match &e {
+            texcraft_forge::Error::Conflict { files, .. } => self.forge_problem = Some(Problem::Conflicts(files.clone())),
+            texcraft_forge::Error::CannotPush { .. } => self.forge_problem = Some(Problem::CannotPush),
+            _ => {}
+        }
+        e.to_string()
+    }
+
+    /// The project's files and its review threads' files (in `.texcraft/review/`), as the forge
+    /// has them; with `requote`, the threads' quotes renewed from the text first (a commit).
+    pub(crate) fn forge_files(&mut self, requote: bool) -> Result<Vec<(String, Vec<u8>)>> {
+        let mut files: Vec<(String, Vec<u8>)> = self.project.files().map(|(p, c)| (p.as_str().to_owned(), c.as_bytes().to_vec())).collect();
+        let review = if requote { self.review.files(&self.project)? } else { self.review.texts()? };
+        files.extend(review.into_iter().map(|(name, text)| (format!("{}/{name}", texcraft_forge::REVIEW_DIR), text.into_bytes())));
+        Ok(files)
+    }
+
+    /// The review threads loaded from a forge branch (paths in `.texcraft/review/` and bytes).
+    fn load_forge_review(&mut self, files: Vec<(String, Vec<u8>)>) {
+        let files = files.into_iter().map(|(path, bytes)| {
+            let name = path.rsplit('/').next().unwrap_or_default().to_owned();
+            (name, String::from_utf8(bytes).map_err(|_| "not UTF-8 text".to_owned()))
+        });
+        self.review = crate::review_store::State::read(files, &self.project);
+    }
+
+    /// Puts a file from the forge into the project, or into the review when it is a thread's.
+    fn put_forge_file(&mut self, path: &str, bytes: Vec<u8>) -> Result<()> {
+        if texcraft_forge::is_review(path) {
+            let text = String::from_utf8(bytes).map_err(|_| "a review thread that is not UTF-8 text".to_owned())?;
+            let id = self.review.put(&text, &self.project)?;
+            return self.review_changed(id);
+        }
+        let pp = ProjectPath::new(path).map_err(|e| e.to_string())?;
+        let contents = Contents::from_bytes(bytes);
+        let put = if self.project.get(&pp).is_some() { self.project.set(&pp, contents) } else { self.project.add(pp, contents) };
+        put.map_err(|e| e.to_string())
+    }
+
+    /// Removes a file the forge's branch deleted from the project, or from the review.
+    fn remove_forge_file(&mut self, path: &str) -> Result<()> {
+        if texcraft_forge::is_review(path) {
+            let name = path.rsplit('/').next().unwrap_or_default();
+            return match self.review.drop_file(name) {
+                Some(id) => self.review_changed(id),
+                None => Ok(()),
+            };
+        }
+        let pp = ProjectPath::new(path).map_err(|e| e.to_string())?;
+        self.project.remove(&pp).map(|_| ()).map_err(|e| e.to_string())
     }
 
     /// Whether a token for the linked project's instance was given in this session.
@@ -343,30 +549,42 @@ impl Session {
     /// project with no link. Kept until the files or the link change.
     pub fn forge_changes(&mut self) -> Result<Vec<texcraft_forge::FileChange>> {
         let Some(link) = &self.forge else { return Ok(Vec::new()) };
+        let at = (self.revision, self.review.revision);
         if let Some((revision, changes)) = &self.forge_changes
-            && *revision == self.revision
+            && *revision == at
         {
             return Ok(changes.clone());
         }
-        let files: Vec<(String, Vec<u8>)> = self.project.files().map(|(p, c)| (p.as_str().to_owned(), c.as_bytes().to_vec())).collect();
-        let changes = texcraft_forge::changes(link, &files).map_err(|e| e.to_string())?;
-        self.forge_changes = Some((self.revision, changes.clone()));
+        let link = link.clone();
+        let files = self.forge_files(false)?;
+        let changes = texcraft_forge::changes(&link, &files).map_err(|e| e.to_string())?;
+        self.forge_changes = Some((at, changes.clone()));
         Ok(changes)
     }
 
     /// The outcome of the forge operation running in the background, once it has ended: what
-    /// `forge.open` or `forge.commit` returns when it waits (with `operation`), or why it failed.
+    /// `forge.open`, `forge.pull` or `forge.commit` returns when it waits (with `operation`), or
+    /// why it failed.
     pub fn poll_forge(&mut self) -> Option<Result<Value>> {
         let outcome = match self.forge_task.as_mut()? {
-            Task::Open { pending, .. } => pending.poll()?.map(Ok),
-            Task::Commit { pending, .. } => pending.poll()?.map(Err),
+            Task::Open { pending, .. } => pending.poll()?.map(Ended::Opened),
+            Task::Commit { pending, .. } => pending.poll()?.map(Ended::Committed),
+            Task::Pull { pending, .. } => pending.poll()?.map(Ended::Pulled),
         };
         let task = self.forge_task.take()?;
         Some(match (outcome, task) {
-            (Ok(Ok(loaded)), Task::Open { token, .. }) => opened(self, loaded, token),
-            (Ok(Err(done)), Task::Commit { token, files, .. }) => committed(self, done, token, &files),
-            (Err(e), _) => Err(e.to_string()),
+            (Ok(Ended::Opened(loaded)), Task::Open { token, .. }) => opened(self, loaded, token),
+            (Ok(Ended::Committed(done)), Task::Commit { token, files, .. }) => committed(self, done, token, &files),
+            (Ok(Ended::Pulled(done)), Task::Pull { token, files, .. }) => pulled(self, done, token, &files),
+            (Err(e), _) => Err(self.forge_failed(e)),
             _ => Err(texcraft_forge::Error::Stopped.to_string()),
         })
     }
+}
+
+/// A background operation's outcome.
+enum Ended {
+    Opened(Loaded),
+    Committed(Committed),
+    Pulled(Pulled),
 }

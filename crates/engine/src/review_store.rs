@@ -59,7 +59,7 @@ impl State {
     }
 
     /// The threads of `files` (each file's name and its text, or why it could not be read).
-    fn read(files: impl IntoIterator<Item = (String, Result<String, String>)>, project: &Project) -> Self {
+    pub(crate) fn read(files: impl IntoIterator<Item = (String, Result<String, String>)>, project: &Project) -> Self {
         let mut state = Self::default();
         for (name, text) in files {
             let text = match text {
@@ -159,6 +159,36 @@ impl State {
         }
         let ids: Vec<Id> = self.review.threads().iter().map(|t| t.id).collect();
         ids.into_iter().try_for_each(|id| self.write(dir, id))
+    }
+
+    /// Every thread's file, by name, as the threads are now (no quote renewed).
+    pub(crate) fn texts(&self) -> Result<BTreeMap<String, String>, String> {
+        self.review.threads().iter().map(|t| Ok((format::file_name(t.id), format::write(t).map_err(|e| e.to_string())?))).collect()
+    }
+
+    /// Puts in the thread of a file's `text` (from a forge's branch), replacing the one with its
+    /// id, its anchor placed on `project`'s text: its id.
+    pub(crate) fn put(&mut self, text: &str, project: &Project) -> Result<Id, String> {
+        let mut thread = format::read(text).map_err(|e| e.to_string())?;
+        let source = texcraft_project::ProjectPath::new(&thread.anchor.path).ok().and_then(|p| project.text(&p).ok().map(str::to_owned));
+        match source {
+            Some(source) => thread.anchor.place(&source),
+            None => thread.anchor.placement = texcraft_review::Placement::Unanchored,
+        }
+        let id = thread.id;
+        self.review.insert(thread);
+        Ok(id)
+    }
+
+    /// Drops the thread kept in file `name` (deleted on a forge's branch): its id, if it was one.
+    pub(crate) fn drop_file(&mut self, name: &str) -> Option<Id> {
+        let id = self.review.threads().iter().map(|t| t.id).find(|id| format::file_name(*id) == name)?;
+        let mut kept = Review::default();
+        for thread in self.review.threads().iter().filter(|t| t.id != id) {
+            kept.insert(thread.clone());
+        }
+        self.review = kept;
+        Some(id)
     }
 
     /// Renews every quote from `project`'s text and gives every thread's file, by name, to save

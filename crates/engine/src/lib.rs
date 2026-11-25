@@ -29,6 +29,8 @@ use serde_json::Value;
 use texcraft_compile::Job;
 use texcraft_project::{Project, ProjectPath};
 
+/// Why the last forge pull or commit was refused ([`Session::forge_problem`]).
+pub use cmd::forge::Problem as ForgeProblem;
 pub use texcraft_compile::{
     Diagnostic, Draft, Engine, Export, MAX_BLEED_MM, Options as BuildOptions, Outcome, Output, PdfX, Progress, Severity, Status,
 };
@@ -149,7 +151,9 @@ pub struct Session {
     /// How forges are reached: this build's transport, or a fake in tests.
     forge_transport: cmd::forge::Connect,
     /// The files changed since the forge branch's base, at a revision.
-    forge_changes: Option<(u64, Vec<texcraft_forge::FileChange>)>,
+    forge_changes: Option<((u64, u64), Vec<texcraft_forge::FileChange>)>,
+    /// Why the last pull or commit was refused, when the interface offers a way out.
+    forge_problem: Option<cmd::forge::Problem>,
 }
 
 impl Session {
@@ -206,6 +210,7 @@ impl Session {
             forge_task: None,
             forge_transport: std::sync::Arc::new(texcraft_forge::transport),
             forge_changes: None,
+            forge_problem: None,
         }
     }
 
