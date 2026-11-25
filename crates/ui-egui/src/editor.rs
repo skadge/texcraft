@@ -588,6 +588,7 @@ fn group(ui: &mut egui::Ui, t: &Tokens, index: usize, chosen: &mut Option<&'stat
     match index {
         0 => {
             let heading = widgets::icon_button(ui, t, "heading-1", tl!("Heading"), true);
+            crate::widgets::keyboard_menu(ui, &heading);
             egui::Popup::menu(&heading).show(|ui| {
                 ui.set_min_width(180.0);
                 for (label, id, size) in [
@@ -608,6 +609,7 @@ fn group(ui: &mut egui::Ui, t: &Tokens, index: usize, chosen: &mut Option<&'stat
         }
         1 => {
             let math = widgets::icon_button(ui, t, "sigma", tl!("Math"), true);
+            crate::widgets::keyboard_menu(ui, &math);
             egui::Popup::menu(&math).show(|ui| {
                 ui.set_min_width(180.0);
                 for (label, id) in [
@@ -686,6 +688,7 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
             }
             if !hidden.is_empty() {
                 let more = widgets::icon_button(ui, &t, "ellipsis", tl!("More formatting"), true);
+                crate::widgets::keyboard_menu(ui, &more);
                 egui::Popup::menu(&more).show(|ui| {
                     ui.set_min_width(180.0);
                     for (n, i) in hidden.iter().enumerate() {

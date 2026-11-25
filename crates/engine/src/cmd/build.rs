@@ -88,6 +88,26 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: false,
         },
         CommandSpec {
+            id: "build.outputs",
+            label: "Build Outputs",
+            menu: &[],
+            shortcut: None,
+            params: no_params,
+            enabled: always,
+            run: outputs,
+            changes: false,
+        },
+        CommandSpec {
+            id: "build.save_output",
+            label: "Save Build Output As…",
+            menu: &[],
+            shortcut: None,
+            params: save_output_schema,
+            enabled: has_outputs,
+            run: save_output,
+            changes: false,
+        },
+        CommandSpec {
             id: "build.result",
             label: "Build Result",
             menu: &[],
@@ -200,6 +220,49 @@ fn save_pdf(s: &mut Session, p: &Value) -> Result<Value> {
     let (pdf, kind) = s.pdf_to_save()?;
     std::fs::write(&path, pdf.as_slice()).map_err(|e| format!("writing {}: {e}", path.display()))?;
     Ok(json!({"path": path.display().to_string(), "bytes": pdf.len(), "kind": kind}))
+}
+
+fn outputs(s: &mut Session, _: &Value) -> Result<Value> {
+    Ok(json!({"outputs": s.outputs()}))
+}
+
+fn save_output_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "output": {"enum": crate::OUTPUT_KINDS, "description": "Which of the last build's files: its PDF, a print build's PDF/X, the SyncTeX data or the raw log (`build.outputs` lists them)."},
+        "path": {"type": "string", "description": "Where to write it. In the browser, the name of the file to download."}
+    }, "required": ["output", "path"], "additionalProperties": false})
+}
+
+fn has_outputs(s: &Session) -> Result<()> {
+    if s.outputs().is_empty() { Err("The last build made no files: compile the project first.".to_owned()) } else { Ok(()) }
+}
+
+/// Writes one of the last build's files (`build.outputs`) to `path`; in the browser, hands it to
+/// the shell to download under `path`'s file name.
+fn save_output(s: &mut Session, p: &Value) -> Result<Value> {
+    let name = p.get("output").and_then(Value::as_str).ok_or("the parameter `output` (a string) is missing")?;
+    let kind = crate::OUTPUT_KINDS.into_iter().find(|k| *k == name).ok_or_else(|| format!("unknown output `{name}`: pdf, pdfx, synctex or log"))?;
+    let data = s.output_data(kind).ok_or_else(|| format!("The last build made no {} file.", s.output_name(kind)))?;
+    let path = std::path::PathBuf::from(p.get("path").and_then(Value::as_str).ok_or("the parameter `path` (a string) is missing")?);
+    write_output(s, kind, &data, path)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn write_output(s: &mut Session, kind: &'static str, data: &[u8], path: std::path::PathBuf) -> Result<Value> {
+    let name = path.file_name().map_or_else(|| s.output_name(kind), |n| n.to_string_lossy().into_owned());
+    s.hand_out(name.clone(), data.to_vec());
+    Ok(json!({"output": kind, "path": name, "bytes": data.len(), "download": true}))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn write_output(s: &mut Session, kind: &'static str, data: &[u8], path: std::path::PathBuf) -> Result<Value> {
+    let path = match &s.roots {
+        Some(roots) => roots.check(&path, crate::file_access::Access::Write)?,
+        None => path,
+    };
+    std::fs::write(&path, data).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    s.output_saved(kind, path.clone());
+    Ok(json!({"output": kind, "path": path.display().to_string(), "bytes": data.len()}))
 }
 
 fn export_schema() -> Value {

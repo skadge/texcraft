@@ -20,6 +20,7 @@ craft-settings = { workspace = true }
 craft-dialogs = { workspace = true }
 craft-quit = { workspace = true }
 craft-control = { workspace = true }
+craft-update = { workspace = true }
 serde_json = { workspace = true }
 getrandom = { workspace = true }
 dirs = { workspace = true }

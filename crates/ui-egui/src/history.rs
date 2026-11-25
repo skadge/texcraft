@@ -226,6 +226,47 @@ enum Action {
     Commit,
 }
 
+/// The list of versions; the chosen one with its files and Restore. `first`: the first row.
+fn versions(ui: &mut egui::Ui, t: &Tokens, view: &HistoryView, action: &mut Option<Action>, first: &mut Option<egui::Id>) {
+    ui.scope_builder(egui::UiBuilder::new().scope_id(egui::Id::unique("texcraft-history-versions")), |ui| {
+        let now = chrono::Utc::now();
+        egui::ScrollArea::vertical().id_salt("history-list").auto_shrink([false, false]).show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 1.0;
+            for c in &view.commits {
+                let selected = view.selected.as_ref() == Some(&c.id);
+                let r = commit_row(ui, t, c, selected, now);
+                first.get_or_insert(r.id);
+                if r.clicked() {
+                    *action = Some(Action::Select(c.id.clone()));
+                }
+                if !selected {
+                    continue;
+                }
+                for (path, change) in &c.changes {
+                    let row = Row {
+                        depth: 1,
+                        icon: change_icon(change),
+                        label: path,
+                        selected: view.file.as_ref() == Some(path),
+                        disclosure: None,
+                        tag: Some(change_word(change)),
+                        icon_color: None,
+                    };
+                    if widgets::row(ui, t, &row).clicked() {
+                        *action = Some(Action::File(path.clone()));
+                    }
+                }
+                ui.horizontal(|ui| {
+                    ui.add_space(t.unit * 6.0);
+                    if widgets::text_button(ui, t, tl!("Restore the Project at This Version…"), true).clicked() {
+                        *action = Some(Action::RestoreProject(c.id.clone()));
+                    }
+                });
+            }
+        });
+    });
+}
+
 pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     let mut view = std::mem::take(&mut app.history);
@@ -268,56 +309,23 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
         });
     }
     widgets::hairline(ui, &t);
-    if view.diff.is_some() {
-        egui::Panel::bottom("history-diff")
-            .resizable(true)
-            .default_size(ui.available_height() * 0.6)
-            .min_size(120.0)
-            .frame(egui::Frame::new().fill(t.frame))
-            .show(ui, |ui| {
-                if let Some(diff) = &view.diff {
-                    diff_view(ui, &t, diff, &mut action);
-                }
-            });
-    }
+    // The versions, then a version's file's changes below them, in the order the keyboard visits
+    // them too. The list keeps its own id, so its controls keep theirs (and the keyboard) when the
+    // changes open.
     let mut first = None;
-    egui::CentralPanel::default().frame(egui::Frame::new().fill(t.frame)).show(ui, |ui| {
-        let now = chrono::Utc::now();
-        egui::ScrollArea::vertical().id_salt("history-list").auto_shrink([false, false]).show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 1.0;
-            for c in &view.commits {
-                let selected = view.selected.as_ref() == Some(&c.id);
-                let r = commit_row(ui, &t, c, selected, now);
-                first.get_or_insert(r.id);
-                if r.clicked() {
-                    action = Some(Action::Select(c.id.clone()));
-                }
-                if !selected {
-                    continue;
-                }
-                for (path, change) in &c.changes {
-                    let row = Row {
-                        depth: 1,
-                        icon: change_icon(change),
-                        label: path,
-                        selected: view.file.as_ref() == Some(path),
-                        disclosure: None,
-                        tag: Some(change_word(change)),
-                        icon_color: None,
-                    };
-                    if widgets::row(ui, &t, &row).clicked() {
-                        action = Some(Action::File(path.clone()));
-                    }
-                }
-                ui.horizontal(|ui| {
-                    ui.add_space(t.unit * 6.0);
-                    if widgets::text_button(ui, &t, tl!("Restore the Project at This Version…"), true).clicked() {
-                        action = Some(Action::RestoreProject(c.id.clone()));
-                    }
-                });
-            }
-        });
-    });
+    let fill = egui::Frame::new().fill(t.frame);
+    if let Some(diff) = &view.diff {
+        egui::Panel::top("history-versions")
+            .resizable(true)
+            .default_size(ui.available_height() * 0.4)
+            .min_size(120.0)
+            .frame(fill)
+            .show(ui, |ui| versions(ui, &t, &view, &mut action, &mut first));
+        widgets::name_splitter(ui, "history-versions", tl!("Resize the versions and the changes"));
+        egui::CentralPanel::default().frame(fill).show(ui, |ui| diff_view(ui, &t, diff, &mut action));
+    } else {
+        egui::CentralPanel::default().frame(fill).show(ui, |ui| versions(ui, &t, &view, &mut action, &mut first));
+    }
     if let Some(id) = first {
         app.region(Region::Side, id);
     }

@@ -152,6 +152,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                             }
                         }
                         "project.from_template" => app.template_project_opened(),
+                        "build.save_output" => {
+                            let said = tl!("Saved to {path}.").replace("{path}", done["path"].as_str().unwrap_or_default());
+                            app.view.status = Some((said, false));
+                        }
                         "history.commit" => {
                             let said = if done["commit"].is_string() { tl!("Committed.") } else { tl!("Nothing changed since the last commit.") };
                             app.view.status = Some((said.to_owned(), false));
@@ -271,9 +275,27 @@ fn confirm(ui: &mut egui::Ui, t: &Tokens, c: &Confirm) -> Outcome {
 
 /// The shared Keyboard Shortcuts dialog (craft-keymap): every command, its shortcuts, editing
 /// and conflicts. Changes are kept in the preferences.
+///
+/// The dialog's body is hosted in a modal of ours, so the window behind it cannot take the keyboard
+/// while it is open; the body draws its own OK and Cancel and handles Escape.
 fn shortcuts(app: &mut App, ctx: &egui::Context) {
+    // A state closed with OK or Cancel shows nothing: opening the dialog again starts a new one.
+    if !app.keys.dialog.is_open() {
+        app.keys.dialog = craft_keymap::ui::DialogState::new();
+    }
     let text = crate::i18n::keymap_text();
-    let outcome = craft_keymap::ui::ShortcutsDialog::new(&mut app.keys.keymap, &text).show(ctx, &mut app.keys.dialog);
+    let t = app.tokens;
+    let screen = ctx.content_rect().size();
+    let size = (screen * 0.8).min(egui::vec2(1320.0, 900.0)).max(egui::vec2(240.0, 180.0)).min(screen - egui::vec2(48.0, 48.0));
+    let mut outcome = None;
+    egui::Modal::new(egui::Id::unique("texcraft-shortcuts")).frame(crate::widgets::dialog_frame(ctx)).show(ctx, |ui| {
+        title(ui, &t, tl!("Keyboard Shortcuts"));
+        let body = egui::vec2(size.x, (size.y - ui.min_rect().height()).max(120.0));
+        ui.allocate_ui(body, |ui| {
+            ui.set_min_size(body);
+            outcome = craft_keymap::ui::ShortcutsDialog::new(&mut app.keys.keymap, &text).ui(ui, &mut app.keys.dialog);
+        });
+    });
     match outcome {
         Some(craft_keymap::ui::Outcome::Ok) => {
             app.prefs.shortcuts = app.keys.keymap.overrides().clone();

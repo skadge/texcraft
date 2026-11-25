@@ -9,7 +9,7 @@ use crate::{App, Side, widgets};
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     let frame = egui::Frame::new().fill(t.frame).inner_margin(egui::Margin::symmetric(0, 8));
-    egui::Panel::left("rail").exact_size(t.rail_width).resizable(false).frame(frame).show(ui, |ui| {
+    let shown = egui::Panel::left("rail").exact_size(t.rail_width).resizable(false).frame(frame).show(ui, |ui| {
         ui.with_layout(Layout::top_down(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.y = t.unit;
             let sections = [
@@ -38,4 +38,5 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             });
         });
     });
+    app.region_area(crate::Region::Rail, shown.response.rect);
 }

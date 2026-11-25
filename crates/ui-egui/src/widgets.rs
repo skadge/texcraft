@@ -266,6 +266,10 @@ pub fn row_sensing(ui: &mut Ui, t: &Tokens, row: &Row<'_>, sense: Sense) -> Resp
     let width = ui.available_width();
     let (rect, r) = ui.allocate_exact_size(vec2(width, t.row_height), sense);
     r.widget_info(|| WidgetInfo::selected(Role::TreeItem, true, row.selected, row.label));
+    // A folder says whether it is open, as its chevron shows.
+    if let Some(open) = row.disclosure {
+        ui.ctx().accesskit_node_builder(r.id, |node| node.set_expanded(open));
+    }
     if !ui.is_rect_visible(rect) {
         return r;
     }
@@ -294,6 +298,82 @@ pub fn row_sensing(ui: &mut Ui, t: &Tokens, row: &Row<'_>, sense: Sense) -> Resp
     }
     focus_ring(ui, t, &r, rect.shrink2(vec2(t.unit, 0.0)), t.corner());
     r
+}
+
+/// Where the menu last opened from the keyboard was opened from: a dialog one of its entries
+/// opens gives the keyboard back there, its entry gone.
+pub(crate) const MENU_OWNER: &str = "texcraft-menu-owner";
+
+/// A menu opened from the keyboard this frame: next frame, the keyboard moves from its button
+/// (or row) to the first entry, drawn right after it (`App::draw`).
+pub(crate) const MENU_ENTER: &str = "texcraft-menu-enter";
+
+/// A menu that opens from `button`: call before showing it. Opened from the keyboard (Enter or
+/// Space on the button), it takes the keyboard (its first entry); closed with
+/// Escape, it gives the keyboard back to the button.
+pub fn keyboard_menu(ui: &Ui, button: &Response) {
+    let open = egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(button));
+    keyboard_popup(ui, button, !open && button.clicked() && !button.clicked_by(egui::PointerButton::Primary), open);
+}
+
+/// A popup of `owner`'s: `opened` by the keyboard this frame, or `open` since an earlier frame.
+/// Opened, it moves the keyboard into its first entry, which must be drawn right after `owner`;
+/// closed with Escape, back to `owner`.
+pub fn keyboard_popup(ui: &Ui, owner: &Response, opened: bool, open: bool) {
+    let ctx = ui.ctx();
+    let entered = owner.id.with("popup-by-keyboard");
+    if opened {
+        ctx.data_mut(|d| {
+            d.insert_temp(entered, true);
+            d.insert_temp(egui::Id::unique(MENU_OWNER), owner.id);
+            d.insert_temp(egui::Id::unique(MENU_ENTER), true);
+        });
+        ctx.request_repaint();
+    } else if open && ctx.input(|i| i.key_pressed(egui::Key::Escape)) && ctx.data(|d| d.get_temp::<bool>(entered)).unwrap_or(false) {
+        ctx.data_mut(|d| d.remove::<bool>(entered));
+        owner.request_focus();
+    } else if !open {
+        ctx.data_mut(|d| {
+            d.remove::<bool>(entered);
+            if d.get_temp::<egui::Id>(egui::Id::unique(MENU_OWNER)) == Some(owner.id) {
+                d.remove::<egui::Id>(egui::Id::unique(MENU_OWNER));
+            }
+        });
+    }
+}
+
+/// Names the resize handle of the panel shown in `ui` with `id_salt` (egui calls every handle
+/// "Resize panel"), so a screen reader can tell them apart.
+pub fn name_splitter(ui: &Ui, id_salt: &str, name: &str) {
+    let id = ui.scope_id().with(id_salt).with("__resize");
+    ui.ctx().accesskit_node_builder(id, |node| node.set_label(name));
+}
+
+/// The room left in `ui`'s row before the controls [`right_aligned`] puts at its end under `key`
+/// (as wide as they were last frame).
+pub fn room_before_right(ui: &Ui, key: &str) -> f32 {
+    let width: f32 = ui.data(|d| d.get_temp(ui.scope_id().with(key))).unwrap_or(0.0);
+    (ui.available_width() - width - ui.spacing().item_spacing.x).max(0.0)
+}
+
+/// Lays out `add` left to right at the end of `ui`'s row, where a right-to-left layout would put
+/// it, so the keyboard visits its controls in the order they read (a right-to-left layout makes
+/// them in reverse). Its width is last pass's: a new one has egui lay the frame out again before
+/// showing it.
+pub fn right_aligned<R>(ui: &mut Ui, key: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let id = ui.scope_id().with(key);
+    let last: Option<f32> = ui.data(|d| d.get_temp(id));
+    // Against the row's end, as a right-to-left layout would put them (over what is before them
+    // when the row is too narrow).
+    let row = ui.available_rect_before_wrap();
+    let rect = Rect::from_min_max(egui::pos2(row.right() - last.unwrap_or(0.0), row.top()), row.max);
+    let inner = ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)), add);
+    let width = inner.response.rect.width();
+    if last.is_none_or(|w| (width - w).abs() > 0.5) {
+        ui.data_mut(|d| d.insert_temp(id, width));
+        ui.ctx().request_discard("controls at a row's end were measured");
+    }
+    inner.inner
 }
 
 /// A 1 px separator across the available width.

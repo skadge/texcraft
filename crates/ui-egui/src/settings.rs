@@ -46,7 +46,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                         tag: None,
                         icon_color: None,
                     };
-                    if widgets::row(ui, &t, &row).clicked() {
+                    // A tab of a tab list, not a tree's item.
+                    let r = widgets::row(ui, &t, &row);
+                    ui.ctx().accesskit_node_builder(r.id, |node| node.set_role(egui::accesskit::Role::Tab));
+                    if r.clicked() {
                         app.view.settings_tab = i;
                     }
                 }

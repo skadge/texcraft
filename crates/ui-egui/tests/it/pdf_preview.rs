@@ -14,7 +14,7 @@ use texcraft_ui_egui::{App, ui_cmd};
 mod sample;
 
 /// Builds the sample PDF of two pages with links.
-struct Sample;
+pub(crate) struct Sample;
 
 impl Backend for Sample {
     fn name(&self) -> String {

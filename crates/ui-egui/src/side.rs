@@ -15,7 +15,7 @@ use crate::{App, Side, ui_cmd};
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     let frame = egui::Frame::new().fill(t.frame).inner_margin(egui::Margin { left: 4, right: 4, top: 0, bottom: 4 });
-    egui::Panel::left("side").resizable(true).default_size(248.0).min_size(180.0).max_size(480.0).frame(frame).show(ui, |ui| {
+    let shown = egui::Panel::left("side").resizable(true).default_size(248.0).min_size(180.0).max_size(480.0).frame(frame).show(ui, |ui| {
         if app.view.side == Some(Side::Review) {
             crate::review::panel(app, ui);
             return;
@@ -32,15 +32,20 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             crate::symbols::panel(app, ui);
             return;
         }
+        // The files above the outline, in the order the keyboard visits them too.
         let outline_first = app.view.side == Some(Side::Outline);
-        egui::Panel::bottom("outline")
+        let height = ui.available_height();
+        egui::Panel::top("files")
             .resizable(true)
-            .default_size(if outline_first { ui.available_height() * 0.7 } else { 220.0 })
+            .default_size(if outline_first { height * 0.3 } else { (height - 220.0).max(80.0) })
             .min_size(80.0)
             .frame(egui::Frame::new().fill(t.frame))
-            .show(ui, |ui| outline(app, ui));
-        egui::CentralPanel::default().frame(egui::Frame::new().fill(t.frame)).show(ui, |ui| files(app, ui));
+            .show(ui, |ui| files(app, ui));
+        widgets::name_splitter(ui, "files", tl!("Resize the files and the outline"));
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(t.frame)).show(ui, |ui| outline(app, ui));
     });
+    widgets::name_splitter(ui, "side", tl!("Resize the side panel"));
+    app.region_area(crate::Region::Side, shown.response.rect);
 }
 
 fn header(ui: &mut egui::Ui, t: &Tokens, title: &str, actions: impl FnOnce(&mut egui::Ui)) {
@@ -322,12 +327,16 @@ fn folder(app: &App, ui: &mut egui::Ui, node: &Folder, prefix: &str, depth: usiz
 fn context_menu(ui: &mut egui::Ui, r: &egui::Response, items: impl FnOnce(&mut egui::Ui)) {
     let by_key = r.id.with("menu-by-key");
     let mut menu = egui::Popup::context_menu(r);
+    let open = egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(r));
+    let mut opened = false;
     if r.has_focus()
         && ui.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10) || i.consume_key(egui::Modifiers::NONE, egui::Key::Menu))
     {
         ui.data_mut(|d| d.insert_temp(by_key, true));
         menu = menu.open_memory(egui::SetOpenCommand::Bool(true));
+        opened = !open;
     }
+    widgets::keyboard_popup(ui, r, opened, open);
     if ui.data(|d| d.get_temp::<bool>(by_key)).unwrap_or(false) {
         menu = menu.at_position(r.rect.left_bottom());
     }
