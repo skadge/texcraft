@@ -35,8 +35,8 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | E4 | ✅ 0.2.2 | Language features | Completion, hover, go to definition, quick fixes and hints as you type, from retex's language server. |
 | E5 | ✅ 0.2.2 | Insert toolbar and menu | Headings, bold and italic, lists, figure, table, formulas, references, citations, links. |
 | E6 | ✅ 0.4.0 | Images by drag and drop | An image dragged from the files onto the source is inserted with `\includegraphics`. |
-| E7 | ⬜ | Context menu in the text | Right-click (or the Menu key): Cut, Copy, Paste, and Add a Comment on a selection. |
-| E8 | ⬜ | Selections in Vim mode | The mouse and Visual mode's selection usable by commands such as commenting. |
+| E7 | ✅ 0.5.0 | Context menu in the text | Right-click, Shift+F10 or the Menu key: Cut, Copy, Paste, Select All, Add a Comment on a selection, Quick Fix, Show in PDF. |
+| E8 | ✅ 0.5.0 | Selections in Vim mode | The mouse and Visual mode's selection usable by commands such as commenting. |
 | E9 | ⬜ | Folding and several carets | Folding environments and sections; multiple carets. |
 | E10 | ⬜ | Project-wide search | Search and replace across files, results grouped by file. |
 | E11 | ⬜ | Writing aids | A symbol palette, and spell checking that skips commands, math and verbatim. |
