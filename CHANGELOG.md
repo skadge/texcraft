@@ -5,7 +5,15 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
-## 0.12.1 (2026-11-25)
+## 0.12.2 (2026-11-26)
+
+0.12.1 with one fix for the web editor; 0.12.1 was not published (its release was stopped for
+this one).
+
+- In the browser, a new project from a built-in template (article, thesis, slides, letter, CV,
+  homework) failed with "This template has not been fetched yet".
+
+## 0.12.1 (2026-11-25, not published)
 
 0.12.0 with two fixes, and AI assistance that no longer asks before every request. 0.12.0's
 Linux packages were not published (its release check failed on the first fix below); its

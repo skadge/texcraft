@@ -41,8 +41,8 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.12.1" date="2026-11-25" type="development">
-      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.12.1</url>
+    <release version="0.12.2" date="2026-11-26" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.12.2</url>
       <description>
         <p>Saving to GitHub or GitLab, push and pull, folders and zip files, and many fixes from testing.</p>
         <ul>
