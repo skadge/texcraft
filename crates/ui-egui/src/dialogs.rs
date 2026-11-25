@@ -125,15 +125,23 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                     }
                 }
             }
-            Some(Dialog::Confirm(c)) => {
-                if app.run(c.command, c.params.clone()).is_some()
-                    && c.command == "project.delete"
-                    && let Some(name) = c.params["name"].as_str()
-                {
-                    app.prefs.recent.retain(|p| p != name);
-                    app.prefs_changed = true;
+            Some(Dialog::Confirm(c)) => match app.run(c.command, c.params.clone()) {
+                Some(_) if c.command == "project.delete" => {
+                    if let Some(name) = c.params["name"].as_str() {
+                        app.prefs.recent.retain(|p| p != name);
+                        app.prefs_changed = true;
+                    }
                 }
-            }
+                Some(done) if c.command == "project.replace" => {
+                    let n = done["replaced"].as_u64().unwrap_or(0) as usize;
+                    let files = done["files"].as_array().map_or(0, Vec::len);
+                    let said = tl!("Replaced {matches} in {files}.")
+                        .replace("{matches}", &crate::i18n::trn(n, "{n} match", "{n} matches"))
+                        .replace("{files}", &crate::i18n::trn(files, "{n} file", "{n} files"));
+                    app.view.status = Some((said, false));
+                }
+                _ => {}
+            },
             Some(Dialog::Unsaved(next)) => app.save_then(next),
             _ => {}
         },

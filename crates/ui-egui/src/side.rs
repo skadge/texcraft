@@ -1,5 +1,5 @@
 //! The side panel (docs/design.md, Regions): the project's files as a tree, and the outline of the
-//! shown file below it in a resizable section.
+//! shown file below it in a resizable section; or the review's threads, or Search.
 
 use std::collections::BTreeMap;
 
@@ -18,6 +18,10 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     egui::Panel::left("side").resizable(true).default_size(248.0).min_size(180.0).max_size(480.0).frame(frame).show(ui, |ui| {
         if app.view.side == Some(Side::Review) {
             crate::review::panel(app, ui);
+            return;
+        }
+        if app.view.side == Some(Side::Search) {
+            crate::search::panel(app, ui);
             return;
         }
         let outline_first = app.view.side == Some(Side::Outline);

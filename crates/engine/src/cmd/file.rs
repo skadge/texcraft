@@ -192,7 +192,7 @@ fn edit_schema() -> Value {
     }, "required": ["path", "edits"], "additionalProperties": false})
 }
 
-fn query_properties() -> serde_json::Map<String, Value> {
+pub(super) fn query_properties() -> serde_json::Map<String, Value> {
     let v = json!({
         "path": {"type": "string"},
         "pattern": {"type": "string", "description": "The text to find, or a regular expression with `regex`."},
@@ -213,7 +213,7 @@ fn replace_schema() -> Value {
     json!({"type": "object", "properties": props, "required": ["path", "pattern", "replacement"], "additionalProperties": false})
 }
 
-fn query(p: &Value) -> Result<crate::find::Query> {
+pub(super) fn query(p: &Value) -> Result<crate::find::Query> {
     let flag = |name: &str| p.get(name).and_then(Value::as_bool).unwrap_or(false);
     Ok(crate::find::Query { pattern: string(p, "pattern")?.to_owned(), regex: flag("regex"), case: flag("case"), word: flag("word") })
 }
@@ -224,22 +224,11 @@ fn find(s: &mut Session, p: &Value) -> Result<Value> {
     let q = query(p)?;
     let text = s.project.text(&path).map_err(|e| e.to_string())?;
     let ranges = q.matches(text)?;
-    let mut line = 1;
-    let mut line_start = 0;
-    let mut scanned = 0;
+    let places = crate::find::places(text, &ranges);
     let matches: Vec<Value> = ranges
         .iter()
-        .map(|r| {
-            for (i, c) in text[scanned..r.start].char_indices() {
-                if c == '\n' {
-                    line += 1;
-                    line_start = scanned + i + 1;
-                }
-            }
-            scanned = r.start;
-            let column = text[line_start..r.start].chars().count() + 1;
-            json!({"line": line, "column": column, "start": r.start, "end": r.end, "text": &text[r.clone()]})
-        })
+        .zip(places)
+        .map(|(r, at)| json!({"line": at.line, "column": at.column, "start": r.start, "end": r.end, "text": &text[r.clone()]}))
         .collect();
     Ok(json!({"count": matches.len(), "matches": matches}))
 }
@@ -250,7 +239,16 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     let path = path_param(p, "path")?;
     let q = query(p)?;
     let replacement = string(p, "replacement")?;
-    let text = s.project.text(&path).map_err(|e| e.to_string())?;
+    let tx = replacements(s, &path, &q, replacement)?;
+    let count = tx.changes().len();
+    s.apply_edit(&path, &tx, Origin::Local)?;
+    Ok(json!({"replaced": count, "revision": s.revision}))
+}
+
+/// The edit that replaces every match of `q` in `path`'s text with `replacement`: a change per
+/// match, so it is undone in one step.
+pub(super) fn replacements(s: &Session, path: &ProjectPath, q: &crate::find::Query, replacement: &str) -> Result<Transaction> {
+    let text = s.project.text(path).map_err(|e| e.to_string())?;
     let mut changes = Vec::new();
     let (mut chars, mut scanned) = (0, 0);
     for r in q.matches(text)? {
@@ -260,10 +258,7 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
         chars += len;
         scanned = r.end;
     }
-    let count = changes.len();
-    let tx = Transaction::new(changes).map_err(|e| e.to_string())?;
-    s.apply_edit(&path, &tx, Origin::Local)?;
-    Ok(json!({"replaced": count, "revision": s.revision}))
+    Transaction::new(changes).map_err(|e| e.to_string())
 }
 
 fn import_schema() -> Value {

@@ -32,6 +32,7 @@ mod picks;
 mod preview;
 mod rail;
 mod review;
+mod search;
 mod settings;
 mod side;
 mod start;
@@ -78,6 +79,8 @@ pub enum Side {
     Outline,
     /// The review's threads (where the margin goes when the editor pane is narrow).
     Review,
+    /// Finding and replacing across the project's files.
+    Search,
 }
 
 /// How the editor and the preview share the window.
@@ -126,6 +129,7 @@ pub struct App {
     view: View,
     editor: editor::Editor,
     review: review::ReviewView,
+    search: search::Search,
     figure: figure_view::FigureView,
     pdf: pdf_view::PdfView,
     applied: Option<Scheme>,
@@ -201,6 +205,7 @@ impl App {
             },
             editor: editor::Editor::default(),
             review: review::ReviewView::default(),
+            search: search::Search::default(),
             figure: figure_view::FigureView::default(),
             pdf: pdf_view::PdfView::default(),
             applied: None,

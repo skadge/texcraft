@@ -15,6 +15,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             let sections = [
                 (Side::Files, "folder", tl!("Project Files")),
                 (Side::Outline, "list-tree", tl!("Outline")),
+                (Side::Search, "search", tl!("Search")),
                 (Side::Review, "message-square-text", tl!("Review")),
             ];
             for (side, icon, label) in sections {

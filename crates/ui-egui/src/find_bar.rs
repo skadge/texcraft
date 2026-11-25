@@ -194,7 +194,7 @@ fn replace_all(bar: &mut FindBar, source: &mut SourceEditor) -> usize {
 }
 
 /// A toggle of the bar; returns whether it was clicked.
-fn toggle(ui: &mut egui::Ui, t: &Tokens, text: &str, name: &str, on: bool) -> bool {
+pub(crate) fn toggle(ui: &mut egui::Ui, t: &Tokens, text: &str, name: &str, on: bool) -> bool {
     let fill = if on { t.accent_soft } else { egui::Color32::TRANSPARENT };
     let stroke = if on { egui::Stroke::new(1.0, t.accent) } else { egui::Stroke::NONE };
     let button = egui::Button::new(RichText::new(text).font(egui::FontId::monospace(12.0)).color(if on { t.accent } else { t.text_muted }))
