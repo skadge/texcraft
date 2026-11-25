@@ -24,6 +24,8 @@ getrandom = { workspace = true }
 similar = { version = "3", default-features = false, features = ["std", "text"] }
 # The organisation's list of servers (texcraft-forges.toml).
 toml = { workspace = true }
+# When a project was last pushed to, as the forge says it (RFC 3339).
+chrono = { workspace = true }
 
 # The desktop's HTTP client (MIT OR Apache-2.0), the one retex-texlive already downloads with.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

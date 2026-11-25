@@ -272,11 +272,21 @@ fn actions(changes: &[FileChange], files: &[(String, Vec<u8>)]) -> Vec<Value> {
         .collect()
 }
 
-/// The `rel="next"` address of a `Link` header.
-fn next_link(header: &str) -> Option<String> {
-    header.split(',').find_map(|part| {
-        let (url, params) = part.split_once(';')?;
-        let next = params.split(';').any(|p| matches!(p.trim(), "rel=\"next\"" | "rel=next"));
-        next.then(|| url.trim().trim_start_matches('<').trim_end_matches('>').to_owned())
-    })
+/// The `rel="next"` address of a `Link` header: `<url>; rel="next", <url>; rel="first"`. Each
+/// address is read whole between its brackets, so a comma in it (GitHub's
+/// `affiliation=owner,collaborator`) does not split it.
+pub(crate) fn next_link(header: &str) -> Option<String> {
+    let mut rest = header;
+    while let Some(open) = rest.find('<') {
+        let after = &rest[open + 1..];
+        let close = after.find('>')?;
+        let url = &after[..close];
+        let params = &after[close + 1..];
+        let params = params.split('<').next().unwrap_or_default();
+        if params.split([';', ',']).any(|p| matches!(p.trim(), "rel=\"next\"" | "rel=next")) {
+            return Some(url.trim().to_owned());
+        }
+        rest = &after[close + 1..];
+    }
+    None
 }

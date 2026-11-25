@@ -59,6 +59,20 @@ struct State {
     /// Branches no one can commit to.
     protected: std::collections::BTreeSet<String>,
     merge_requests: Vec<FakeMergeRequest>,
+    /// The projects the instance lists: those the user reaches (its own first), and public ones
+    /// only a search finds.
+    listed: Vec<FakeListed>,
+}
+
+/// A project the fake lists or finds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FakeListed {
+    path: String,
+    visibility: String,
+    activity: String,
+    default_branch: Option<String>,
+    /// The user is a member (GitLab), owns it or collaborates on it (GitHub).
+    member: bool,
 }
 
 /// A merge request (a pull request on GitHub) opened on the fake.
@@ -109,6 +123,7 @@ impl Fake {
             ..Default::default()
         };
         let fake = Self { state: Arc::new(Mutex::new(state)) };
+        fake.list(path, "private", "2026-11-20T10:00:00Z", Some("main"));
         let changes: Vec<(&str, Option<&[u8]>)> = files.iter().map(|(p, b)| (*p, Some(*b))).collect();
         fake.push("main", &changes);
         fake
@@ -260,6 +275,32 @@ impl Fake {
         self.lock().fail = Some(Response { status, headers, body: body.as_bytes().to_vec(), too_large: false });
     }
 
+    /// Lists project `path` among those the user reaches: its visibility (`private`, `internal`,
+    /// `public`), its last activity (RFC 3339) and its default branch. Listed after those listed
+    /// before, as the forge lists the less recently active ones.
+    pub fn list(&self, path: &str, visibility: &str, activity: &str, default_branch: Option<&str>) {
+        let listed = FakeListed {
+            path: path.to_owned(),
+            visibility: visibility.to_owned(),
+            activity: activity.to_owned(),
+            default_branch: default_branch.map(str::to_owned),
+            member: true,
+        };
+        self.lock().listed.push(listed);
+    }
+
+    /// A public project the user is no member of: only a search finds it.
+    pub fn list_public(&self, path: &str) {
+        let listed = FakeListed {
+            path: path.to_owned(),
+            visibility: "public".to_owned(),
+            activity: "2020-01-01T00:00:00Z".to_owned(),
+            default_branch: Some("main".to_owned()),
+            member: false,
+        };
+        self.lock().listed.push(listed);
+    }
+
     /// Requests are answered normally again.
     pub fn heal(&self) {
         self.lock().fail = None;
@@ -356,6 +397,9 @@ impl State {
         if self.service == Service::GitHub {
             return self.github(request);
         }
+        if request.url.starts_with(&format!("{}/api/v4/projects?", self.instance)) {
+            return self.gitlab_projects(request);
+        }
         let prefix = format!("{}/api/v4/projects/{}", self.instance, crate::encode(&self.path));
         let Some(rest) = request.url.strip_prefix(&prefix) else { return message(404, "404 Project Not Found") };
         let route = rest.split('?').next().unwrap_or_default();
@@ -376,6 +420,10 @@ impl State {
                     }
                     None => message(404, "404 Branch Not Found"),
                 }
+            }
+            ("GET", "/repository/branches") => {
+                let all = self.branch_list(|name, commit, protected| json!({"name": name, "commit": {"id": commit}, "protected": protected, "default": self.default_branch.as_deref() == Some(name)}));
+                self.page(request, all)
             }
             ("GET", "/repository/tree") => self.tree(request),
             ("GET", r) if r.starts_with("/repository/blobs/") && r.ends_with("/raw") => {
@@ -519,6 +567,13 @@ impl State {
 /// GitHub's answers.
 impl State {
     fn github(&mut self, request: &Request) -> Response {
+        if request.url.starts_with("https://api.github.com/user/repos?") {
+            let all: Vec<Value> = self.listed.iter().filter(|l| l.member).map(github_repo).collect();
+            return self.page(request, all);
+        }
+        if request.url.starts_with("https://api.github.com/search/repositories?") {
+            return self.github_search(request);
+        }
         let prefix = format!("https://api.github.com/repos/{}", self.path);
         let Some(rest) = request.url.strip_prefix(&prefix) else { return message(404, "Not Found") };
         let route = rest.split('?').next().unwrap_or_default().to_owned();
@@ -538,6 +593,10 @@ impl State {
                     "permissions": {"admin": false, "push": self.can_push, "pull": true},
                 }),
             ),
+            ("GET", "/branches") => {
+                let all = self.branch_list(|name, commit, protected| json!({"name": name, "commit": {"sha": commit}, "protected": protected}));
+                self.page(request, all)
+            }
             ("GET", r) if r.starts_with("/branches/") => {
                 let name = decode(&r["/branches/".len()..]);
                 match self.branches.get(&name) {
@@ -694,6 +753,104 @@ impl State {
         }
         let id = make_tree(self, files);
         json_response(201, &json!({"sha": id}))
+    }
+}
+
+/// A repository as GitHub's lists give it.
+fn github_repo(l: &FakeListed) -> Value {
+    json!({
+        "full_name": l.path,
+        "private": l.visibility != "public",
+        "visibility": l.visibility,
+        "default_branch": l.default_branch,
+        "pushed_at": l.activity,
+        "description": format!("The {} project", l.path),
+    })
+}
+
+/// The listings: branches, projects, repositories, and their pages.
+impl State {
+    /// The branches in their names' order, each as `make` writes it from its name, head and
+    /// whether it is protected.
+    fn branch_list(&self, make: impl Fn(&str, &str, bool) -> Value) -> Vec<Value> {
+        self.branches.iter().map(|(name, commit)| make(name, commit, self.protected.contains(name))).collect()
+    }
+
+    /// Page `page` of `all` (the request's `per_page` entries, no more than the fake's), with the
+    /// next page's number (GitLab's `X-Next-Page`) and address (`Link`).
+    fn page(&self, request: &Request, all: Vec<Value>) -> Response {
+        let q = query(&request.url);
+        let per_page = q.get("per_page").and_then(|p| p.parse().ok()).unwrap_or(20usize).clamp(1, self.per_page);
+        let page: usize = q.get("page").and_then(|p| p.parse().ok()).unwrap_or(1).max(1);
+        let start = (page - 1) * per_page;
+        let items: Vec<Value> = all.iter().skip(start).take(per_page).cloned().collect();
+        let mut response = json_response(200, &Value::Array(items));
+        let more = start + per_page < all.len();
+        let next = if more { (page + 1).to_string() } else { String::new() };
+        if self.service == Service::GitLab {
+            response.headers.push(("x-next-page".to_owned(), next.clone()));
+        }
+        if more && (self.link_header || self.service == Service::GitHub) {
+            let base = request.url.split("&page=").next().unwrap_or(&request.url);
+            response.headers.push(("link".to_owned(), format!("<{base}&page={next}>; rel=\"next\"")));
+        }
+        response
+    }
+
+    /// GitLab's projects the user is a member of, those whose name or path holds `search` (and
+    /// whose namespace does, with `search_namespaces`).
+    fn gitlab_projects(&self, request: &Request) -> Response {
+        let q = query(&request.url);
+        if q.get("membership").map(String::as_str) != Some("true") {
+            return message(400, "the fake lists only the user's projects");
+        }
+        let search = q.get("search").map(|s| s.to_lowercase()).unwrap_or_default();
+        let namespaces = q.get("search_namespaces").map(String::as_str) == Some("true");
+        let all: Vec<Value> = self
+            .listed
+            .iter()
+            .filter(|l| l.member)
+            .filter(|l| {
+                let path = l.path.to_lowercase();
+                let name = path.rsplit('/').next().unwrap_or_default();
+                search.is_empty() || name.contains(&search) || (namespaces && path.contains(&search))
+            })
+            .map(|l| {
+                json!({
+                    "path_with_namespace": l.path,
+                    "visibility": l.visibility,
+                    "default_branch": l.default_branch,
+                    "last_activity_at": l.activity,
+                    "description": null,
+                })
+            })
+            .collect();
+        self.page(request, all)
+    }
+
+    /// GitHub's search of repositories by name (`<text> in:name`, `user:<owner>`): the public
+    /// ones and those the user reaches.
+    fn github_search(&self, request: &Request) -> Response {
+        let q = query(&request.url).get("q").cloned().unwrap_or_default().replace('+', " ");
+        let (mut text, mut owner) = (String::new(), None);
+        for part in q.split_whitespace() {
+            match part.strip_prefix("user:") {
+                Some(o) => owner = Some(o.to_lowercase()),
+                None if part == "in:name" => {}
+                None => text = part.to_lowercase(),
+            }
+        }
+        let items: Vec<Value> = self
+            .listed
+            .iter()
+            .filter(|l| {
+                let path = l.path.to_lowercase();
+                let (o, name) = path.split_once('/').unwrap_or_default();
+                name.contains(&text) && owner.as_deref().is_none_or(|w| w == o)
+            })
+            .map(github_repo)
+            .collect();
+        json_response(200, &json!({"total_count": items.len(), "incomplete_results": false, "items": items}))
     }
 }
 

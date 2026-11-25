@@ -20,6 +20,7 @@ mod forge;
 mod github;
 mod gitlab;
 mod http;
+pub mod listing;
 pub mod merge;
 pub mod oauth;
 pub mod servers;
