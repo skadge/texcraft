@@ -80,14 +80,20 @@ variables:
 # The caches (cargo's downloads and target/) are shared by every branch and tag, one per job:
 # a key per ref would give each release tag an empty cache and a build of every dependency.
 
+# The image has a full, current TeX Live, for the tests that build with retex (exports,
+# formulas: retex 2.5 needs a recent one, and the `preview` package); Rust is installed into it,
+# as in `web`.
 check:
   stage: check
-  image: rust:1.95-bookworm
+  image: texlive/texlive:latest
+  variables:
+    RUSTUP_HOME: "$CI_PROJECT_DIR/.rustup-home"
   before_script:
     - *desktop-deps
-    # A TeX Live for the tests that build with retex (exports, formulas): Debian's, as retex's
-    # own CI does for its packaging job.
-    - apt-get install -y -qq --no-install-recommends mesa-vulkan-drivers texlive-latex-base texlive-latex-recommended lmodern
+    - apt-get install -y -qq --no-install-recommends mesa-vulkan-drivers curl ca-certificates gcc libc6-dev git
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+    - export PATH="$CARGO_HOME/bin:$PATH"
+    - rustup show active-toolchain || rustup toolchain install
     - rustup component add clippy rustfmt
     - rustup target add wasm32-unknown-unknown
   script:
@@ -97,6 +103,7 @@ check:
     paths:
       - .cargo-home/registry
       - .cargo-home/git
+      - .rustup-home
       - target/
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
