@@ -35,6 +35,10 @@ the commits only (AGENTS.md rule 4).
 11. **Pages** (optional): start the `pages` job of the tag's pipeline by hand to put the browser
     build at the project's Pages address.
 
+## Windows and macOS (experimental)
+
+GitHub Actions on the mirror (`.github/workflows/experimental-builds.yml`) builds them on each tag that GitLab's `mirror` job pushes, and attaches a Windows zip and an ad-hoc-signed macOS app to the tag's GitHub release. GitHub's hosted runners for those systems are free for the public mirror and spare the GitLab runner. The mirror's token cannot push workflow files: a change to `.github/workflows/` is pushed to GitHub over SSH (`git push github main`) before GitLab's mirror job pushes the same commit. Start a run by hand with `gh workflow run experimental-builds -R skadge/texcraft --ref main`.
+
 ## What CI does on a tag
 
 | Stage | Job | What it does |

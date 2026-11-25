@@ -139,7 +139,9 @@ Agent and contributor rules are in [`AGENTS.md`](AGENTS.md), which also lists th
 
 ## Downloads
 
-Releases are on the [releases page](https://gitlab.com/severin-lemaignan/texcraft/-/releases): an AppImage and a Flatpak bundle for Linux (x86_64), and the browser build. What changed is in [CHANGELOG.md](CHANGELOG.md). Elsewhere, build it from source as shown in [Quick start](#quick-start).
+Releases are on the [releases page](https://gitlab.com/severin-lemaignan/texcraft/-/releases): an AppImage and a Flatpak bundle for Linux (x86_64), and the browser build. What changed is in [CHANGELOG.md](CHANGELOG.md).
+
+**Experimental Windows and macOS builds** are attached to the same releases on the [GitHub mirror](https://github.com/skadge/texcraft/releases): a zip for Windows (x86_64) and an app for macOS (Apple Silicon). They are not signed: Windows asks before running it the first time (More info › Run anyway), and on macOS open it with a right-click › Open the first time. Elsewhere, build it from source as shown in [Quick start](#quick-start).
 
 ## License and credits
 
