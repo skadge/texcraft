@@ -17,7 +17,23 @@ fn junk() -> Vec<Value> {
         json!({"from": "main.tex", "to": "main.tex"}),
         json!({"path": "main.tex", "edits": [{"start": u64::MAX, "end": 1, "text": 7}, null], "start": u64::MAX, "end": 2, "text": "x", "id": "zz", "message": 3}),
         json!({"path": "main.tex", "edits": {"start": 0}, "start": 5, "end": 1, "text": "", "state": "maybe", "origin": "nowhere"}),
+        // Hostile imports: names that leave the project, a zip bomb, junk zips (`file.unzip`,
+        // `file.import`, `project.import`).
+        json!({"data": hostile_zip(&[("../../evil.tex", b"x"), ("/abs.tex", b"x"), ("C:/drive.tex", b"x")]), "into": "../up", "existing": "never"}),
+        json!({"data": hostile_zip(&[("zeros.bin", &[0u8; 2 * 1024 * 1024])]), "check": "yes"}),
+        json!({"data": "UEsFBgAAAAD//wAA", "files": [{"path": "../x", "data": "!!"}, {"path": 3}], "source": "/"}),
+        json!({"files": [{"path": "a/../../b", "data": "eA=="}, {"path": "/c", "data": "eA=="}], "into": "/"}),
     ]
+}
+
+/// A zip of `entries`, in base64.
+fn hostile_zip(entries: &[(&str, &[u8])]) -> String {
+    use base64::Engine as _;
+    let mut w = craft_zip::Writer::new();
+    for (name, data) in entries {
+        let _ = w.add(name, data, craft_zip::Compression::Level(9));
+    }
+    base64::engine::general_purpose::STANDARD.encode(w.finish().unwrap_or_default())
 }
 
 #[test]

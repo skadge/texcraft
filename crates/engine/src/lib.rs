@@ -21,6 +21,7 @@ pub use language::{Completion, Fix, Lint, TextEdit};
 pub use sync::PageRect;
 pub use texcraft_buffer::{Change, Origin, Transaction};
 pub mod guard;
+pub mod import;
 pub mod library;
 mod review_store;
 pub use texcraft_review as review;

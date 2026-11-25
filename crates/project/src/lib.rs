@@ -251,6 +251,18 @@ impl Project {
         self.main.as_ref()
     }
 
+    /// Makes the main document `main.tex` when there is one, else the first `.tex` file with
+    /// `\documentclass`, else the first `.tex` file; none when there is no `.tex` file.
+    pub fn choose_main(&mut self) {
+        let tex: Vec<&ProjectPath> = self.paths().filter(|p| p.extension() == "tex").collect();
+        self.main = tex
+            .iter()
+            .find(|p| p.as_str() == "main.tex")
+            .or_else(|| tex.iter().find(|p| matches!(self.get(p), Some(Contents::Text(t)) if t.contains("\\documentclass"))))
+            .or_else(|| tex.first())
+            .map(|p| (*p).clone());
+    }
+
     pub fn set_main(&mut self, path: &ProjectPath) -> Result<()> {
         if !self.files.contains_key(path) {
             return Err(Error::NoSuchFile(path.to_string()));

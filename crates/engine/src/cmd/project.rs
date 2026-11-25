@@ -32,6 +32,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "project.import",
+            label: "New Project from Files",
+            menu: &[],
+            shortcut: None,
+            params: import_schema,
+            enabled: always,
+            run: import,
+            changes: true,
+        },
+        CommandSpec {
             id: "project.save",
             label: "Save",
             menu: &["File"],
@@ -125,6 +135,54 @@ fn open(s: &mut Session, params: &Value) -> Result<Value> {
     s.replace_project(project, Some(dir));
     super::history::find(s);
     Ok(json!({"files": files, "main": s.project.main().map(|p| p.to_string()), "history": super::history::status_of(s)}))
+}
+
+fn import_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "source": {"type": "string", "description": "A zip file or a folder on disk whose files make the project (a folder is copied, not opened in place: `project.open` does that)."},
+        "data": {"type": "string", "description": "Or a zip file's contents, in base64."},
+        "files": {"type": "array", "description": "Or files by path and contents (a folder the browser read); the one folder they are all in is left out of their paths.", "items": {"type": "object", "properties": {
+            "path": {"type": "string"},
+            "data": {"type": "string", "description": "Its contents, in base64."}
+        }, "required": ["path", "data"], "additionalProperties": false}}
+    }, "additionalProperties": false})
+}
+
+/// Makes a new project, not saved yet, from a zip file, a folder's files or files given by
+/// contents, with the filter and limits of an import, and opens it. Its main document is chosen as
+/// when a folder is opened. Save Project As keeps it.
+fn import(s: &mut Session, p: &Value) -> Result<Value> {
+    use crate::import::{Gathered, Limits};
+    let limits = Limits::default();
+    let gathered = if p.get("files").is_some() {
+        Gathered::from_files(super::file::files_param(p)?, limits, true)
+    } else if p.get("data").is_some() {
+        Gathered::from_zip(&super::file::base64_param(p, "data")?, limits)?
+    } else {
+        let source = super::file::source_param(s, p)?;
+        if source.is_dir() {
+            Gathered::from_folder(&source, limits, false, s.roots.as_ref())?
+        } else {
+            Gathered::from_zip(&super::file::read_source(&source, limits.bytes)?, limits)?
+        }
+    };
+    if gathered.files.is_empty() {
+        return Err("There is no file to make a project from: everything was left out or the source is empty.".to_owned());
+    }
+    let mut project = Project::new();
+    let mut skipped = gathered.skipped;
+    for (path, bytes) in gathered.files {
+        let added = texcraft_project::ProjectPath::new(&path).and_then(|at| project.add(at, texcraft_project::Contents::from_bytes(bytes)));
+        if added.is_err() {
+            skipped.push(crate::import::Skipped { path, reason: crate::import::Skip::Unreadable });
+        }
+    }
+    project.choose_main();
+    let (files, main) = (project.len(), project.main().map(|m| m.to_string()));
+    s.replace_project(project, None);
+    // Nowhere yet: closing it asks to save it.
+    s.dirty = true;
+    Ok(json!({"files": files, "main": main, "skipped": skipped, "folder": gathered.stripped}))
 }
 
 fn save(s: &mut Session, _: &Value) -> Result<Value> {

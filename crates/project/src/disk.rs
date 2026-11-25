@@ -15,7 +15,7 @@ impl Project {
     pub fn load_dir(dir: &Path) -> Result<Self> {
         let mut project = Project::new();
         walk(dir, "", 0, &mut project)?;
-        project.main = pick_main(&project);
+        project.choose_main();
         Ok(project)
     }
 
@@ -64,13 +64,4 @@ fn walk(dir: &Path, prefix: &str, depth: usize, project: &mut Project) -> Result
         }
     }
     Ok(())
-}
-
-fn pick_main(project: &Project) -> Option<ProjectPath> {
-    let tex: Vec<&ProjectPath> = project.paths().filter(|p| p.extension() == "tex").collect();
-    tex.iter()
-        .find(|p| p.as_str() == "main.tex")
-        .or_else(|| tex.iter().find(|p| matches!(project.get(p), Some(Contents::Text(t)) if t.contains("\\documentclass"))))
-        .or_else(|| tex.first())
-        .map(|p| (*p).clone())
 }

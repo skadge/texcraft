@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 use texcraft_project::{Contents, ProjectPath};
 
 use super::{CommandSpec, always, path_param, string};
+use crate::import::{self, Gathered};
 use crate::{Change, Origin, Result, Session, Transaction};
 
 pub(super) fn specs() -> Vec<CommandSpec> {
@@ -117,6 +118,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             params: import_schema,
             enabled: always,
             run: import,
+            changes: true,
+        },
+        CommandSpec {
+            id: "file.unzip",
+            label: "Import a Zip File…",
+            menu: &["File"],
+            shortcut: None,
+            params: unzip_schema,
+            enabled: always,
+            run: unzip,
             changes: true,
         },
         CommandSpec {
@@ -262,57 +273,125 @@ pub(super) fn replacements(s: &Session, path: &ProjectPath, q: &crate::find::Que
 }
 
 fn import_schema() -> Value {
-    json!({"type": "object", "properties": {
-        "source": {"type": "string", "description": "A file on disk to copy into the project."},
-        "data": {"type": "string", "description": "Or the file's contents, in base64 (the browser, a dropped file); `path` is then required."},
-        "path": {"type": "string", "description": "Its path in the project (default: its file name)."}
-    }, "additionalProperties": false})
+    let mut props = json!({
+        "source": {"type": "string", "description": "A file on disk to copy into the project, or a folder: its files are copied with their folders, in a folder of its name (hidden files, build outputs and links out of it are left out)."},
+        "data": {"type": "string", "description": "Or one file's contents, in base64 (the browser, a dropped file); `path` is then required."},
+        "path": {"type": "string", "description": "The one file's path in the project (default: its file name)."},
+        "files": {"type": "array", "description": "Or several files by path and contents (a folder the browser read), filtered as a folder is.", "items": {"type": "object", "properties": {
+            "path": {"type": "string", "description": "Its path, such as `figures/plot.png`."},
+            "data": {"type": "string", "description": "Its contents, in base64."}
+        }, "required": ["path", "data"], "additionalProperties": false}}
+    });
+    if let Some(map) = props.as_object_mut() {
+        map.extend(import::shared_properties());
+    }
+    json!({"type": "object", "properties": props, "additionalProperties": false})
+}
+
+fn unzip_schema() -> Value {
+    let mut props = json!({
+        "source": {"type": "string", "description": "A zip file on disk."},
+        "data": {"type": "string", "description": "Or the zip file's contents, in base64."}
+    });
+    if let Some(map) = props.as_object_mut() {
+        map.extend(import::shared_properties());
+    }
+    json!({"type": "object", "properties": props, "additionalProperties": false})
 }
 
 fn on_disk(_: &Session) -> Result<()> {
     if cfg!(target_arch = "wasm32") { Err("Adding files from disk is not available in the browser yet.".to_owned()) } else { Ok(()) }
 }
 
-/// Copies a file from disk, or contents given in base64, into the project, replacing a file of
-/// the same path.
+/// Bytes given in base64 as parameter `name`.
+pub(super) fn base64_param(p: &Value, name: &str) -> Result<Vec<u8>> {
+    use base64::Engine as _;
+    let data = p.get(name).and_then(Value::as_str).ok_or_else(|| format!("`{name}` must be a base64 string"))?;
+    base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| format!("`{name}` is not base64: {e}"))
+}
+
+/// The files of parameter `files`: paths and contents in base64.
+pub(super) fn files_param(p: &Value) -> Result<Vec<(String, Vec<u8>)>> {
+    let list = p.get("files").and_then(Value::as_array).ok_or("`files` must be a list of paths and contents")?;
+    list.iter().map(|f| Ok((string(f, "path")?.to_owned(), base64_param(f, "data")?))).collect()
+}
+
+/// A file or folder on disk named by parameter `source`, checked in an agent session.
+pub(super) fn source_param(s: &Session, p: &Value) -> Result<std::path::PathBuf> {
+    on_disk(s)?;
+    let source = std::path::PathBuf::from(string(p, "source")?);
+    match &s.roots {
+        Some(roots) => roots.check(&source, crate::file_access::Access::Read),
+        None => Ok(source),
+    }
+}
+
+/// The bytes of file `source`, refused past `max` bytes.
+pub(super) fn read_source(source: &std::path::Path, max: u64) -> Result<Vec<u8>> {
+    let len = std::fs::metadata(source).map_err(|e| format!("{}: {e}", source.display()))?.len();
+    if len > max {
+        return Err(format!("{} is larger than TeXCraft reads ({max} bytes)", source.display()));
+    }
+    std::fs::read(source).map_err(|e| format!("{}: {e}", source.display()))
+}
+
+/// Copies files into the project: one file from disk or given in base64, a folder from disk, or
+/// several files given in base64. A file of the same path is replaced unless `existing` says
+/// otherwise; with `check`, nothing changes and the answer says what would.
 fn import(s: &mut Session, p: &Value) -> Result<Value> {
-    if let Some(data) = p.get("data") {
-        use base64::Engine as _;
-        let data = data.as_str().ok_or("`data` must be a base64 string")?;
-        let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| format!("`data` is not base64: {e}"))?;
+    let limits = import::Limits::default();
+    let gathered = if p.get("files").is_some() {
+        Gathered::from_files(files_param(p)?, limits, false)
+    } else if p.get("data").is_some() {
+        let bytes = base64_param(p, "data")?;
         if bytes.len() > texcraft_project::MAX_FILE_BYTES {
             return Err("The file is larger than a project file may be.".to_owned());
         }
         let path = ProjectPath::new(string(p, "path")?).map_err(|e| e.to_string())?;
-        return add_contents(s, path, Contents::from_bytes(bytes));
-    }
-    on_disk(s)?;
-    let source = std::path::PathBuf::from(string(p, "source")?);
-    let source = match &s.roots {
-        Some(roots) => roots.check(&source, crate::file_access::Access::Read)?,
-        None => source,
+        Gathered::one(path.into(), bytes)
+    } else {
+        let source = source_param(s, p)?;
+        if source.is_dir() {
+            if p.get("path").is_some() {
+                return Err("`path` names one file: a folder keeps its name (use `into` for where it goes).".to_owned());
+            }
+            Gathered::from_folder(&source, limits, true, s.roots.as_ref())?
+        } else {
+            let name = match p.get("path").and_then(Value::as_str) {
+                Some(path) => path.to_owned(),
+                None => source.file_name().and_then(|n| n.to_str()).ok_or_else(|| format!("{} has no file name", source.display()))?.to_owned(),
+            };
+            let path = ProjectPath::new(&name).map_err(|e| e.to_string())?;
+            let bytes = read_source(&source, texcraft_project::MAX_FILE_BYTES as u64)
+                .map_err(|_| format!("{} is larger than a project file may be, or cannot be read", source.display()))?;
+            Gathered::one(path.into(), bytes)
+        }
     };
-    let name = match p.get("path").and_then(Value::as_str) {
-        Some(path) => path.to_owned(),
-        None => source.file_name().and_then(|n| n.to_str()).ok_or_else(|| format!("{} has no file name", source.display()))?.to_owned(),
-    };
-    let path = ProjectPath::new(&name).map_err(|e| e.to_string())?;
-    let len = std::fs::metadata(&source).map_err(|e| format!("{}: {e}", source.display()))?.len();
-    if len > texcraft_project::MAX_FILE_BYTES as u64 {
-        return Err(format!("{} is larger than a project file may be", source.display()));
-    }
-    let bytes = std::fs::read(&source).map_err(|e| format!("{}: {e}", source.display()))?;
-    add_contents(s, path, Contents::from_bytes(bytes))
+    bring_in(s, p, gathered)
 }
 
-fn add_contents(s: &mut Session, path: ProjectPath, contents: Contents) -> Result<Value> {
-    if s.project.get(&path).is_some() {
-        s.project.set(&path, contents).map_err(|e| e.to_string())?;
-    } else {
-        s.project.add(path.clone(), contents).map_err(|e| e.to_string())?;
+/// Unpacks a zip file into the project (`file.unzip`).
+fn unzip(s: &mut Session, p: &Value) -> Result<Value> {
+    let limits = import::Limits::default();
+    let bytes = if p.get("data").is_some() { base64_param(p, "data")? } else { read_source(&source_param(s, p)?, limits.bytes)? };
+    let gathered = Gathered::from_zip(&bytes, limits)?;
+    bring_in(s, p, gathered)
+}
+
+/// Adds what was gathered, or with `check` says what adding it would do.
+fn bring_in(s: &mut Session, p: &Value, gathered: Gathered) -> Result<Value> {
+    let into = import::into(p)?;
+    let existing = import::Existing::from_params(p)?;
+    if p.get("check").and_then(Value::as_bool).unwrap_or(false) {
+        return Ok(import::check(s, into.as_ref(), &gathered));
     }
-    s.touch();
-    Ok(json!({"path": path.as_str()}))
+    let report = import::apply(s, into.as_ref(), gathered, existing);
+    let mut result = serde_json::to_value(&report).map_err(|e| e.to_string())?;
+    // One file: its path, as adding one file has always answered.
+    if let ([only], Some(map)) = (report.files.as_slice(), result.as_object_mut()) {
+        map.insert("path".to_owned(), json!(only));
+    }
+    Ok(result)
 }
 
 fn rename_schema() -> Value {

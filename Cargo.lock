@@ -6589,6 +6589,7 @@ dependencies = [
  "craft-keymap",
  "craft-menu",
  "craft-ui",
+ "craft-zip",
  "egui",
  "egui_extras",
  "egui_kittest",
