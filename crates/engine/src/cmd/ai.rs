@@ -1,5 +1,6 @@
-//! AI assistance (docs/ROADMAP.md, AI1 to AI3): the connection, explaining build messages,
-//! rewriting a selection and continuing a paragraph.
+//! AI assistance (docs/ROADMAP.md, AI1 to AI5): the connection, explaining build messages,
+//! rewriting a selection and continuing a paragraph, making LaTeX and drafting references, asking
+//! about the project and reviewing a section.
 //! The work is in [`crate::ai`]; these are its commands, for the window and for agents alike.
 
 use serde_json::{Value, json};
@@ -21,6 +22,11 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         spec("ai.explain", "Explain", explain_schema, connected, explain, true),
         spec("ai.rewrite", "Rewrite with AI", rewrite_schema, connected, rewrite, true),
         spec("ai.complete", "Suggest the Next Words", complete_schema, connected, complete, true),
+        spec("ai.make", "Make with AI", make_schema, connected, make, true),
+        spec("ai.insert_made", "Insert What AI Made", insert_made_schema, connected, insert_made, true),
+        spec("ai.reference", "Add a Reference with AI", reference_schema, connected, reference, true),
+        spec("ai.ask", "Ask AI", ask_schema, connected, ask, true),
+        spec("ai.review", "Review with AI", review_schema, connected, review, true),
         spec("ai.cancel", "Cancel the AI Request", cancel_schema, always, cancel, true),
     ]
 }
@@ -65,8 +71,16 @@ const MESSAGE: &str = "The message: `index` in build.result's diagnostics (from 
 
 fn disclose_schema() -> Value {
     json!({"type": "object", "description": "What a request would send, where, and whether the user must agree to its kind first. \
-explain: the message (`index`, or `path` and `line`); rewrite: as ai.rewrite; complete: as ai.complete (without `path`, an example).", "properties": {
-        "request": {"type": "string", "enum": ["explain", "rewrite", "complete"], "description": "Default: explain."},
+explain: the message (`index`, or `path` and `line`); rewrite: as ai.rewrite; complete: as ai.complete (without `path`, an example); \
+make: as ai.make; reference: as ai.reference; ask: as ai.ask; review: as ai.review.", "properties": {
+        "request": {"type": "string", "enum": crate::ai::REQUESTS, "description": "Default: explain."},
+        "kind": {"type": "string", "enum": KINDS},
+        "description": {"type": "string"},
+        "again": {"type": "boolean"},
+        "query": {"type": "string"},
+        "bib": {"type": "string"},
+        "question": {"type": "string"},
+        "scope": {"type": "string", "enum": ["file", "project"]},
         "index": {"type": "integer", "minimum": 0},
         "path": {"type": "string"},
         "line": {"type": "integer", "minimum": 1},
@@ -79,6 +93,56 @@ explain: the message (`index`, or `path` and `line`); rewrite: as ai.rewrite; co
 }
 
 const HOWS: [&str; 5] = ["clearer", "shorter", "formal", "grammar", "translate"];
+const KINDS: [&str; 4] = ["table", "equation", "tikz", "figure"];
+
+fn make_schema() -> Value {
+    json!({"type": "object", "description": "Asks the model for LaTeX from a description and typesets it after the main document's preamble. \
+Sends the description, the preamble and, for a figure, the names of the project's images. When it typesets (and `insert` is not false) it becomes a suggested change at `at` by \"AI (<model>)\", \
+and the packages it needs a second one before \\begin{document}; never an edit. When it does not typeset, retex's `messages` say why and nothing is inserted.", "properties": {
+        "kind": {"type": "string", "enum": KINDS, "description": "table, equation, tikz (a TikZ diagram in a figure) or figure (a figure environment for one of the project's images)."},
+        "description": {"type": "string", "description": "What to make, in words: \"a table of the results by year\", \"the equation for the normal distribution\"."},
+        "path": {"type": "string", "description": "The file it goes in."},
+        "at": {"type": "integer", "minimum": 0, "description": "The caret, in characters from 0."},
+        "again": {"type": "boolean", "description": "Send the last answer that did not typeset, and retex's messages, to ask for a corrected one."},
+        "insert": {"type": "boolean", "description": "Make it a suggested change when it typesets. Default: true; the window previews first and inserts with ai.insert_made."},
+        "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_ai` and `Session::ai_made`. Default: wait for it."}
+    }, "required": ["kind", "description", "path", "at"], "additionalProperties": false})
+}
+
+fn insert_made_schema() -> Value {
+    json!({"type": "object", "description": "Inserts the last thing ai.make made, at its caret, as a suggested change (and its packages before \\begin{document} as another).", "properties": {
+        "anyway": {"type": "boolean", "description": "Insert it even though it did not typeset. Default: false."}
+    }, "additionalProperties": false})
+}
+
+fn reference_schema() -> Value {
+    json!({"type": "object", "description": "Asks the model to draft a BibTeX entry for a title or DOI (only that is sent). The entry becomes a suggested change at the end of `bib` \
+(made when it does not exist), under a line `% Drafted by AI (<model>): check it`. Models invent references: the entry is a draft to check, never a verified record.", "properties": {
+        "query": {"type": "string", "description": "The work's title, or its DOI."},
+        "bib": {"type": "string", "description": "The .bib file it goes in. Default: references.bib."},
+        "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_ai` and `Session::ai_referenced`. Default: wait for it."}
+    }, "required": ["query"], "additionalProperties": false})
+}
+
+fn ask_schema() -> Value {
+    json!({"type": "object", "description": "Asks the model a question about the open file or the whole project, sending the question and the file (or every text file of the project) with numbered lines. \
+The answer's `links` are the `path:line` places it names that exist (character offsets in the answer).", "properties": {
+        "question": {"type": "string"},
+        "scope": {"type": "string", "enum": ["file", "project"], "description": "Default: file."},
+        "path": {"type": "string", "description": "The open file. Default: the file shown."},
+        "background": {"type": "boolean", "description": "Return at once; the answer comes from `Session::poll_ai` and `Session::ai_answers`. Default: wait for it."}
+    }, "required": ["question"], "additionalProperties": false})
+}
+
+fn review_schema() -> Value {
+    json!({"type": "object", "description": "Sends characters `start..end` of `path` (a section) for review. Each remark becomes a comment by \"AI (<model>)\" on the words it quotes; \
+remarks whose quote is not in the text are dropped and counted (`dropped`).", "properties": {
+        "path": {"type": "string"},
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 0},
+        "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_ai` and `Session::ai_reviewed`. Default: wait for it."}
+    }, "required": ["path", "start", "end"], "additionalProperties": false})
+}
 
 fn rewrite_schema() -> Value {
     json!({"type": "object", "description": "Rewrites characters `start..end` of `path` (from 0). The rewrite arrives as a suggested change on exactly them, by \"AI (<model>)\", never as an edit; it is refused, saying why, when it dropped or altered a label, reference, citation, formula or command.", "properties": {
@@ -116,7 +180,7 @@ fn explain_schema() -> Value {
 
 fn consent_schema() -> Value {
     json!({"type": "object", "properties": {
-        "request": {"type": "string", "enum": ["explain", "rewrite", "complete"], "description": "The kind of request agreed to, for the connection's endpoint: what ai.disclose shows it sends."}
+        "request": {"type": "string", "enum": crate::ai::REQUESTS, "description": "The kind of request agreed to, for the connection's endpoint: what ai.disclose shows it sends."}
     }, "required": ["request"], "additionalProperties": false})
 }
 
@@ -183,6 +247,26 @@ fn rewrite(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn complete(s: &mut Session, p: &Value) -> Result<Value> {
     s.ai_complete(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+}
+
+fn make(s: &mut Session, p: &Value) -> Result<Value> {
+    s.ai_make(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+}
+
+fn insert_made(s: &mut Session, p: &Value) -> Result<Value> {
+    s.ai_insert_made(flag(p, "anyway"))
+}
+
+fn reference(s: &mut Session, p: &Value) -> Result<Value> {
+    s.ai_reference(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+}
+
+fn ask(s: &mut Session, p: &Value) -> Result<Value> {
+    s.ai_ask(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+}
+
+fn review(s: &mut Session, p: &Value) -> Result<Value> {
+    s.ai_review(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
 }
 
 fn cancel(s: &mut Session, p: &Value) -> Result<Value> {

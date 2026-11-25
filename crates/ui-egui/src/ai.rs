@@ -118,6 +118,47 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
         Some(texcraft_engine::ai::Event::Completed(Err(e))) => {
             app.view.status = Some((tl!("No words were suggested: {error}").replace("{error}", &e), true));
         }
+        Some(texcraft_engine::ai::Event::Made(Ok(typeset))) => {
+            let said = if typeset {
+                tl!("The LaTeX is made and typeset: its preview is in the dialog.")
+            } else {
+                tl!("The LaTeX is made but does not typeset: the dialog shows why.")
+            };
+            app.view.status = Some((said.to_owned(), !typeset));
+        }
+        Some(texcraft_engine::ai::Event::Made(Err(e))) => {
+            app.view.status = Some((tl!("Nothing was made: {error}").replace("{error}", &e), true));
+        }
+        Some(texcraft_engine::ai::Event::Referenced(Ok(bib))) => {
+            let said = tl!("The drafted entry is a suggested change in {bib}: check every field before accepting it.");
+            app.view.status = Some((said.replace("{bib}", &bib), false));
+        }
+        Some(texcraft_engine::ai::Event::Referenced(Err(e))) => {
+            app.view.status = Some((tl!("No reference was drafted: {error}").replace("{error}", &e), true));
+        }
+        Some(texcraft_engine::ai::Event::Answered(Ok(_))) => {
+            app.view.status = Some((tl!("The answer is in the Ask panel.").to_owned(), false));
+        }
+        Some(texcraft_engine::ai::Event::Answered(Err(e))) => {
+            app.view.status = Some((tl!("No answer: {error}").replace("{error}", &e), true));
+        }
+        Some(texcraft_engine::ai::Event::Reviewed(Ok((left, dropped)))) => {
+            let said = crate::i18n::trn(left, "The review left {n} comment.", "The review left {n} comments.").replace("{n}", &left.to_string());
+            let said = if dropped > 0 {
+                let lost = crate::i18n::trn(
+                    dropped,
+                    "{n} remark was dropped: the words it quoted are not in the text.",
+                    "{n} remarks were dropped: the words they quoted are not in the text.",
+                );
+                format!("{said} {}", lost.replace("{n}", &dropped.to_string()))
+            } else {
+                said
+            };
+            app.view.status = Some((said, false));
+        }
+        Some(texcraft_engine::ai::Event::Reviewed(Err(e))) => {
+            app.view.status = Some((tl!("No review: {error}").replace("{error}", &e), true));
+        }
         // The editor shows (and announces) the words when the caret is still where they go.
         Some(texcraft_engine::ai::Event::Completed(Ok(_))) | None => {}
     }

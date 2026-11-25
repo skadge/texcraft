@@ -97,7 +97,7 @@ pub struct Passage {
 }
 
 /// Characters `start..end` of `text`, as bytes; `None` past its end.
-fn bytes_of(text: &str, start: usize, end: usize) -> Option<(usize, usize)> {
+pub(super) fn bytes_of(text: &str, start: usize, end: usize) -> Option<(usize, usize)> {
     let mut at = text.char_indices().map(|(b, _)| b).chain(std::iter::once(text.len()));
     let s = at.nth(start)?;
     let e = if end == start { s } else { at.nth(end - start - 1)? };
@@ -169,14 +169,14 @@ impl Passage {
 
 /// The text between a line `<<<NAME` and a line `NAME>>>` (the last such block), a code fence
 /// around it dropped.
-fn between(text: &str, name: &str) -> Option<String> {
+pub(super) fn between(text: &str, name: &str) -> Option<String> {
     let lines: Vec<&str> = text.lines().collect();
     let open = lines.iter().rposition(|l| l.trim() == format!("<<<{name}"))?;
     let close = open + 1 + lines.iter().skip(open + 1).position(|l| l.trim() == format!("{name}>>>"))?;
     Some(unfenced(&lines.get(open + 1..close).unwrap_or_default().join("\n")))
 }
 
-fn unfenced(text: &str) -> String {
+pub(super) fn unfenced(text: &str) -> String {
     let lines: Vec<&str> = text.trim_matches('\n').lines().collect();
     if lines.len() >= 2 && lines.first().is_some_and(|l| l.trim_start().starts_with("```")) && lines.last().is_some_and(|l| l.trim() == "```") {
         return lines.get(1..lines.len() - 1).unwrap_or_default().join("\n");
@@ -360,7 +360,7 @@ impl Session {
         self.ai_ready()?;
         let passage = self.ai_passage(p)?;
         let opts = craft_ai::GenOpts { max_tokens: u32::try_from(passage.text.len() / 2 + 400).unwrap_or(4000).min(4000), temperature: 0.3 };
-        let (model, run, answer) = self.begin(&passage.request()?, ("rewrite", "Rewrite"), passage.prompt(), opts, |to| {
+        let (model, run, answer) = self.begin(&passage.request()?, ("rewrite", "Rewrite"), passage.prompt(), opts, Answer::Text, |to| {
             format!(
                 "Rewriting sends the selected text and a few lines around it to {to}. Agree to it first (the window asks; agents: ai.disclose with request rewrite shows it, ai.consent agrees)."
             )
@@ -395,7 +395,7 @@ impl Session {
         }
         self.ai.ghost = None;
         let opts = craft_ai::GenOpts { max_tokens: 60, temperature: 0.3 };
-        let (_, run, answer) = self.begin(&request, ("complete", "Suggest the next words"), paragraph.prompt(), opts, |to| {
+        let (_, run, answer) = self.begin(&request, ("complete", "Suggest the next words"), paragraph.prompt(), opts, Answer::Text, |to| {
             format!(
                 "Suggesting the next words sends the paragraph before the caret to {to} after each pause in typing. Agree to it first (Settings › AI asks when it is turned on)."
             )

@@ -501,3 +501,192 @@ fn cancelling_a_continuation_leaves_an_explanation_in_flight_alone() -> R {
     assert!(s.ai_busy(), "cancelling continuations cancelled the explanation");
     Ok(())
 }
+
+// ----- AI4: making LaTeX and drafting references -----
+
+/// A typesetter that records what it was given and refuses `\bad`.
+fn typesetter(s: &mut Session) -> Arc<Mutex<Vec<String>>> {
+    let seen: Arc<Mutex<Vec<String>>> = Arc::default();
+    let kept = seen.clone();
+    s.set_ai_typeset(Arc::new(move |scratch: &texcraft_engine::ai::Scratch| {
+        if let Ok(mut k) = kept.lock() {
+            k.push(format!("{}\n---\n{}", scratch.preamble, scratch.body));
+        }
+        if scratch.body.contains("\\bad") { Err(vec!["line 2: undefined command \\bad".to_owned()]) } else { Ok(b"%PDF-fake".to_vec()) }
+    }));
+    seen
+}
+
+/// The caret on the line "Line 10 of the body.", at its start.
+fn caret(s: &Session) -> usize {
+    let t = text(s);
+    t[..t.find("Line 10 of").unwrap_or_default()].chars().count()
+}
+
+#[test]
+fn making_sends_what_was_disclosed_and_a_typeset_answer_becomes_suggestions_never_an_edit() -> R {
+    let seen = Seen::default();
+    let mut s = session(
+        20,
+        "<<<LATEX\n\\begin{tikzpicture}\\draw (0,0) -- (1,1);\\end{tikzpicture}\nLATEX>>>\n<<<PACKAGES\n\\usepackage{tikz}\nPACKAGES>>>",
+        &seen,
+    )?;
+    let typeset = typesetter(&mut s);
+    connect_remote(&mut s)?;
+    let at = caret(&s);
+    let p = json!({"kind": "tikz", "description": "a line from the origin", "path": "main.tex", "at": at});
+    let e = s.execute("ai.make", &p).err().ok_or("made without consent")?;
+    assert!(e.contains("Agree") && e.contains("https://api.example.com"), "{e}");
+    assert!(seen.prompts().is_empty(), "something was sent before the user agreed");
+    let mut d = p.clone();
+    d["request"] = json!("make");
+    let disclosed = s.execute("ai.disclose", &d)?;
+    assert_eq!(disclosed["needs_consent"], true);
+    s.execute("ai.consent", &json!({"request": "make"}))?;
+    let before = text(&s);
+    let r = s.execute("ai.make", &p)?;
+    let prompt = seen.prompts().first().cloned().unwrap_or_default();
+    assert_eq!(Some(prompt.as_str()), disclosed["sends"]["prompt"].as_str(), "the request differs from its disclosure");
+    assert!(prompt.contains("a line from the origin") && prompt.contains("private-preamble"), "the description or the preamble is missing");
+    assert!(!prompt.contains("FAR-AWAY-TEXT") && !prompt.contains("OTHER-FILE-TEXT"), "the document's body was sent");
+    assert!(
+        typeset
+            .lock()
+            .map(|t| t.first().is_some_and(|x| x.contains("private-preamble") && x.contains("\\usepackage{tikz}") && x.contains("\\draw")))
+            .unwrap_or(false),
+        "it was not typeset after the preamble with its package"
+    );
+    assert_eq!(r["typeset"], true, "{r}");
+    assert_eq!(text(&s), before, "making edited the file");
+    assert_eq!(r["suggestions"].as_array().map(Vec::len), Some(2), "the picture and its package are not two suggestions: {r}");
+    for id in r["suggestions"].as_array().cloned().unwrap_or_default() {
+        s.execute("review.accept", &json!({"id": id}))?;
+    }
+    let after = text(&s);
+    let (pkg, doc, pic, line10) =
+        (after.find("\\usepackage{tikz}"), after.find("\\begin{document}"), after.find("\\begin{tikzpicture}"), after.find("Line 10 of"));
+    assert!(pkg < doc && doc < pic && pic < line10 && pkg.is_some(), "not in their places:\n{after}");
+    Ok(())
+}
+
+#[test]
+fn an_answer_that_does_not_typeset_is_reported_and_asking_again_sends_the_error() -> R {
+    let seen = Seen::default();
+    let mut s = session(20, "<<<LATEX\n\\begin{equation}\n\\bad x\n\\end{equation}\nLATEX>>>", &seen)?;
+    typesetter(&mut s);
+    s.execute("ai.connect", &json!({"endpoint": "http://127.0.0.1:11434/v1", "model": "small"}))?;
+    let p = json!({"kind": "equation", "description": "the bad one", "path": "main.tex", "at": caret(&s)});
+    let r = s.execute("ai.make", &p)?;
+    assert_eq!(r["typeset"], false);
+    assert!(r["messages"].to_string().contains("undefined command"), "retex's message is not reported: {r}");
+    assert_eq!(suggestions(&mut s)?["openSuggestions"], 0, "what does not typeset was inserted");
+    assert!(s.execute("ai.insert_made", &json!({})).is_err(), "inserted without `anyway`");
+    let mut again = p.clone();
+    again["again"] = json!(true);
+    seen.answer("<<<LATEX\n\\begin{equation}\nx\n\\end{equation}\nLATEX>>>");
+    let r = s.execute("ai.make", &again)?;
+    assert_eq!(r["typeset"], true);
+    let second = seen.prompts().get(1).cloned().unwrap_or_default();
+    assert!(second.contains("undefined command \\bad") && second.contains("\\bad x"), "asking again did not send the answer and its error");
+    assert_eq!(suggestions(&mut s)?["openSuggestions"], 1);
+    Ok(())
+}
+
+#[test]
+fn a_reference_is_a_suggestion_in_the_bib_marked_as_drafted_by_the_model() -> R {
+    let seen = Seen::default();
+    let mut s = session(20, "<<<BIB\n@book{knuth84,\n  title = {The {TeX}book},\n  year = {1984}\n}\nBIB>>>", &seen)?;
+    s.execute("file.new", &json!({"path": "refs.bib", "text": "@article{knuth84,\n  title = {Other}\n}\n"}))?;
+    connect_remote(&mut s)?;
+    let p = json!({"query": "The TeXbook", "bib": "refs.bib"});
+    assert!(s.execute("ai.reference", &p).is_err(), "drafted without consent");
+    let mut d = p.clone();
+    d["request"] = json!("reference");
+    let disclosed = s.execute("ai.disclose", &d)?;
+    s.execute("ai.consent", &json!({"request": "reference"}))?;
+    let r = s.execute("ai.reference", &p)?;
+    let prompt = seen.prompts().first().cloned().unwrap_or_default();
+    assert_eq!(Some(prompt.as_str()), disclosed["sends"]["prompt"].as_str());
+    assert!(!prompt.contains("private-preamble") && !prompt.contains("Other"), "project text was sent with a reference");
+    assert!(r["note"].as_str().is_some_and(|n| n.contains("invent")), "the answer does not say models invent references: {r}");
+    let bib = texcraft_engine::project::ProjectPath::new("refs.bib")?;
+    assert!(!s.project().text(&bib)?.contains("TeXbook"), "the entry was written directly");
+    s.execute("review.accept", &json!({"id": r["suggestion"]}))?;
+    let after = s.project().text(&bib)?.to_owned();
+    assert!(after.contains("% Drafted by AI (small): check it\n@book{knuth84a,"), "no comment line or the key clashes:\n{after}");
+    // A .bib that does not exist is made for it.
+    let r = s.execute("ai.reference", &json!({"query": "10.1000/xyz", "bib": "new.bib"}))?;
+    assert_eq!(r["created"], true);
+    Ok(())
+}
+
+// ----- AI5: asking and reviewing -----
+
+#[test]
+fn a_question_sends_the_open_file_or_the_project_and_its_answer_links_the_lines_it_names() -> R {
+    let seen = Seen::default();
+    let mut s = session(20, "The bold group opens at main.tex:20 and other.tex:1; nowhere.tex:3 is not a file.", &seen)?;
+    connect_remote(&mut s)?;
+    let p = json!({"question": "Where is the bold word?", "scope": "file", "path": "main.tex"});
+    assert!(s.execute("ai.ask", &p).is_err(), "asked without consent");
+    let mut d = p.clone();
+    d["request"] = json!("ask");
+    let disclosed = s.execute("ai.disclose", &d)?;
+    s.execute("ai.consent", &json!({"request": "ask"}))?;
+    let r = s.execute("ai.ask", &p)?;
+    let prompt = seen.prompts().first().cloned().unwrap_or_default();
+    assert_eq!(Some(prompt.as_str()), disclosed["sends"]["prompt"].as_str());
+    assert!(prompt.contains("20| The \\textbf{bold word") && !prompt.contains("OTHER-FILE-TEXT"), "not the open file alone, numbered");
+    let links: Vec<(String, u64)> = r["links"]
+        .as_array()
+        .map(|l| l.iter().map(|l| (l["path"].as_str().unwrap_or_default().to_owned(), l["line"].as_u64().unwrap_or_default())).collect())
+        .unwrap_or_default();
+    assert_eq!(links, vec![("main.tex".to_owned(), 20), ("other.tex".to_owned(), 1)]);
+    s.execute("ai.ask", &json!({"question": "And elsewhere?", "scope": "project"}))?;
+    assert!(seen.prompts().get(1).is_some_and(|p| p.contains("OTHER-FILE-TEXT")), "the project's other file was not sent");
+    assert_eq!(s.ai_answers().len(), 2);
+    Ok(())
+}
+
+#[test]
+fn a_review_leaves_comments_on_the_quotes_it_finds_and_counts_those_it_does_not() -> R {
+    let seen = Seen::default();
+    let reply = "QUOTE: \"bold word is\nhere\"\nREMARK: The group is not closed.\n\nQUOTE: Line 18 of the body.\nREMARK: Say more.\n\nQUOTE: words that are not there\nREMARK: Lost.";
+    let mut s = session(20, reply, &seen)?;
+    connect_remote(&mut s)?;
+    let t = text(&s);
+    let start = t[..t.find("Line 15").unwrap_or_default()].chars().count();
+    let end = t[..t.find("Line 25").unwrap_or_default()].chars().count();
+    let p = json!({"path": "main.tex", "start": start, "end": end});
+    assert!(s.execute("ai.review", &p).is_err(), "reviewed without consent");
+    s.execute("ai.consent", &json!({"request": "review"}))?;
+    let r = s.execute("ai.review", &p)?;
+    let prompt = seen.prompts().first().cloned().unwrap_or_default();
+    assert!(prompt.contains("Line 16") && !prompt.contains("FAR-AWAY-TEXT") && !prompt.contains("Line 26"), "more or less than the section was sent");
+    assert_eq!(r["comments"].as_array().map(Vec::len), Some(2), "{r}");
+    assert_eq!(r["dropped"], 1);
+    assert_eq!(text(&s), t, "the review edited the file");
+    let list = s.execute("review.list", &json!({"author": "AI (small)"}))?;
+    let quoted: Vec<String> = list["threads"]
+        .as_array()
+        .map(|th| th.iter().filter_map(|t| t["anchor"]["quote"]["exact"].as_str().map(str::to_owned)).collect())
+        .unwrap_or_default();
+    assert!(quoted.iter().any(|q| q == "bold word is here") && quoted.iter().any(|q| q == "Line 18 of the body."), "{list}");
+    Ok(())
+}
+
+#[test]
+fn an_agent_session_cannot_agree_to_any_new_kind_of_request() -> R {
+    let seen = Seen::default();
+    let mut s = session(3, "", &seen)?;
+    connect_remote(&mut s)?;
+    let dir = std::env::temp_dir().join(format!("texcraft-ai-roots45-{}", std::process::id()));
+    std::fs::create_dir_all(&dir)?;
+    let roots = texcraft_engine::file_access::AutomationRoots::new(std::slice::from_ref(&dir), std::slice::from_ref(&dir))?;
+    s.confine(roots);
+    for kind in ["make", "reference", "ask", "review"] {
+        assert!(s.execute("ai.consent", &json!({"request": kind})).is_err(), "an agent agreed to {kind} for the user");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}

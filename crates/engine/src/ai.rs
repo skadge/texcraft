@@ -19,7 +19,15 @@
 //! selection's LaTeX ([`texcraft_latex::keep`]); a paragraph being typed can be continued, the
 //! continuation shown after the caret until it is accepted or typed over. Each is its own kind of
 //! request, agreed to on its own.
+//!
+//! AI4 ([`make`]): a table, an equation, a TikZ diagram or a figure made from a description,
+//! typeset after the preamble before it is offered and inserted as a suggested change; a BibTeX
+//! entry drafted from a title or DOI, suggested at the end of a `.bib` under a line saying a model
+//! drafted it. AI5 ([`ask`]): questions about the open file or the project, answered with links
+//! to the lines they name, and a section reviewed as comments on the words each remark quotes.
 
+mod ask;
+mod make;
 mod write;
 
 use std::path::PathBuf;
@@ -47,6 +55,19 @@ pub const EXPLAIN: &str = "text.explain";
 pub const REWRITE: &str = "text.rewrite";
 /// The kind of request a continuation is.
 pub const COMPLETE: &str = "text.complete";
+/// The kind of request making LaTeX from a description is.
+pub const MAKE: &str = "text.make";
+/// The kind of request drafting a BibTeX entry is.
+pub const REFERENCE: &str = "text.reference";
+/// The kind of request a question about the project is.
+pub const ASK: &str = "text.ask";
+/// The kind of request reviewing a section is.
+pub const REVIEW: &str = "text.review";
+pub use ask::{
+    Answered, Link, MAX_ASK_CHARS, MAX_QUESTION_CHARS, MAX_REVIEW_CHARS, Question, Remark, Reviewed, Scope, Section, find_quote, links, remarks,
+    section_at,
+};
+pub use make::{MAX_DESCRIPTION_CHARS, Made, MakeKind, Making, Preview, Referenced, Scratch, Typeset, UNVERIFIED, entry, made, retex_typeset};
 pub use write::{
     COMPLETE_EVERY_MS, Ghost, How, MAX_PARAGRAPH_CHARS, MAX_REWRITE_CHARS, Paragraph, Passage, REWRITE_CONTEXT_CHARS, Rewritten, continuation,
     rewritten,
@@ -212,6 +233,14 @@ pub enum Event {
     Rewritten(std::result::Result<String, String>),
     /// A continuation is shown after the caret (or was dropped: the text moved on), or why not.
     Completed(std::result::Result<bool, String>),
+    /// LaTeX was made: whether it typeset; or why not.
+    Made(std::result::Result<bool, String>),
+    /// A reference became a suggested change in this `.bib`, or why not.
+    Referenced(std::result::Result<String, String>),
+    /// A question was answered (with this many links), or why not.
+    Answered(std::result::Result<usize, String>),
+    /// A review left this many comments and dropped this many remarks, or why not.
+    Reviewed(std::result::Result<(usize, usize), String>),
 }
 
 /// What an explanation sends: exactly these parts, in [`Context::prompt`].
@@ -369,6 +398,10 @@ enum Work {
     Explain { key: Key, context: Box<Context>, model: String, run: String },
     Rewrite { passage: Box<Passage>, model: String, run: String },
     Complete { paragraph: Box<Paragraph>, run: String },
+    Make { making: Box<Making>, model: String, run: String, insert: bool },
+    Reference { lookup: Box<make::Lookup>, model: String, run: String },
+    Ask { question: Box<Question>, model: String, run: String },
+    Review { section: Box<Section>, model: String, run: String },
 }
 
 /// Where a request's answer comes.
@@ -383,6 +416,12 @@ struct Task {
 enum Answer {
     Models(Vec<String>),
     Text(String),
+    /// Made LaTeX, its packages, and how it typeset.
+    Made {
+        latex: String,
+        packages: Vec<String>,
+        preview: Preview,
+    },
 }
 
 /// The session's AI state.
@@ -401,6 +440,12 @@ pub(crate) struct State {
     ghost: Option<Ghost>,
     /// When the last continuation was asked for (unix milliseconds), for the rate limit.
     last_complete: u64,
+    /// Typesets what is made, for its preview.
+    typeset: Typeset,
+    made: Option<Made>,
+    reference: Option<Referenced>,
+    answers: Vec<Answered>,
+    reviewed: Option<Reviewed>,
     /// The project's own setting: the folder it was read from, and whether AI is off.
     project_off: Option<(Option<PathBuf>, bool)>,
     /// Goes up when `saved` changes, so the window keeps it in the preferences.
@@ -421,6 +466,11 @@ impl Default for State {
             rewrite: None,
             ghost: None,
             last_complete: 0,
+            typeset: retex_typeset(),
+            made: None,
+            reference: None,
+            answers: Vec::new(),
+            reviewed: None,
             project_off: None,
             revision: 0,
             runs: 0,
@@ -446,13 +496,20 @@ fn destination(c: &Connection) -> String {
     c.endpoint.as_deref().and_then(|e| Endpoint::parse(e).ok()).map_or_else(|| c.provider.clone(), |e| e.fingerprint())
 }
 
-/// The kind of request `name` is: `explain`, `rewrite` or `complete` (or its capability id).
+/// The kinds of request, as `ai.disclose` and `ai.consent` name them.
+pub const REQUESTS: [&str; 7] = ["explain", "rewrite", "complete", "make", "reference", "ask", "review"];
+
+/// The kind of request `name` is (one of [`REQUESTS`], or its capability id).
 fn capability(name: &str) -> Result<&'static str> {
     match name {
         "explain" | EXPLAIN => Ok(EXPLAIN),
         "rewrite" | REWRITE => Ok(REWRITE),
         "complete" | COMPLETE => Ok(COMPLETE),
-        _ => Err(format!("There is no AI request `{name}`: there are `explain`, `rewrite` and `complete`.")),
+        "make" | MAKE => Ok(MAKE),
+        "reference" | REFERENCE => Ok(REFERENCE),
+        "ask" | ASK => Ok(ASK),
+        "review" | REVIEW => Ok(REVIEW),
+        _ => Err(format!("There is no AI request `{name}`: there are {}.", REQUESTS.join(", "))),
     }
 }
 
@@ -464,6 +521,11 @@ impl Session {
     /// Keeps AI tokens in `secrets` (the desktop shell gives the system's keychain).
     pub fn set_ai_secrets(&mut self, secrets: Arc<dyn Secrets>) {
         self.ai.secrets = secrets;
+    }
+
+    /// Typesets what the model makes with `typeset` (tests give a fake).
+    pub fn set_ai_typeset(&mut self, typeset: Typeset) {
+        self.ai.typeset = typeset;
     }
 
     /// Sends AI requests through `connect` (tests give a fake).
@@ -565,6 +627,10 @@ impl Session {
                 Work::Explain { .. } => "explain",
                 Work::Rewrite { .. } => "rewrite",
                 Work::Complete { .. } => "complete",
+                Work::Make { .. } => "make",
+                Work::Reference { .. } => "reference",
+                Work::Ask { .. } => "ask",
+                Work::Review { .. } => "review",
             }),
             "requests": requests,
         })
@@ -709,6 +775,22 @@ impl Session {
                 let paragraph = if p.get("path").is_some() { self.ai_paragraph(p)? } else { Paragraph::example() };
                 (paragraph.request()?, paragraph.describe())
             }
+            MAKE => {
+                let making = self.ai_making(p)?;
+                (making.request()?, making.describe())
+            }
+            REFERENCE => {
+                let lookup = self.ai_lookup(p)?;
+                (lookup.request()?, lookup.describe())
+            }
+            ASK => {
+                let question = self.ai_question(p)?;
+                (question.request()?, question.describe())
+            }
+            REVIEW => {
+                let section = self.ai_section(p)?;
+                (section.request()?, section.describe())
+            }
             _ => {
                 let d = self.ai_diagnostic(p)?;
                 let context = Context::of(&d, &self.project);
@@ -766,7 +848,7 @@ impl Session {
         let context = Context::of(&d, &self.project);
         let preamble = context.preamble.is_some();
         let opts = craft_ai::GenOpts { max_tokens: 1200, temperature: 0.2 };
-        let (model, run, answer) = self.begin(&context.request()?, ("explain", "Explain"), context.prompt(), opts, |to| {
+        let (model, run, answer) = self.begin(&context.request()?, ("explain", "Explain"), context.prompt(), opts, Answer::Text, |to| {
             format!(
                 "Explaining sends the message, the source lines around it{} to {to}. Agree to it first (the window asks; agents: ai.disclose shows it, ai.consent agrees).",
                 if preamble { " and the preamble" } else { "" },
@@ -813,6 +895,22 @@ impl Session {
                 self.log(cancelled(run));
             }
             Work::Complete { run, .. } => self.log(cancelled(run)),
+            Work::Make { run, .. } => {
+                self.ai.made = Some(Made::Cancelled);
+                self.log(cancelled(run));
+            }
+            Work::Reference { run, .. } => {
+                self.ai.reference = Some(Referenced::Cancelled);
+                self.log(cancelled(run));
+            }
+            Work::Ask { question, run, .. } => {
+                self.set_last_answer(Answered::Cancelled { question: question.question.clone() });
+                self.log(cancelled(run));
+            }
+            Work::Review { run, .. } => {
+                self.ai.reviewed = Some(Reviewed::Cancelled);
+                self.log(cancelled(run));
+            }
             Work::Models { .. } => {}
         }
         true
@@ -820,14 +918,15 @@ impl Session {
 
     /// Starts `request` on the connection, `prompt` being its whole text: refused, with `ask`'s
     /// message, while the user has not agreed to its kind; logged (its size and destination,
-    /// never its text); sent from its own thread. A continuation being asked for is dropped
-    /// first. Gives the model and the run's id.
+    /// never its text); sent from its own thread, where `after` makes the answer of its text. A
+    /// continuation being asked for is dropped first. Gives the model and the run's id.
     fn begin(
         &mut self,
         request: &Request,
         role: (&str, &str),
         prompt: String,
         opts: craft_ai::GenOpts,
+        after: impl FnOnce(String) -> Answer + Send + 'static,
         ask: impl FnOnce(&str) -> String,
     ) -> Result<(String, String, Pending)> {
         let model = self.ai.saved.model.clone().ok_or("Choose a model first (Settings › AI).")?;
@@ -866,7 +965,7 @@ impl Session {
             prompt: None,
         }));
         let secrets: Vec<SecretString> = token.into_iter().collect();
-        let answer = spawn(move || provider.complete(&prompt, &opts).map(Answer::Text).map_err(|e| scrub(&e.to_string(), &secrets)));
+        let answer = spawn(move || provider.complete(&prompt, &opts).map(after).map_err(|e| scrub(&e.to_string(), &secrets)));
         Ok((model, run, answer))
     }
 
@@ -931,9 +1030,13 @@ impl Session {
                 self.set_explanation(key, Explanation::Failed(e.clone()));
                 Some(Event::Explained(Err(e)))
             }
-            (Work::Models { .. }, Ok(Answer::Text(_))) => Some(Event::Models(Err("The endpoint's answer could not be read.".to_owned()))),
+            (Work::Models { .. }, Ok(_)) => Some(Event::Models(Err("The endpoint's answer could not be read.".to_owned()))),
             (Work::Rewrite { passage, model, run }, answer) => Some(self.finish_rewrite(&passage, &model, run, answer)),
             (Work::Complete { paragraph, run }, answer) => Some(self.finish_complete(&paragraph, run, answer)),
+            (Work::Make { making, model, run, insert }, answer) => Some(self.finish_make(&making, &model, run, insert, answer)),
+            (Work::Reference { lookup, model, run }, answer) => Some(self.finish_reference(&lookup, &model, run, answer)),
+            (Work::Ask { question, model, run }, answer) => Some(self.finish_ask(&question, &model, run, answer)),
+            (Work::Review { section, model, run }, answer) => Some(self.finish_review(&section, &model, run, answer)),
         }
     }
 
