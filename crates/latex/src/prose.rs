@@ -113,7 +113,7 @@ fn key_groups(name: &str) -> usize {
 }
 
 /// Environments whose body is drawing or code, not text.
-fn code_environment(name: &str) -> bool {
+pub(crate) fn code_environment(name: &str) -> bool {
     matches!(
         name,
         "tikzpicture"
