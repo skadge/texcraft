@@ -41,6 +41,20 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.12.0" date="2026-11-25" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.12.0</url>
+      <description>
+        <p>Save a project to GitHub or GitLab, push and pull, folders and zip files, and fixes from testing.</p>
+        <ul>
+          <li>Save a project to GitHub or GitLab: a new repository, set as origin, the history pushed</li>
+          <li>Push and pull for project folders</li>
+          <li>Project suggestions and a branch list when opening from a forge</li>
+          <li>Drop folders and zip files</li>
+          <li>A layout for narrow windows and phones</li>
+          <li>Many fixes from testing</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.11.0" date="2026-11-25" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.11.0</url>
       <description>

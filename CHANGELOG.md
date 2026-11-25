@@ -5,6 +5,55 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.12.0 (2026-11-25)
+
+Save a project to GitHub or GitLab, push and pull, folders and zip files, and fixes from testing.
+
+### Git and forges
+
+- File › Save Project to GitHub… / to GitLab…: creates the repository (yours or a group's,
+  private by default), sets it as the project's `origin` and pushes the whole history. In the
+  browser the files go in as one first commit.
+- Push and Pull for project folders in the History panel, with real git over HTTPS: what is to
+  push and to pull, a fast-forward or a merge of text files, a refusal in words when the remote
+  has commits you don't.
+- The Open dialog suggests your projects as you type and lists the branches, the default chosen.
+- Self-managed GitLab servers and GitHub Enterprise Server can be added for signing in (Settings ›
+  Accounts), and the desktop trusts the system's certificates.
+
+### Projects and files
+
+- Dropping a folder imports it with its structure; dropping a zip asks whether to unzip it
+  (unsafe names and zip bombs refused). On the start screen, a folder opens and a zip becomes a
+  new project. File › Import a Zip File….
+
+### AI assistance (desktop)
+
+- Make with AI inserts at the caret, Undo takes it out (#13).
+- Agreeing to send text is asked once per kind of request and kept; Settings › AI lists what was
+  agreed, with Withdraw (#15).
+- Ask AI to Change This…: an instruction of your own on a selection, such as "flesh out these
+  bullet points" (#14).
+
+### Fixes
+
+- The editor gets the keyboard back after Go to Line (#3); the margin's Hide button works while a
+  comment is written (#6).
+- Export is a full button, and says "Exporting…" while a file is made (#8, #10); the Compile
+  button says Auto-Compile when it compiles automatically (#9); `:w` in Vim saves and compiles
+  (#11).
+- A failed save of the preferences is said on the status line, and an idle window saves them.
+- The browser has the bibliography styles of the common publishers (#4), and SVG figures show
+  their text in the editor (#5).
+- A narrow window or a phone gets a layout of its own: the files in a drawer, Source and PDF as
+  tabs, one Menu button; text on phones should no longer be garbled (#12).
+
+Known limits:
+
+- Nothing of the push, pull and Save to GitHub/GitLab has been used against the real services
+  yet; the narrow layout has not been tried on a phone.
+- SVG figures still use a serif font in the PDF in the browser (a retex change).
+
 ## 0.11.0 (2026-11-25)
 
 Sign in to GitLab and GitHub, and more AI assistance.

@@ -6399,7 +6399,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "chrono",
  "craft-control",
@@ -6424,7 +6424,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-buffer"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "ropey",
  "thiserror 2.0.21",
@@ -6432,7 +6432,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-cli"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "dirs 6.0.0",
  "serde_json",
@@ -6442,7 +6442,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-compile"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "js-sys",
  "log",
@@ -6459,7 +6459,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-engine"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6491,7 +6491,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-forge"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6514,7 +6514,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-gitwire"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "base64 0.22.1",
  "gix",
@@ -6523,7 +6523,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-history"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "chrono",
  "gix",
@@ -6532,7 +6532,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-latex"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "retex-lsp",
  "serde",
@@ -6540,7 +6540,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-mcp"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "craft-mcp-server",
  "serde_json",
@@ -6549,7 +6549,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-preview"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "craft-pdf",
  "epaint_default_fonts",
@@ -6562,7 +6562,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-project"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "serde",
  "thiserror 2.0.21",
@@ -6570,7 +6570,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-review"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "chrono",
  "serde",
@@ -6581,7 +6581,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-templates"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "log",
  "retex-kpath",
@@ -6594,7 +6594,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-ui-egui"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6624,7 +6624,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-vim"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "regex",
  "texcraft-buffer",
@@ -6632,7 +6632,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-wasi"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -6640,7 +6640,7 @@ dependencies = [
 
 [[package]]
 name = "texcraft-web"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "eframe",
  "egui",
@@ -8201,7 +8201,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "resvg 0.48.1",
  "serde_json",
