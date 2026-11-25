@@ -46,7 +46,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | Code | | Feature | Description |
 |---|---|---|---|
 | F1 | ✅ 0.2.2 | Formatted view, read-only | A Source/Formatted switch: headings, styled text, lists, figure cards, chips for references and citations; double-click shows the source there. |
-| F2 | ✅ 0.5.0 | Typeset formulas | Formulas drawn by retex with the document's preamble, cached, in the colour of the text; errors underlined with retex's message. Desktop only: the browser still shows their source. |
+| F2 | ✅ 0.6.0 | Typeset formulas | Formulas drawn by retex with the document's preamble, cached, in the colour of the text; errors underlined with retex's message. Desktop only: the browser still shows their source. |
 | F3 | ⬜ | Editing in the formatted view | Typing, styles and lists in the view, each edit a minimal change of the source. |
 | F4 | ⬜ | Tables and figures | A grid editor for `tabular`, and a dialog for figures. |
 
