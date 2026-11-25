@@ -1,44 +1,98 @@
-//! A git server in memory: a bare repository answering the smart HTTP protocol's four requests,
-//! built from this crate's own pieces (its refs advertised, packs indexed into it, packs written
-//! from it), with the refusals a real server makes.
+//! A git server in memory, for tests: a bare repository answering the smart HTTP protocol's four
+//! requests, built from this crate's own pieces (its refs advertised, packs indexed into it,
+//! packs written from it), with the refusals a real server makes. No test reaches the network.
 
-use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use gix::ObjectId;
-use texcraft_gitwire::pktline::{self, Packet, Reader};
-use texcraft_gitwire::{Http, Reply, ZERO_ID};
+
+use crate::pktline::{self, Packet, Reader};
+use crate::{Http, Reply, ZERO_ID};
 
 /// A request the server got: method, address, headers.
 pub type Sent = (String, String, Vec<(String, String)>);
 
+/// The server; clones share it.
+#[derive(Clone)]
 pub struct Server {
+    state: Arc<Mutex<State>>,
+}
+
+struct State {
     /// The bare repository's folder.
-    pub dir: PathBuf,
+    dir: PathBuf,
     /// Its refs; the bare repository holds the objects.
-    pub refs: RefCell<BTreeMap<String, ObjectId>>,
-    /// Whether requests must carry these credentials (else 401).
-    pub auth: Option<String>,
+    refs: BTreeMap<String, ObjectId>,
+    /// The authorization header requests must carry (else 401).
+    auth: Option<String>,
     /// Refuses ref updates with this reason (`ng`), as a protected branch does.
-    pub refuse: Option<String>,
+    refuse: Option<String>,
     /// Whether it offers side-band-64k.
-    pub sideband: bool,
-    /// Every request: method, address, headers.
-    pub requests: RefCell<Vec<Sent>>,
+    sideband: bool,
+    requests: Vec<Sent>,
 }
 
 impl Server {
-    pub fn new(dir: PathBuf) -> Self {
-        Self { dir, refs: RefCell::default(), auth: None, refuse: None, sideband: true, requests: RefCell::default() }
+    /// A server of the bare repository at `dir` (made with `git init --bare` or gix), with no ref.
+    pub fn new(dir: &Path) -> Self {
+        let state = State { dir: dir.to_path_buf(), refs: BTreeMap::new(), auth: None, refuse: None, sideband: true, requests: Vec::new() };
+        Self { state: Arc::new(Mutex::new(state)) }
     }
 
-    /// Requires the authorization header `header`.
-    pub fn with_auth(mut self, header: String) -> Self {
-        self.auth = Some(header);
+    fn lock(&self) -> MutexGuard<'_, State> {
+        self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Requires HTTP basic authentication with `username` and `password`.
+    pub fn with_auth(self, username: &str, password: &str) -> Self {
+        self.lock().auth = Some(crate::Credentials::new(username, password).header());
         self
     }
 
+    /// Refuses every ref update with `why`, as a protected branch does.
+    pub fn refuse(&self, why: &str) {
+        self.lock().refuse = Some(why.to_owned());
+    }
+
+    /// Whether it offers side-band-64k (it does at first).
+    pub fn set_sideband(&self, on: bool) {
+        self.lock().sideband = on;
+    }
+
+    /// The bare repository's folder.
+    pub fn dir(&self) -> PathBuf {
+        self.lock().dir.clone()
+    }
+
+    /// Its refs.
+    pub fn refs(&self) -> BTreeMap<String, ObjectId> {
+        self.lock().refs.clone()
+    }
+
+    /// Ref `name`'s commit.
+    pub fn get(&self, name: &str) -> Option<ObjectId> {
+        self.lock().refs.get(name).copied()
+    }
+
+    /// Sets ref `name` (its objects must be in the repository).
+    pub fn set(&self, name: &str, id: ObjectId) {
+        self.lock().refs.insert(name.to_owned(), id);
+    }
+
+    /// Every request so far: method, address, headers.
+    pub fn requests(&self) -> Vec<Sent> {
+        self.lock().requests.clone()
+    }
+
+    /// How many requests of `method` so far.
+    pub fn count(&self, method: &str) -> usize {
+        self.lock().requests.iter().filter(|(m, ..)| m == method).count()
+    }
+}
+
+impl State {
     fn authorized(&self, headers: &[(String, String)]) -> bool {
         match &self.auth {
             None => true,
@@ -59,7 +113,7 @@ impl Server {
         let mut out = Vec::new();
         pktline::write(&mut out, format!("# service={service}\n").as_bytes());
         pktline::flush(&mut out);
-        let refs = self.refs.borrow();
+        let refs = &self.refs;
         if refs.is_empty() {
             pktline::write(&mut out, format!("{ZERO_ID} capabilities^{{}}\0{caps}\n").as_bytes());
         }
@@ -87,7 +141,7 @@ impl Server {
         out
     }
 
-    fn receive(&self, body: &[u8]) -> Result<Reply, String> {
+    fn receive(&mut self, body: &[u8]) -> Result<Reply, String> {
         let mut reader = Reader::new(body);
         let mut commands = Vec::new();
         while let Ok(Some(Packet::Data(line))) = reader.next_packet() {
@@ -100,18 +154,22 @@ impl Server {
         let pack = reader.rest();
         let count = u32::from_be_bytes(pack.get(8..12).and_then(|b| b.try_into().ok()).ok_or("no pack")?);
         if count > 0 {
-            texcraft_gitwire::fetch::index(&self.dir, pack).map_err(|e| e.to_string())?;
+            crate::fetch::index(&self.dir, pack).map_err(|e| e.to_string())?;
         }
         let mut report = Vec::new();
         pktline::write(&mut report, b"unpack ok\n");
         for (old, new, name) in commands {
-            let current = self.refs.borrow().get(&name).map(ObjectId::to_string).unwrap_or_else(|| ZERO_ID.to_owned());
+            let current = self.refs.get(&name).map(ObjectId::to_string).unwrap_or_else(|| ZERO_ID.to_owned());
             if let Some(why) = &self.refuse {
                 pktline::write(&mut report, format!("ng {name} {why}\n").as_bytes());
             } else if current != old {
                 pktline::write(&mut report, format!("ng {name} fetch first\n").as_bytes());
             } else {
-                self.refs.borrow_mut().insert(name.clone(), ObjectId::from_hex(new.as_bytes()).map_err(|e| e.to_string())?);
+                let id = ObjectId::from_hex(new.as_bytes()).map_err(|e| e.to_string())?;
+                self.refs.insert(name.clone(), id);
+                // Into the bare repository too, so that git sees it.
+                let repo = gix::open(&self.dir).map_err(|e| e.to_string())?;
+                repo.reference(name.as_str(), id, gix::refs::transaction::PreviousValue::Any, "push").map_err(|e| e.to_string())?;
                 pktline::write(&mut report, format!("ok {name}\n").as_bytes());
             }
         }
@@ -133,8 +191,8 @@ impl Server {
         }
         let repo = gix::open(&self.dir).map_err(|e| e.to_string())?;
         let want = *wants.first().ok_or("no want")?;
-        let objects = texcraft_gitwire::pack::objects_to_send(&repo, want, &haves).map_err(|e| e.to_string())?;
-        let pack = texcraft_gitwire::pack::write(&repo, &objects).map_err(|e| e.to_string())?;
+        let objects = crate::pack::objects_to_send(&repo, want, &haves).map_err(|e| e.to_string())?;
+        let pack = crate::pack::write(&repo, &objects).map_err(|e| e.to_string())?;
         let mut out = Vec::new();
         pktline::write(&mut out, b"NAK\n");
         out.extend_from_slice(&self.banded(&pack));
@@ -144,7 +202,20 @@ impl Server {
 
 impl Http for Server {
     fn get(&self, url: &str, headers: &[(String, String)]) -> Result<Reply, String> {
-        self.requests.borrow_mut().push(("GET".into(), url.into(), headers.to_vec()));
+        let mut s = self.lock();
+        s.requests.push(("GET".into(), url.into(), headers.to_vec()));
+        s.get(url, headers)
+    }
+
+    fn post(&self, url: &str, headers: &[(String, String)], body: Vec<u8>) -> Result<Reply, String> {
+        let mut s = self.lock();
+        s.requests.push(("POST".into(), url.into(), headers.to_vec()));
+        s.post(url, headers, &body)
+    }
+}
+
+impl State {
+    fn get(&self, url: &str, headers: &[(String, String)]) -> Result<Reply, String> {
         if !self.authorized(headers) {
             return Ok(Reply { status: 401, content_type: None, body: b"HTTP Basic: Access denied".to_vec() });
         }
@@ -152,15 +223,14 @@ impl Http for Server {
         Ok(Reply { status: 200, content_type: Some(format!("application/x-{service}-advertisement")), body: self.advertisement(service) })
     }
 
-    fn post(&self, url: &str, headers: &[(String, String)], body: Vec<u8>) -> Result<Reply, String> {
-        self.requests.borrow_mut().push(("POST".into(), url.into(), headers.to_vec()));
+    fn post(&mut self, url: &str, headers: &[(String, String)], body: &[u8]) -> Result<Reply, String> {
         if !self.authorized(headers) {
             return Ok(Reply { status: 401, content_type: None, body: Vec::new() });
         }
         if url.ends_with("/git-receive-pack") {
-            self.receive(&body)
+            self.receive(body)
         } else if url.ends_with("/git-upload-pack") {
-            self.upload(&body)
+            self.upload(body)
         } else {
             Ok(Reply { status: 404, content_type: None, body: Vec::new() })
         }

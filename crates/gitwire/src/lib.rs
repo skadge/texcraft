@@ -24,6 +24,8 @@ pub mod pktline;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod advertise;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod fake;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod fetch;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod pack;
@@ -60,7 +62,7 @@ impl Credentials {
     }
 
     /// The `Authorization` header's value.
-    fn header(&self) -> String {
+    pub(crate) fn header(&self) -> String {
         use base64::Engine as _;
         let pair = format!("{}:{}", self.username, self.password);
         format!("Basic {}", base64::engine::general_purpose::STANDARD.encode(pair))

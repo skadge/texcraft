@@ -3,16 +3,11 @@
 use texcraft_gitwire::pktline::{self, Packet, Reader};
 use texcraft_gitwire::{Credentials, Error, Remote, fetch, push};
 
-use crate::fake::Server;
 use crate::repo::{Scratch, commit, head, init, init_bare, reachable, same_object};
+use texcraft_gitwire::fake::Server;
 
 const URL: &str = "https://git.example/owner/paper.git";
 const MAIN: &str = "refs/heads/main";
-
-fn basic(user: &str, password: &str) -> String {
-    use base64::Engine as _;
-    format!("Basic {}", base64::engine::general_purpose::STANDARD.encode(format!("{user}:{password}")))
-}
 
 #[test]
 fn packet_lines_read_back_as_written_and_bad_lengths_are_refused() {
@@ -56,14 +51,14 @@ fn a_push_into_an_empty_repository_sends_the_whole_history_and_a_second_only_wha
     let git = init(&scratch.path("work")).unwrap();
     commit(&git, &[("main.tex", "one")], "first").unwrap();
     let tip = commit(&git, &[("main.tex", "two"), ("refs.bib", "@book{}")], "second").unwrap();
-    let server = Server::new(init_bare(&scratch.path("server.git")).unwrap());
+    let server = Server::new(&init_bare(&scratch.path("server.git")).unwrap());
     let remote = Remote::new(URL, None);
 
     let pushed = push(&server, &remote, &git, &tip.to_string(), MAIN, false).unwrap();
     assert_eq!(pushed.old, None);
-    assert_eq!(server.refs.borrow().get(MAIN), Some(&tip));
+    assert_eq!(server.get(MAIN).as_ref(), Some(&tip));
     for id in reachable(&git, tip).unwrap() {
-        assert!(same_object(&server.dir, &git, id), "the server has {id}");
+        assert!(same_object(&server.dir(), &git, id), "the server has {id}");
     }
     let first_count = pushed.objects;
 
@@ -71,11 +66,11 @@ fn a_push_into_an_empty_repository_sends_the_whole_history_and_a_second_only_wha
     let pushed = push(&server, &remote, &git, &next.to_string(), MAIN, false).unwrap();
     assert_eq!(pushed.old.as_deref(), Some(tip.to_string().as_str()));
     assert!(pushed.objects < first_count, "an unchanged file is not sent again");
-    assert_eq!(server.refs.borrow().get(MAIN), Some(&next));
+    assert_eq!(server.get(MAIN).as_ref(), Some(&next));
 
     let again = push(&server, &remote, &git, &next.to_string(), MAIN, false).unwrap();
     assert!(again.up_to_date);
-    let posts = server.requests.borrow().iter().filter(|(m, ..)| m == "POST").count();
+    let posts = server.count("POST");
     assert_eq!(posts, 2, "nothing is sent when the server is up to date");
 }
 
@@ -84,10 +79,10 @@ fn a_push_works_without_side_band_too() {
     let scratch = Scratch::new("push-plain").unwrap();
     let git = init(&scratch.path("work")).unwrap();
     let tip = commit(&git, &[("main.tex", "one")], "first").unwrap();
-    let mut server = Server::new(init_bare(&scratch.path("server.git")).unwrap());
-    server.sideband = false;
+    let server = Server::new(&init_bare(&scratch.path("server.git")).unwrap());
+    server.set_sideband(false);
     push(&server, &Remote::new(URL, None), &git, &tip.to_string(), MAIN, false).unwrap();
-    assert_eq!(server.refs.borrow().get(MAIN), Some(&tip));
+    assert_eq!(server.get(MAIN).as_ref(), Some(&tip));
 }
 
 #[test]
@@ -95,7 +90,7 @@ fn a_push_over_commits_the_project_lacks_is_refused_before_anything_is_sent() {
     let scratch = Scratch::new("push-diverged").unwrap();
     let ours = init(&scratch.path("ours")).unwrap();
     let theirs = init(&scratch.path("theirs")).unwrap();
-    let server = Server::new(init_bare(&scratch.path("server.git")).unwrap());
+    let server = Server::new(&init_bare(&scratch.path("server.git")).unwrap());
     let remote = Remote::new(URL, None);
     let their_tip = commit(&theirs, &[("main.tex", "theirs")], "theirs").unwrap();
     push(&server, &remote, &theirs, &their_tip.to_string(), MAIN, false).unwrap();
@@ -104,13 +99,13 @@ fn a_push_over_commits_the_project_lacks_is_refused_before_anything_is_sent() {
     let refused = push(&server, &remote, &ours, &our_tip.to_string(), MAIN, false).unwrap_err();
     assert_eq!(refused, Error::NotFastForward { branch: "main".into() });
     assert!(refused.to_string().contains("pull first"));
-    assert_eq!(server.refs.borrow().get(MAIN), Some(&their_tip), "the server's branch is untouched");
-    let posts = server.requests.borrow().iter().filter(|(m, ..)| m == "POST").count();
+    assert_eq!(server.get(MAIN).as_ref(), Some(&their_tip), "the server's branch is untouched");
+    let posts = server.count("POST");
     assert_eq!(posts, 1, "only the first push posted");
 
     // Forced, it goes.
     push(&server, &remote, &ours, &our_tip.to_string(), MAIN, true).unwrap();
-    assert_eq!(server.refs.borrow().get(MAIN), Some(&our_tip));
+    assert_eq!(server.get(MAIN).as_ref(), Some(&our_tip));
 }
 
 #[test]
@@ -118,11 +113,11 @@ fn a_ref_the_server_refuses_is_said_with_its_reason() {
     let scratch = Scratch::new("push-ng").unwrap();
     let git = init(&scratch.path("work")).unwrap();
     let tip = commit(&git, &[("main.tex", "one")], "first").unwrap();
-    let mut server = Server::new(init_bare(&scratch.path("server.git")).unwrap());
-    server.refuse = Some("protected branch hook declined".into());
+    let server = Server::new(&init_bare(&scratch.path("server.git")).unwrap());
+    server.refuse("protected branch hook declined");
     let refused = push(&server, &Remote::new(URL, None), &git, &tip.to_string(), MAIN, false).unwrap_err();
     assert_eq!(refused, Error::Rejected { reference: MAIN.into(), why: "protected branch hook declined".into() });
-    assert!(server.refs.borrow().is_empty());
+    assert!(server.refs().is_empty());
 }
 
 #[test]
@@ -131,7 +126,7 @@ fn credentials_are_sent_as_basic_authentication_and_never_shown() {
     let git = init(&scratch.path("work")).unwrap();
     let tip = commit(&git, &[("main.tex", "one")], "first").unwrap();
     let secret = "glpat-very-secret";
-    let server = Server::new(init_bare(&scratch.path("server.git")).unwrap()).with_auth(basic("oauth2", secret));
+    let server = Server::new(&init_bare(&scratch.path("server.git")).unwrap()).with_auth("oauth2", secret);
 
     let refused = push(&server, &Remote::new(URL, None), &git, &tip.to_string(), MAIN, false).unwrap_err();
     assert_eq!(refused, Error::Unauthorized);
@@ -141,7 +136,7 @@ fn credentials_are_sent_as_basic_authentication_and_never_shown() {
     let remote = Remote::new(URL, Some(Credentials::new("oauth2", secret)));
     assert!(!format!("{remote:?}").contains(secret), "the password is not printed");
     push(&server, &remote, &git, &tip.to_string(), MAIN, false).unwrap();
-    assert_eq!(server.refs.borrow().get(MAIN), Some(&tip));
+    assert_eq!(server.get(MAIN).as_ref(), Some(&tip));
     let unauthorized = Error::Unauthorized.to_string();
     assert!(!unauthorized.contains(secret));
 }
@@ -169,7 +164,7 @@ fn a_fetch_receives_the_commits_the_project_lacks_and_only_those() {
     let scratch = Scratch::new("fetch").unwrap();
     let theirs = init(&scratch.path("theirs")).unwrap();
     let ours = init(&scratch.path("ours")).unwrap();
-    let server = Server::new(init_bare(&scratch.path("server.git")).unwrap());
+    let server = Server::new(&init_bare(&scratch.path("server.git")).unwrap());
     let remote = Remote::new(URL, None);
 
     // Nothing on the server yet: no tip.
@@ -188,17 +183,16 @@ fn a_fetch_receives_the_commits_the_project_lacks_and_only_those() {
 
     let second = commit(&theirs, &[("main.tex", "two"), ("big.txt", "a large file")], "second").unwrap();
     push(&server, &remote, &theirs, &second.to_string(), MAIN, false).unwrap();
-    let before = server.requests.borrow().len();
+    let before = server.requests().len();
     fetch(&server, &remote, &ours, MAIN, &[first.to_string()]).unwrap();
     for id in reachable(&theirs, second).unwrap() {
         assert!(same_object(&ours, &theirs, id), "fetched {id}");
     }
     // The second fetch said what it had.
-    let requests = server.requests.borrow();
+    let requests = server.requests();
     assert!(requests[before..].iter().any(|(m, u, _)| m == "POST" && u.ends_with("/git-upload-pack")));
 
     // Had already: nothing is asked.
-    drop(requests);
     let again = fetch(&server, &remote, &ours, MAIN, &[second.to_string()]).unwrap();
     assert!(!again.received);
     assert_eq!(head(&ours, MAIN), None, "fetching moves no ref: the caller does");
@@ -240,9 +234,8 @@ fn a_pushed_repository_passes_git_fsck_when_git_is_installed() {
     let git = init(&scratch.path("work")).unwrap();
     commit(&git, &[("main.tex", "one"), ("figures/a.txt", "a")], "first").unwrap();
     let tip = commit(&git, &[("main.tex", "two"), ("figures/a.txt", "a"), ("figures/b.txt", "b")], "second").unwrap();
-    let server = Server::new(init_bare(&scratch.path("server.git")).unwrap());
+    let server = Server::new(&init_bare(&scratch.path("server.git")).unwrap());
     push(&server, &Remote::new(URL, None), &git, &tip.to_string(), MAIN, false).unwrap();
-    std::fs::write(server.dir.join("refs/heads/main"), format!("{tip}\n")).unwrap();
-    let fsck = std::process::Command::new("git").args(["-C"]).arg(&server.dir).args(["fsck", "--strict"]).output().unwrap();
+    let fsck = std::process::Command::new("git").args(["-C"]).arg(server.dir()).args(["fsck", "--strict"]).output().unwrap();
     assert!(fsck.status.success(), "{}", String::from_utf8_lossy(&fsck.stderr));
 }
