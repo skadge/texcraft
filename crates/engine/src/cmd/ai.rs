@@ -1,4 +1,5 @@
-//! AI assistance (docs/ROADMAP.md, AI1, AI2): the connection, and explaining build messages.
+//! AI assistance (docs/ROADMAP.md, AI1 to AI3): the connection, explaining build messages,
+//! rewriting a selection and continuing a paragraph.
 //! The work is in [`crate::ai`]; these are its commands, for the window and for agents alike.
 
 use serde_json::{Value, json};
@@ -15,10 +16,12 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         spec("ai.models", "List the Models", background_schema, connected, models, true),
         spec("ai.forget", "Forget the AI Connection", no_params, always, forget, true),
         spec("ai.project", "AI in This Project", project_schema, always, project, true),
-        spec("ai.disclose", "What Explaining Sends", message_schema, connected, disclose, false),
+        spec("ai.disclose", "What an AI Request Sends", disclose_schema, connected, disclose, false),
         spec("ai.consent", "Agree to Send", consent_schema, connected, consent, true),
         spec("ai.explain", "Explain", explain_schema, connected, explain, true),
-        spec("ai.cancel", "Cancel the AI Request", no_params, always, cancel, true),
+        spec("ai.rewrite", "Rewrite with AI", rewrite_schema, connected, rewrite, true),
+        spec("ai.complete", "Suggest the Next Words", complete_schema, connected, complete, true),
+        spec("ai.cancel", "Cancel the AI Request", cancel_schema, always, cancel, true),
     ]
 }
 
@@ -60,11 +63,45 @@ fn project_schema() -> Value {
 
 const MESSAGE: &str = "The message: `index` in build.result's diagnostics (from 0), or its `path` and `line` (from 1).";
 
-fn message_schema() -> Value {
-    json!({"type": "object", "description": MESSAGE, "properties": {
+fn disclose_schema() -> Value {
+    json!({"type": "object", "description": "What a request would send, where, and whether the user must agree to its kind first. \
+explain: the message (`index`, or `path` and `line`); rewrite: as ai.rewrite; complete: as ai.complete (without `path`, an example).", "properties": {
+        "request": {"type": "string", "enum": ["explain", "rewrite", "complete"], "description": "Default: explain."},
         "index": {"type": "integer", "minimum": 0},
         "path": {"type": "string"},
-        "line": {"type": "integer", "minimum": 1}
+        "line": {"type": "integer", "minimum": 1},
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 0},
+        "how": {"type": "string", "enum": HOWS},
+        "language": {"type": "string"},
+        "at": {"type": "integer", "minimum": 0}
+    }, "additionalProperties": false})
+}
+
+const HOWS: [&str; 5] = ["clearer", "shorter", "formal", "grammar", "translate"];
+
+fn rewrite_schema() -> Value {
+    json!({"type": "object", "description": "Rewrites characters `start..end` of `path` (from 0). The rewrite arrives as a suggested change on exactly them, by \"AI (<model>)\", never as an edit; it is refused, saying why, when it dropped or altered a label, reference, citation, formula or command.", "properties": {
+        "path": {"type": "string"},
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 0},
+        "how": {"type": "string", "enum": HOWS, "description": "clearer, shorter, formal (more formal), grammar (fix grammar and spelling only) or translate."},
+        "language": {"type": "string", "description": "For translate: the language, in English words (French, Brazilian Portuguese)."},
+        "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_ai` and `Session::ai_rewritten`. Default: wait for it."}
+    }, "required": ["path", "start", "end", "how"], "additionalProperties": false})
+}
+
+fn complete_schema() -> Value {
+    json!({"type": "object", "description": "Asks how the paragraph at the caret goes on: sends the paragraph up to `at`. At most once every two seconds; the answer is `text` (null when the text moved on meanwhile).", "properties": {
+        "path": {"type": "string"},
+        "at": {"type": "integer", "minimum": 0, "description": "The caret, in characters from 0."},
+        "background": {"type": "boolean", "description": "Return at once; the continuation comes from `Session::poll_ai` and `Session::ai_ghost`. Default: wait for it."}
+    }, "required": ["path", "at"], "additionalProperties": false})
+}
+
+fn cancel_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "only": {"type": "string", "enum": ["completion"], "description": "Cancel only a continuation being asked for or shown (as typing on does). Default: whatever is in flight."}
     }, "additionalProperties": false})
 }
 
@@ -79,7 +116,7 @@ fn explain_schema() -> Value {
 
 fn consent_schema() -> Value {
     json!({"type": "object", "properties": {
-        "request": {"type": "string", "enum": ["explain"], "description": "The kind of request agreed to, for the connection's endpoint: what ai.disclose shows it sends."}
+        "request": {"type": "string", "enum": ["explain", "rewrite", "complete"], "description": "The kind of request agreed to, for the connection's endpoint: what ai.disclose shows it sends."}
     }, "required": ["request"], "additionalProperties": false})
 }
 
@@ -140,6 +177,19 @@ fn explain(s: &mut Session, p: &Value) -> Result<Value> {
     s.ai_explain(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
 }
 
-fn cancel(s: &mut Session, _: &Value) -> Result<Value> {
-    Ok(json!({"cancelled": s.ai_cancel()}))
+fn rewrite(s: &mut Session, p: &Value) -> Result<Value> {
+    s.ai_rewrite(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+}
+
+fn complete(s: &mut Session, p: &Value) -> Result<Value> {
+    s.ai_complete(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+}
+
+fn cancel(s: &mut Session, p: &Value) -> Result<Value> {
+    let only = match p.get("only").and_then(Value::as_str) {
+        None => false,
+        Some("completion") => true,
+        Some(other) => return Err(format!("`only` is \"completion\", not `{other}`.")),
+    };
+    Ok(json!({"cancelled": s.ai_cancel(only)}))
 }

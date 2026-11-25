@@ -13,6 +13,14 @@
 //! preamble when the error is in it) and where. A fix the model proposes becomes a suggested
 //! change by "AI (<model>)", never an edit. A project can turn AI off for itself
 //! (`.texcraft/ai.json`).
+//!
+//! AI3 ([`write`]): a selection rewritten (clearer, shorter, more formal, corrected, translated)
+//! comes back as a suggested change on exactly that selection, and only when it kept the
+//! selection's LaTeX ([`texcraft_latex::keep`]); a paragraph being typed can be continued, the
+//! continuation shown after the caret until it is accepted or typed over. Each is its own kind of
+//! request, agreed to on its own.
+
+mod write;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -35,6 +43,14 @@ use crate::{Result, Session};
 pub const APP: &str = "texcraft";
 /// The kind of request an explanation is, for consent: agreeing to it covers explanations only.
 pub const EXPLAIN: &str = "text.explain";
+/// The kind of request a rewrite is.
+pub const REWRITE: &str = "text.rewrite";
+/// The kind of request a continuation is.
+pub const COMPLETE: &str = "text.complete";
+pub use write::{
+    COMPLETE_EVERY_MS, Ghost, How, MAX_PARAGRAPH_CHARS, MAX_REWRITE_CHARS, Paragraph, Passage, REWRITE_CONTEXT_CHARS, Rewritten, continuation,
+    rewritten,
+};
 /// Lines of source sent on each side of the message's line.
 pub const CONTEXT_LINES: usize = 6;
 /// The most of the preamble sent, in characters.
@@ -192,6 +208,10 @@ pub enum Event {
     Models(std::result::Result<usize, String>),
     /// An explanation arrived (with a suggested change or not), or why not.
     Explained(std::result::Result<bool, String>),
+    /// A rewrite became a suggested change (its id), or why not.
+    Rewritten(std::result::Result<String, String>),
+    /// A continuation is shown after the caret (or was dropped: the text moved on), or why not.
+    Completed(std::result::Result<bool, String>),
 }
 
 /// What an explanation sends: exactly these parts, in [`Context::prompt`].
@@ -347,11 +367,16 @@ pub fn smallest_change(old: &str, new: &str) -> Option<(usize, usize, String)> {
 enum Work {
     Models { endpoint: String },
     Explain { key: Key, context: Box<Context>, model: String, run: String },
+    Rewrite { passage: Box<Passage>, model: String, run: String },
+    Complete { paragraph: Box<Paragraph>, run: String },
 }
+
+/// Where a request's answer comes.
+type Pending = Receiver<std::result::Result<Answer, String>>;
 
 struct Task {
     work: Work,
-    answer: Receiver<std::result::Result<Answer, String>>,
+    answer: Pending,
     cancelled: Arc<AtomicBool>,
 }
 
@@ -370,6 +395,12 @@ pub(crate) struct State {
     task: Option<Task>,
     explanations: Vec<(Key, Explanation)>,
     log: Vec<HistoryRecord>,
+    /// The last rewrite.
+    rewrite: Option<Rewritten>,
+    /// The continuation offered after the caret.
+    ghost: Option<Ghost>,
+    /// When the last continuation was asked for (unix milliseconds), for the rate limit.
+    last_complete: u64,
     /// The project's own setting: the folder it was read from, and whether AI is off.
     project_off: Option<(Option<PathBuf>, bool)>,
     /// Goes up when `saved` changes, so the window keeps it in the preferences.
@@ -387,6 +418,9 @@ impl Default for State {
             task: None,
             explanations: Vec::new(),
             log: Vec::new(),
+            rewrite: None,
+            ghost: None,
+            last_complete: 0,
             project_off: None,
             revision: 0,
             runs: 0,
@@ -410,6 +444,16 @@ fn handle(c: &Connection) -> Option<String> {
 /// `scheme://host[:port]` of an address, which consent is bound to.
 fn destination(c: &Connection) -> String {
     c.endpoint.as_deref().and_then(|e| Endpoint::parse(e).ok()).map_or_else(|| c.provider.clone(), |e| e.fingerprint())
+}
+
+/// The kind of request `name` is: `explain`, `rewrite` or `complete` (or its capability id).
+fn capability(name: &str) -> Result<&'static str> {
+    match name {
+        "explain" | EXPLAIN => Ok(EXPLAIN),
+        "rewrite" | REWRITE => Ok(REWRITE),
+        "complete" | COMPLETE => Ok(COMPLETE),
+        _ => Err(format!("There is no AI request `{name}`: there are `explain`, `rewrite` and `complete`.")),
+    }
 }
 
 fn kind_of(error: &str) -> ErrorKind {
@@ -477,7 +521,8 @@ impl Session {
         if self.ai_project_off() {
             return Err("AI is turned off for this project (Settings › AI).".to_owned());
         }
-        if self.ai.task.is_some() {
+        // A continuation being asked for gives way to any other request.
+        if self.ai.task.as_ref().is_some_and(|t| !matches!(t.work, Work::Complete { .. })) {
             return Err("The model is still answering the last request: wait for it or cancel it.".to_owned());
         }
         Ok(())
@@ -515,7 +560,12 @@ impl Session {
             "model": a.saved.model,
             "models": a.models,
             "project_off": project_off,
-            "busy": a.task.as_ref().map(|t| match t.work { Work::Models { .. } => "models", Work::Explain { .. } => "explain" }),
+            "busy": a.task.as_ref().map(|t| match t.work {
+                Work::Models { .. } => "models",
+                Work::Explain { .. } => "explain",
+                Work::Rewrite { .. } => "rewrite",
+                Work::Complete { .. } => "complete",
+            }),
             "requests": requests,
         })
     }
@@ -585,7 +635,7 @@ impl Session {
 
     /// `ai.forget`: the connection, its token and the agreements given for it.
     pub(crate) fn ai_forget(&mut self) -> Result<Value> {
-        self.ai_cancel();
+        self.ai_cancel(false);
         let Some(c) = self.ai.saved.connection.take() else { return Ok(json!({"forgotten": false})) };
         if let Some(h) = handle(&c) {
             self.ai
@@ -645,35 +695,48 @@ impl Session {
         Ok((d, ask))
     }
 
-    /// `ai.disclose`: what explaining a message sends, where, and whether the user must agree first.
+    /// `ai.disclose`: what a request (explaining a message, by default) sends, where, and whether
+    /// the user must agree first.
     pub(crate) fn ai_disclose(&mut self, p: &Value) -> Result<Value> {
         self.ai_ready()?;
-        let d = self.ai_diagnostic(p)?;
-        let context = Context::of(&d, &self.project);
-        let (disclosure, ask) = self.disclosure(&context.request()?)?;
+        let kind = capability(p.get("request").and_then(Value::as_str).unwrap_or("explain"))?;
+        let (request, sends) = match kind {
+            REWRITE => {
+                let passage = self.ai_passage(p)?;
+                (passage.request()?, passage.describe())
+            }
+            COMPLETE => {
+                let paragraph = if p.get("path").is_some() { self.ai_paragraph(p)? } else { Paragraph::example() };
+                (paragraph.request()?, paragraph.describe())
+            }
+            _ => {
+                let d = self.ai_diagnostic(p)?;
+                let context = Context::of(&d, &self.project);
+                (context.request()?, context.describe())
+            }
+        };
+        let (disclosure, ask) = self.disclosure(&request)?;
         let bytes: u64 = disclosure.items.iter().filter_map(|i| i.bytes).sum();
         Ok(json!({
-            "request": EXPLAIN,
+            "request": kind,
             "destination": disclosure.destination,
             "local": disclosure.locality == Locality::Local,
             "model": self.ai.saved.model,
             "needs_consent": ask,
             "bytes": bytes,
-            "sends": context.describe(),
+            "sends": sends,
         }))
     }
 
-    /// `ai.consent`: the user agrees to send explanations to the connection.
+    /// `ai.consent`: the user agrees to send one kind of request (explanations, rewrites,
+    /// continuations) to the connection.
     pub(crate) fn ai_consent(&mut self, request: &str) -> Result<Value> {
-        if request != EXPLAIN && request != "explain" {
-            return Err(format!("There is no AI request `{request}`: the one there is is `explain`."));
-        }
-        let capability = CapabilityId::parse(EXPLAIN).map_err(|e| e.to_string())?;
-        let probe = Request::new(capability).with_input(InputRole::Prompt, Payload::text(""));
+        let kind = capability(request)?;
+        let probe = Request::new(CapabilityId::parse(kind).map_err(|e| e.to_string())?).with_input(InputRole::Prompt, Payload::text(""));
         let (d, _) = self.disclosure(&probe)?;
         self.ai.saved.consent.grant(&d);
         self.changed_ai();
-        Ok(json!({"agreed": EXPLAIN, "destination": d.destination}))
+        Ok(json!({"agreed": kind, "destination": d.destination}))
     }
 
     /// `ai.models`: lists the endpoint's models (a handshake: no document text is sent).
@@ -698,51 +761,17 @@ impl Session {
     /// change. Refused before anything is sent when the user has not agreed to it.
     pub(crate) fn ai_explain(&mut self, p: &Value, background: bool) -> Result<Value> {
         self.ai_ready()?;
-        let model = self.ai.saved.model.clone().ok_or("Choose a model first (Settings › AI).")?;
+        self.ai.saved.model.clone().ok_or("Choose a model first (Settings › AI).")?;
         let d = self.ai_diagnostic(p)?;
         let context = Context::of(&d, &self.project);
-        let request = context.request()?;
-        let (disclosure, ask) = self.disclosure(&request)?;
-        if ask {
-            return Err(format!(
-                "Explaining sends the message, the source lines around it{} to {}. Agree to it first (the window asks; agents: ai.disclose shows it, ai.consent agrees).",
-                if context.preamble.is_some() { " and the preamble" } else { "" },
-                disclosure.destination
-            ));
-        }
-        let c = self.ai.saved.connection.clone().ok_or("AI is off: connect a model first (Settings › AI).")?;
-        let token = self.token(&c)?;
-        let target = Target { endpoint: c.endpoint.clone().unwrap_or_default(), token: token.clone(), model: model.clone() };
-        let mut provider = (self.ai.connect)(&target)?;
-        self.ai.runs += 1;
-        let run = format!("{APP}-{}-{}", now_ms(), self.ai.runs);
-        let bytes: u64 = disclosure.items.iter().filter_map(|i| i.bytes).sum();
-        log::info!("AI request {run}: {bytes} bytes of text to {} ({model})", disclosure.destination);
-        self.log(HistoryRecord::Start(StartRecord {
-            v: HISTORY_SCHEMA,
-            run: run.clone(),
-            at_ms: now_ms(),
-            app: APP.to_owned(),
-            role_id: "explain".to_owned(),
-            role_label: "Explain".to_owned(),
-            capability: EXPLAIN.to_owned(),
-            connection: c.id.to_string(),
-            connection_label: c.label.clone(),
-            model: model.clone(),
-            locality: c.locality,
-            destination: disclosure.destination.clone(),
-            sent: disclosure.items.clone(),
-            params: Vec::new(),
-            provider_job: None,
-            estimate: None,
-            prompt: None,
-        }));
-        let prompt = context.prompt();
-        let secrets: Vec<SecretString> = token.into_iter().collect();
-        let answer = spawn(move || {
-            let opts = craft_ai::GenOpts { max_tokens: 1200, temperature: 0.2 };
-            provider.complete(&prompt, &opts).map(Answer::Text).map_err(|e| scrub(&e.to_string(), &secrets))
-        });
+        let preamble = context.preamble.is_some();
+        let opts = craft_ai::GenOpts { max_tokens: 1200, temperature: 0.2 };
+        let (model, run, answer) = self.begin(&context.request()?, ("explain", "Explain"), context.prompt(), opts, |to| {
+            format!(
+                "Explaining sends the message, the source lines around it{} to {to}. Agree to it first (the window asks; agents: ai.disclose shows it, ai.consent agrees).",
+                if preamble { " and the preamble" } else { "" },
+            )
+        })?;
         let key = Key::of(&d);
         self.set_explanation(key.clone(), Explanation::Running);
         self.ai.task = Some(Task {
@@ -763,16 +792,82 @@ impl Session {
         }
     }
 
-    /// `ai.cancel`: stops waiting for the request in flight. Its answer, if it still comes, is
-    /// dropped (the endpoint may still finish it).
-    pub(crate) fn ai_cancel(&mut self) -> bool {
-        let Some(task) = self.ai.task.take() else { return false };
+    /// `ai.cancel`: stops waiting for the request in flight, and takes away the continuation
+    /// shown; with `only_completion`, only a continuation (typing on cancels it). An answer that
+    /// still comes is dropped (the endpoint may still finish it).
+    pub(crate) fn ai_cancel(&mut self, only_completion: bool) -> bool {
+        let shown = self.ai.ghost.take().is_some();
+        if only_completion && !self.ai.task.as_ref().is_some_and(|t| matches!(t.work, Work::Complete { .. })) {
+            return shown;
+        }
+        let Some(task) = self.ai.task.take() else { return shown };
         task.cancelled.store(true, Ordering::Relaxed);
-        if let Work::Explain { key, run, .. } = task.work {
-            self.set_explanation(key, Explanation::Cancelled);
-            self.log(HistoryRecord::End(EndRecord { v: HISTORY_SCHEMA, run, at_ms: now_ms(), outcome: Logged::Cancelled, usage: None }));
+        let cancelled = |run| HistoryRecord::End(EndRecord { v: HISTORY_SCHEMA, run, at_ms: now_ms(), outcome: Logged::Cancelled, usage: None });
+        match task.work {
+            Work::Explain { key, run, .. } => {
+                self.set_explanation(key, Explanation::Cancelled);
+                self.log(cancelled(run));
+            }
+            Work::Rewrite { run, .. } => {
+                self.ai.rewrite = Some(Rewritten::Cancelled);
+                self.log(cancelled(run));
+            }
+            Work::Complete { run, .. } => self.log(cancelled(run)),
+            Work::Models { .. } => {}
         }
         true
+    }
+
+    /// Starts `request` on the connection, `prompt` being its whole text: refused, with `ask`'s
+    /// message, while the user has not agreed to its kind; logged (its size and destination,
+    /// never its text); sent from its own thread. A continuation being asked for is dropped
+    /// first. Gives the model and the run's id.
+    fn begin(
+        &mut self,
+        request: &Request,
+        role: (&str, &str),
+        prompt: String,
+        opts: craft_ai::GenOpts,
+        ask: impl FnOnce(&str) -> String,
+    ) -> Result<(String, String, Pending)> {
+        let model = self.ai.saved.model.clone().ok_or("Choose a model first (Settings › AI).")?;
+        let (disclosure, needs) = self.disclosure(request)?;
+        if needs {
+            return Err(ask(&disclosure.destination));
+        }
+        let c = self.ai.saved.connection.clone().ok_or("AI is off: connect a model first (Settings › AI).")?;
+        let token = self.token(&c)?;
+        let target = Target { endpoint: c.endpoint.clone().unwrap_or_default(), token: token.clone(), model: model.clone() };
+        let mut provider = (self.ai.connect)(&target)?;
+        if self.ai.task.is_some() {
+            self.ai_cancel(true);
+        }
+        self.ai.runs += 1;
+        let run = format!("{APP}-{}-{}", now_ms(), self.ai.runs);
+        let bytes: u64 = disclosure.items.iter().filter_map(|i| i.bytes).sum();
+        log::info!("AI request {run}: {bytes} bytes of text to {} ({model})", disclosure.destination);
+        self.log(HistoryRecord::Start(StartRecord {
+            v: HISTORY_SCHEMA,
+            run: run.clone(),
+            at_ms: now_ms(),
+            app: APP.to_owned(),
+            role_id: role.0.to_owned(),
+            role_label: role.1.to_owned(),
+            capability: request.capability.as_str().to_owned(),
+            connection: c.id.to_string(),
+            connection_label: c.label.clone(),
+            model: model.clone(),
+            locality: c.locality,
+            destination: disclosure.destination.clone(),
+            sent: disclosure.items.clone(),
+            params: Vec::new(),
+            provider_job: None,
+            estimate: None,
+            prompt: None,
+        }));
+        let secrets: Vec<SecretString> = token.into_iter().collect();
+        let answer = spawn(move || provider.complete(&prompt, &opts).map(Answer::Text).map_err(|e| scrub(&e.to_string(), &secrets)));
+        Ok((model, run, answer))
     }
 
     /// What finished in the background since the last call. The window calls it every frame.
@@ -837,6 +932,8 @@ impl Session {
                 Some(Event::Explained(Err(e)))
             }
             (Work::Models { .. }, Ok(Answer::Text(_))) => Some(Event::Models(Err("The endpoint's answer could not be read.".to_owned()))),
+            (Work::Rewrite { passage, model, run }, answer) => Some(self.finish_rewrite(&passage, &model, run, answer)),
+            (Work::Complete { paragraph, run }, answer) => Some(self.finish_complete(&paragraph, run, answer)),
         }
     }
 
@@ -860,14 +957,19 @@ impl Session {
         let fix = if raw.contains('\r') { fix.split('\n').collect::<Vec<_>>().join("\r\n") } else { fix.to_owned() };
         let Some((start, end, text)) = smallest_change(&raw, &fix) else { return Ok(None) };
         let base: usize = all.iter().take(first).map(|l| l.chars().count() + 1).sum();
-        let (start, end) = (base + start, base + end);
+        self.suggest_change(&path, &source, base + start, base + end, &text, model).map(Some)
+    }
+
+    /// A suggested change by "AI (<model>)": characters `start..end` of `source` (the text of
+    /// `path`) become `text`. Its id.
+    fn suggest_change(&mut self, path: &ProjectPath, source: &str, start: usize, end: usize, text: &str, model: &str) -> Result<String> {
         let id = self.new_id()?;
-        let anchor = texcraft_review::Anchor::new(path.as_str(), &source, start, end);
+        let anchor = texcraft_review::Anchor::new(path.as_str(), source, start, end);
         let author = texcraft_review::Author::new(format!("AI ({model})"), "");
         let now = self.now();
-        self.review.review.suggest(id, anchor, &source, &text, author, now).map_err(|e| e.to_string())?;
+        self.review.review.suggest(id, anchor, source, text, author, now).map_err(|e| e.to_string())?;
         self.review_changed(id)?;
-        Ok(Some(id.to_string()))
+        Ok(id.to_string())
     }
 
     fn set_explanation(&mut self, key: Key, e: Explanation) {
