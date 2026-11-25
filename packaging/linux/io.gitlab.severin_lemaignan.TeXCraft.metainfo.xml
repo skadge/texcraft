@@ -41,6 +41,17 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.9.0" date="2026-11-25" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.9.0</url>
+      <description>
+        <p>GitHub projects, and tables and figures in the formatted view.</p>
+        <ul>
+          <li>Open, commit and update projects on GitHub</li>
+          <li>Tables edited as grids in the formatted view</li>
+          <li>A dialog to edit figures</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.8.0" date="2026-11-25" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.8.0</url>
       <description>

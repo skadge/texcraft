@@ -5,6 +5,34 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.9.0 (2026-11-25)
+
+GitHub projects, tables and figures in the formatted view, and the macOS menu bar.
+
+### Git forges
+
+- Projects on GitHub open, commit, update and merge as GitLab projects do, with a personal access
+  token (File › Open from GitLab or GitHub…). A branch you cannot push to gets a new branch and a
+  pull request.
+
+### The formatted view
+
+- Tables (`tabular`) show as grids: edit a cell in place, Tab to the next, and add or remove rows
+  and columns, set a column's alignment or the rules (none, all, booktabs) from the table's
+  toolbar. A table the grid cannot show faithfully stays as source and says why.
+- Figures have an Edit Figure… dialog: image, width, placement, caption and label. On the desktop,
+  an image dropped on the view becomes a figure.
+
+### macOS
+
+- The menus are in the macOS menu bar, with the app menu (About, Settings, Quit). Built and
+  compiled for macOS, not yet tried on a Mac: please report how it behaves.
+
+Known limits:
+
+- Merging and splitting table cells, `tabularx` and `longtable` are not in the grid yet.
+- Signing in to GitLab or GitHub (instead of a token) comes later.
+
 ## 0.8.0 (2026-11-25)
 
 Projects from GitLab, editing in the formatted view, and more of the window.
