@@ -13,6 +13,7 @@ mod find;
 mod floats;
 mod folders;
 mod forge;
+mod forge_servers;
 mod forge_sign_in;
 mod history;
 mod image;

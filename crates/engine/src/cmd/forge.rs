@@ -196,9 +196,13 @@ fn key_for(s: &Session, p: &Value, address: &Address) -> Result<Key> {
         return Ok(Key::Grant(Box::new(grant.clone())));
     }
     let service = address.service.name();
-    Err(match s.forge_sign_in_unavailable(address.service) {
+    Err(match s.forge_sign_in_unavailable_at(address.service, &address.instance) {
         None if address.instance == oauth::instance(address.service) => format!(
             "Sign in to {service} (forge.sign_in), or give a personal access token for {}: TeXCraft keeps a token only while it runs, never on disk.",
+            address.instance
+        ),
+        None => format!(
+            "Sign in to {} (forge.sign_in with its instance), or give a personal access token for it: TeXCraft keeps a token only while it runs, never on disk.",
             address.instance
         ),
         _ => format!("Give a personal access token for {}: TeXCraft keeps it only while it runs, never on disk.", address.instance),
