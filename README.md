@@ -15,6 +15,12 @@
 </p>
 
 <p align="center">
+  <a href="https://texcraft-893d51.gitlab.io/"><img alt="Open the editor in your browser" src="https://img.shields.io/badge/%E2%96%B6%20open%20in%20your%20browser-texcraft-2563eb?style=for-the-badge"></a>
+  &nbsp;
+  <a href="#downloads"><img alt="Download for Linux, Windows or macOS" src="https://img.shields.io/badge/download-Linux%20%C2%B7%20Windows%20%C2%B7%20macOS-555555?style=for-the-badge"></a>
+</p>
+
+<p align="center">
   <img alt="Status: early development" src="https://img.shields.io/badge/status-early%20development-d6bc25?style=flat-square">
   <img alt="Written in pure Rust" src="https://img.shields.io/badge/pure-Rust-a08a10?style=flat-square&logo=rust&logoColor=white">
   <img alt="Runs on Linux, macOS, Windows and the web" src="https://img.shields.io/badge/runs%20on-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows%20%C2%B7%20Web-555555?style=flat-square">
@@ -138,6 +144,8 @@ TeXCraft is in early development. [`docs/ROADMAP.md`](docs/ROADMAP.md) has what 
 Agent and contributor rules are in [`AGENTS.md`](AGENTS.md), which also lists the checks for the crates you change.
 
 ## Downloads
+
+**In the browser:** [texcraft-893d51.gitlab.io](https://texcraft-893d51.gitlab.io/), nothing to install. The engine runs in the page; projects stay in your browser.
 
 Releases are on the [releases page](https://gitlab.com/severin-lemaignan/texcraft/-/releases): an AppImage and a Flatpak bundle for Linux (x86_64), and the browser build. What changed is in [CHANGELOG.md](CHANGELOG.md).
 
