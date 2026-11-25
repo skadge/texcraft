@@ -36,6 +36,8 @@ use texcraft_project::{Project, ProjectPath};
 pub use cmd::forge::Problem as ForgeProblem;
 /// Where a sign-in to a forge stands, and why one is not offered.
 pub use cmd::forge_auth::{Progress as SignInProgress, Unavailable as SignInUnavailable};
+/// Which forge lookup an outcome is of ([`Session::poll_forge_lookup`]).
+pub use cmd::forge_pick::Lookup as ForgeLookup;
 pub use texcraft_compile::{
     Diagnostic, Draft, Engine, Export, MAX_BLEED_MM, Options as BuildOptions, Outcome, Output, PdfX, Progress, Severity, Status,
 };
@@ -185,6 +187,8 @@ pub struct Session {
     forge_problem: Option<cmd::forge::Problem>,
     /// Sign-ins to GitLab and GitHub (C5, step 4): kept in the store the shell gives.
     forge_auth: cmd::forge_auth::State,
+    /// The projects and branches looked up for the Open dialog, and GitHub's listing kept.
+    forge_lookups: cmd::forge_pick::State,
     /// AI assistance: the connection, its requests and their answers (docs/ROADMAP.md, AI1, AI2).
     ai: ai::State,
     /// Spell checking: the dictionary, the word lists and each file's words.
@@ -249,6 +253,7 @@ impl Session {
             forge_changes: None,
             forge_problem: None,
             forge_auth: cmd::forge_auth::State::default(),
+            forge_lookups: cmd::forge_pick::State::default(),
             ai: ai::State::default(),
             spelling: spelling::State::default(),
             saved_outputs: std::collections::BTreeMap::new(),

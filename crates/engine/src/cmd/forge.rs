@@ -47,7 +47,12 @@ pub(crate) type Renewed = std::sync::Arc<std::sync::Mutex<Option<Grant>>>;
 
 impl Key {
     /// The token to send, renewing the sign-in first when it has expired (into `renewed`).
-    async fn token(self, transport: &dyn texcraft_forge::Transport, clients: &Clients, renewed: &Renewed) -> texcraft_forge::Result<Token> {
+    pub(super) async fn token(
+        self,
+        transport: &dyn texcraft_forge::Transport,
+        clients: &Clients,
+        renewed: &Renewed,
+    ) -> texcraft_forge::Result<Token> {
         match self {
             Key::Token(t) => Ok(t),
             Key::Grant(grant) => {
@@ -179,39 +184,42 @@ fn can_commit(s: &Session) -> Result<()> {
     idle(s)
 }
 
-fn background(p: &Value) -> bool {
+pub(super) fn background(p: &Value) -> bool {
     cfg!(target_arch = "wasm32") || p.get("background").and_then(Value::as_bool).unwrap_or(false)
 }
 
 /// The token given, the one given earlier in this session for `address`'s instance, or the
 /// sign-in to it.
 fn key_for(s: &Session, p: &Value, address: &Address) -> Result<Key> {
+    key_at(s, p, &address.instance, address.service)
+}
+
+/// The token given, the one given earlier in this session for `instance`, or the sign-in to it.
+pub(super) fn key_at(s: &Session, p: &Value, instance: &str, service: Service) -> Result<Key> {
     if let Some(t) = p.get("token").and_then(Value::as_str).filter(|t| !t.trim().is_empty()) {
         return Token::new(t).map(Key::Token).map_err(|e| e.to_string());
     }
-    if let Some(token) = s.forge_tokens.get(&address.instance) {
+    if let Some(token) = s.forge_tokens.get(instance) {
         return Ok(Key::Token(token.clone()));
     }
-    if let Some(grant) = s.forge_grant(&address.instance, address.service) {
+    if let Some(grant) = s.forge_grant(instance, service) {
         return Ok(Key::Grant(Box::new(grant.clone())));
     }
-    let service = address.service.name();
-    Err(match s.forge_sign_in_unavailable_at(address.service, &address.instance) {
-        None if address.instance == oauth::instance(address.service) => format!(
-            "Sign in to {service} (forge.sign_in), or give a personal access token for {}: TeXCraft keeps a token only while it runs, never on disk.",
-            address.instance
+    let name = service.name();
+    Err(match s.forge_sign_in_unavailable_at(service, instance) {
+        None if instance == oauth::instance(service) => format!(
+            "Sign in to {name} (forge.sign_in), or give a personal access token for {instance}: TeXCraft keeps a token only while it runs, never on disk."
         ),
         None => format!(
-            "Sign in to {} (forge.sign_in with its instance), or give a personal access token for it: TeXCraft keeps a token only while it runs, never on disk.",
-            address.instance
+            "Sign in to {instance} (forge.sign_in with its instance), or give a personal access token for it: TeXCraft keeps a token only while it runs, never on disk."
         ),
-        _ => format!("Give a personal access token for {}: TeXCraft keeps it only while it runs, never on disk.", address.instance),
+        _ => format!("Give a personal access token for {instance}: TeXCraft keeps it only while it runs, never on disk."),
     })
 }
 
 /// Runs the operation `make` returns: in the background (then `None`: [`Session::poll_forge`]
 /// gives its outcome), or at once.
-fn start<T, F, Fut>(p: &Value, make: F) -> texcraft_forge::Result<std::result::Result<Pending<T>, T>>
+pub(super) fn start<T, F, Fut>(p: &Value, make: F) -> texcraft_forge::Result<std::result::Result<Pending<T>, T>>
 where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = texcraft_forge::Result<T>> + 'static,
@@ -641,19 +649,19 @@ impl Session {
     }
 
     /// The applications this session signs in as.
-    fn forge_auth_clients(&self) -> Clients {
+    pub(super) fn forge_auth_clients(&self) -> Clients {
         self.forge_auth_clients_ref().clone()
     }
 
     /// A personal access token given is kept for the session; a sign-in is kept already.
-    fn keep_key(&mut self, instance: &str, key: Key) {
+    pub(super) fn keep_key(&mut self, instance: &str, key: Key) {
         if let Key::Token(token) = key {
             self.forge_tokens.insert(instance.to_owned(), token);
         }
     }
 
     /// Keeps the sign-in an operation renewed, if it did.
-    fn keep_renewed(&mut self, slot: &Renewed) {
+    pub(super) fn keep_renewed(&mut self, slot: &Renewed) {
         let renewed = slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
         if let Some(grant) = renewed
             && let Some(warning) = self.keep_grant(grant)
