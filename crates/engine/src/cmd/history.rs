@@ -216,6 +216,7 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
         .map(|e| {
             json!({
                 "id": e.id,
+                "parent": e.parent,
                 "time": e.time.to_rfc3339(),
                 "author": e.author,
                 "message": e.message,
