@@ -15,6 +15,7 @@ use std::ops::Range;
 pub mod edit;
 pub mod figure;
 pub mod fold;
+pub mod prose;
 pub mod table;
 pub mod tree;
 pub mod view;
