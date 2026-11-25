@@ -237,7 +237,7 @@ fn a_pull_or_a_push_waits_for_the_project_to_be_saved_and_runs_in_the_background
     assert_eq!(started["started"], true);
     assert!(s.execute("git.pull", &json!({})).is_err(), "one operation at a time");
     let done = wait(&mut s)?;
-    assert_eq!(done["operation"], "push");
+    assert_eq!(done["operation"], "git_push");
     assert_eq!(server.get("refs/heads/main").map(|id| id.to_string()), Some(head(&mut s)?));
     // An SSH address of the server was reached over HTTPS.
     assert!(server.requests().iter().all(|(_, url, _)| url.starts_with("https://github.com/ada/paper.git/")));

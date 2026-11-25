@@ -213,7 +213,7 @@ pub(super) fn push(s: &mut Session, p: &Value) -> Result<Value> {
     match started.map_err(|e| s.forge_failed(e))? {
         Ok(pending) => {
             s.git_task = Some(Task::Push { pending, remote: remote.clone(), branch: branch.clone(), renewed: slot });
-            Ok(json!({"operation": "push", "started": true, "remote": remote, "branch": branch}))
+            Ok(json!({"operation": "git_push", "started": true, "remote": remote, "branch": branch}))
         }
         Err(done) => pushed(s, &remote, &branch, done),
     }
@@ -229,7 +229,7 @@ pub(super) fn pushed(s: &mut Session, remote: &str, branch: &str, done: std::res
         h.set_upstream(remote, branch)?;
     }
     Ok(json!({
-        "operation": "push",
+        "operation": "git_push",
         "remote": remote,
         "branch": branch,
         "commit": pushed.new,
@@ -269,7 +269,7 @@ pub(super) fn pull(s: &mut Session, p: &Value) -> Result<Value> {
     match started.map_err(|e| s.forge_failed(e))? {
         Ok(pending) => {
             s.git_task = Some(Task::Pull { pending, remote: remote.clone(), branch: branch.clone(), renewed: slot });
-            Ok(json!({"operation": "pull", "started": true, "remote": remote, "branch": branch}))
+            Ok(json!({"operation": "git_pull", "started": true, "remote": remote, "branch": branch}))
         }
         Err(done) => fetched(s, &remote, &branch, done),
     }
@@ -287,7 +287,7 @@ pub(super) fn fetched(s: &mut Session, remote: &str, branch: &str, done: std::re
     let h = s.history.as_mut().ok_or("The project has no git repository.")?;
     h.set_ref(&format!("refs/remotes/{remote}/{branch}"), &tip, "fetch")?;
     let head = h.head()?;
-    let mut result = json!({"operation": "pull", "remote": remote, "branch": branch, "commit": tip, "received": fetched.received});
+    let mut result = json!({"operation": "git_pull", "remote": remote, "branch": branch, "commit": tip, "received": fetched.received});
     let changed = match &head {
         Some(head) if *head == tip || h.is_ancestor(&tip, head)? => {
             let (ahead, _) = h.ahead_behind(head, &tip)?;

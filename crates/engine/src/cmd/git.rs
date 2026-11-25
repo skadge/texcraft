@@ -99,12 +99,32 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         },
         CommandSpec {
             id: "forge.create_repository",
-            label: "Save Project to GitLab or GitHub…",
-            menu: &["File"],
+            label: "Save Project to GitLab or GitHub",
+            menu: &[],
             shortcut: None,
             params: create_schema,
             enabled: can_create,
             run: create,
+            changes: true,
+        },
+        CommandSpec {
+            id: "forge.save_to_github",
+            label: "Save Project to GitHub…",
+            menu: &["File"],
+            shortcut: None,
+            params: || create_schema_for(Service::GitHub),
+            enabled: can_create,
+            run: |s, p| create(s, &with_service(p, Service::GitHub)),
+            changes: true,
+        },
+        CommandSpec {
+            id: "forge.save_to_gitlab",
+            label: "Save Project to GitLab…",
+            menu: &["File"],
+            shortcut: None,
+            params: || create_schema_for(Service::GitLab),
+            enabled: can_create,
+            run: |s, p| create(s, &with_service(p, Service::GitLab)),
             changes: true,
         },
     ]
@@ -151,6 +171,23 @@ fn create_schema() -> Value {
         "token": {"type": "string", "description": "A personal access token that can make repositories (GitLab: api; GitHub: a classic token with repo, or a fine-grained one with Administration read and write)."},
         "background": {"type": "boolean", "description": BACKGROUND}
     }, "required": ["service", "name"], "additionalProperties": false})
+}
+
+/// forge.create_repository's parameters for one service: the same, without `service`.
+fn create_schema_for(_: Service) -> Value {
+    let mut schema = create_schema();
+    if let Some(props) = schema["properties"].as_object_mut() {
+        props.remove("service");
+    }
+    schema["required"] = json!(["name"]);
+    schema
+}
+
+/// `p` with `service` set (the menu's Save Project to GitHub… and to GitLab…).
+fn with_service(p: &Value, service: Service) -> Value {
+    let mut p = if p.is_object() { p.clone() } else { json!({}) };
+    p["service"] = json!(service.id());
+    p
 }
 
 fn idle(s: &Session) -> Result<()> {
@@ -254,7 +291,7 @@ fn owners(s: &mut Session, p: &Value) -> Result<Value> {
 fn listed_owners(s: &mut Session, owners: Vec<Owner>, key: Key, instance: &str) -> Result<Value> {
     s.keep_key(instance, key);
     let list: Vec<Value> = owners.iter().map(|o| json!({"path": o.path, "personal": o.personal})).collect();
-    Ok(json!({"operation": "owners", "owners": list}))
+    Ok(json!({"operation": "owners", "instance": instance, "owners": list}))
 }
 
 fn create(s: &mut Session, p: &Value) -> Result<Value> {
@@ -426,13 +463,14 @@ fn pull(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 impl Session {
-    /// The push, pull or new repository under way: `push`, `pull`, `create_repository` or `owners`.
+    /// The push, pull or new repository under way: `git_push`, `git_pull`, `create_repository` or
+    /// `owners`.
     pub fn git_busy(&self) -> Option<&'static str> {
         self.git_task.as_ref().map(|t| match t {
             #[cfg(not(target_arch = "wasm32"))]
-            Task::Push { .. } => "push",
+            Task::Push { .. } => "git_push",
             #[cfg(not(target_arch = "wasm32"))]
-            Task::Pull { .. } => "pull",
+            Task::Pull { .. } => "git_pull",
             Task::Create { .. } => "create_repository",
             Task::Owners { .. } => "owners",
         })
