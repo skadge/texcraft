@@ -107,7 +107,11 @@ fn options_schema() -> Value {
     json!({"type": "object", "properties": {
         "engine": {"enum": ["auto", "lualatex", "pdflatex"], "description": "The engine the build is like: chosen from the document (auto), LuaLaTeX or pdfLaTeX."},
         "halt_on_error": {"type": "boolean", "description": "Stop at the first error instead of reporting every error."},
-        "draft_images": {"type": "boolean", "description": "Draw images as framed boxes with their names, for faster builds."}
+        "draft_images": {"type": "boolean", "description": "Draw images as framed boxes with their names, for faster builds."},
+        "output": {"enum": ["screen", "accessible", "print"], "description": "The kind of PDF: for the screen; accessible (tagged, PDF/UA, checked for screen readers); or for print (a PDF/X beside the PDF, with preflight checks)."},
+        "pdfx": {"enum": ["x4", "x1a"], "description": "For print: PDF/X-4 or PDF/X-1a."},
+        "bleed_mm": {"type": "number", "minimum": 0, "maximum": texcraft_compile::MAX_BLEED_MM, "description": "For print: the bleed, in millimetres."},
+        "crop_marks": {"type": "boolean", "description": "For print: crop marks outside the bleed."}
     }, "additionalProperties": false})
 }
 
@@ -122,6 +126,19 @@ fn options(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if let Some(v) = p.get("draft_images") {
         o.draft_images = v.as_bool().ok_or("`draft_images` must be a boolean")?;
+    }
+    if let Some(v) = p.get("output") {
+        o.output = serde_json::from_value(v.clone()).map_err(|_| "`output` must be screen, accessible or print")?;
+    }
+    if let Some(v) = p.get("pdfx") {
+        o.pdfx = serde_json::from_value(v.clone()).map_err(|_| "`pdfx` must be x4 or x1a")?;
+    }
+    if let Some(v) = p.get("bleed_mm") {
+        let mm = v.as_f64().filter(|mm| (0.0..=f64::from(texcraft_compile::MAX_BLEED_MM)).contains(mm));
+        o.bleed_mm = mm.ok_or(format!("`bleed_mm` must be a number from 0 to {}", texcraft_compile::MAX_BLEED_MM))? as f32;
+    }
+    if let Some(v) = p.get("crop_marks") {
+        o.crop_marks = v.as_bool().ok_or("`crop_marks` must be a boolean")?;
     }
     s.set_build_options(o);
     serde_json::to_value(o).map_err(|e| e.to_string())
@@ -158,9 +175,9 @@ fn save_pdf(s: &mut Session, p: &Value) -> Result<Value> {
         Some(roots) => roots.check(&path, crate::file_access::Access::Write)?,
         None => path,
     };
-    let pdf = s.pdf.as_ref().ok_or("There is no PDF yet.")?;
+    let (pdf, kind) = s.pdf_to_save()?;
     std::fs::write(&path, pdf.as_slice()).map_err(|e| format!("writing {}: {e}", path.display()))?;
-    Ok(json!({"path": path.display().to_string(), "bytes": pdf.len()}))
+    Ok(json!({"path": path.display().to_string(), "bytes": pdf.len(), "kind": kind}))
 }
 
 fn export_schema() -> Value {
@@ -198,9 +215,9 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
 fn export_to(s: &mut Session, _: &Value, format: texcraft_compile::Export, path: std::path::PathBuf) -> Result<Value> {
     let name = path.file_name().map_or_else(|| format!("document.{}", format.extension()), |n| n.to_string_lossy().into_owned());
     if format == texcraft_compile::Export::Pdf {
-        let pdf = s.pdf.clone().ok_or("There is no PDF yet.")?;
+        let (pdf, kind) = s.pdf_to_save()?;
         s.hand_out(name.clone(), pdf.to_vec());
-        return Ok(json!({"format": "pdf", "path": name, "bytes": pdf.len()}));
+        return Ok(json!({"format": "pdf", "path": name, "bytes": pdf.len(), "kind": kind}));
     }
     s.start_web_export(format, name)?;
     Ok(json!({"format": format, "started": true}))
@@ -309,5 +326,15 @@ fn result(s: &mut Session, _: &Value) -> Result<Value> {
         "pdfBytes": o.pdf.as_ref().map(|p| p.len()),
         "diagnostics": o.diagnostics,
         "draft": draft,
+        "output": o.output,
+        "accessibility": o.accessibility().collect::<Vec<_>>(),
+        "print": o.preflight.as_ref().map(|p| json!({
+            "standard": p.standard.name(),
+            "pdfxBytes": p.pdfx.as_ref().map(|x| x.len()),
+            "ready": o.print_problems() == Some(0),
+            "problems": o.print_problems(),
+            "checks": p.checks,
+            "rules": p.rules,
+        })),
     }))
 }
