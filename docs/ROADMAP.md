@@ -75,7 +75,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | C5 | ⬜ | Git forges | A project opened from GitLab or GitHub (their web APIs answer browsers), committed back, kept up with the branch with a three-way merge, a merge request when the branch cannot take a commit; push and pull for folders (retex's `docs/design/gitlab.md`). |
 | C6 | ⬜ | Cloud projects and sharing | Projects in cloud storage, shared with others. |
 | C7 | ⬜ | Real-time editing together | Waits for the suite's shared-text layer; one participant commits for the session (retex's collaboration notes). |
-| C8 | ⬜ | Every project a git repository | As Overleaf does: a project's history is a git repository, whether or not it is ever pushed anywhere. A folder that is not in one becomes one on its first save, and each save is a commit; a folder already in a repository is used as it is, and commits only when asked. Browser projects keep the same history in the browser. |
+| C8 | 🚧 | Every project a git repository | As Overleaf does: a project's history is a git repository, whether or not it is ever pushed anywhere. A folder that is not in one becomes one on its first save, and each save is a commit; a folder already in a repository is used as it is, and commits only when asked. Browser projects keep the same history in the browser. Desktop done (`history.*` commands); the browser next. |
 
 ## In the browser
 
