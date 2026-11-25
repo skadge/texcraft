@@ -142,6 +142,8 @@ pub(crate) struct Problem {
     pub fixes: Vec<texcraft_engine::Fix>,
     /// A build's message (AI can explain it), not the language server's hint.
     pub build: bool,
+    /// A misspelled word: its fixes are the dictionary's spellings.
+    pub spelling: bool,
 }
 
 /// The popup of a problem: its message, help and fixes.
@@ -437,6 +439,17 @@ impl SourceEditor {
     pub fn selected(&self) -> Option<String> {
         let r = self.doc.selection.primary();
         (!r.is_empty()).then(|| self.doc.buffer.slice(r.start(), r.end()))
+    }
+
+    /// The lines shown, first to last (from 0, end excluded), as last drawn.
+    pub fn visible_lines(&self) -> std::ops::Range<usize> {
+        self.view.0..self.view.0 + self.view.1 + 1
+    }
+
+    /// The misspelled word at the caret, if it is on one.
+    pub fn misspelling_at_caret(&self) -> Option<&Problem> {
+        let caret = self.caret();
+        self.problems.iter().find(|p| p.spelling && p.start <= caret && caret <= p.end)
     }
 
     /// Whether the caret is on a problem's text (Quick Fix opens its popup).
@@ -1760,6 +1773,7 @@ impl SourceEditor {
         let mut close = false;
         let mut ai_act = None;
         let (icon, color) = match popup.problem.severity {
+            _ if popup.problem.spelling => ("type", t.spelling),
             Severity::Error => ("circle-exclamation-point", t.error),
             Severity::Warning => ("triangle-exclamation-point", t.warning),
             _ => ("info", t.note),
@@ -2053,17 +2067,7 @@ impl SourceEditor {
                 paint_span(painter, galley, origin + vec2(0.0, *top), (s, e), t.selection, through_break);
             }
             painter.galley(origin + vec2(0.0, *top), galley.clone(), t.text);
-            // Problems, underlined: hints with dots, warnings and errors with waves.
-            for p in self.problems.iter().filter(|p| p.end > line_start && p.start <= line_start + line_len) {
-                let (s, e) = (p.start.saturating_sub(line_start).min(line_len), (p.end - line_start).min(line_len));
-                let span = (s, e.max(s + 1).min(line_len.max(s + 1)));
-                let at = origin + vec2(0.0, *top);
-                match p.severity {
-                    Severity::Error => underline(painter, galley, at, span, t.error, true),
-                    Severity::Warning => underline(painter, galley, at, span, t.warning, true),
-                    _ => underline(painter, galley, at, span, t.note, false),
-                }
-            }
+            self.paint_problems(painter, t, galley, origin + vec2(0.0, *top), (line_start, line_len));
             // The gutter.
             let first_row = galley.rows.first().map_or(t.code_line_height, |r| r.max_y());
             let mid = y0 + first_row / 2.0;
@@ -2141,6 +2145,21 @@ impl SourceEditor {
                 painter.rect_filled(r, 0.0, t.surface);
                 painter.galley(c.min, g, t.text);
                 painter.hline(r.x_range(), r.bottom(), egui::Stroke::new(1.0, t.text));
+            }
+        }
+    }
+
+    /// The problems of one line, underlined: hints with dots, warnings, errors and misspelled words
+    /// with waves.
+    fn paint_problems(&self, painter: &egui::Painter, t: &Tokens, galley: &Galley, at: Pos2, (line_start, line_len): (usize, usize)) {
+        for p in self.problems.iter().filter(|p| p.end > line_start && p.start <= line_start + line_len) {
+            let (s, e) = (p.start.saturating_sub(line_start).min(line_len), (p.end - line_start).min(line_len));
+            let span = (s, e.max(s + 1).min(line_len.max(s + 1)));
+            match p.severity {
+                _ if p.spelling => underline(painter, galley, at, span, t.spelling, true),
+                Severity::Error => underline(painter, galley, at, span, t.error, true),
+                Severity::Warning => underline(painter, galley, at, span, t.warning, true),
+                _ => underline(painter, galley, at, span, t.note, false),
             }
         }
     }

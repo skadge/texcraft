@@ -43,6 +43,8 @@ pub struct Tokens {
     pub warning: Color32,
     pub success: Color32,
     pub note: Color32,
+    /// The wavy line under a misspelled word, set apart from the problems' colours.
+    pub spelling: Color32,
     /// Behind a source line with an error.
     pub error_line: Color32,
     /// Behind the line with the caret.
@@ -128,6 +130,7 @@ impl Tokens {
             warning: rgb(0x7F5200),
             success: rgb(0x17683B),
             note: rgb(0x2557D6),
+            spelling: rgb(0xA3249E),
             error_line: alpha(rgb(0xC42B1C), 22),
             current_line: alpha(rgb(0x1B1E23), 8),
             search_match: alpha(rgb(0xE8A317), 77),
@@ -170,6 +173,7 @@ impl Tokens {
             warning: rgb(0xF2C45A),
             success: rgb(0x6FD39A),
             note: rgb(0x7AA7FF),
+            spelling: rgb(0xF08BE4),
             error_line: alpha(rgb(0xFF6B6B), 36),
             current_line: alpha(rgb(0xFFFFFF), 10),
             search_match: alpha(rgb(0xF2C45A), 64),

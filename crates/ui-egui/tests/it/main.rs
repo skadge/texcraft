@@ -38,3 +38,4 @@ mod system_menu;
 mod tables;
 mod unsaved;
 mod vim;
+mod writing_aids;

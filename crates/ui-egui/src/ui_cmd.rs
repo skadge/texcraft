@@ -39,6 +39,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.find_in_project", "Find in Project", "Edit", "find", Some("Cmd+Shift+F")),
     ui("view.show_in_pdf", "Show in PDF", "Edit", "find", Some("Cmd+Alt+J")),
     ui("edit.quick_fix", "Quick Fix", "Edit", "fix", Some("Cmd+.")),
+    ui("edit.spelling.next", "Next Misspelling", "Edit", "fix", Some("F7")),
     ui("edit.fold", "Fold", "Edit", "fold", Some("Cmd+Shift+[")),
     ui("edit.unfold", "Unfold", "Edit", "fold", Some("Cmd+Shift+]")),
     ui("edit.fold_all", "Fold All", "Edit", "fold", Some("Cmd+Alt+Shift+[")),
@@ -62,6 +63,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("edit.math_inline", "Inline Formula", "Insert", "math", Some("Cmd+Shift+M")),
     ui("edit.math_display", "Displayed Formula", "Insert", "math", None),
     ui("edit.equation", "Numbered Equation", "Insert", "math", None),
+    ui("edit.symbols", "Symbols…", "Insert", "math", None),
     ui("edit.ref", "Cross-Reference", "Insert", "refs", None),
     ui("edit.cite", "Citation", "Insert", "refs", None),
     ui("edit.link", "Link", "Insert", "refs", None),
@@ -103,6 +105,13 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.focus_mode", "Focus Mode", "View", "focus", Some("Cmd+Shift+Enter")),
     ui("view.theme", "Switch Light and Dark", "View", "theme", None),
     ui("app.start", "Start Page", "View", "settings", None),
+    // The text's context menu on a misspelled word; `{"text": …}` chooses the spelling, `{"to":
+    // "project"}` adds to the project's words.
+    ui("edit.spelling.replace", "Change Spelling", "Spelling", "spelling", None),
+    ui("edit.spelling.add", "Add to Dictionary", "Spelling", "spelling", None),
+    ui("edit.spelling.ignore", "Ignore Word", "Spelling", "spelling", None),
+    // The palette's symbols: `{"command": "\\alpha"}`.
+    ui("edit.insert_symbol", "Insert Symbol", "Symbols", "symbols", None),
     ui("help.shortcuts", "Keyboard Shortcuts", "Help", "help", None),
     ui("help.manual", "retex User Manual", "Help", "help", None),
     ui("help.about", "About TeXCraft", "Help", "about", None),
@@ -209,6 +218,9 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "view.fit_width" => app.pdf.set_fit(crate::pdf_view::Fit::Width),
         "view.fit_page" => app.pdf.set_fit(crate::pdf_view::Fit::Page),
         "view.actual_size" => app.pdf.set_fit(crate::pdf_view::Fit::Zoom(1.0)),
+        "edit.spelling.replace" | "edit.spelling.add" | "edit.spelling.ignore" | "edit.spelling.next" => crate::spell::run(app, id, params),
+        "edit.symbols" => crate::symbols::toggle(app),
+        "edit.insert_symbol" => crate::symbols::run(app, params),
         id if id.starts_with("window.") => {
             if !crate::window::run(app, id) {
                 log::warn!("unknown window command {id}");

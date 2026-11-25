@@ -46,6 +46,8 @@ pub(crate) struct Editor {
     pub caret_hint: Option<crate::suggest::CaretHint>,
     /// The caret before the editor's last frame, to tell a deletion forwards from one backwards.
     pub caret_before: usize,
+    /// The spellings offered for the last word asked about (the context menu asks every frame).
+    pub spelling_suggestions: Option<(String, Vec<String>)>,
 }
 
 fn session_text(project: &texcraft_engine::project::Project, path: Option<&ProjectPath>) -> Option<String> {
@@ -560,11 +562,12 @@ const GROUPS: [(f32, &[(&str, &str)]); 3] = [
         ],
     ),
     (
-        130.0,
+        160.0,
         &[
             ("Inline formula", "edit.math_inline"),
             ("Displayed formula", "edit.math_display"),
             ("Numbered equation", "edit.equation"),
+            ("Symbols", "edit.symbols"),
             ("Cross-reference", "edit.ref"),
             ("Citation", "edit.cite"),
             ("Link", "edit.link"),
@@ -617,6 +620,7 @@ fn group(ui: &mut egui::Ui, t: &Tokens, index: usize, chosen: &mut Option<&'stat
                     }
                 }
             });
+            tool(ui, t, ("omega", tl!("Symbols"), "edit.symbols"), chosen);
             tool(ui, t, ("tag", tl!("Cross-reference"), "edit.ref"), chosen);
             tool(ui, t, ("book-open", tl!("Citation"), "edit.cite"), chosen);
             tool(ui, t, ("link", tl!("Link"), "edit.link"), chosen);
@@ -789,6 +793,7 @@ fn problems(app: &mut App, path: &ProjectPath) -> Vec<crate::source::Problem> {
             help: Vec::new(),
             fixes: Vec::new(),
             build: false,
+            spelling: false,
         })
         .collect();
     let b = &app.editor.source.doc.buffer;
@@ -842,9 +847,11 @@ fn problems(app: &mut App, path: &ProjectPath) -> Vec<crate::source::Problem> {
                 help: d.help.clone(),
                 fixes,
                 build: true,
+                spelling: false,
             });
         }
     }
+    out.extend(crate::spell::problems(app, path));
     out.sort_by_key(|p| p.start);
     out
 }
@@ -907,10 +914,35 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, r: &egui::Response) {
         entries.push(Some(("edit.quick_fix", tl!("Quick Fix"))));
     }
     entries.push(Some(("view.show_in_pdf", tl!("Show in PDF"))));
+    // On a misspelled word: its spellings, Add to Dictionary and Ignore come first.
+    let misspelled = app.editor.source.misspelling_at_caret().map(|p| app.editor.source.doc.buffer.slice(p.start, p.end));
+    let spelling = misspelled.map(|w| crate::spell::suggestions(app, &w));
     let mut chosen = None;
+    let mut spell_choice: Option<(&'static str, serde_json::Value)> = None;
     let shown = menu.show(|ui| {
         ui.set_min_width(220.0);
         let mut focus = keyed == Some(true);
+        if let Some(offered) = &spelling {
+            if offered.is_empty() {
+                ui.label(egui::RichText::new(tl!("No spellings to offer")).font(t.small()).color(t.text_muted));
+            }
+            let changes = offered.iter().map(|s| ("edit.spelling.replace", tl!("Change to “{text}”").replace("{text}", s), json!({"text": s})));
+            let others = [
+                ("edit.spelling.add", tl!("Add to Dictionary").to_owned(), json!({})),
+                ("edit.spelling.ignore", tl!("Ignore").to_owned(), json!({})),
+            ];
+            for (id, label, params) in changes.chain(others) {
+                let icon = if id == "edit.spelling.replace" { Some("pencil") } else { crate::top_bar::icon_for(id) };
+                let item = crate::top_bar::item_response(ui, &t, icon, &label, None, Ok(()));
+                if std::mem::take(&mut focus) {
+                    item.request_focus();
+                }
+                if item.clicked() {
+                    spell_choice = Some((id, params));
+                }
+            }
+            ui.separator();
+        }
         for entry in &entries {
             let Some((id, label)) = *entry else {
                 ui.separator();
@@ -927,19 +959,23 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, r: &egui::Response) {
                 chosen = Some(id);
             }
         }
-        if chosen.is_some() {
+        if chosen.is_some() || spell_choice.is_some() {
             ui.close();
         }
     });
     if keyed == Some(true) {
         ui.data_mut(|d| d.insert_temp(by_key, false));
     }
-    if shown.is_none() || chosen.is_some() {
+    if shown.is_none() || chosen.is_some() || spell_choice.is_some() {
         ui.data_mut(|d| d.remove::<bool>(by_key));
         // Closed from the keyboard without a choice: the keyboard goes back to the text.
         if keyed.is_some() && shown.is_none() {
             app.editor.focus = true;
         }
+    }
+    if let Some((id, params)) = spell_choice {
+        app.editor.focus = true;
+        crate::ui_cmd::run_with(app, id, &params);
     }
     if let Some(id) = chosen {
         if id != "edit.comment" {
@@ -1022,7 +1058,12 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             None => crate::preview::show_in_pdf(app, path, line as u32 + 1),
         }
     }
-    if let Some(line) = out.fixes_for {
+    if let Some(problem) = out.fixes_for.and(app.editor.source.popup.as_ref()).map(|p| p.problem.clone()).filter(|p| p.spelling) {
+        let fixes = crate::spell::fixes(app, &problem);
+        if let Some(popup) = app.editor.source.popup.as_mut() {
+            popup.fixes = Some(fixes);
+        }
+    } else if let Some(line) = out.fixes_for {
         let message = app.editor.source.popup.as_ref().map(|p| p.problem.message.clone());
         let fixes: Vec<texcraft_engine::Fix> =
             app.session.fixes(path, line).into_iter().filter(|f| f.problem.is_none() || f.problem == message).collect();

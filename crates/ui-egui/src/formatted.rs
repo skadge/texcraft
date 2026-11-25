@@ -39,6 +39,9 @@ struct Cache {
     summary: String,
 }
 
+/// The misspelled words' bytes, in order.
+type Misspelled = Arc<Vec<Range<usize>>>;
+
 /// An image a figure shows: its texture and natural size, or why it cannot be shown.
 type Picture = Result<(egui::TextureHandle, Vec2), String>;
 
@@ -53,6 +56,8 @@ pub(crate) struct Formatted {
     images: HashMap<(String, usize), Picture>,
     /// Typeset formulas drawn as textures.
     ink: Ink,
+    /// The misspelled words' bytes, with the session revision and the time they were found at.
+    misspelled: Option<(u64, f64, Misspelled)>,
     /// The caret's keys and pointer.
     pub editing: crate::formatted_edit::Editing,
 }
@@ -229,6 +234,8 @@ struct Cx<'a> {
     table_action: Option<serde_json::Value>,
     /// Out: a figure's Edit button was pressed (its first byte).
     edit_figure: Option<usize>,
+    /// The misspelled words' bytes, in order.
+    misspelled: &'a [Range<usize>],
 }
 
 /// A line of text as drawn: what its characters stand for, its layout and where it is, the slot
@@ -301,6 +308,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     let caret = crate::formatted_edit::caret_byte(app);
     let reveal = std::mem::take(&mut app.editor.formatted.editing.reveal).then_some(caret);
     let vim = app.editor.source.vim.is_some();
+    let misspelled = misspellings(app, ui, path);
     let ink = &mut app.editor.formatted.ink;
     ink.begin();
     let mut cx = Cx {
@@ -329,6 +337,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         toolbar_focused: false,
         table_action: None,
         edit_figure: None,
+        misspelled: &misspelled,
     };
     let page = 6.0 * t.unit;
     app.view.cursor = None;
@@ -381,6 +390,59 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     }
     if let Some(Jump(byte)) = jump {
         to_source(app, ui, path, &text, byte);
+    }
+}
+
+/// The misspelled words of the shown file, found again when it changes and at most each second
+/// otherwise (a word added to the dictionary).
+fn misspellings(app: &mut App, ui: &egui::Ui, path: &ProjectPath) -> Arc<Vec<Range<usize>>> {
+    if !crate::spell::checked(path) {
+        return Arc::default();
+    }
+    let now = ui.input(|i| i.time);
+    let revision = app.session.revision();
+    if let Some((r, at, found)) = &app.editor.formatted.misspelled
+        && *r == revision
+        && now - at < 1.0
+    {
+        return Arc::clone(found);
+    }
+    let found: Arc<Vec<Range<usize>>> = Arc::new(app.session.misspellings(path, None).unwrap_or_default().into_iter().map(|m| m.range).collect());
+    app.editor.formatted.misspelled = Some((revision, now, Arc::clone(&found)));
+    found
+}
+
+/// A wavy line under the misspelled words of a paragraph's text pieces.
+fn paint_misspellings(ui: &egui::Ui, t: &Tokens, galley: &Galley, pieces: &[Piece], origin: Pos2, (text, misspelled): (&str, &[Range<usize>])) {
+    if misspelled.is_empty() {
+        return;
+    }
+    for p in pieces {
+        let (PieceKind::Text, Some(offsets)) = (&p.kind, &p.offsets) else { continue };
+        let from = misspelled.partition_point(|m| m.end <= p.range.start);
+        for m in misspelled[from..].iter().take_while(|m| m.start < p.range.end) {
+            // The view's text is the editor's: a word the session has not seen yet is not marked.
+            if text.get(m.clone()).is_none() {
+                continue;
+            }
+            let inside: Vec<usize> = offsets
+                .iter()
+                .take(offsets.len().saturating_sub(1))
+                .enumerate()
+                .filter(|(_, o)| m.start <= **o && **o < m.end)
+                .map(|(k, _)| k)
+                .collect();
+            let (Some(first), Some(last)) = (inside.first(), inside.last()) else { continue };
+            for r in span_rects(galley, (p.chars.start + first, p.chars.start + last + 1)) {
+                let r = r.translate(origin.to_vec2());
+                let y = r.bottom() - 2.0;
+                let step = 2.5;
+                let points: Vec<Pos2> = (0..=(r.width() / step).max(1.0) as usize)
+                    .map(|i| pos2(r.left() + i as f32 * step, y + if i % 2 == 0 { -1.2 } else { 1.2 }))
+                    .collect();
+                ui.painter().add(egui::Shape::line(points, Stroke::new(1.0, t.spelling)));
+            }
+        }
     }
 }
 
@@ -839,6 +901,7 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
     if ui.is_rect_visible(rect) {
         paint_pieces(ui, &t, &galley, &pieces, origin, para.size);
         ui.painter().galley(origin, Arc::clone(&galley), t.text);
+        paint_misspellings(ui, &t, &galley, &pieces, origin, (cx.text, cx.misspelled));
         paint_chip_icons(ui, &t, &galley, &pieces, origin, para.size);
         paint_typeset(ui, cx, &galley, &pieces, origin, (scale, para.color));
     }

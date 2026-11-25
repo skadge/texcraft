@@ -51,6 +51,12 @@ pub struct Prefs {
     pub identity: Option<Identity>,
     /// The AI connection (its token is in the keychain, never here), model and agreements.
     pub ai: texcraft_engine::ai::Saved,
+    /// Spell checking: on, the language, comments.
+    pub spelling: texcraft_engine::SpellingOptions,
+    /// The user's words (Add to Dictionary), for every project.
+    pub words: Vec<String>,
+    /// The symbols inserted last, by command, the latest first.
+    pub recent_symbols: Vec<String>,
 }
 
 /// The name and key a person's comments carry (docs/collaboration-roadmap.md, R1). No accounts:
@@ -102,6 +108,9 @@ impl Default for Prefs {
             build: texcraft_engine::BuildOptions::default(),
             identity: None,
             ai: texcraft_engine::ai::Saved::default(),
+            spelling: texcraft_engine::SpellingOptions::default(),
+            words: Vec::new(),
+            recent_symbols: Vec::new(),
         }
     }
 }
@@ -121,6 +130,7 @@ impl Prefs {
             "review" => Some(Side::Review),
             "search" => Some(Side::Search),
             "history" => Some(Side::History),
+            "symbols" => Some(Side::Symbols),
             "" => None,
             _ => Some(Side::Files),
         }
@@ -139,6 +149,7 @@ impl Prefs {
             Some(Side::Review) => "review",
             Some(Side::Search) => "search",
             Some(Side::History) => "history",
+            Some(Side::Symbols) => "symbols",
             None => "",
         }
         .to_owned();

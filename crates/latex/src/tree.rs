@@ -525,6 +525,17 @@ fn raw_group_end(text: &str, start: usize) -> usize {
     text.len()
 }
 
+/// Whether byte `at` is inside a formula's math (between its delimiters, both ends included).
+pub fn in_math(nodes: &[Node], at: usize) -> bool {
+    nodes.iter().filter(|n| n.range.start <= at && at <= n.range.end).any(|n| match &n.kind {
+        Kind::Math { body, .. } => body.start <= at && at <= body.end,
+        Kind::Group { body, .. } => in_math(body, at),
+        Kind::Command { args, .. } => args.iter().any(|a| in_math(&a.body, at)),
+        Kind::Environment { args, body, .. } => args.iter().any(|a| in_math(&a.body, at)) || in_math(body, at),
+        _ => false,
+    })
+}
+
 /// Whether `inner` lies inside `outer`.
 fn within(inner: &Range<usize>, outer: &Range<usize>) -> bool {
     outer.start <= inner.start && inner.start <= inner.end && inner.end <= outer.end

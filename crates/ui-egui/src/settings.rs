@@ -136,6 +136,7 @@ fn appearance(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
                         app.prefs.language = code.to_owned();
                         app.prefs_changed = true;
                         crate::i18n::set_language(code);
+                        app.session.set_interface_language(crate::i18n::current_code());
                     }
                 };
                 choose(ui, "auto", tl!("As the system"));
@@ -171,11 +172,91 @@ fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         }
         Some(r)
     });
+    spelling(app, ui, t);
     let preview =
         egui::text::LayoutJob::simple_singleline("\\section{Introduction} % E = mc^2".to_owned(), app.tokens.code_font(), app.tokens.syntax_command);
     egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner()).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.label(preview);
+    });
+}
+
+/// The spelling languages offered, by tag; others can be set by agents (`language.spelling_options`).
+const SPELLING_LANGUAGES: &[(&str, &str)] = &[
+    ("en-US", "English (United States)"),
+    ("en-GB", "English (United Kingdom)"),
+    ("en-CA", "English (Canada)"),
+    ("en-AU", "English (Australia)"),
+    ("fr", "French"),
+    ("de", "German"),
+    ("es", "Spanish"),
+    ("it", "Italian"),
+    ("pt", "Portuguese"),
+    ("pt-BR", "Portuguese (Brazil)"),
+    ("nl", "Dutch"),
+    ("pl", "Polish"),
+    ("cs", "Czech"),
+    ("ru", "Russian"),
+    ("tr", "Turkish"),
+    ("hr", "Croatian"),
+    ("id", "Indonesian"),
+    ("sv", "Swedish"),
+    ("da", "Danish"),
+    ("nb", "Norwegian"),
+    ("fi", "Finnish"),
+];
+
+/// Spell checking: on, the language (with what is checked now, or why nothing is), comments.
+fn spelling(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    let options = app.session.settings.spelling.clone();
+    setting(ui, t, tl!("Check spelling"), tl!("Misspelled words in the text are underlined; commands, math and verbatim text are skipped."), |ui| {
+        let mut on = options.on;
+        let r = ui.add(egui::Checkbox::without_text(&mut on));
+        if r.changed() {
+            app.run("language.spelling_options", json!({"on": on}));
+        }
+        Some(r)
+    });
+    let (language, from) = app.session.spelling_language();
+    let name = |tag: &str| {
+        SPELLING_LANGUAGES.iter().find(|(c, _)| c.eq_ignore_ascii_case(tag)).map_or_else(|| tag.to_owned(), |(_, n)| crate::i18n::t(n).to_owned())
+    };
+    let help = match (app.session.spelling_ready(), from) {
+        (Err(why), _) if options.on => why,
+        (_, texcraft_engine::spelling::LanguageFrom::Document) => {
+            tl!("Checking {language}, as the document's babel or polyglossia sets it.").replace("{language}", &name(&language))
+        }
+        (_, texcraft_engine::spelling::LanguageFrom::Interface) => {
+            tl!("Checking {language}, the interface's language: the document names none.").replace("{language}", &name(&language))
+        }
+        _ => tl!("Checking {language}.").replace("{language}", &name(&language)),
+    };
+    setting(ui, t, tl!("Spelling language"), &help, |ui| {
+        let current = if options.language == "auto" { tl!("From the document").to_owned() } else { name(&options.language) };
+        let mut chosen = None;
+        let combo = craft_ui::ComboBox::from_id_salt("settings-spelling-language").width(200.0).selected_text(current).show_ui(ui, |ui| {
+            if ui.selectable_label(options.language == "auto", tl!("From the document")).clicked() {
+                chosen = Some("auto");
+            }
+            for (tag, n) in SPELLING_LANGUAGES {
+                if ui.selectable_label(options.language.eq_ignore_ascii_case(tag), crate::i18n::t(n)).clicked() {
+                    chosen = Some(tag);
+                }
+            }
+        });
+        let _ = combo.response.accessible_name(tl!("Spelling language"));
+        if let Some(tag) = chosen {
+            app.run("language.spelling_options", json!({"language": tag}));
+        }
+        None
+    });
+    setting(ui, t, tl!("Check comments"), tl!("Also check the text after % in the source."), |ui| {
+        let mut on = options.comments;
+        let r = ui.add_enabled(options.on, egui::Checkbox::without_text(&mut on));
+        if r.changed() {
+            app.run("language.spelling_options", json!({"comments": on}));
+        }
+        Some(r)
     });
 }
 

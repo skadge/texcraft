@@ -56,6 +56,11 @@ pub fn set_language(code: &str) {
     }
 }
 
+/// The interface language's code (`en`, `fr`, `zh-Hans`).
+pub fn current_code() -> &'static str {
+    I18N.code(CURRENT.get())
+}
+
 /// Follows the system language.
 pub fn use_system_language() {
     CURRENT.set(I18N.system_lang());

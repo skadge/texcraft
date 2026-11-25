@@ -28,6 +28,10 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             crate::history::panel(app, ui);
             return;
         }
+        if app.view.side == Some(Side::Symbols) {
+            crate::symbols::panel(app, ui);
+            return;
+        }
         let outline_first = app.view.side == Some(Side::Outline);
         egui::Panel::bottom("outline")
             .resizable(true)

@@ -30,6 +30,8 @@ mod keys;
 mod pdf_view;
 pub mod prefs;
 mod source;
+mod spell;
+mod symbols;
 pub use picks::{Pick, PickKind, PickRequest};
 pub use start::{THUMBNAIL_WIDTH, Thumbnail};
 mod history;
@@ -90,6 +92,8 @@ pub enum Side {
     Search,
     /// The project's saved versions (its git history).
     History,
+    /// The symbol palette (`edit.symbols`).
+    Symbols,
 }
 
 /// How the editor and the preview share the window.
@@ -198,6 +202,8 @@ pub struct App {
     system_menu: Option<craft_menu::NativeMenu>,
     /// Settings › AI's form, and the AI settings last kept in the preferences.
     ai: ai::AiView,
+    /// The symbol palette's search.
+    symbols: symbols::Palette,
 }
 
 impl App {
@@ -212,9 +218,12 @@ impl App {
         session.settings.build = prefs.build;
         session.set_author(prefs.identity.as_ref().map(prefs::Identity::author));
         session.restore_ai(prefs.ai.clone());
+        session.settings.spelling = prefs.spelling.clone();
+        session.set_user_words(&prefs.words);
         let (layout, side) = (prefs.layout(), prefs.side());
         let keys = keys::Keys::new(prefs.shortcuts.clone());
         i18n::set_language(&prefs.language);
+        session.set_interface_language(i18n::current_code());
         let mut app = Self {
             session,
             tokens: Tokens::dark(),
@@ -272,6 +281,7 @@ impl App {
             alt: top_bar::AltTap::default(),
             system_menu: None,
             ai: ai::AiView::default(),
+            symbols: symbols::Palette::default(),
         };
         app.remember_project();
         app
@@ -294,6 +304,8 @@ impl App {
         current.set_view(self.view.layout, self.view.side);
         current.auto_compile = self.session.settings.auto_compile;
         current.build = self.session.settings.build;
+        current.spelling = self.session.settings.spelling.clone();
+        current.words = self.session.user_words();
         if current != self.prefs {
             self.prefs = current;
             self.prefs_changed = true;
