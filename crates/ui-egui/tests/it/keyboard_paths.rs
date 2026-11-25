@@ -456,7 +456,7 @@ fn the_small_dialogs_take_the_keyboard_keep_it_and_give_it_back() {
     dialog_path(&mut h, &from, |h| run(h, "help.about"), &[(Role::Button, "Close")]);
     let prompt = [(Role::TextInput, "Its path in the project, such as chapters/intro.tex"), (Role::Button, "Cancel")];
     dialog_path(&mut h, &from, |h| run(h, "file.new"), &prompt);
-    let open_forge = [(Role::TextInput, "Project address"), (Role::Button, "Cancel"), (Role::RadioButton, "GitLab: Service")];
+    let open_forge = [(Role::EditableComboBox, "Project address"), (Role::Button, "Cancel"), (Role::RadioButton, "GitLab: Service")];
     dialog_path(&mut h, &from, |h| run(h, "forge.open"), &open_forge);
     // The gallery is no dialog of the control channel's, but a modal all the same.
     run(&mut h, "project.from_template");

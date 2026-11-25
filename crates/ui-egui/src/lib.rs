@@ -23,6 +23,7 @@ mod figure_view;
 mod find_bar;
 pub mod fonts;
 mod forge;
+mod forge_pick;
 mod forge_server;
 mod formatted;
 mod formatted_edit;
