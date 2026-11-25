@@ -208,6 +208,7 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         // Opening from GitLab replaces the project: unsaved changes are asked about first.
         "forge.open" => app.guard(Next::OpenFromForge),
         "forge.commit" => crate::forge::ask_commit(app),
+        "forge.pull" => crate::forge::pull(app),
         "project.new" => app.guard(Next::NewProject),
         "project.from_template" => app.open_gallery(),
         "project.save_as" if app.session.library().is_some() => {

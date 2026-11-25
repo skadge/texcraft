@@ -52,6 +52,8 @@ pub(crate) enum Dialog {
     GoToFile(crate::goto_file::Palette),
     ForgeOpen(crate::forge::OpenForm),
     ForgeCommit(crate::forge::CommitForm),
+    ForgeResolve(crate::forge::ResolveForm),
+    ForgeMergeRequest(crate::forge::MergeRequestNote),
 }
 
 impl Dialog {
@@ -67,6 +69,8 @@ impl Dialog {
             Dialog::GoToFile(_) => "go_to_file",
             Dialog::ForgeOpen(_) => "forge_open",
             Dialog::ForgeCommit(_) => "forge_commit",
+            Dialog::ForgeResolve(_) => "forge_resolve",
+            Dialog::ForgeMergeRequest(_) => "forge_merge_request",
         }
     }
 }
@@ -85,7 +89,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         crate::goto_file::show(app, ctx);
         return;
     }
-    if matches!(app.view.dialog, Some(Dialog::ForgeOpen(_) | Dialog::ForgeCommit(_))) {
+    if matches!(app.view.dialog, Some(Dialog::ForgeOpen(_) | Dialog::ForgeCommit(_) | Dialog::ForgeResolve(_) | Dialog::ForgeMergeRequest(_))) {
         crate::forge::dialog(app, ctx);
         return;
     }
@@ -101,7 +105,13 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             Dialog::Prompt(p) => outcome = prompt(ui, &t, p),
             Dialog::Confirm(c) => outcome = confirm(ui, &t, c),
             Dialog::Unsaved(_) => outcome = unsaved(ui, &t, &project),
-            Dialog::Shortcuts | Dialog::Settings | Dialog::GoToFile(_) | Dialog::ForgeOpen(_) | Dialog::ForgeCommit(_) => {}
+            Dialog::Shortcuts
+            | Dialog::Settings
+            | Dialog::GoToFile(_)
+            | Dialog::ForgeOpen(_)
+            | Dialog::ForgeCommit(_)
+            | Dialog::ForgeResolve(_)
+            | Dialog::ForgeMergeRequest(_) => {}
             Dialog::About => outcome = about(ui, &t, &engine),
         }
     });

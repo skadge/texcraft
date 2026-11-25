@@ -173,6 +173,8 @@ pub struct App {
     recent_files: Vec<ProjectPath>,
     /// The files changed since the GitLab branch's base, as the top bar last counted them.
     forge_count: forge::Count,
+    /// The GitLab branch checked for new commits.
+    forge_check: forge::Check,
 }
 
 impl App {
@@ -237,6 +239,7 @@ impl App {
             pending_name: None,
             recent_files: Vec::new(),
             forge_count: forge::Count::default(),
+            forge_check: forge::Check::default(),
         };
         app.remember_project();
         app

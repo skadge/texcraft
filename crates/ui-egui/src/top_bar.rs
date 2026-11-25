@@ -109,6 +109,7 @@ pub(crate) fn icon_for(id: &str) -> Option<&'static str> {
         "project.open" => "folder-open",
         "forge.open" => "download",
         "forge.commit" => "git-commit-horizontal",
+        "forge.pull" => "refresh-cw",
         "project.save" => "download",
         "file.import" => "upload",
         "file.new" => "file-code",
