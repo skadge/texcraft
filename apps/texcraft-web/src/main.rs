@@ -223,7 +223,18 @@ mod web {
         }
     }
 
+    /// The largest texture the browser build asks for, glyph atlas included (issue #12).
+    const MAX_TEXTURE_SIDE: usize = 2048;
+
     impl eframe::App for Shell {
+        /// Phones' GPUs can interpolate texture coordinates at half precision: in egui's glyph
+        /// atlas, as wide as the largest texture (8192 px under WebGL 2), the glyphs past its middle
+        /// were then read four texels at a time and drawn garbled. In an atlas of 2048 px a step
+        /// is at most one texel, which the linear filter smooths.
+        fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+            raw_input.max_texture_side = Some(raw_input.max_texture_side.map_or(MAX_TEXTURE_SIDE, |s| s.min(MAX_TEXTURE_SIDE)));
+        }
+
         fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
             if !self.started {
                 self.started = true;
