@@ -93,7 +93,7 @@ fn message_of(body: &[u8]) -> String {
 }
 
 /// Seconds since 1970 by this computer's clock, to tell how long until a rate limit resets.
-fn now_secs() -> Option<u64> {
+pub(crate) fn now_secs() -> Option<u64> {
     #[cfg(not(target_arch = "wasm32"))]
     return std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs());
     #[cfg(target_arch = "wasm32")]

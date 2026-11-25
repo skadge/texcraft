@@ -21,6 +21,7 @@ mod github;
 mod gitlab;
 mod http;
 pub mod merge;
+pub mod oauth;
 mod sync;
 pub mod task;
 
@@ -109,6 +110,8 @@ pub enum Error {
     Busy { branch: String },
     /// A new branch's name git does not accept.
     BranchName(String),
+    /// Signing in did not work, or cannot here: why, in words.
+    SignIn(String),
     /// There is nothing to commit.
     Nothing,
     /// The operation's thread ended without an outcome.
@@ -178,6 +181,7 @@ impl std::fmt::Display for Error {
                 write!(f, "Nothing was committed: the branch {branch} kept getting new commits while yours was made. Try again in a moment.")
             }
             Error::BranchName(why) => write!(f, "This cannot be a branch's name: {why}."),
+            Error::SignIn(why) => f.write_str(why),
             Error::Nothing => f.write_str("Nothing to commit: the files are as on the branch."),
             Error::Stopped => f.write_str("The operation on the forge stopped unexpectedly."),
         }
