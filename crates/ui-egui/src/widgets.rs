@@ -8,7 +8,7 @@ use crate::icons;
 use crate::theme::{Tokens, blend};
 
 /// Background for an interactive control in its current state.
-fn state_fill(t: &Tokens, r: &Response, base: Color32) -> Color32 {
+pub fn state_fill(t: &Tokens, r: &Response, base: Color32) -> Color32 {
     if r.is_pointer_button_down_on() {
         blend(base, t.pressed)
     } else if r.hovered() || r.has_focus() {

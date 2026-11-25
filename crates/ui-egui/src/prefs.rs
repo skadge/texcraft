@@ -116,6 +116,7 @@ impl Prefs {
         match self.side.as_str() {
             "outline" => Some(Side::Outline),
             "review" => Some(Side::Review),
+            "search" => Some(Side::Search),
             "" => None,
             _ => Some(Side::Files),
         }
@@ -132,6 +133,7 @@ impl Prefs {
             Some(Side::Files) => "files",
             Some(Side::Outline) => "outline",
             Some(Side::Review) => "review",
+            Some(Side::Search) => "search",
             None => "",
         }
         .to_owned();

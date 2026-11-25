@@ -19,6 +19,7 @@ mod recent;
 mod regions;
 mod rename;
 mod review;
+mod search;
 mod shortcuts;
 mod unsaved;
 mod vim;
