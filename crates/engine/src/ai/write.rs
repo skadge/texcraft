@@ -12,7 +12,7 @@ use craft_ai_core::{CapabilityId, HistoryRecord, InputRole, Payload, Request};
 use serde_json::{Value, json};
 use texcraft_project::{Project, ProjectPath};
 
-use super::{Answer, COMPLETE, Event, REWRITE, Task, Work, kind_of, now_ms};
+use super::{Answer, COMPLETE, Event, INSTRUCT, REWRITE, Task, Work, kind_of, now_ms};
 use crate::{Result, Session};
 
 /// Characters of text sent on each side of a selection to rewrite, at most (whole lines).
@@ -35,6 +35,9 @@ pub enum How {
     Grammar,
     /// Into this language, named in English.
     Translate(String),
+    /// As the user asked, in their words ("flesh out these bullet points"): its own kind of
+    /// request, and it may add text and LaTeX.
+    Instruct(String),
 }
 
 impl How {
@@ -65,6 +68,32 @@ impl How {
             Self::Formal => "formal",
             Self::Grammar => "grammar",
             Self::Translate(_) => "translate",
+            Self::Instruct(_) => "instruct",
+        }
+    }
+
+    /// An instruction, checked: one line of at most [`MAX_INSTRUCTION_CHARS`].
+    pub fn instruct(instruction: &str) -> Result<Self> {
+        let i = instruction.trim();
+        if i.is_empty() {
+            return Err("Say how to change the selection: `instruction`, such as \"flesh out these bullet points\".".to_owned());
+        }
+        if i.chars().count() > MAX_INSTRUCTION_CHARS || i.chars().any(char::is_control) {
+            return Err(format!("Say how to change it in one line of at most {MAX_INSTRUCTION_CHARS} characters."));
+        }
+        Ok(Self::Instruct(i.to_owned()))
+    }
+
+    /// The kind of request it is, for consent.
+    fn capability(&self) -> &'static str {
+        if matches!(self, Self::Instruct(_)) { INSTRUCT } else { REWRITE }
+    }
+
+    /// What the model is told: the rules, then how.
+    fn instructions(&self) -> String {
+        match self {
+            Self::Instruct(i) => format!("{INSTRUCT_INSTRUCTIONS}\n\nThe author's request: {i}"),
+            _ => format!("{REWRITE_INSTRUCTIONS} {}", self.instruction()),
         }
     }
 
@@ -75,6 +104,7 @@ impl How {
             Self::Formal => "Make it more formal, as in a scholarly text.".to_owned(),
             Self::Grammar => "Correct its grammar and spelling only, changing as little as possible.".to_owned(),
             Self::Translate(l) => format!("Translate it into {l}."),
+            Self::Instruct(i) => i.clone(),
         }
     }
 }
@@ -82,6 +112,14 @@ impl How {
 const REWRITE_INSTRUCTIONS: &str = "You rewrite a passage of a LaTeX document. \
 Keep every LaTeX command, every \\label, \\ref and \\cite with its key, and every formula exactly as written; change only the words around them. \
 Answer with the rewritten passage alone, between a line <<<TEXT and a line TEXT>>>.";
+
+const INSTRUCT_INSTRUCTIONS: &str = "You change a passage of a LaTeX document as its author asks. \
+Keep every \\label, \\ref and \\cite of the passage with its key, and every formula of it exactly as written; \
+you may add text, and new LaTeX, as the request needs. \
+Answer with the changed passage alone, between a line <<<TEXT and a line TEXT>>>.";
+
+/// The longest instruction, in characters.
+pub const MAX_INSTRUCTION_CHARS: usize = 500;
 
 /// What a rewrite sends: the selection and a little text on each side, in [`Passage::prompt`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,7 +170,7 @@ impl Passage {
 
     /// The whole text sent to the model.
     pub fn prompt(&self) -> String {
-        let mut out = format!("{REWRITE_INSTRUCTIONS} {}\n", self.how.instruction());
+        let mut out = format!("{}\n", self.how.instructions());
         if !self.before.trim().is_empty() {
             out.push_str(&format!("\nThe text just before the passage, for context only:\n<<<BEFORE\n{}\nBEFORE>>>\n", self.before));
         }
@@ -144,9 +182,9 @@ impl Passage {
     }
 
     pub(super) fn request(&self) -> Result<Request> {
-        let capability = CapabilityId::parse(REWRITE).map_err(|e| e.to_string())?;
+        let capability = CapabilityId::parse(self.how.capability()).map_err(|e| e.to_string())?;
         Ok(Request::new(capability)
-            .with_input(InputRole::Prompt, Payload::text(format!("{REWRITE_INSTRUCTIONS} {}", self.how.instruction())))
+            .with_input(InputRole::Prompt, Payload::text(self.how.instructions()))
             .with_input(InputRole::Source, Payload::text(self.text.clone()))
             .with_input(InputRole::Context, Payload::text(self.before.clone()))
             .with_input(InputRole::Context, Payload::text(self.after.clone())))
@@ -159,6 +197,7 @@ impl Passage {
             "end": self.end,
             "how": self.how.id(),
             "language": match &self.how { How::Translate(l) => Some(l), _ => None },
+            "instruction": match &self.how { How::Instruct(i) => Some(i), _ => None },
             "before": self.before,
             "text": self.text,
             "after": self.after,
@@ -194,9 +233,11 @@ pub fn rewritten(answer: &str, original: &str) -> String {
 }
 
 /// The rewrite of `passage` refused, with what it changed besides words; `None` when it kept
-/// the passage's LaTeX.
-fn refusal(original: &str, new: &str) -> Option<String> {
-    let changes = texcraft_latex::keep::compare(original, new);
+/// the passage's LaTeX. A change asked for in the user's words may add text and LaTeX, and change
+/// markup, but not drop or alter a label, reference, citation or formula.
+fn refusal(how: &How, original: &str, new: &str) -> Option<String> {
+    let instructed = matches!(how, How::Instruct(_));
+    let changes = if instructed { texcraft_latex::keep::dropped(original, new) } else { texcraft_latex::keep::compare(original, new) };
     if changes.is_empty() {
         return None;
     }
@@ -204,7 +245,11 @@ fn refusal(original: &str, new: &str) -> Option<String> {
     if changes.len() > 4 {
         said.push(format!("{} more", changes.len() - 4));
     }
-    Some(format!("The rewrite is not offered: it {}. Rewrite a smaller passage, or try again.", said.join(", ")))
+    Some(if instructed {
+        format!("The change is not offered: it {}. Ask again, or select less.", said.join(", "))
+    } else {
+        format!("The rewrite is not offered: it {}. Rewrite a smaller passage, or try again.", said.join(", "))
+    })
 }
 
 /// The last rewrite.
@@ -329,7 +374,10 @@ impl Session {
                 .and_then(|n| usize::try_from(n).ok())
                 .ok_or_else(|| format!("`{name}` is a character position, from 0."))
         };
-        let how = How::parse(p.get("how").and_then(Value::as_str).unwrap_or_default(), p.get("language").and_then(Value::as_str))?;
+        let how = match p.get("instruction") {
+            Some(i) => How::instruct(i.as_str().ok_or("`instruction` is text: how to change the selection.")?)?,
+            None => How::parse(p.get("how").and_then(Value::as_str).unwrap_or_default(), p.get("language").and_then(Value::as_str))?,
+        };
         Passage::of(&self.project, path, place("start")?, place("end")?, how)
     }
 
@@ -359,11 +407,21 @@ impl Session {
     pub(crate) fn ai_rewrite(&mut self, p: &Value, background: bool) -> Result<Value> {
         self.ai_ready()?;
         let passage = self.ai_passage(p)?;
-        let opts = craft_ai::GenOpts { max_tokens: u32::try_from(passage.text.len() / 2 + 400).unwrap_or(4000).min(4000), temperature: 0.3 };
-        let (model, run, answer) = self.begin(&passage.request()?, ("rewrite", "Rewrite"), passage.prompt(), opts, Answer::Text, |to| {
-            format!(
-                "Rewriting sends the selected text and a few lines around it to {to}. Agree to it first (the window asks; agents: ai.disclose with request rewrite shows it, ai.consent agrees)."
-            )
+        let instructed = matches!(passage.how, How::Instruct(_));
+        // A change in the user's words may make the passage much longer.
+        let tokens = if instructed { 4000 } else { u32::try_from(passage.text.len() / 2 + 400).unwrap_or(4000).min(4000) };
+        let opts = craft_ai::GenOpts { max_tokens: tokens, temperature: 0.3 };
+        let role = if instructed { ("instruct", "Change as Asked") } else { ("rewrite", "Rewrite") };
+        let (model, run, answer) = self.begin(&passage.request()?, role, passage.prompt(), opts, Answer::Text, |to| {
+            if instructed {
+                format!(
+                    "Changing a selection as asked sends your instruction, the selected text and a few lines around it to {to}. Agree to it first (the window asks; agents: ai.disclose with request instruct shows it, ai.consent agrees)."
+                )
+            } else {
+                format!(
+                    "Rewriting sends the selected text and a few lines around it to {to}. Agree to it first (the window asks; agents: ai.disclose with request rewrite shows it, ai.consent agrees)."
+                )
+            }
         })?;
         self.ai.rewrite = Some(Rewritten::Running);
         self.ai.task = Some(Task { work: Work::Rewrite { passage: Box::new(passage), model, run }, answer, cancelled: Default::default() });
@@ -439,7 +497,7 @@ impl Session {
         if new == passage.text {
             return Err("The model left the passage as it was.".to_owned());
         }
-        if let Some(why) = refusal(&passage.text, &new) {
+        if let Some(why) = refusal(&passage.how, &passage.text, &new) {
             return Err(why);
         }
         let path = ProjectPath::new(&passage.path).map_err(|e| e.to_string())?;
@@ -485,6 +543,17 @@ mod tests {
         let answer = "Here it is:\n<<<TEXT\n```latex\nA shorter line.\n```\nTEXT>>>\n";
         assert_eq!(rewritten(answer, "  A long line, which is long.\n"), "  A shorter line.\n");
         assert_eq!(rewritten("Plain answer.", "x"), "Plain answer.");
+    }
+
+    #[test]
+    fn a_change_as_asked_may_grow_the_passage_but_not_lose_a_citation() {
+        let how = How::Instruct("flesh it out".to_owned());
+        let bullets = "\\item fast \\cite{a}\n\\item small\n";
+        assert_eq!(refusal(&how, bullets, "It is fast \\cite{a}, and \\emph{small} too \\cite{b}.\n"), None);
+        assert!(refusal(&how, bullets, "It is fast and small.\n").is_some_and(|why| why.contains("\\cite{a}")));
+        // A rewrite may not add a citation.
+        assert!(refusal(&How::Shorter, bullets, "Fast \\cite{a} \\cite{b}; small.\\item").is_some());
+        assert!(How::instruct("  ").is_err() && How::instruct("two\nlines").is_err());
     }
 
     #[test]

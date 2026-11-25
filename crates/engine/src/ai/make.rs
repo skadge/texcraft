@@ -3,9 +3,10 @@
 //! Making sends the description, what kind of thing it is, the main document's preamble (so the
 //! model uses the packages it loads) and, for a figure, the names of the project's images. The
 //! answer is typeset after the preamble in a scratch document ([`Typeset`]) before it is offered:
-//! its preview, or retex's messages, which can be sent back to ask again. Inserted, it is a
-//! suggested change at the caret by "AI (<model>)", and the packages it needs a second one before
-//! `\begin{document}`, never edits.
+//! its preview, or retex's messages, which can be sent back to ask again. Inserted by the person who
+//! asked for it and saw it (the window's Insert), it is an edit at the caret, undone by Undo, and
+//! the packages it needs go before `\begin{document}` in the same way. Inserted without being looked
+//! at (an agent, `ai.make` with `insert`), it is a suggested change by "AI (<model>)" instead.
 //!
 //! A reference sends the title or DOI alone. The entry the model drafts goes at the end of the
 //! chosen `.bib` (created when it does not exist) as a suggested change, under a comment line
@@ -20,7 +21,7 @@ use texcraft_project::{Contents, Project, ProjectPath};
 
 use super::write::{between, unfenced};
 use super::{Answer, Event, MAKE, MAX_PREAMBLE_CHARS, REFERENCE, Task, Work, kind_of, now_ms};
-use crate::{Result, Session};
+use crate::{Change, Origin, Result, Session, Transaction};
 
 /// The longest description or query sent, in characters.
 pub const MAX_DESCRIPTION_CHARS: usize = 2000;
@@ -208,11 +209,20 @@ pub enum Made {
         path: String,
         at: usize,
         preview: Preview,
-        /// The suggested changes it became, once inserted.
-        inserted: Vec<String>,
+        /// How it was inserted, once it is.
+        inserted: Option<Inserted>,
     },
     Failed(String),
     Cancelled,
+}
+
+/// How made LaTeX went into the text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Inserted {
+    /// As these suggested changes.
+    Suggested(Vec<String>),
+    /// As an edit (Undo takes it out).
+    Edited,
 }
 
 /// The LaTeX and the packages in a model's answer. A whole document is cut to its body, its
@@ -445,7 +455,11 @@ impl Session {
                     "model": model,
                     "typeset": matches!(preview, Preview::Typeset(_)),
                     "messages": messages,
-                    "suggestions": inserted,
+                    "suggestions": match inserted {
+                        Some(Inserted::Suggested(ids)) => ids.clone(),
+                        _ => Vec::new(),
+                    },
+                    "edited": *inserted == Some(Inserted::Edited),
                     "note": (!messages.is_empty()).then_some("It does not typeset, so it was not inserted: ask again with `again: true` to send retex's messages back, or insert it anyway with ai.insert_made {anyway: true}."),
                 }))
             }
@@ -474,11 +488,11 @@ impl Session {
                     path: making.path.clone(),
                     at: making.at,
                     preview,
-                    inserted: Vec::new(),
+                    inserted: None,
                 });
                 if insert
                     && typeset
-                    && let Err(e) = self.ai_insert_made(false)
+                    && let Err(e) = self.ai_insert_made(false, false)
                 {
                     self.ai.made = Some(Made::Failed(e.clone()));
                     return Event::Made(Err(e));
@@ -495,15 +509,18 @@ impl Session {
         }
     }
 
-    /// `ai.insert_made`: the last thing made becomes a suggested change at its caret, and the
-    /// packages it needs another one before `\begin{document}`. One that did not typeset only
+    /// `ai.insert_made`: the last thing made goes in at its caret, and the packages it needs
+    /// before `\begin{document}`: with `edit`, as an edit Undo takes out (the window, whose user
+    /// saw it and chose Insert); otherwise as suggested changes. One that did not typeset only
     /// `anyway`.
-    pub(crate) fn ai_insert_made(&mut self, anyway: bool) -> Result<Value> {
+    pub(crate) fn ai_insert_made(&mut self, anyway: bool, edit: bool) -> Result<Value> {
         let Some(Made::Done { latex, packages, model, path, at, preview, inserted, .. }) = self.ai.made.clone() else {
             return Err("There is nothing made to insert: make something first (ai.make).".to_owned());
         };
-        if !inserted.is_empty() {
-            return Err("It is already inserted as a suggested change.".to_owned());
+        match inserted {
+            Some(Inserted::Suggested(_)) => return Err("It is already inserted as a suggested change.".to_owned()),
+            Some(Inserted::Edited) => return Err("It is already inserted.".to_owned()),
+            None => {}
         }
         if let Preview::NotTypeset(messages) = &preview
             && !anyway
@@ -519,20 +536,51 @@ impl Session {
         // On lines of its own.
         let before = if at == 0 || chars.get(at - 1) == Some(&'\n') { "" } else { "\n" };
         let after = if chars.get(at) == Some(&'\n') { "" } else { "\n" };
-        let mut ids = vec![self.suggest_change(&p, &source, at, at, &format!("{before}{latex}{after}"), &model)?];
+        let body = format!("{before}{latex}{after}");
+        // Where the packages go: the main document, before `\begin{document}`.
         let mut note = None;
+        let mut place = None;
         if !packages.is_empty() {
             let main = self.project.main().cloned();
-            let place = main.as_ref().and_then(|m| self.project.text(m).ok().map(|t| (m.clone(), t.to_owned())));
-            match place.and_then(|(m, t)| t.find("\\begin{document}").map(|b| (m, t[..b].chars().count(), t))) {
-                Some((m, at, text)) => ids.push(self.suggest_change(&m, &text, at, at, &format!("{}\n", packages.join("\n")), &model)?),
+            let found = main.as_ref().and_then(|m| self.project.text(m).ok().map(|t| (m.clone(), t.to_owned())));
+            match found.and_then(|(m, t)| t.find("\\begin{document}").map(|b| (m, t[..b].chars().count(), t))) {
+                Some(found) => place = Some(found),
                 None => note = Some(format!("It needs {} in the preamble: the main document has none to add them to.", packages.join(", "))),
             }
         }
-        if let Some(Made::Done { inserted, .. }) = &mut self.ai.made {
-            inserted.clone_from(&ids);
+        let lines = format!("{}\n", packages.join("\n"));
+        if !edit {
+            let mut ids = vec![self.suggest_change(&p, &source, at, at, &body, &model)?];
+            if let Some((m, at, text)) = place {
+                ids.push(self.suggest_change(&m, &text, at, at, &lines, &model)?);
+            }
+            if let Some(Made::Done { inserted, .. }) = &mut self.ai.made {
+                *inserted = Some(Inserted::Suggested(ids.clone()));
+            }
+            return Ok(json!({"suggestions": ids, "note": note}));
         }
-        Ok(json!({"suggestions": ids, "note": note}))
+        // One edit for each file: in the same file, the packages and the LaTeX go together.
+        let added = if place.is_some() { packages.clone() } else { Vec::new() };
+        let mut start = at;
+        match place {
+            Some((m, pat, _)) if m == p => {
+                let changes = vec![Change { start: pat, end: pat, text: lines.clone() }, Change { start: at, end: at, text: body.clone() }];
+                self.apply_edit(&p, &Transaction::new(changes).map_err(|e| e.to_string())?, Origin::Local)?;
+                if pat <= at {
+                    start += lines.chars().count();
+                }
+            }
+            Some((m, pat, _)) => {
+                self.apply_edit(&p, &Transaction::insert(at, &body), Origin::Local)?;
+                self.apply_edit(&m, &Transaction::insert(pat, &lines), Origin::Local)?;
+            }
+            None => self.apply_edit(&p, &Transaction::insert(at, &body), Origin::Local)?,
+        }
+        if let Some(Made::Done { inserted, .. }) = &mut self.ai.made {
+            *inserted = Some(Inserted::Edited);
+        }
+        let end = start + body.chars().count();
+        Ok(json!({"edited": true, "path": path, "start": start, "end": end, "packages": added, "note": note, "revision": self.revision}))
     }
 
     /// What `ai.reference`'s (or `ai.disclose`'s) parameters ask for.

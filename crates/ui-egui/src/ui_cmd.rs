@@ -56,6 +56,9 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     // `{"how": "shorter"}`, or `{"how": "translate", "language": "French"}`: the Edit menu's and
     // the text's context menu's Rewrite with AI submenu, whose entries carry these parameters.
     ui("edit.rewrite", "Rewrite with AI", "Rewrite with AI", "ai", None),
+    // Opens a field for how to change the selection, in the user's words ("flesh out these
+    // bullet points"); the change arrives as a suggestion, as a rewrite does.
+    ui("edit.instruct", "Ask AI to Change This…", "Rewrite with AI", "ai", None),
     // Insert holds what the editor's toolbar does, for the keyboard and when the toolbar is narrow.
     ui("edit.section", "Section", "Insert", "headings", None),
     ui("edit.subsection", "Subsection", "Insert", "headings", None),
@@ -142,7 +145,7 @@ pub const MENUS: &[&str] = &["File", "Edit", "Insert", "Help"];
 pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
     match id {
         "edit.cut" | "edit.copy" if app.editor.source.selected().is_none() => Err(tl!("Select some text first.").to_owned()),
-        "edit.rewrite" => crate::ai::can_rewrite(app),
+        "edit.rewrite" | "edit.instruct" => crate::ai::can_rewrite(app),
         "edit.ai_make" | "edit.ai_reference" => crate::ai_make::can_make(app),
         "edit.ai_review" => crate::ai_ask::can_review(app),
         "edit.accept_all" | "edit.reject_all" if crate::review::open_suggestions_in_current(app) == 0 => {
@@ -249,6 +252,7 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             }
         }
         "edit.rewrite" => crate::ai::rewrite(app, params),
+        "edit.instruct" => crate::ai::open_instruct(app),
         "edit.ai_make" => crate::ai_make::open_make(app),
         "edit.ai_reference" => crate::ai_make::open_reference(app),
         "edit.ai_review" => crate::ai_ask::review(app),

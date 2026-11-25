@@ -53,6 +53,8 @@ pub const APP: &str = "texcraft";
 pub const EXPLAIN: &str = "text.explain";
 /// The kind of request a rewrite is.
 pub const REWRITE: &str = "text.rewrite";
+/// The kind of request changing a selection as the user asked, in their words, is.
+pub const INSTRUCT: &str = "text.instruct";
 /// The kind of request a continuation is.
 pub const COMPLETE: &str = "text.complete";
 /// The kind of request making LaTeX from a description is.
@@ -67,10 +69,12 @@ pub use ask::{
     Answered, Link, MAX_ASK_CHARS, MAX_QUESTION_CHARS, MAX_REVIEW_CHARS, Question, Remark, Reviewed, Scope, Section, find_quote, links, remarks,
     section_at,
 };
-pub use make::{MAX_DESCRIPTION_CHARS, Made, MakeKind, Making, Preview, Referenced, Scratch, Typeset, UNVERIFIED, entry, made, retex_typeset};
+pub use make::{
+    Inserted, MAX_DESCRIPTION_CHARS, Made, MakeKind, Making, Preview, Referenced, Scratch, Typeset, UNVERIFIED, entry, made, retex_typeset,
+};
 pub use write::{
-    COMPLETE_EVERY_MS, Ghost, How, MAX_PARAGRAPH_CHARS, MAX_REWRITE_CHARS, Paragraph, Passage, REWRITE_CONTEXT_CHARS, Rewritten, continuation,
-    rewritten,
+    COMPLETE_EVERY_MS, Ghost, How, MAX_INSTRUCTION_CHARS, MAX_PARAGRAPH_CHARS, MAX_REWRITE_CHARS, Paragraph, Passage, REWRITE_CONTEXT_CHARS,
+    Rewritten, continuation, rewritten,
 };
 /// Lines of source sent on each side of the message's line.
 pub const CONTEXT_LINES: usize = 6;
@@ -82,6 +86,8 @@ pub const PROJECT_FILE: &str = ".texcraft/ai.json";
 const MAX_EXPLANATIONS: usize = 64;
 /// Request log lines kept in the session.
 const MAX_LOG: usize = 200;
+/// The texts of the last requests kept in the session, for "Show what is sent".
+const MAX_SENT: usize = 20;
 
 /// What is kept between runs (in the preferences): the connection, which holds a reference to its
 /// token and never the token, the model, and the agreements.
@@ -434,6 +440,9 @@ pub(crate) struct State {
     task: Option<Task>,
     explanations: Vec<(Key, Explanation)>,
     log: Vec<HistoryRecord>,
+    /// The whole text of the last requests (run, text), in memory only: never in the log or the
+    /// preferences.
+    sent: Vec<(String, String)>,
     /// The last rewrite.
     rewrite: Option<Rewritten>,
     /// The continuation offered after the caret.
@@ -463,6 +472,7 @@ impl Default for State {
             task: None,
             explanations: Vec::new(),
             log: Vec::new(),
+            sent: Vec::new(),
             rewrite: None,
             ghost: None,
             last_complete: 0,
@@ -497,13 +507,23 @@ fn destination(c: &Connection) -> String {
 }
 
 /// The kinds of request, as `ai.disclose` and `ai.consent` name them.
-pub const REQUESTS: [&str; 7] = ["explain", "rewrite", "complete", "make", "reference", "ask", "review"];
+pub const REQUESTS: [&str; 8] = ["explain", "rewrite", "instruct", "complete", "make", "reference", "ask", "review"];
+
+/// The name `ai.disclose` and `ai.consent` give a kind of request (its capability id).
+fn request_name(capability: &str) -> Option<&'static str> {
+    REQUESTS.into_iter().find(|r| capability_of(r) == Some(capability))
+}
+
+fn capability_of(name: &str) -> Option<&'static str> {
+    capability(name).ok()
+}
 
 /// The kind of request `name` is (one of [`REQUESTS`], or its capability id).
 fn capability(name: &str) -> Result<&'static str> {
     match name {
         "explain" | EXPLAIN => Ok(EXPLAIN),
         "rewrite" | REWRITE => Ok(REWRITE),
+        "instruct" | INSTRUCT => Ok(INSTRUCT),
         "complete" | COMPLETE => Ok(COMPLETE),
         "make" | MAKE => Ok(MAKE),
         "reference" | REFERENCE => Ok(REFERENCE),
@@ -622,9 +642,11 @@ impl Session {
             "model": a.saved.model,
             "models": a.models,
             "project_off": project_off,
+            "agreed": c.map(|c| agreed(&a.saved.consent, c)).unwrap_or_default(),
             "busy": a.task.as_ref().map(|t| match t.work {
                 Work::Models { .. } => "models",
                 Work::Explain { .. } => "explain",
+                Work::Rewrite { ref passage, .. } if matches!(passage.how, How::Instruct(_)) => "instruct",
                 Work::Rewrite { .. } => "rewrite",
                 Work::Complete { .. } => "complete",
                 Work::Make { .. } => "make",
@@ -767,8 +789,11 @@ impl Session {
         self.ai_ready()?;
         let kind = capability(p.get("request").and_then(Value::as_str).unwrap_or("explain"))?;
         let (request, sends) = match kind {
-            REWRITE => {
+            REWRITE | INSTRUCT => {
                 let passage = self.ai_passage(p)?;
+                if (kind == INSTRUCT) != matches!(passage.how, How::Instruct(_)) {
+                    return Err("A change as asked takes an `instruction`; a rewrite takes `how`.".to_owned());
+                }
                 (passage.request()?, passage.describe())
             }
             COMPLETE => {
@@ -819,6 +844,38 @@ impl Session {
         self.ai.saved.consent.grant(&d);
         self.changed_ai();
         Ok(json!({"agreed": kind, "destination": d.destination}))
+    }
+
+    /// `ai.revoke`: withdraws the agreement to one kind of request (`request`), or to all of them,
+    /// for the connection: the next request of that kind asks again.
+    pub(crate) fn ai_revoke(&mut self, request: Option<&str>) -> Result<Value> {
+        let c = self.ai.saved.connection.clone().ok_or("AI is off: connect a model first (Settings › AI).")?;
+        let app = app()?;
+        match request {
+            None => self.ai.saved.consent.revoke(&app, &c.id),
+            Some(name) => {
+                let kind = capability(name)?;
+                self.ai
+                    .saved
+                    .consent
+                    .records
+                    .retain(|r| !(r.app == app && r.connection == c.id && r.capability.as_ref().is_some_and(|k| k.as_str() == kind)));
+            }
+        }
+        self.changed_ai();
+        Ok(json!({"agreed": agreed(&self.ai.saved.consent, &c)}))
+    }
+
+    /// `ai.sent`: the whole text a request of this session sent (`run`, as the request log names
+    /// it). Only the last few are kept, and only in memory.
+    pub(crate) fn ai_sent(&self, run: &str) -> Result<Value> {
+        let (_, text) = self
+            .ai
+            .sent
+            .iter()
+            .find(|(r, _)| r == run)
+            .ok_or_else(|| format!("The text of request {run} is not kept: only the last {MAX_SENT} of this session are."))?;
+        Ok(json!({"run": run, "text": text}))
     }
 
     /// `ai.models`: lists the endpoint's models (a handshake: no document text is sent).
@@ -964,6 +1021,9 @@ impl Session {
             estimate: None,
             prompt: None,
         }));
+        self.ai.sent.push((run.clone(), prompt.clone()));
+        let over = self.ai.sent.len().saturating_sub(MAX_SENT);
+        self.ai.sent.drain(..over);
         let secrets: Vec<SecretString> = token.into_iter().collect();
         let answer = spawn(move || provider.complete(&prompt, &opts).map(after).map_err(|e| scrub(&e.to_string(), &secrets)));
         Ok((model, run, answer))
@@ -1087,6 +1147,22 @@ impl Session {
         let over = self.ai.log.len().saturating_sub(MAX_LOG);
         self.ai.log.drain(..over);
     }
+}
+
+/// The kinds of request (as [`REQUESTS`] names them) the user agreed to send to `c`'s endpoint,
+/// and that still hold.
+fn agreed(ledger: &ConsentLedger, c: &Connection) -> Vec<&'static str> {
+    let now = u64::try_from(chrono::Utc::now().timestamp()).unwrap_or_default();
+    let to = destination(c);
+    let mut out: Vec<&'static str> = ledger
+        .records
+        .iter()
+        .filter(|r| r.app.as_str() == APP && r.connection == c.id && r.destination == to && r.expires_at.is_none_or(|t| now < t))
+        .filter_map(|r| r.capability.as_ref().and_then(|k| request_name(k.as_str())))
+        .collect();
+    out.sort_by_key(|n| REQUESTS.iter().position(|r| r == n));
+    out.dedup();
+    out
 }
 
 /// Runs `job` on its own thread (in the browser, where nothing reaches this, at once).

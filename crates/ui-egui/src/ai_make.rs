@@ -1,6 +1,8 @@
 //! Making LaTeX and drafting references with AI (docs/ROADMAP.md, AI4): Insert › Make with AI…
 //! asks for a description, shows the model's LaTeX typeset (or retex's messages, with Ask Again
-//! with the Error) and inserts it as a suggested change at the caret; Insert › Add a Reference
+//! with the Error) and inserts it at the caret as an edit Undo takes out (the user saw it and chose
+//! Insert: a suggestion to accept as well would be a second yes, and is easy to miss beside a
+//! narrow editor); Insert › Add a Reference
 //! with AI… drafts a BibTeX entry from a title or DOI into a `.bib`, as a suggested change, and
 //! says plainly that models invent references. Both go through `ai.make`, `ai.insert_made` and
 //! `ai.reference`; the first request of each kind asks first ([`crate::ai::request`]).
@@ -162,7 +164,7 @@ pub(crate) fn make_dialog(app: &mut App, ctx: &egui::Context) {
             }
             None => {
                 ui.label(
-                    RichText::new(tl!("The model's LaTeX is typeset here before you insert it, and goes in as a suggested change at the caret."))
+                    RichText::new(tl!("The model's LaTeX is typeset here before you insert it at the caret; Undo takes it out again."))
                         .font(t.small())
                         .color(t.text_muted),
                 );
@@ -179,7 +181,7 @@ pub(crate) fn make_dialog(app: &mut App, ctx: &egui::Context) {
                         act = MakeAct::Stop;
                     }
                 }
-                Some(Made::Done { preview: Preview::Typeset(_), inserted, .. }) if inserted.is_empty() => {
+                Some(Made::Done { preview: Preview::Typeset(_), inserted: None, .. }) => {
                     if ui.add(primary(tl!("Insert")).min_size(egui::vec2(88.0, 30.0))).clicked() {
                         act = MakeAct::Insert { anyway: false };
                     }
@@ -187,7 +189,7 @@ pub(crate) fn make_dialog(app: &mut App, ctx: &egui::Context) {
                         act = MakeAct::Make { again: false };
                     }
                 }
-                Some(Made::Done { preview: Preview::NotTypeset(_), inserted, .. }) if inserted.is_empty() => {
+                Some(Made::Done { preview: Preview::NotTypeset(_), inserted: None, .. }) => {
                     let again = ui.add_enabled(ready, primary(tl!("Ask Again with the Error")).min_size(egui::vec2(160.0, 30.0)));
                     if again.clicked() {
                         act = MakeAct::Make { again: true };
@@ -229,18 +231,39 @@ pub(crate) fn make_dialog(app: &mut App, ctx: &egui::Context) {
             crate::ai::request(app, Kind::Make, target, Some(Dialog::AiMake(f)));
         }
         MakeAct::Insert { anyway } => {
-            if let Some(done) = app.run("ai.insert_made", json!({"anyway": anyway})) {
+            // While suggesting, it is a suggestion like any other change.
+            let edit = !app.editor.suggest;
+            if let Some(done) = app.run("ai.insert_made", json!({"anyway": anyway, "edit": edit})) {
                 app.view.dialog = None;
-                let said = match done["note"].as_str() {
-                    Some(note) => {
-                        format!("{} {note}", tl!("Inserted as a suggested change: accept or reject it beside the text or in the Review panel."))
-                    }
-                    None => tl!("Inserted as a suggested change: accept or reject it beside the text or in the Review panel.").to_owned(),
-                };
-                app.view.status = Some((said, false));
+                inserted(app, &done);
             }
         }
     }
+}
+
+/// After Insert: the editor shows the LaTeX at the caret, selected, and the status line says what
+/// went in and how to take it out.
+fn inserted(app: &mut App, done: &Value) {
+    if done["edited"] != true {
+        let said = tl!("Inserted as a suggested change: accept or reject it beside the text or in the Review panel.");
+        app.view.status = Some((said.to_owned(), false));
+        return;
+    }
+    let (Some(path), Some(start), Some(end)) = (done["path"].as_str(), done["start"].as_u64(), done["end"].as_u64()) else { return };
+    let (Ok(start), Ok(end)) = (usize::try_from(start), usize::try_from(end)) else { return };
+    if let Ok(path) = ProjectPath::new(path) {
+        crate::editor::select_after_edit(app, &path, start, end);
+    }
+    let packages: Vec<&str> = done["packages"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    let mut said = if packages.is_empty() {
+        tl!("Inserted at the caret: Undo takes it out.").to_owned()
+    } else {
+        tl!("Inserted at the caret, and {packages} before \\begin{document}: Undo takes them out.").replace("{packages}", &packages.join(", "))
+    };
+    if let Some(note) = done["note"].as_str() {
+        said = format!("{said} {note}");
+    }
+    app.view.status = Some((said, false));
 }
 
 /// The made LaTeX: its preview or why it does not typeset, the code, the packages it needs.
@@ -282,8 +305,7 @@ fn done(ui: &mut egui::Ui, t: &Tokens, form: &mut MakeForm, latex: &str, package
         }
     }
     if !packages.is_empty() {
-        let said = tl!("It needs {packages}: inserting it adds them before \\begin{document} too, as a second suggested change.")
-            .replace("{packages}", &packages.join(", "));
+        let said = tl!("It needs {packages}: inserting it adds them before \\begin{document} too.").replace("{packages}", &packages.join(", "));
         ui.label(RichText::new(said).font(t.small()).color(t.text));
     }
     ui.add_space(t.unit);

@@ -158,6 +158,56 @@ fn an_explanation_is_refused_until_the_user_agrees_and_nothing_is_sent_before() 
     Ok(())
 }
 
+/// Issue #15: an agreement is to a kind of request, kept with the settings (never any text) so a
+/// new session restored from them does not ask again; withdrawing it asks again.
+#[test]
+fn an_agreement_outlives_the_session_until_it_is_withdrawn() -> R {
+    let seen = Seen::default();
+    // The keychain outlives the session.
+    let keychain: Arc<dyn Secrets> = Arc::new(texcraft_engine::ai::SessionSecrets::default());
+    let mut s = session(20, "It is a brace.", &seen)?;
+    s.set_ai_secrets(keychain.clone());
+    connect_remote(&mut s)?;
+    s.execute("ai.consent", &json!({"request": "explain"}))?;
+    s.execute("ai.explain", &json!({"index": 0}))?;
+    let kept = serde_json::to_string(s.ai_saved().0)?;
+    assert!(!kept.contains("Missing } inserted") && !kept.contains("bold word"), "the settings hold what was sent: {kept}");
+    let mut again = session(20, "It is a brace.", &seen)?;
+    again.set_ai_secrets(keychain);
+    again.restore_ai(serde_json::from_str(&kept)?);
+    assert_eq!(again.execute("ai.status", &json!({}))?["agreed"], json!(["explain"]));
+    // Another message, another session: the same kind is not asked about again.
+    again.execute("ai.explain", &json!({"index": 0}))?;
+    assert_eq!(seen.prompts().len(), 2);
+    assert_eq!(
+        again.execute("ai.disclose", &json!({"request": "make", "kind": "table", "description": "x", "path": "main.tex", "at": 0}))?["needs_consent"],
+        true,
+        "agreeing to one kind covered another"
+    );
+    again.execute("ai.revoke", &json!({"request": "explain"}))?;
+    assert!(again.execute("ai.explain", &json!({"index": 0})).is_err(), "a withdrawn agreement still holds");
+    assert_eq!(again.execute("ai.status", &json!({}))?["agreed"], json!([]));
+    Ok(())
+}
+
+/// What a request sent can be shown again afterwards, from this session's memory: the request log
+/// and the settings hold only its size.
+#[test]
+fn what_a_request_sent_can_be_shown_afterwards_but_is_not_logged() -> R {
+    let seen = Seen::default();
+    let mut s = session(20, "It is a brace.", &seen)?;
+    connect_remote(&mut s)?;
+    s.execute("ai.consent", &json!({"request": "explain"}))?;
+    s.execute("ai.explain", &json!({"index": 0}))?;
+    let status = s.execute("ai.status", &json!({}))?;
+    let run = status["requests"][0]["run"].as_str().ok_or("no run in the log")?.to_owned();
+    assert!(!status["requests"].to_string().contains("Missing } inserted"), "the log holds the text sent");
+    let shown = s.execute("ai.sent", &json!({"run": run}))?;
+    assert_eq!(shown["text"].as_str(), seen.prompts().first().map(String::as_str), "not what was sent");
+    assert!(s.execute("ai.sent", &json!({"run": "texcraft-0-0"})).is_err());
+    Ok(())
+}
+
 #[test]
 fn what_an_explanation_sends_is_what_was_disclosed_and_no_more() -> R {
     let seen = Seen::default();
@@ -502,6 +552,40 @@ fn cancelling_a_continuation_leaves_an_explanation_in_flight_alone() -> R {
     Ok(())
 }
 
+/// Issue #14: a change in the user's words is its own kind of request, sends the instruction,
+/// may grow the passage, and is refused when it drops a reference or alters a formula.
+#[test]
+fn a_change_as_asked_needs_its_own_consent_may_add_text_and_keeps_references_and_formulas() -> R {
+    let seen = Seen::default();
+    let longer = "<<<TEXT\nAs Section~\\ref{sec:a} shows, the value $x^2$ is very large: it grows with $n$, as \\cite{knuth84} found.\nTEXT>>>";
+    let (mut s, start, end) = paper(&seen, longer)?;
+    connect_remote(&mut s)?;
+    let p = json!({"path": "main.tex", "start": start, "end": end, "instruction": "Flesh this out"});
+    s.execute("ai.consent", &json!({"request": "rewrite"}))?;
+    let e = s.execute("ai.instruct", &p).err().ok_or("changed with a rewrite's consent")?;
+    assert!(e.contains("instruction") && e.contains("Agree"), "{e}");
+    let mut d = p.clone();
+    d["request"] = json!("instruct");
+    let disclosed = s.execute("ai.disclose", &d)?;
+    assert_eq!(disclosed["needs_consent"], true);
+    s.execute("ai.consent", &json!({"request": "instruct"}))?;
+    let before = text(&s);
+    s.execute("ai.instruct", &p)?;
+    let prompt = seen.prompts().first().cloned().unwrap_or_default();
+    assert_eq!(Some(prompt.as_str()), disclosed["sends"]["prompt"].as_str(), "the request differs from its disclosure");
+    assert!(prompt.contains("Flesh this out") && prompt.contains(SELECTED), "the instruction or the selection is missing");
+    assert_eq!(text(&s), before, "the change was made, not suggested");
+    assert_eq!(suggestions(&mut s)?["openSuggestions"], 1, "the longer passage is not a suggestion");
+    // Shorter and without its reference, or with its formula changed: refused.
+    for answer in ["<<<TEXT\nThe value $x^2$ is large.\nTEXT>>>", "<<<TEXT\nAs Section~\\ref{sec:a} shows, $x^3$ is large and more.\nTEXT>>>"] {
+        seen.answer(answer);
+        let e = s.execute("ai.instruct", &p).err().ok_or("a change that lost LaTeX was offered")?;
+        assert!(e.contains("not offered"), "{e}");
+    }
+    assert_eq!(suggestions(&mut s)?["openSuggestions"], 1);
+    Ok(())
+}
+
 // ----- AI4: making LaTeX and drafting references -----
 
 /// A typesetter that records what it was given and refuses `\bad`.
@@ -566,6 +650,37 @@ fn making_sends_what_was_disclosed_and_a_typeset_answer_becomes_suggestions_neve
     let (pkg, doc, pic, line10) =
         (after.find("\\usepackage{tikz}"), after.find("\\begin{document}"), after.find("\\begin{tikzpicture}"), after.find("Line 10 of"));
     assert!(pkg < doc && doc < pic && pic < line10 && pkg.is_some(), "not in their places:\n{after}");
+    Ok(())
+}
+
+/// What the person saw and chose to insert goes in as one edit of the file: the packages before
+/// `\begin{document}` and the LaTeX at the caret, its place given back with the packages counted.
+#[test]
+fn inserting_as_an_edit_puts_the_latex_at_the_caret_and_its_packages_in_the_preamble_at_once() -> R {
+    let seen = Seen::default();
+    let mut s = session(
+        20,
+        "<<<LATEX\n\\begin{tikzpicture}\\draw (0,0) -- (1,1);\\end{tikzpicture}\nLATEX>>>\n<<<PACKAGES\n\\usepackage{tikz}\nPACKAGES>>>",
+        &seen,
+    )?;
+    typesetter(&mut s);
+    s.execute("ai.connect", &json!({"endpoint": "http://127.0.0.1:11434/v1", "model": "small"}))?;
+    let p = json!({"kind": "tikz", "description": "a line", "path": "main.tex", "at": caret(&s), "insert": false});
+    s.execute("ai.make", &p)?;
+    let main = texcraft_engine::project::ProjectPath::new("main.tex")?;
+    let before = s.revision();
+    let r = s.execute("ai.insert_made", &json!({"edit": true}))?;
+    assert_eq!(r["edited"], true, "{r}");
+    assert_eq!(suggestions(&mut s)?["openSuggestions"], 0, "an edit made suggestions too");
+    let after = text(&s);
+    let (pkg, doc, pic, line10) =
+        (after.find("\\usepackage{tikz}"), after.find("\\begin{document}"), after.find("\\begin{tikzpicture}"), after.find("Line 10 of"));
+    assert!(pkg.is_some() && pkg < doc && doc < pic && pic < line10, "not in their places:\n{after}");
+    let start = r["start"].as_u64().and_then(|n| usize::try_from(n).ok()).unwrap_or_default();
+    let shown: String = after.chars().skip(start).take("\\begin{tikzpicture}".len()).collect();
+    assert_eq!(shown, "\\begin{tikzpicture}", "`start` is not where the LaTeX went");
+    assert_eq!(s.edits_since(&main, before).map(|e| e.len()), Some(1), "the packages and the LaTeX are not one edit");
+    assert!(s.execute("ai.insert_made", &json!({"edit": true})).is_err(), "inserted twice");
     Ok(())
 }
 

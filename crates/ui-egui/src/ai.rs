@@ -31,6 +31,8 @@ pub(crate) struct AiView {
     announced: Option<String>,
     /// The Ask panel's question and scope.
     pub(crate) ask: crate::ai_ask::AskForm,
+    /// The request whose text the request log shows, and that text (or why it cannot).
+    shown: Option<(String, String)>,
 }
 
 /// A kind of request, as the consent dialog asks about it.
@@ -38,6 +40,7 @@ pub(crate) struct AiView {
 pub(crate) enum Kind {
     Explain,
     Rewrite,
+    Instruct,
     Complete,
     Make,
     Reference,
@@ -46,10 +49,28 @@ pub(crate) enum Kind {
 }
 
 impl Kind {
+    /// Every kind, in the order Settings › AI lists them.
+    const ALL: [Kind; 8] = [Kind::Explain, Kind::Rewrite, Kind::Instruct, Kind::Complete, Kind::Make, Kind::Reference, Kind::Ask, Kind::Review];
+
+    /// What the user agrees to send, in Settings › AI's list.
+    fn label(self) -> &'static str {
+        match self {
+            Kind::Explain => tl!("Explaining build messages"),
+            Kind::Rewrite => tl!("Rewriting a selection"),
+            Kind::Instruct => tl!("Changing a selection as asked"),
+            Kind::Complete => tl!("Suggesting the next words"),
+            Kind::Make => tl!("Making LaTeX"),
+            Kind::Reference => tl!("Drafting references"),
+            Kind::Ask => tl!("Asking about the project"),
+            Kind::Review => tl!("Reviewing a section"),
+        }
+    }
+
     fn request(self) -> &'static str {
         match self {
             Kind::Explain => "explain",
             Kind::Rewrite => "rewrite",
+            Kind::Instruct => "instruct",
             Kind::Complete => "complete",
             Kind::Make => "make",
             Kind::Reference => "reference",
@@ -63,6 +84,7 @@ impl Kind {
         match self {
             Kind::Explain => "ai.explain",
             Kind::Rewrite => "ai.rewrite",
+            Kind::Instruct => "ai.instruct",
             Kind::Complete => "ai.complete",
             Kind::Make => "ai.make",
             Kind::Reference => "ai.reference",
@@ -253,6 +275,100 @@ pub(crate) fn rewrite(app: &mut App, params: &Value) {
     request(app, Kind::Rewrite, target, None);
 }
 
+/// The instructions remembered for Ask AI to Change This.
+const MAX_INSTRUCTIONS: usize = 8;
+
+/// The Ask AI to Change This dialog: the selection it is for, and the instruction being typed.
+pub(crate) struct InstructForm {
+    path: String,
+    start: usize,
+    end: usize,
+    text: String,
+    focus: bool,
+}
+
+/// `edit.instruct`: asks how to change the selection.
+pub(crate) fn open_instruct(app: &mut App) {
+    if let Err(why) = can_rewrite(app) {
+        app.view.status = Some((why, true));
+        return;
+    }
+    crate::editor::send_edits(app);
+    let Some(path) = app.session.current().cloned() else { return };
+    let r = app.editor.source.doc.selection.primary();
+    let (start, end) = (crate::suggest::to_source(app, &path, r.start()), crate::suggest::to_source(app, &path, r.end()));
+    app.editor.source.end_visual();
+    let form = InstructForm { path: path.as_str().to_owned(), start, end, text: String::new(), focus: true };
+    app.view.dialog = Some(Dialog::AiInstruct(Box::new(form)));
+}
+
+/// The dialog: one line for the instruction (Enter sends, Escape cancels), the recent ones below.
+pub(crate) fn instruct_dialog(app: &mut App, ctx: &egui::Context) {
+    let t = app.tokens;
+    let recent = app.prefs.ai_instructions.clone();
+    let Some(Dialog::AiInstruct(form)) = &mut app.view.dialog else { return };
+    let mut send = false;
+    let mut close = false;
+    let modal = egui::Modal::new(egui::Id::unique("texcraft-ai-instruct")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
+        ui.set_width(480.0);
+        crate::dialogs::title(ui, &t, tl!("Ask AI to Change This"));
+        let label = ui.label(RichText::new(tl!("How to change the selection")).color(t.text_muted));
+        let edit = egui::TextEdit::singleline(&mut form.text)
+            .hint_text(tl!("Flesh out these bullet points"))
+            .char_limit(texcraft_engine::ai::MAX_INSTRUCTION_CHARS)
+            .desired_width(f32::INFINITY)
+            .margin(egui::vec2(8.0, 6.0));
+        let edit = ui.add(edit).labelled_by(label.id);
+        if std::mem::take(&mut form.focus) {
+            edit.request_focus();
+        }
+        if edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) && !form.text.trim().is_empty() {
+            send = true;
+        }
+        ui.label(
+            RichText::new(tl!("The change comes back as a suggested change. It may add text, but it is not offered if it drops or alters a label, reference, citation or formula."))
+                .font(t.small())
+                .color(t.text_muted),
+        );
+        if !recent.is_empty() {
+            ui.add_space(t.unit * 2.0);
+            ui.label(RichText::new(tl!("Recent")).font(t.strong()));
+            for r in &recent {
+                let b = ui.add(egui::Button::new(RichText::new(r).color(t.text)).frame_when_inactive(false).wrap());
+                if b.on_hover_text(tl!("Use this instruction again")).clicked() {
+                    form.text.clone_from(r);
+                    form.focus = true;
+                }
+            }
+        }
+        ui.add_space(t.unit * 3.0);
+        crate::dialogs::button_row(ui, |ui| {
+            let primary = egui::Button::new(RichText::new(tl!("Send")).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
+            if ui.add_enabled(!form.text.trim().is_empty(), primary.min_size(egui::vec2(88.0, 30.0))).clicked() {
+                send = true;
+            }
+            if ui.add(egui::Button::new(tl!("Cancel")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+                close = true;
+            }
+        });
+    });
+    if modal.should_close() {
+        close = true;
+    }
+    if send {
+        let Some(Dialog::AiInstruct(form)) = app.view.dialog.take() else { return };
+        let instruction = form.text.trim().to_owned();
+        app.prefs.ai_instructions.retain(|i| *i != instruction);
+        app.prefs.ai_instructions.insert(0, instruction.clone());
+        app.prefs.ai_instructions.truncate(MAX_INSTRUCTIONS);
+        app.prefs_changed = true;
+        let target = json!({"path": form.path, "start": form.start, "end": form.end, "instruction": instruction});
+        request(app, Kind::Instruct, target, None);
+    } else if close {
+        app.view.dialog = None;
+    }
+}
+
 fn start(app: &mut App, kind: Kind, mut target: Value) {
     if kind == Kind::Complete {
         app.prefs.ai_complete = true;
@@ -268,6 +384,7 @@ fn start(app: &mut App, kind: Kind, mut target: Value) {
     }
     match kind {
         Kind::Rewrite => app.view.status = Some((tl!("The model is rewriting the selection…").to_owned(), false)),
+        Kind::Instruct => app.view.status = Some((tl!("The model is changing the selection…").to_owned(), false)),
         Kind::Explain => app.view.logs = true,
         Kind::Make | Kind::Reference => crate::ai_make::started(app),
         Kind::Ask => app.view.side = Some(crate::Side::Ask),
@@ -297,8 +414,12 @@ pub(crate) fn rewrite_menu(app: &App, ui: &mut egui::Ui) -> Option<Value> {
             }
         })
     });
-    if let Err(why) = enabled {
+    if let Err(why) = &enabled {
         let _ = translate.inner.response.on_disabled_hover_text(why);
+    }
+    ui.separator();
+    if crate::top_bar::item(ui, &t, None, tl!("Ask AI to Change This…"), None, enabled.clone()) {
+        chosen = Some(json!({"instruct": true}));
     }
     if app.session.ai_busy() {
         ui.separator();
@@ -313,6 +434,8 @@ pub(crate) fn rewrite_menu(app: &App, ui: &mut egui::Ui) -> Option<Value> {
 pub(crate) fn run_rewrite_choice(app: &mut App, choice: &Value) {
     if choice["cancel"] == true {
         app.run("ai.cancel", json!({}));
+    } else if choice["instruct"] == true {
+        crate::ui_cmd::run(app, "edit.instruct");
     } else {
         crate::ui_cmd::run_with(app, "edit.rewrite", choice);
     }
@@ -404,6 +527,9 @@ pub(crate) fn consent_dialog(app: &mut App, ctx: &egui::Context) {
             }
             Kind::Explain => tl!("Explaining a message sends it, its help and the source lines around it to {destination}."),
             Kind::Rewrite => tl!("Rewriting sends the selected text and a few lines around it to {destination}. The rewrite comes back as a suggested change."),
+            Kind::Instruct => tl!(
+                "Changing a selection as you ask sends your instruction, the selected text and a few lines around it to {destination}. The change comes back as a suggested change."
+            ),
             Kind::Complete => tl!(
                 "Suggesting the next words sends the paragraph you are typing, up to the caret, to {destination} after each pause in typing, at most every two seconds."
             ),
@@ -419,9 +545,9 @@ pub(crate) fn consent_dialog(app: &mut App, ctx: &egui::Context) {
         };
         ui.label(what.replace("{destination}", &destination));
         let below = if kind == Kind::Complete {
-            tl!("This is asked once for this connection; each request is logged in Settings › AI. Below is an example of what is sent.")
+            tl!("You are asked once for this kind of request and this connection, then not again: Settings › AI lists what you agreed to, where you can withdraw it, and logs each request with what it sent. Below is an example of what is sent.")
         } else {
-            tl!("This is asked once for this connection; each request is logged in Settings › AI. Below is exactly what is sent.")
+            tl!("You are asked once for this kind of request and this connection, then not again: Settings › AI lists what you agreed to, where you can withdraw it, and logs each request with what it sent. Below is exactly what is sent.")
         };
         ui.label(RichText::new(below).font(t.small()).color(t.text_muted));
         ui.add_space(t.unit * 2.0);
@@ -437,6 +563,7 @@ pub(crate) fn consent_dialog(app: &mut App, ctx: &egui::Context) {
             let label = match kind {
                 Kind::Explain => tl!("Agree and Explain"),
                 Kind::Rewrite => tl!("Agree and Rewrite"),
+                Kind::Instruct => tl!("Agree and Send"),
                 Kind::Complete => tl!("Agree and Turn On"),
                 Kind::Make => tl!("Agree and Make"),
                 Kind::Reference => tl!("Agree and Draft"),
@@ -592,7 +719,8 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         model(app, ui, t, &status, busy);
         project(app, ui, t, &status);
         typing_setting(app, ui, t);
-        requests(ui, t, &status);
+        agreements(app, ui, t, &status);
+        requests(app, ui, t, &status);
     }
 }
 
@@ -685,8 +813,46 @@ fn project(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
     );
 }
 
-/// The request log: when, where, how much, how it ended; never what.
-fn requests(ui: &mut egui::Ui, t: &Tokens, status: &Value) {
+/// What the user agreed to send to this connection, each with Withdraw.
+fn agreements(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
+    let agreed: Vec<&str> = status["agreed"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    ui.label(RichText::new(tl!("Agreed to send")).font(t.strong()));
+    if status["local"] == true {
+        ui.label(RichText::new(tl!("Nothing leaves this computer: requests to it are not asked about.")).font(t.small()).color(t.text_muted));
+        return;
+    }
+    if agreed.is_empty() {
+        let said = tl!("Nothing yet: the first request of each kind shows what it sends and asks.");
+        ui.label(RichText::new(said).font(t.small()).color(t.text_muted));
+        return;
+    }
+    let to = status["destination"].as_str().unwrap_or_default();
+    let said = tl!("You are not asked again before these are sent to {destination}. Withdraw one to be asked before it is next sent.");
+    ui.label(RichText::new(said.replace("{destination}", to)).font(t.small()).color(t.text_muted));
+    let mut withdraw = None;
+    for kind in Kind::ALL.into_iter().filter(|k| agreed.contains(&k.request())) {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(kind.label()).color(t.text));
+            let name = tl!("Withdraw: {kind}").replace("{kind}", kind.label());
+            let r = widgets::text_button(ui, t, tl!("Withdraw"), true);
+            let r = r.on_hover_text(tl!("Ask again before the next request of this kind is sent"));
+            r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+            if r.clicked() {
+                withdraw = Some(kind);
+            }
+        });
+    }
+    if let Some(kind) = withdraw
+        && app.run("ai.revoke", json!({"request": kind.request()})).is_some()
+    {
+        let said = tl!("Withdrawn: the next request of this kind asks first.");
+        app.view.status = Some((said.to_owned(), false));
+    }
+}
+
+/// The request log: when, where, how much, how it ended; what was sent on demand, for the last
+/// requests of this session (the log itself never holds it).
+fn requests(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
     let records = status["requests"].as_array().cloned().unwrap_or_default();
     let starts: Vec<&Value> = records.iter().filter(|r| r["phase"] == "start").collect();
     let title = crate::i18n::trn(starts.len(), "{n} request sent", "{n} requests sent").replace("{n}", &starts.len().to_string());
@@ -710,7 +876,35 @@ fn requests(ui: &mut egui::Ui, t: &Tokens, status: &Value) {
                 .replace("{destination}", s["destination"].as_str().unwrap_or_default())
                 .replace("{model}", s["model"].as_str().unwrap_or_default())
                 .replace("{outcome}", outcome);
-            ui.label(RichText::new(line).font(t.small()).color(t.text));
+            let run = s["run"].as_str().unwrap_or_default().to_owned();
+            let open = app.ai.shown.as_ref().is_some_and(|(r, _)| *r == run);
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new(line).font(t.small()).color(t.text));
+                let label = if open { tl!("Hide What Was Sent") } else { tl!("Show What Was Sent") };
+                if widgets::text_button(ui, t, label, true).clicked() {
+                    app.ai.shown = if open {
+                        None
+                    } else {
+                        let text = match app.session.execute("ai.sent", &json!({"run": run})) {
+                            Ok(v) => v["text"].as_str().unwrap_or_default().to_owned(),
+                            Err(e) => e,
+                        };
+                        Some((run.clone(), text))
+                    };
+                }
+            });
+            if let Some((_, text)) = app.ai.shown.as_ref().filter(|(r, _)| *r == run) {
+                egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner()).inner_margin(egui::Margin::same(8)).show(
+                    ui,
+                    |ui| {
+                        egui::ScrollArea::vertical().id_salt(("ai-sent", &run)).max_height(220.0).show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            let label = ui.add(egui::Label::new(RichText::new(text).font(t.code_font()).color(t.text)).wrap().selectable(true));
+                            let _ = label.accessible_name(tl!("What was sent"));
+                        });
+                    },
+                );
+            }
         }
     });
 }

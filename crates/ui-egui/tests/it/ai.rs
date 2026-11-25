@@ -146,6 +146,63 @@ fn explain_asks_once_shows_what_is_sent_and_puts_the_answer_in_the_card() -> Res
     Ok(())
 }
 
+/// Issue #15: agreed to in the dialog once, a kind of request is not asked about again, after a
+/// restart either (the preferences keep the agreement); Settings › AI lists it, shows what a
+/// request sent, and withdraws it.
+#[test]
+fn an_agreement_is_asked_once_kept_over_a_restart_and_withdrawn_in_settings() -> Result<(), String> {
+    let prompts = Arc::new(Mutex::new(Vec::new()));
+    // The keychain outlives the app.
+    let keychain: Arc<dyn texcraft_engine::ai::Secrets> = Arc::new(texcraft_engine::ai::SessionSecrets::default());
+    let compiled = |prompts: &Arc<Mutex<Vec<String>>>| -> Result<Session, String> {
+        let mut s = session(prompts)?;
+        s.set_ai_secrets(keychain.clone());
+        s.execute("build.compile", &json!({}))?;
+        s.wait();
+        Ok(s)
+    };
+    let mut s = compiled(&prompts)?;
+    s.execute("ai.connect", &json!({"endpoint": "https://api.example.com/v1", "token": TOKEN, "model": "small"}))?;
+    let mut h = harness(s);
+    h.state_mut().control("engine.execute", &json!({"command": "view.logs"}));
+    h.run();
+    h.get_by_label("Explain").click();
+    h.run();
+    h.get_by_label("Agree and Explain").click();
+    h.run();
+    assert!(settle(&mut h), "the explanation did not arrive");
+    let prefs = h.state_mut().take_changed_prefs().ok_or("the agreement was not kept in the preferences")?;
+    let kept = serde_json::to_string(&prefs).map_err(|e| e.to_string())?;
+    assert!(!kept.contains("Missing } inserted"), "the preferences hold what was sent");
+    // The next run of the app, from the stored preferences.
+    let prefs: Prefs = serde_json::from_str(&kept).map_err(|e| e.to_string())?;
+    let app = App::with_prefs(compiled(&prompts)?, Prefs { auto_compile: false, ..prefs });
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).with_max_steps(60).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    h.state_mut().control("engine.execute", &json!({"command": "view.logs"}));
+    h.run();
+    h.get_by_label("Explain").click();
+    h.run();
+    assert!(h.query_by_label("Agree and Explain").is_none(), "asked again after a restart");
+    assert!(settle(&mut h), "the explanation did not arrive");
+    assert_eq!(sent(&prompts), 2, "the second explanation was not sent");
+    ui_cmd::run(h.state_mut(), "app.settings");
+    h.run();
+    h.get_by_label("AI").click();
+    h.run();
+    assert!(h.query_by_label("Explaining build messages").is_some(), "Settings › AI does not list the agreement");
+    h.get_by_label_contains("1 request sent").click();
+    h.run();
+    let shown = |h: &Harness<'_, App>| h.query_all_by_label_contains("Missing } inserted").count();
+    let before = shown(&h);
+    h.get_by_label("Show What Was Sent").click();
+    h.run();
+    assert!(shown(&h) > before, "what was sent is not shown");
+    h.get_by_label("Withdraw: Explaining build messages").click();
+    h.run();
+    assert!(h.query_by_label("Explaining build messages").is_none(), "the agreement was not withdrawn");
+    Ok(())
+}
+
 /// A model that answers every prompt with the same text.
 struct Says(&'static str, Arc<Mutex<Vec<String>>>);
 
@@ -220,6 +277,51 @@ fn rewrite_shorter_on_a_selection_asks_first_and_makes_a_suggestion_card() -> Re
     assert_eq!(file.ok().as_deref(), Some(text), "the rewrite was applied directly");
     h.run();
     assert!(h.query_by_label_contains("Suggestion by AI (small)").is_some(), "no suggestion card for the rewrite");
+    Ok(())
+}
+
+/// Issue #14: bullet points selected, Ask AI to Change This… in the context menu, an instruction:
+/// the longer text arrives as a suggestion, and the instruction is offered again next time.
+#[test]
+fn ask_ai_to_change_this_sends_the_instruction_and_the_change_is_a_suggestion() -> Result<(), String> {
+    let prompts = Arc::new(Mutex::new(Vec::new()));
+    let text = "\\begin{itemize}\n\\item fast\n\\item small\n\\end{itemize}\n";
+    let reply = "<<<TEXT\nThe method is fast, much faster than the others, and small enough to fit anywhere.\nTEXT>>>";
+    let mut h = editor(reply, text, &prompts, false, false)?;
+    h.run();
+    h.get_by_label("main.tex source").focus();
+    h.run();
+    ui_cmd::run(h.state_mut(), "edit.select_all");
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F10);
+    h.run();
+    h.run();
+    h.get_by_label("Rewrite with AI").click();
+    h.run();
+    h.get_by_label("Ask AI to Change This…").click();
+    h.run();
+    h.get_by_label("How to change the selection").type_text("Flesh out these bullet points");
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(sent(&prompts), 0, "sent before the user agreed");
+    h.get_by_label("Agree and Send").click();
+    h.run();
+    assert!(settle(&mut h), "the change did not arrive");
+    assert!(prompts.lock().map(|p| p[0].contains("Flesh out these bullet points")).unwrap_or(false), "the instruction was not sent");
+    let file =
+        h.state().session().project().text(&texcraft_engine::project::ProjectPath::new("main.tex").map_err(|e| e.to_string())?).map(str::to_owned);
+    assert_eq!(file.ok().as_deref(), Some(text), "the change was applied directly");
+    h.run();
+    assert!(h.query_by_label_contains("Suggestion by AI (small)").is_some(), "no suggestion card for the change");
+    // Asked again: the instruction is offered, and Escape leaves.
+    ui_cmd::run(h.state_mut(), "edit.select_all");
+    ui_cmd::run(h.state_mut(), "edit.instruct");
+    h.run();
+    assert!(h.query_by_label("Flesh out these bullet points").is_some(), "the last instruction is not offered");
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(h.query_by_label("How to change the selection").is_none(), "Escape did not close the dialog");
     Ok(())
 }
 

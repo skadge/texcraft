@@ -19,8 +19,11 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         spec("ai.project", "AI in This Project", project_schema, always, project, true),
         spec("ai.disclose", "What an AI Request Sends", disclose_schema, connected, disclose, false),
         spec("ai.consent", "Agree to Send", consent_schema, connected, consent, true),
+        spec("ai.revoke", "Withdraw an Agreement to Send", revoke_schema, connected, revoke, true),
+        spec("ai.sent", "What an AI Request Sent", sent_schema, connected, sent, false),
         spec("ai.explain", "Explain", explain_schema, connected, explain, true),
         spec("ai.rewrite", "Rewrite with AI", rewrite_schema, connected, rewrite, true),
+        spec("ai.instruct", "Ask AI to Change This", instruct_schema, connected, instruct, true),
         spec("ai.complete", "Suggest the Next Words", complete_schema, connected, complete, true),
         spec("ai.make", "Make with AI", make_schema, connected, make, true),
         spec("ai.insert_made", "Insert What AI Made", insert_made_schema, connected, insert_made, true),
@@ -71,7 +74,7 @@ const MESSAGE: &str = "The message: `index` in build.result's diagnostics (from 
 
 fn disclose_schema() -> Value {
     json!({"type": "object", "description": "What a request would send, where, and whether the user must agree to its kind first. \
-explain: the message (`index`, or `path` and `line`); rewrite: as ai.rewrite; complete: as ai.complete (without `path`, an example); \
+explain: the message (`index`, or `path` and `line`); rewrite: as ai.rewrite; instruct: as ai.instruct; complete: as ai.complete (without `path`, an example); \
 make: as ai.make; reference: as ai.reference; ask: as ai.ask; review: as ai.review.", "properties": {
         "request": {"type": "string", "enum": crate::ai::REQUESTS, "description": "Default: explain."},
         "kind": {"type": "string", "enum": KINDS},
@@ -88,6 +91,7 @@ make: as ai.make; reference: as ai.reference; ask: as ai.ask; review: as ai.revi
         "end": {"type": "integer", "minimum": 0},
         "how": {"type": "string", "enum": HOWS},
         "language": {"type": "string"},
+        "instruction": {"type": "string"},
         "at": {"type": "integer", "minimum": 0}
     }, "additionalProperties": false})
 }
@@ -110,8 +114,9 @@ and the packages it needs a second one before \\begin{document}; never an edit. 
 }
 
 fn insert_made_schema() -> Value {
-    json!({"type": "object", "description": "Inserts the last thing ai.make made, at its caret, as a suggested change (and its packages before \\begin{document} as another).", "properties": {
-        "anyway": {"type": "boolean", "description": "Insert it even though it did not typeset. Default: false."}
+    json!({"type": "object", "description": "Inserts the last thing ai.make made, at its caret, and the packages it needs before \\begin{document}: as suggested changes, or with `edit` as an edit (Undo takes it out).", "properties": {
+        "anyway": {"type": "boolean", "description": "Insert it even though it did not typeset. Default: false."},
+        "edit": {"type": "boolean", "description": "Insert it as an edit, not as suggested changes: for when the person saw it and chose to insert it (the window's Insert). Default: false."}
     }, "additionalProperties": false})
 }
 
@@ -155,6 +160,18 @@ fn rewrite_schema() -> Value {
     }, "required": ["path", "start", "end", "how"], "additionalProperties": false})
 }
 
+fn instruct_schema() -> Value {
+    json!({"type": "object", "description": "Changes characters `start..end` of `path` (from 0) as `instruction` says, in the user's words (\"flesh out these bullet points\"). \
+Sends the instruction, the selection and a few lines around it. The change arrives as a suggested change on exactly them, by \"AI (<model>)\", never as an edit. \
+It may add text and LaTeX, and change markup, but is refused, saying why, when it dropped or altered a label, reference, citation or formula. Its own kind of request for consent (instruct).", "properties": {
+        "path": {"type": "string"},
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 0},
+        "instruction": {"type": "string", "description": "How to change the selection: one line, at most 500 characters."},
+        "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_ai` and `Session::ai_rewritten`. Default: wait for it."}
+    }, "required": ["path", "start", "end", "instruction"], "additionalProperties": false})
+}
+
 fn complete_schema() -> Value {
     json!({"type": "object", "description": "Asks how the paragraph at the caret goes on: sends the paragraph up to `at`. At most once every two seconds; the answer is `text` (null when the text moved on meanwhile).", "properties": {
         "path": {"type": "string"},
@@ -182,6 +199,27 @@ fn consent_schema() -> Value {
     json!({"type": "object", "properties": {
         "request": {"type": "string", "enum": crate::ai::REQUESTS, "description": "The kind of request agreed to, for the connection's endpoint: what ai.disclose shows it sends."}
     }, "required": ["request"], "additionalProperties": false})
+}
+
+fn revoke_schema() -> Value {
+    json!({"type": "object", "description": "Withdraws the user's agreement to send a kind of request to the connection's endpoint (all of them without `request`): the next one asks again. ai.status's `agreed` lists what is agreed.", "properties": {
+        "request": {"type": "string", "enum": crate::ai::REQUESTS}
+    }, "additionalProperties": false})
+}
+
+fn sent_schema() -> Value {
+    json!({"type": "object", "description": "The whole text a request of this session sent, by its run (ai.status's `requests`). The last 20 are kept, in memory only.", "properties": {
+        "run": {"type": "string"}
+    }, "required": ["run"], "additionalProperties": false})
+}
+
+fn revoke(s: &mut Session, p: &Value) -> Result<Value> {
+    let request = p.get("request").and_then(Value::as_str).map(str::to_owned);
+    s.ai_revoke(request.as_deref())
+}
+
+fn sent(s: &mut Session, p: &Value) -> Result<Value> {
+    s.ai_sent(string(p, "run")?)
 }
 
 fn flag(p: &Value, name: &str) -> bool {
@@ -245,6 +283,11 @@ fn rewrite(s: &mut Session, p: &Value) -> Result<Value> {
     s.ai_rewrite(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
 }
 
+fn instruct(s: &mut Session, p: &Value) -> Result<Value> {
+    string(p, "instruction")?;
+    s.ai_rewrite(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+}
+
 fn complete(s: &mut Session, p: &Value) -> Result<Value> {
     s.ai_complete(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
 }
@@ -254,7 +297,7 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn insert_made(s: &mut Session, p: &Value) -> Result<Value> {
-    s.ai_insert_made(flag(p, "anyway"))
+    s.ai_insert_made(flag(p, "anyway"), flag(p, "edit"))
 }
 
 fn reference(s: &mut Session, p: &Value) -> Result<Value> {
