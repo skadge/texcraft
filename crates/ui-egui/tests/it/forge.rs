@@ -189,6 +189,9 @@ fn a_github_repository_is_opened_and_its_pull_request_link_shown() {
     h.run();
     // The address on github.com chooses GitHub, whose token permissions the dialog explains.
     type_into(&mut h, "Project address", "https://github.com/owner/paper");
+    // Signing in comes first on github.com; the token is the fallback.
+    h.get_by_label("Use a personal access token instead").click();
+    h.run();
     type_into(&mut h, "Personal access token", GH_TOKEN);
     assert!(h.query_by_label_contains("Contents read and write").is_some(), "the dialog does not say what a GitHub token needs");
     h.get_by_role_and_label(Role::Button, "Open").click();

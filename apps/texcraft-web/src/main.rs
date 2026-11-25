@@ -306,6 +306,65 @@ mod web {
         listener.forget();
     }
 
+    /// Sign-ins to GitLab (docs/forges.md, step 4), kept in the tab's session storage: a reload
+    /// and GitLab's round trip keep them, closing the tab forgets them. IndexedDB or local storage
+    /// would keep a refresh token, which works for months, in the browser's profile after the tab
+    /// is gone; any script of the page could read either, and the page loads only its own.
+    struct TabStorage;
+
+    impl TabStorage {
+        fn storage() -> Result<web_sys::Storage, String> {
+            web_sys::window()
+                .ok_or("no window")?
+                .session_storage()
+                .map_err(|e| format!("{e:?}"))?
+                .ok_or_else(|| "this browser has no session storage".to_owned())
+        }
+    }
+
+    impl texcraft_engine::ai::Secrets for TabStorage {
+        fn get(&self, handle: &str) -> Result<Option<texcraft_engine::ai::SecretString>, String> {
+            Ok(Self::storage()?.get_item(handle).map_err(|e| format!("{e:?}"))?.map(texcraft_engine::ai::SecretString::new))
+        }
+        fn put(&self, handle: &str, value: &texcraft_engine::ai::SecretString) -> Result<(), String> {
+            Self::storage()?.set_item(handle, value.expose()).map_err(|e| format!("{e:?}"))
+        }
+        fn remove(&self, handle: &str) -> Result<(), String> {
+            Self::storage()?.remove_item(handle).map_err(|e| format!("{e:?}"))
+        }
+        fn lasting(&self) -> bool {
+            true
+        }
+    }
+
+    /// The page's address without its query (GitLab's redirect URI: the origin and `/`), and the
+    /// query GitLab sent the page back with, if it did (`code` and `state`, or `error`); the query
+    /// is taken out of the address bar at once, so the code is in no history entry.
+    fn sign_in_return() -> (String, Option<serde_json::Value>) {
+        let Some(window) = web_sys::window() else { return (String::new(), None) };
+        let location = window.location();
+        let origin = location.origin().unwrap_or_default();
+        let page = format!("{origin}/");
+        let search = location.search().unwrap_or_default();
+        let pairs = texcraft_engine::forge::oauth::parse_query(&search);
+        let has = |k: &str| pairs.iter().any(|(n, _)| n == k);
+        if !(has("state") && (has("code") || has("error"))) {
+            return (page, None);
+        }
+        let path = location.pathname().unwrap_or_else(|_| "/".to_owned());
+        if let Ok(history) = window.history()
+            && let Err(e) = history.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&path))
+        {
+            log::warn!("the sign-in's code could not be taken out of the address: {e:?}");
+        }
+        let params: serde_json::Map<String, serde_json::Value> = pairs
+            .into_iter()
+            .filter(|(k, _)| matches!(k.as_str(), "code" | "state" | "error" | "error_description"))
+            .map(|(k, v)| (k, serde_json::Value::String(v)))
+            .collect();
+        (page, Some(params.into()))
+    }
+
     /// The engine worker's script, made by Trunk (`index.html`), under its plain name.
     const WORKER: &str = "engine-worker_loader.js";
 
@@ -334,6 +393,9 @@ mod web {
                 return;
             };
             let mut session = texcraft_engine::Session::in_browser(&worker_url());
+            let (page, returned) = sign_in_return();
+            session.set_forge_secrets(std::sync::Arc::new(TabStorage));
+            session.set_forge_redirect(&page);
             let errors = Errors::default();
             let store = match Store::open().await {
                 Ok(store) => Some(store),
@@ -366,6 +428,9 @@ mod web {
             }
             app.set_native_pickers(true);
             app.show_start_page();
+            if let Some(params) = returned {
+                app.forge_sign_in_returned(params);
+            }
             let chosen = Chosen::default();
             let repaint = Repaint::default();
             watch_drops(&canvas, &chosen, &errors, &repaint);

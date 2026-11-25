@@ -14,6 +14,7 @@ mod focus_mode;
 mod folders;
 mod folding;
 mod forge;
+mod forge_sign_in;
 mod formatted;
 mod formatted_editing;
 mod frame;

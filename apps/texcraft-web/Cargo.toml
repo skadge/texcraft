@@ -32,6 +32,7 @@ web-sys = { version = "0.3", features = [
     "Window", "Document", "HtmlCanvasElement", "Element", "Event", "EventTarget", "BeforeUnloadEvent", "Response",
     "DragEvent", "DataTransfer", "Url", "HtmlAnchorElement", "HtmlElement", "DataTransferItemList", "DataTransferItem", "FileList", "File", "Blob", "AddEventListenerOptions",
     "IdbFactory", "IdbOpenDbRequest", "IdbRequest", "IdbDatabase", "IdbObjectStore", "IdbTransaction", "IdbTransactionMode", "IdbKeyRange", "DomException", "DomStringList",
+    "Location", "History", "Storage",
 ] }
 js-sys = "0.3"
 serde_json = { workspace = true }

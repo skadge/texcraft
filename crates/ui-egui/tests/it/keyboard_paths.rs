@@ -437,7 +437,7 @@ fn every_settings_tab_is_reached_and_walked_from_the_keyboard() {
     let from = focus(&mut h, Role::Button, "Compile");
     run(&mut h, "app.settings");
     assert!(now(&h).in_dialog, "Settings takes the keyboard");
-    for tab_name in ["Appearance", "Editor", "Building", "Keyboard", "Review", "AI"] {
+    for tab_name in ["Appearance", "Editor", "Building", "Keyboard", "Review", "AI", "Accounts"] {
         focus(&mut h, Role::Tab, tab_name);
         key(&mut h, egui::Key::Enter);
         let cycle = tab_cycle(&mut h, 60);
