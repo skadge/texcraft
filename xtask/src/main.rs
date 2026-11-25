@@ -3,7 +3,8 @@
 //! - `layers`: each workspace crate may depend only on crates of a lower layer, and only the
 //!   `ui-egui` layer and the apps may use a UI toolkit.
 //! - `wasm`: the web app and the crates it uses build for wasm32-unknown-unknown.
-//! - `ci`: fmt, clippy, tests, layers, wasm, in that order.
+//! - `ci`: fmt, clippy, tests, layers, wasm, guide-check, in that order.
+//! - `guide-check`: the user guide's pages, links and anchors (`docs/guide/`; see `guide.rs`).
 //! - `icons`: every app icon file, from the SVG master in `assets/app-icon/`.
 //! - `retex-wasm`: retex's engine for the browser, from the release `Cargo.lock` pins (needs
 //!   nightly and wasi-sdk; see `retex_wasm.rs`).
@@ -15,6 +16,7 @@
 //! - `version-worker [DIR]`: names the browser build's engine files after their contents (Trunk's
 //!   post-build hook, on its staging folder; see `web_version.rs`).
 
+mod guide;
 mod icons;
 mod retex_wasm;
 mod tree_site;
@@ -56,6 +58,7 @@ fn main() -> ExitCode {
         "layers" => layers(),
         "wasm" => wasm(),
         "ci" => ci(),
+        "guide-check" => guide::check(),
         "icons" => icons::run(),
         "retex-wasm" => std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -75,7 +78,7 @@ fn main() -> ExitCode {
             None => Err("usage: cargo xtask version-worker DIR (a Trunk build's folder; Trunk's hooks set TRUNK_STAGING_DIR)".to_owned()),
         },
         _ => Err(
-            "usage: cargo xtask layers | wasm | ci | icons | retex-wasm | templates [ID] | templates-site OUT | tree-site OUT | version-worker [DIR]"
+            "usage: cargo xtask layers | wasm | ci | guide-check | icons | retex-wasm | templates [ID] | templates-site OUT | tree-site OUT | version-worker [DIR]"
                 .to_owned(),
         ),
     };
@@ -143,7 +146,8 @@ fn ci() -> Result<(), String> {
     run(cargo, &["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"])?;
     run(cargo, &["test", "--workspace"])?;
     layers()?;
-    wasm()
+    wasm()?;
+    guide::check()
 }
 
 fn templates(only: Option<&str>) -> Result<(), String> {
