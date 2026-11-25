@@ -299,6 +299,11 @@ fn the_token_is_in_the_secret_store_never_in_the_saved_settings() -> R {
     assert!(!s.execute("ai.status", &json!({}))?.to_string().contains("sk-test-secret-123"));
     let models = s.execute("ai.models", &json!({}))?;
     assert_eq!(models["models"], json!(["small", "large"]));
+    // Another host does not inherit the token.
+    s.execute("ai.connect", &json!({"endpoint": "https://elsewhere.example.net/v1"}))?;
+    assert_eq!(s.execute("ai.status", &json!({}))?["token"], false, "the token went with the connection to another host");
+    assert!(store.values().is_empty(), "the old host's token was kept");
+    connect_remote(&mut s)?;
     s.execute("ai.forget", &json!({}))?;
     assert!(store.values().is_empty(), "the token outlived Forget");
     assert_eq!(s.execute("ai.status", &json!({}))?["connected"], false);

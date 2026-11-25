@@ -525,9 +525,11 @@ impl Session {
         let existing: Vec<Connection> = self.ai.saved.connection.iter().cloned().collect();
         let mut draft = existing.first().map(ConnectionDraft::from_connection).unwrap_or_default();
         let moved = draft.endpoint.trim() != endpoint.trim();
-        draft.endpoint = endpoint.trim().to_owned();
         let parsed = Endpoint::parse(endpoint.trim())
             .map_err(|e| format!("That address cannot be used ({e}). Use https://, or http:// only for this computer."))?;
+        // A token is for its host: another host never gets it unless it is given again.
+        let new_host = Endpoint::parse(draft.endpoint.trim()).ok().map(|e| e.fingerprint()) != Some(parsed.fingerprint());
+        draft.endpoint = endpoint.trim().to_owned();
         draft.label = parsed.fingerprint().chars().take(80).collect();
         match token.map(str::trim) {
             Some("") => {
@@ -538,8 +540,11 @@ impl Session {
                 draft.uses_key = true;
                 draft.key = t.to_owned();
             }
-            // A new connection given no token uses none.
-            None if existing.is_empty() => draft.uses_key = false,
+            // A new connection, or a new host, given no token uses none.
+            None if existing.is_empty() || new_host => {
+                draft.uses_key = false;
+                draft.key.clear();
+            }
             None => {}
         }
         let prepared = draft.prepare(&existing).map_err(|e| e.message)?;
