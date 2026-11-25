@@ -89,8 +89,9 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | W6 | ✅ 0.4.0 | Templates in the browser | Served with the browser version; a template makes a named project. |
 | W7 | ✅ 0.4.0 | Whole projects and draft images | Files outside the main document's folder are found; draft images work. |
 | W8 | ⬜ | Missing packages | Downloaded during the build (retex 2.5.0 can), once a TeX Live repository is hosted with CORS. |
-| W9 | ⬜ | Faster first builds | A read list per project; waiting for a file instead of stopping the run (JavaScript Promise Integration). |
-| W10 | ⬜ | Safe updates | Versioned worker files, so a browser never keeps an old engine after an update. |
+| W9 | ✅ 0.5.0 | Faster first builds | A read list per project: the TeX files its builds read are kept, and fetched together before its first build of a visit, so the build no longer stops for each package beyond a plain article's. |
+| W10 | ✅ 0.5.0 | Safe updates | The engine's files are named after their contents at each build (the page names the worker's), and the TeX tree's files carry its index's version, so a browser never keeps an old engine or mixes trees after an update. |
+| W12 | ⬜ | Waiting for a file | A build that needs a file not fetched yet waits for it instead of stopping and starting again (JavaScript Promise Integration). |
 | W11 | ⬜ | Cloud storage and embedding | Opening and saving to cloud storage; TeXCraft embedded in another page. |
 
 ## Output formats and print
