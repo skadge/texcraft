@@ -61,7 +61,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | B5 | ✅ 0.2.2 | Build options | Engine (from the document, LuaLaTeX, pdfLaTeX), stop at the first error, draft images, delete build files. |
 | B6 | ✅ 0.2.2 | Source and PDF navigation | Double-click in the PDF opens the source line; Show in PDF marks the caret's line. |
 | B7 | ✅ 0.5.0 | Progress beside the PDF | The page being built also in the PDF pane's header. |
-| B8 | ⬜ | A better preview | Pages drawn in the background, zoom presets, links, text selection, presentation mode. |
+| B8 | ✅ 0.6.0 | A better preview | Pages drawn in the background, zoom presets, links, text selection, presentation mode. Selection is on one page at a time; presentations fill the window, not the screen. |
 | B9 | ⬜ | The raw log and outputs | Search in the raw log, and the list of output files. |
 
 ## Comments and working together
