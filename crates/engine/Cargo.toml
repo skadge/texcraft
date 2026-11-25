@@ -34,6 +34,8 @@ regex = { workspace = true }
 retex-lsp = { workspace = true }
 retex-synctex = { workspace = true }
 log = { workspace = true }
+# Line diffs of a file's versions (history.diff).
+similar = { version = "3", default-features = false, features = ["std", "text"] }
 
 # Files a save removes from the project's folder and its history does not hold go to the
 # system's trash (issue #2).

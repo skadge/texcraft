@@ -340,6 +340,13 @@ impl History {
         Ok(out)
     }
 
+    /// The first parent of commit `commit` (a full id); none for a first commit.
+    pub fn parent_of(&self, commit: &str) -> Result<Option<String>> {
+        let object = git!("A commit cannot be read", self.repo.find_object(self.parse(commit)?))?;
+        let commit = git!("A commit cannot be read", object.try_into_commit())?;
+        Ok(commit.parent_ids().next().map(|id| id.detach().to_string()))
+    }
+
     fn full_path(&self, path: &str) -> String {
         if self.prefix.is_empty() { path.to_owned() } else { format!("{}/{path}", self.prefix) }
     }

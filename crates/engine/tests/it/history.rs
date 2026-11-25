@@ -122,6 +122,14 @@ fn restoring_brings_back_an_old_version_as_unsaved_edits_and_the_next_save_commi
     s.execute("project.save", &json!({}))?;
     let first = s.execute("history.list", &json!({}))?["commits"][1]["id"].as_str().map(str::to_owned).ok_or("no id")?;
 
+    let newest = s.execute("history.list", &json!({}))?["commits"][0]["id"].as_str().map(str::to_owned).ok_or("no id")?;
+    let diff = s.execute("history.diff", &json!({"commit": newest, "path": "main.tex"}))?;
+    let lines = &diff["hunks"][0]["lines"];
+    assert_eq!((lines[0]["kind"].as_str(), lines[0]["text"].as_str()), (Some("removed"), Some("old")), "{diff}");
+    assert_eq!((lines[1]["kind"].as_str(), lines[1]["text"].as_str()), (Some("added"), Some("new")), "{diff}");
+    let added = s.execute("history.diff", &json!({"commit": newest, "path": "later.tex"}))?;
+    assert_eq!(added["change"], "added", "against the parent, which had no such file");
+
     let one = s.execute("history.restore", &json!({"commit": first, "path": "main.tex"}))?;
     assert_eq!(one["restored"], json!(["main.tex"]));
     assert!(s.is_dirty(), "a restored version is an unsaved edit");
