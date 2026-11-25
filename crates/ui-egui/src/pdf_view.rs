@@ -240,6 +240,10 @@ pub(crate) struct PdfView {
     selection: Option<(usize, usize, usize)>,
     /// Text copied from the PDF this frame: the preview pane says it in the status bar.
     pub copied: Option<String>,
+    /// Presentation mode: the page shown, the whole window for it.
+    presenting: Option<usize>,
+    /// When the presentation started (egui time), once drawn.
+    presenting_since: Option<f64>,
 }
 
 /// A link to outside the document, clicked.
@@ -275,6 +279,8 @@ impl Default for PdfView {
             glyphs: HashMap::new(),
             selection: None,
             copied: None,
+            presenting: None,
+            presenting_since: None,
         }
     }
 }
@@ -311,6 +317,69 @@ impl PdfView {
             }
         }
         self.page = self.page.min(self.sizes.len().saturating_sub(1));
+        if let Some(p) = &mut self.presenting {
+            *p = (*p).min(self.sizes.len().saturating_sub(1));
+        }
+    }
+
+    /// Starts presenting from the first page in view.
+    pub fn present(&mut self) {
+        if self.doc.is_some() {
+            self.presenting = Some(self.page);
+            self.presenting_since = None;
+        }
+    }
+
+    /// The page presented, while in presentation mode.
+    pub fn presenting(&self) -> Option<usize> {
+        self.presenting
+    }
+
+    /// When the presentation started (egui time): `now` the first time it is asked.
+    pub fn presented_since(&mut self, now: f64) -> f64 {
+        *self.presenting_since.get_or_insert(now)
+    }
+
+    /// Presents the page `by` pages on (back when negative), within the document.
+    pub fn present_step(&mut self, by: isize) {
+        if let Some(p) = &mut self.presenting {
+            *p = p.saturating_add_signed(by).min(self.sizes.len().saturating_sub(1));
+        }
+    }
+
+    /// Leaves presentation mode, the page presented in view.
+    pub fn present_end(&mut self) {
+        if let Some(p) = self.presenting.take() {
+            self.scroll_to = Some(p);
+            self.page = p;
+        }
+    }
+
+    /// Draws the page presented, as large as `ui` allows, on the presentation backdrop. Links
+    /// work; a click elsewhere on the page goes to the next one.
+    pub fn show_slide(&mut self, ui: &mut egui::Ui, t: &Tokens) {
+        self.receive(ui.ctx());
+        let rect = ui.max_rect();
+        ui.painter().rect_filled(rect, 0.0, t.presentation);
+        let Some(p) = self.presenting else { return };
+        let Some(size) = self.sizes.get(p).copied() else { return };
+        let zoom = (rect.width() / size[0]).min(rect.height() / size[1]).max(0.01);
+        let page = egui::Rect::from_center_size(rect.center(), egui::vec2(size[0], size[1]) * zoom);
+        let next: Vec<usize> = [p, p + 1].into_iter().filter(|i| *i < self.sizes.len()).collect();
+        self.request(ui.ctx(), &next, ui.ctx().pixels_per_point() * zoom);
+        ui.painter().rect_filled(page, 0.0, egui::Color32::WHITE);
+        if let Some((_, _, texture)) = self.textures.get(&p) {
+            let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+            ui.painter().image(texture.id(), page, uv, egui::Color32::WHITE);
+        }
+        let name = tl!("Page {n} of {count}").replace("{n}", &(p + 1).to_string()).replace("{count}", &self.sizes.len().to_string());
+        let r = ui.interact(page, ui.scope_id().with("pdf-slide"), egui::Sense::click());
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Document, true, &name));
+        match self.page_links(ui, t, p, page, zoom) {
+            Some((_, target)) => self.follow(ui.ctx(), target),
+            None if r.clicked() => self.present_step(1),
+            None => {}
+        }
     }
 
     pub fn has_pdf(&self) -> bool {
@@ -514,20 +583,31 @@ impl PdfView {
         if clicked.is_some() {
             self.clicked = clicked;
         }
-        match follow {
-            Some(Target::Page { page, y }) => {
-                self.jump = Some((page, y.unwrap_or(0.0)));
-                ui.ctx().request_repaint();
-            }
-            Some(Target::Uri(uri)) if texcraft_preview::safe_url(&uri) => {
-                ui.ctx().open_url(egui::OpenUrl::new_tab(uri.trim()));
-                self.followed = Some(Followed::Opened(uri));
-            }
-            Some(Target::Uri(uri)) => self.followed = Some(Followed::Refused(uri)),
-            None => {}
+        if let Some(target) = follow {
+            self.follow(ui.ctx(), target);
         }
         if let Some(pass) = building.and_then(|b| b.draft) {
             draft_badge(ui, t, rect, pass);
+        }
+    }
+
+    /// Follows a link: to its page (presented, or scrolled to the top of the pane at the
+    /// destination's height), or to the web after the safe-URL check.
+    fn follow(&mut self, ctx: &egui::Context, target: Target) {
+        match target {
+            Target::Page { page, y } => {
+                if self.presenting.is_some() {
+                    self.presenting = Some(page.min(self.sizes.len().saturating_sub(1)));
+                } else {
+                    self.jump = Some((page, y.unwrap_or(0.0)));
+                }
+                ctx.request_repaint();
+            }
+            Target::Uri(uri) if texcraft_preview::safe_url(&uri) => {
+                ctx.open_url(egui::OpenUrl::new_tab(uri.trim()));
+                self.followed = Some(Followed::Opened(uri));
+            }
+            Target::Uri(uri) => self.followed = Some(Followed::Refused(uri)),
         }
     }
 

@@ -80,6 +80,11 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.actual_size", "Actual Size", "View", "pdf", Some("Cmd+0")),
     // `{"percent": 200}`: the zoom menu's fixed zooms, and any other from 25 to 400 %.
     ui("view.zoom", "Zoom To", "View", "pdf", None),
+    ui("view.present", "Present the PDF", "View", "present", Some("F5")),
+    // In presentation mode the arrows, Space, Page Up and Page Down, and Escape run these.
+    ui("view.present.next", "Next Page", "View", "present", None),
+    ui("view.present.previous", "Previous Page", "View", "present", None),
+    ui("view.present.end", "Leave Presentation", "View", "present", None),
     ui("view.next_region", "Next Region", "View", "regions", Some("F6")),
     ui("view.previous_region", "Previous Region", "View", "regions", Some("Shift+F6")),
     ui("view.theme", "Switch Light and Dark", "View", "theme", None),
@@ -150,6 +155,16 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         },
         "view.zoom_in" => app.pdf.zoom_by(1.25),
         "view.zoom_out" => app.pdf.zoom_by(0.8),
+        "view.present" => {
+            crate::preview::sync(app);
+            app.pdf.present();
+            if app.pdf.presenting().is_none() {
+                app.view.status = Some((tl!("There is no PDF to present yet: compile the project first.").to_owned(), true));
+            }
+        }
+        "view.present.next" => app.pdf.present_step(1),
+        "view.present.previous" => app.pdf.present_step(-1),
+        "view.present.end" => app.pdf.present_end(),
         "view.fit_width" => app.pdf.set_fit(crate::pdf_view::Fit::Width),
         "view.fit_page" => app.pdf.set_fit(crate::pdf_view::Fit::Page),
         "view.actual_size" => app.pdf.set_fit(crate::pdf_view::Fit::Zoom(1.0)),

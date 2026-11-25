@@ -47,7 +47,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     } else {
         // While a build's later passes run, its draft; otherwise the last PDF a build wrote, so a
         // draft never outlives its build (finished, failed or stopped).
-        app.pdf.sync(app.view.draft.as_ref().map(|d| &d.pdf).or(app.session.pdf()));
+        sync(app);
         app.pdf.show(ui, &t, building.as_ref());
         if let Some((page, x, y)) = app.pdf.clicked.take() {
             go_to_source(app, page, x, y);
@@ -70,6 +70,62 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             }
             None => {}
         }
+    }
+}
+
+/// Shows the PDF to show: the running build's draft, or the last build's.
+pub(crate) fn sync(app: &mut App) {
+    app.pdf.sync(app.view.draft.as_ref().map(|d| &d.pdf).or(app.session.pdf()));
+}
+
+/// Presentation mode: the page presented takes the whole window. The arrows, Space, Enter,
+/// Page Up and Page Down, Home and End move through the pages; Escape leaves.
+pub(crate) fn present(app: &mut App, ui: &mut egui::Ui) {
+    let t = app.tokens;
+    sync(app);
+    let keys = ui.input_mut(|i| {
+        let mut pressed = |keys: &[egui::Key]| keys.iter().filter(|k| i.consume_key(egui::Modifiers::NONE, **k)).count() > 0;
+        let next = pressed(&[egui::Key::ArrowRight, egui::Key::ArrowDown, egui::Key::Space, egui::Key::PageDown, egui::Key::Enter]);
+        let previous = pressed(&[egui::Key::ArrowLeft, egui::Key::ArrowUp, egui::Key::PageUp, egui::Key::Backspace]);
+        let first = pressed(&[egui::Key::Home]);
+        let last = pressed(&[egui::Key::End]);
+        let end = pressed(&[egui::Key::Escape]);
+        (next, previous, first, last, end)
+    });
+    match keys {
+        (true, ..) => ui_cmd::run(app, "view.present.next"),
+        (_, true, ..) => ui_cmd::run(app, "view.present.previous"),
+        (_, _, true, ..) => app.pdf.present_step(-(app.pdf.page_count() as isize)),
+        (_, _, _, true, _) => app.pdf.present_step(app.pdf.page_count() as isize),
+        _ => {}
+    }
+    if keys.4 {
+        ui_cmd::run(app, "view.present.end");
+        return;
+    }
+    app.pdf.show_slide(ui, &t);
+    // Where it is, and how to leave, said once the page changes; shown for a moment at the start.
+    let Some(page) = app.pdf.presenting() else { return };
+    let text = tl!("Page {n} of {count}. Escape leaves the presentation.")
+        .replace("{n}", &(page + 1).to_string())
+        .replace("{count}", &app.pdf.page_count().to_string());
+    let now = ui.input(|i| i.time);
+    let shown = now - app.pdf.presented_since(now) < 3.0;
+    let strip = egui::Rect::from_min_max(egui::pos2(ui.max_rect().left(), ui.max_rect().bottom() - t.unit * 14.0), ui.max_rect().max);
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(strip).layout(egui::Layout::bottom_up(egui::Align::Center)));
+    child.add_space(t.unit * 3.0);
+    let chip = egui::Frame::new()
+        .fill(if shown { t.raised } else { egui::Color32::TRANSPARENT })
+        .corner_radius(t.corner())
+        .inner_margin(egui::Margin::symmetric(10, 4))
+        .show(&mut child, |ui| {
+            let color = if shown { t.text } else { egui::Color32::TRANSPARENT };
+            ui.add(egui::Label::new(RichText::new(&text).font(t.small()).color(color)).sense(Sense::hover()))
+        })
+        .inner;
+    crate::status::announce(ui, &chip, &text);
+    if shown {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
     }
 }
 
@@ -248,6 +304,15 @@ fn zoom_menu(app: &mut App, ui: &mut egui::Ui) {
             } else {
                 choose(ui, &text, Fit::Zoom(z as f32 / 100.0), "view.zoom", json!({"percent": z}));
             }
+        }
+        ui.separator();
+        let mut present = egui::Button::new(tl!("Present"));
+        if let Some(k) = app.keys.shortcut_text("view.present") {
+            present = present.shortcut_text(k);
+        }
+        if ui.add(present).on_hover_text(tl!("Show the PDF a page at a time, in the whole window.")).clicked() {
+            ui.close();
+            ui_cmd::run(app, "view.present");
         }
     });
 }

@@ -576,6 +576,12 @@ impl App {
         for id in self.keys.dispatch(ctx) {
             ui_cmd::run(self, &id);
         }
+        // Presentation mode: the PDF's page takes the whole window.
+        if self.pdf.presenting().is_some() {
+            preview::present(self, ui);
+            dialogs::show(self, ctx);
+            return;
+        }
         if thumbnail {
             self.update_thumbnail();
         }
