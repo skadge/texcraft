@@ -71,12 +71,25 @@ fn the_fold_shortcut_folds_at_the_caret_and_going_to_a_hidden_line_unfolds() -> 
 }
 
 #[test]
+fn after_going_to_a_line_with_the_go_button_typing_goes_to_the_editor() -> Result<(), String> {
+    let mut harness = harness(false)?;
+    go_to_line(&mut harness, 4);
+    harness.run_steps(4);
+    for c in "Q!".chars() {
+        harness.event(egui::Event::Text(c.to_string()));
+    }
+    harness.run_steps(2);
+    let path = texcraft_engine::project::ProjectPath::new("main.tex").map_err(|e| e.to_string())?;
+    let text = harness.state_mut().session().project().text(&path).map(str::to_owned).map_err(|e| e.to_string())?;
+    assert!(text.contains("Q!Alpha line."), "the text typed did not reach the editor at the line gone to: {text:?}");
+    Ok(())
+}
+
+#[test]
 fn vims_zc_and_zo_fold_and_unfold_and_j_steps_over_a_fold() -> Result<(), String> {
     let mut harness = harness(true)?;
     let shown = line_height(&harness, "Alpha line.");
     go_to_line(&mut harness, 3);
-    harness.get_by_label("main.tex source").focus();
-    harness.run_steps(2);
     harness.get_by_label("main.tex source").type_text("zc");
     harness.run_steps(2);
     assert!(line_height(&harness, "Alpha line.") < shown / 2.0, "zc did not fold");

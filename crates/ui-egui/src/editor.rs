@@ -1014,12 +1014,16 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             let at = b.line_to_char(line.saturating_sub(1) as usize);
             app.editor.source.select(at, at);
             app.editor.source.flash_line(line.saturating_sub(1) as usize, ui.input(|i| i.time));
-            ui.memory_mut(|m| m.request_focus(id));
+            app.editor.focus = true;
         } else {
             app.view.goto = Some((goto_path, line));
         }
     }
-    if std::mem::take(&mut app.editor.focus) {
+    // While a dialog is open, and the frame after it closes, egui keeps the keyboard in the
+    // dialog's layer and would take it back from the editor: the request waits for the frame the
+    // editor can have it (closing a dialog draws that frame).
+    if app.editor.focus && ui.memory(|m| m.allows_interaction(ui.layer_id())) {
+        app.editor.focus = false;
         ui.memory_mut(|m| m.request_focus(id));
     }
     app.editor.source.problems = problems(app, path);
