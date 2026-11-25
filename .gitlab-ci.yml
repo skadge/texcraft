@@ -85,7 +85,9 @@ check:
   image: rust:1.95-bookworm
   before_script:
     - *desktop-deps
-    - apt-get install -y -qq --no-install-recommends mesa-vulkan-drivers
+    # A TeX Live for the tests that build with retex (exports, formulas): Debian's, as retex's
+    # own CI does for its packaging job.
+    - apt-get install -y -qq --no-install-recommends mesa-vulkan-drivers texlive-latex-base texlive-latex-recommended lmodern
     - rustup component add clippy rustfmt
     - rustup target add wasm32-unknown-unknown
   script:
