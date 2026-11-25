@@ -56,18 +56,23 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                 }
             });
             ui.add_space(t.unit * 4.0);
-            ui.vertical(|ui| {
-                ui.set_min_height(320.0);
-                ui.spacing_mut().item_spacing.y = t.unit * 3.0;
-                match app.view.settings_tab {
-                    0 => appearance(app, ui, &t),
-                    1 => editor(app, ui, &t),
-                    2 => building(app, ui, &t),
-                    3 => keyboard(app, ui, &t),
-                    4 => review(app, ui, &t),
-                    5 => crate::ai::settings(app, ui, &t),
-                    _ => crate::forge::settings(app, ui, &t),
-                }
+            // A tab taller than the window (a long language, a small window) scrolls, so the
+            // dialog's title and Close stay on the screen.
+            let room = (ui.ctx().content_rect().height() - 120.0).max(200.0);
+            egui::ScrollArea::vertical().id_salt("settings-tab").max_height(room).auto_shrink([false, true]).show(ui, |ui| {
+                ui.vertical(|ui| {
+                    ui.set_min_height(320.0_f32.min(room));
+                    ui.spacing_mut().item_spacing.y = t.unit * 3.0;
+                    match app.view.settings_tab {
+                        0 => appearance(app, ui, &t),
+                        1 => editor(app, ui, &t),
+                        2 => building(app, ui, &t),
+                        3 => keyboard(app, ui, &t),
+                        4 => review(app, ui, &t),
+                        5 => crate::ai::settings(app, ui, &t),
+                        _ => crate::forge::settings(app, ui, &t),
+                    }
+                });
             });
         });
     });
@@ -135,20 +140,21 @@ fn appearance(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             languages.iter().find(|(c, _)| *c == app.prefs.language).map_or_else(|| app.prefs.language.clone(), |(_, n)| n.clone())
         };
         ui.add_enabled_ui(languages.len() > 1, |ui| {
-            let combo = craft_ui::ComboBox::from_id_salt("settings-language").width(180.0).selected_text(current).show_ui(ui, |ui| {
-                let mut choose = |ui: &mut egui::Ui, code: &str, name: &str| {
-                    if ui.selectable_label(app.prefs.language == code, name).clicked() {
-                        app.prefs.language = code.to_owned();
-                        app.prefs_changed = true;
-                        crate::i18n::set_language(code);
-                        app.session.set_interface_language(crate::i18n::current_code());
+            let combo =
+                craft_ui::ComboBox::from_id_salt("settings-language").width(180.0).height(f32::INFINITY).selected_text(current).show_ui(ui, |ui| {
+                    let mut choose = |ui: &mut egui::Ui, code: &str, name: &str| {
+                        if ui.selectable_label(app.prefs.language == code, name).clicked() {
+                            app.prefs.language = code.to_owned();
+                            app.prefs_changed = true;
+                            crate::i18n::set_language(code);
+                            app.session.set_interface_language(crate::i18n::current_code());
+                        }
+                    };
+                    choose(ui, "auto", tl!("System"));
+                    for (code, name) in &languages {
+                        choose(ui, code, name);
                     }
-                };
-                choose(ui, "auto", tl!("System"));
-                for (code, name) in &languages {
-                    choose(ui, code, name);
-                }
-            });
+                });
             let _ = combo.response.accessible_name(tl!("Interface language"));
         });
         None

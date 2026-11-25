@@ -29,6 +29,7 @@ mod history;
 mod image_drop;
 mod insert;
 mod keyboard_paths;
+mod languages;
 mod log_copy;
 mod menu_bar;
 mod narrow;

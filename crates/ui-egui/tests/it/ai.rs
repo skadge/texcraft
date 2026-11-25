@@ -106,6 +106,8 @@ fn settings_connect_lists_models_and_keep_the_token_out_of_the_preferences() -> 
     h.run();
     h.get_by_label("Token").type_text(TOKEN);
     h.run();
+    h.get_by_label("Connect").scroll_to_me();
+    h.run();
     h.get_by_label("Connect").click();
     h.run();
     assert!(settle(&mut h), "listing the models did not end");
@@ -175,10 +177,15 @@ fn a_kind_switched_off_in_settings_disables_its_entry_and_another_model_asks_aga
     h.get_by_label("AI").click();
     h.run();
     assert!(h.query_by_label_contains("The section at the caret.").is_some(), "Settings › AI does not say what a kind sends");
+    h.get_by_label_contains("1 request sent").scroll_to_me();
+    h.run();
     h.get_by_label_contains("1 request sent").click();
     h.run();
     let shown = |h: &Harness<'_, App>| h.query_all_by_label_contains("Missing } inserted").count();
     let before = shown(&h);
+    // Settings scrolls a tab taller than the window.
+    h.get_by_label("Show What Was Sent").scroll_to_me();
+    h.run();
     h.get_by_label("Show What Was Sent").click();
     h.run();
     assert!(shown(&h) > before, "what was sent is not shown");
@@ -210,6 +217,8 @@ fn a_kind_switched_off_in_settings_disables_its_entry_and_another_model_asks_aga
     h.get_by_label("AI").click();
     h.run();
     assert!(h.query_by_label("Agree to Send").is_some(), "another model did not ask to agree again");
+    h.get_by_label("Agree to Send").scroll_to_me();
+    h.run();
     h.get_by_label("Agree to Send").click();
     h.run();
     assert!(h.query_by_label("Agree to Send").is_none(), "agreeing did not hold");
