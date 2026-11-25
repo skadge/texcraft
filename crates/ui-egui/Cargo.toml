@@ -42,4 +42,6 @@ sha2 = { workspace = true }
 [dev-dependencies]
 egui_kittest = { workspace = true }
 texcraft-compile = { workspace = true, default-features = false }
+# The formatted view's tests typeset formulas with retex, as the desktop app does.
+texcraft-engine = { workspace = true, features = ["retex"] }
 egui = { workspace = true, features = ["default_fonts"] }

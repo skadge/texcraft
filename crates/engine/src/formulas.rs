@@ -153,7 +153,7 @@ impl crate::Session {
     #[cfg(not(all(feature = "retex", not(target_arch = "wasm32"))))]
     fn typeset_found(&mut self) -> Vec<FormulaState> {
         let why = "Formulas are typeset in the desktop app; this build shows their source.";
-        self.formulas.found.iter().map(|_| FormulaState::Unavailable(why.to_owned())).collect()
+        self.formulas.found.iter().map(|f| if f.closed { FormulaState::Unavailable(why.to_owned()) } else { not_closed() }).collect()
     }
 }
 

@@ -2,8 +2,11 @@
 //! ([`texcraft_latex::view`]) drawn as a document, at a reading measure in the reading face.
 //!
 //! It is read-only for now. Double-clicking a part (or pressing Enter on it) shows the source with
-//! the caret where that part starts. Formulas are shown as their source until retex typesets them
-//! (phase 3, item 3); what the view cannot show faithfully stays as its source.
+//! the caret where that part starts. Formulas are drawn as retex typesets them after the main
+//! document's preamble (F2: [`Session::formulas`](texcraft_engine::Session::formulas)), as ink in
+//! the colour of the text, at the window's pixels per point; until then, and where the build has no
+//! engine for them (the browser), they are shown as their source. What the view cannot show
+//! faithfully stays as its source.
 
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -12,6 +15,7 @@ use std::sync::Arc;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{Align, Align2, Color32, FontFamily, FontId, Galley, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2, pos2, vec2};
 use texcraft_engine::project::{Contents, Project, ProjectPath};
+use texcraft_engine::{FormulaBox, FormulaState};
 use texcraft_latex::view::{Block, BlockKind, ChipKind, Inline, InlineKind, Item, ListKind, Style};
 use texcraft_preview::figure;
 
@@ -40,6 +44,85 @@ pub(crate) struct Formatted {
     cache: Option<Cache>,
     /// By the image's project path and length.
     images: HashMap<(String, usize), Picture>,
+    /// Typeset formulas drawn as textures.
+    ink: Ink,
+}
+
+/// Typeset formulas as textures, by their batch's PDF, page and pixels per point; those not drawn
+/// for a while are dropped.
+#[derive(Default)]
+struct Ink {
+    /// The batches' PDFs, opened, by the address of their bytes (kept alive here).
+    docs: HashMap<usize, (Arc<Vec<u8>>, Option<texcraft_preview::Document>)>,
+    textures: HashMap<(usize, u32, u32), (Drawn, u64)>,
+    frame: u64,
+    /// Formulas that may still be rasterised this frame.
+    budget: usize,
+}
+
+#[derive(Clone)]
+enum Drawn {
+    Ready(egui::TextureHandle),
+    /// The page could not be drawn.
+    Broken,
+}
+
+/// What [`Ink::texture`] gives.
+enum Inked {
+    Ready(egui::TextureId),
+    /// Not rasterised yet (too many this frame).
+    Later,
+    Broken,
+}
+
+/// Formulas rasterised in one frame at most, so a file full of them does not stall the window.
+const INK_PER_FRAME: usize = 24;
+
+impl Ink {
+    fn begin(&mut self) {
+        self.frame += 1;
+        self.budget = INK_PER_FRAME;
+    }
+
+    fn end(&mut self) {
+        let frame = self.frame;
+        self.textures.retain(|_, (_, used)| frame.saturating_sub(*used) < 600);
+        let live: HashSet<usize> = self.textures.keys().map(|k| k.0).collect();
+        self.docs.retain(|k, _| live.contains(k));
+    }
+
+    /// The texture of `b` at `px` pixels per TeX point.
+    fn texture(&mut self, ctx: &egui::Context, b: &FormulaBox, px: f32) -> Inked {
+        let max_side = ctx.input(|i| i.max_texture_side).min(4096) as f32;
+        let px = px.min(max_side / b.width_pt.max(1.0)).min(max_side / (b.height_pt + b.depth_pt).max(1.0));
+        let doc_key = Arc::as_ptr(&b.pdf) as usize;
+        let key = (doc_key, b.page, (px * 64.0).round() as u32);
+        if let Some((drawn, used)) = self.textures.get_mut(&key) {
+            *used = self.frame;
+            return match drawn {
+                Drawn::Ready(t) => Inked::Ready(t.id()),
+                Drawn::Broken => Inked::Broken,
+            };
+        }
+        if self.budget == 0 {
+            ctx.request_repaint();
+            return Inked::Later;
+        }
+        self.budget -= 1;
+        let (_, doc) = self.docs.entry(doc_key).or_insert_with(|| (Arc::clone(&b.pdf), texcraft_preview::Document::open(Arc::clone(&b.pdf)).ok()));
+        let drawn = match doc.as_ref().map(|d| d.render_ink(b.page as usize, px)) {
+            Some(Ok(img)) => {
+                let pixels = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.rgba);
+                Drawn::Ready(ctx.load_texture(format!("formula:{doc_key}:{}:{}", b.page, key.2), pixels, egui::TextureOptions::LINEAR))
+            }
+            _ => Drawn::Broken,
+        };
+        self.textures.insert(key, (drawn.clone(), self.frame));
+        match drawn {
+            Drawn::Ready(t) => Inked::Ready(t.id()),
+            Drawn::Broken => Inked::Broken,
+        }
+    }
 }
 
 impl Formatted {
@@ -116,6 +199,10 @@ struct Cx<'a> {
     align: Align,
     /// Footnotes numbered so far.
     footnotes: usize,
+    /// The file's formulas, by their first byte, and the document's body size in TeX points.
+    typeset: &'a HashMap<usize, FormulaState>,
+    body_pt: f32,
+    ink: &'a mut Ink,
 }
 
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
@@ -144,7 +231,14 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             None
         }
     };
+    let found = app.session.formulas(path).unwrap_or_default();
+    if found.formulas.iter().any(|f| matches!(f.state, FormulaState::Pending)) {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+    }
+    let typeset: HashMap<usize, FormulaState> = found.formulas.into_iter().map(|f| (f.range.start, f.state)).collect();
     let t = app.tokens;
+    let ink = &mut app.editor.formatted.ink;
+    ink.begin();
     let mut cx = Cx {
         t,
         text: &text,
@@ -160,6 +254,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         focused: false,
         align: Align::Min,
         footnotes: 0,
+        typeset: &typeset,
+        body_pt: found.body_pt.max(1.0),
+        ink,
     };
     let page = 6.0 * t.unit;
     app.view.cursor = None;
@@ -179,6 +276,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         ui.add_space(page * 4.0);
         keyboard_scroll(ui, cx.focused);
     });
+    cx.ink.end();
     let (jump, toggle, first) = (cx.jump.take(), cx.toggle_preamble, cx.first);
     if let Some(id) = first {
         app.region(crate::Region::Editor, id);
@@ -299,7 +397,12 @@ struct Piece {
 enum PieceKind {
     Text,
     Chip(ChipKind, String),
-    Formula,
+    /// A formula shown as its source: being typeset (true), or this build cannot typeset it.
+    Formula(bool),
+    /// A typeset formula, drawn over the space its no-break space holds.
+    Typeset(FormulaBox),
+    /// A formula retex could not typeset: its source, underlined, and retex's messages.
+    FormulaError(String),
     Source,
     Link(String),
     Footnote(String),
@@ -318,6 +421,12 @@ struct Builder<'a> {
     /// The paragraph as words, for its accessible name.
     plain: String,
     footnotes: &'a mut usize,
+    typeset: &'a HashMap<usize, FormulaState>,
+    /// Screen points per TeX point.
+    scale: f32,
+    /// The reading face's no-break space at this size: its advance, and how far the baseline is
+    /// below the middle of its line.
+    probe: (f32, f32),
 }
 
 /// White space as single spaces.
@@ -361,6 +470,24 @@ impl Builder<'_> {
         self.pieces.push(Piece { chars: start..self.chars, range, kind });
     }
 
+    /// A no-break space as wide as typeset formula `b`, in a line tall enough for its height above
+    /// and depth below the baseline it shares with the text.
+    fn typeset_space(&mut self, b: &FormulaBox, range: Range<usize>) {
+        let (advance, below_middle) = self.probe;
+        let (w, h, d) = (b.width_pt * self.scale, b.height_pt * self.scale, b.depth_pt * self.scale);
+        let gap = self.size * 0.15;
+        let line = self.line_height().max(2.0 * (h - below_middle) + gap).max(2.0 * (d + below_middle) + gap);
+        let format = TextFormat {
+            font_id: self.t.reading(self.size, false, false),
+            color: Color32::TRANSPARENT,
+            line_height: Some(line.ceil()),
+            extra_letter_spacing: w - advance,
+            valign: Align::Center,
+            ..TextFormat::default()
+        };
+        self.append("\u{a0}", format, range, PieceKind::Typeset(b.clone()));
+    }
+
     fn atom_format(&self, font: FontId, color: Color32) -> TextFormat {
         TextFormat { font_id: font, color, line_height: Some(self.line_height()), valign: Align::Center, ..TextFormat::default() }
     }
@@ -383,9 +510,18 @@ impl Builder<'_> {
             InlineKind::Formula { source, .. } => {
                 let math = collapse(self.text.get(source.clone()).unwrap_or_default());
                 self.plain.push_str(&math);
+                let kind = match self.typeset.get(&range.start) {
+                    Some(FormulaState::Typeset(b)) => {
+                        self.typeset_space(b, range);
+                        return;
+                    }
+                    Some(FormulaState::Failed(messages)) => PieceKind::FormulaError(messages.join("\n")),
+                    Some(FormulaState::Pending) => PieceKind::Formula(true),
+                    Some(FormulaState::Unavailable(_)) | None => PieceKind::Formula(false),
+                };
                 let font = FontId::new(self.t.code_size * self.size / self.t.reading_size * 0.95, FontFamily::Monospace);
                 let format = self.atom_format(font, self.t.syntax_math);
-                self.append(&format!("\u{a0}{math}\u{a0}"), format, range, PieceKind::Formula);
+                self.append(&format!("\u{a0}{math}\u{a0}"), format, range, kind);
             }
             InlineKind::Chip { kind, command, key } => {
                 self.plain.push_str(key);
@@ -502,7 +638,12 @@ fn piece_tip(kind: &PieceKind, text: &str, range: &Range<usize>) -> Option<Strin
         }
         PieceKind::Chip(ChipKind::Citation, command) => tl!("Citation (\\{command}) of {key}").replace("{command}", command).replace("{key}", &key()),
         PieceKind::Chip(ChipKind::File, command) => tl!("File read with \\{command}: {key}").replace("{command}", command).replace("{key}", &key()),
-        PieceKind::Formula => tl!("The formula's source. Typeset formulas come in a later version; double-click to edit it.").to_owned(),
+        PieceKind::Formula(true) => tl!("The formula's source, while it is typeset. Double-click to edit it.").to_owned(),
+        PieceKind::Formula(false) => {
+            tl!("The formula's source: this version typesets formulas in the desktop app only. Double-click to edit it.").to_owned()
+        }
+        PieceKind::Typeset(_) => tl!("A formula. Double-click to edit its source.").to_owned(),
+        PieceKind::FormulaError(message) => tl!("This formula has an error: {message}").replace("{message}", message),
         PieceKind::Source => tl!("Shown as its source: the formatted view does not show this command yet.").to_owned(),
         PieceKind::Link(url) => url.clone(),
         PieceKind::Footnote(note) => tl!("Footnote: {text}").replace("{text}", note),
@@ -513,6 +654,8 @@ fn piece_tip(kind: &PieceKind, text: &str, range: &Range<usize>) -> Option<Strin
 fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Range<usize>, para: &Para) -> egui::Response {
     let t = cx.t;
     let width = ui.available_width();
+    let scale = para.size / cx.body_pt;
+    let typeset = cx.typeset;
     let mut b = Builder {
         t: &t,
         text: cx.text,
@@ -524,6 +667,9 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
         chars: 0,
         plain: String::new(),
         footnotes: &mut cx.footnotes,
+        typeset,
+        scale,
+        probe: probe(ui, &t, para.size),
     };
     for i in inlines {
         b.inline(i, Style::default());
@@ -543,6 +689,7 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
         paint_pieces(ui, &t, &galley, &pieces, origin, para.size);
         ui.painter().galley(origin, Arc::clone(&galley), t.text);
         paint_chip_icons(ui, &t, &galley, &pieces, origin, para.size);
+        paint_typeset(ui, cx, &galley, &pieces, origin, (scale, para.color));
     }
     let hovered = r.hover_pos().and_then(|p| piece_at(&galley, &pieces, p - origin));
     let r = match hovered.and_then(|p| piece_tip(&p.kind, cx.text, &p.range)) {
@@ -576,26 +723,91 @@ fn activate(ui: &egui::Ui, cx: &mut Cx<'_>, r: &egui::Response, rect: Rect, star
     }
 }
 
+/// The advance of the reading face's no-break space at `size`, and how far its baseline is below
+/// the middle of its line (the text and a typeset formula's space are centred in their row, so
+/// they share that baseline).
+fn probe(ui: &egui::Ui, t: &Tokens, size: f32) -> (f32, f32) {
+    let galley = ui.painter().layout_no_wrap("\u{a0}".to_owned(), t.reading(size, false, false), t.text);
+    galley.rows.first().and_then(|r| r.glyphs.first()).map_or((size * 0.25, size * 0.25), |g| (g.advance_width, g.font_ascent - g.font_height / 2.0))
+}
+
+/// The baseline and right edge of char `at` of `galley`, relative to it (a formula's space is
+/// its letter spacing, laid before the glyph, and the glyph: it ends where the glyph does).
+fn glyph_end(galley: &Galley, at: usize) -> Option<Pos2> {
+    let mut row_start = 0;
+    for row in &galley.rows {
+        let n = row.char_count_including_newline().0;
+        if at < row_start + n {
+            let g = row.glyphs.get(at - row_start)?;
+            return Some(pos2(row.pos.x + g.pos.x + g.advance_width, row.pos.y + g.pos.y));
+        }
+        row_start += n;
+    }
+    None
+}
+
+/// Typeset formulas over the spaces held for them, in `color`, `scale` screen points per TeX
+/// point.
+fn paint_typeset(ui: &egui::Ui, cx: &mut Cx<'_>, galley: &Galley, pieces: &[Piece], origin: Pos2, (scale, color): (f32, Color32)) {
+    let ppp = ui.ctx().pixels_per_point();
+    for p in pieces {
+        let PieceKind::Typeset(b) = &p.kind else { continue };
+        let Some(end) = glyph_end(galley, p.chars.start) else { continue };
+        let end = origin + end.to_vec2();
+        let rect = Rect::from_min_max(pos2(end.x - b.width_pt * scale, end.y - b.height_pt * scale), pos2(end.x, end.y + b.depth_pt * scale));
+        if ui.is_rect_visible(rect) {
+            ink(ui, cx, b, rect, scale * ppp, color);
+        }
+    }
+}
+
+/// Draws typeset formula `b` in `rect`, rasterised at `px` pixels per TeX point.
+fn ink(ui: &egui::Ui, cx: &mut Cx<'_>, b: &FormulaBox, rect: Rect, px: f32, color: Color32) {
+    match cx.ink.texture(ui.ctx(), b, px) {
+        Inked::Ready(id) => {
+            ui.painter().image(id, rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), color);
+        }
+        Inked::Later => {}
+        Inked::Broken => {
+            ui.painter().rect_stroke(rect, cx.t.corner(), Stroke::new(1.0, cx.t.text_muted), StrokeKind::Inside);
+        }
+    }
+}
+
 /// The soft pills behind formulas, chips and source runs.
 fn paint_pieces(ui: &egui::Ui, t: &Tokens, galley: &Galley, pieces: &[Piece], origin: Pos2, size: f32) {
     for p in pieces {
         let fill = match p.kind {
             PieceKind::Chip(..) => blend(t.surface, t.accent_soft),
-            PieceKind::Formula | PieceKind::Source => blend(t.surface, t.pressed),
-            PieceKind::Text | PieceKind::Link(_) | PieceKind::Footnote(_) => continue,
+            PieceKind::Formula(_) | PieceKind::FormulaError(_) | PieceKind::Source => blend(t.surface, t.pressed),
+            PieceKind::Text | PieceKind::Link(_) | PieceKind::Footnote(_) | PieceKind::Typeset(_) => continue,
         };
         // Chips and formulas are outlined too, so they read as one unit on dark surfaces.
         let stroke = match p.kind {
             PieceKind::Chip(..) => Stroke::new(1.0, t.accent.gamma_multiply(0.35)),
-            PieceKind::Formula => formula_outline(t),
+            PieceKind::Formula(_) => formula_outline(t),
+            PieceKind::FormulaError(_) => Stroke::new(1.0, t.error),
             _ => Stroke::NONE,
         };
         for r in span_rects(galley, (p.chars.start, p.chars.end)) {
             let r = r.translate(origin.to_vec2());
             let pill = Rect::from_center_size(r.center(), vec2(r.width(), (size * 1.3).min(r.height())));
             ui.painter().rect(pill, t.corner(), fill, stroke, StrokeKind::Inside);
+            if matches!(p.kind, PieceKind::FormulaError(_)) {
+                error_underline(ui, t, pill);
+            }
         }
     }
+}
+
+/// The wavy line under a formula with an error.
+fn error_underline(ui: &egui::Ui, t: &Tokens, pill: Rect) {
+    let y = pill.bottom() - 1.0;
+    let step = 2.0;
+    let points: Vec<Pos2> = (0..=((pill.width() - 2.0 * step) / step).max(1.0) as usize)
+        .map(|i| pos2(pill.left() + step + i as f32 * step, y - if i % 2 == 0 { 0.0 } else { 1.5 }))
+        .collect();
+    ui.painter().add(egui::Shape::line(points, Stroke::new(1.0, t.error)));
 }
 
 /// The outline of a formula's pill.
@@ -907,6 +1119,28 @@ fn formula(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, source: &Ra
     // The environment's name sits in the margin on the right, as an equation number would.
     let margin = tag.as_ref().map_or(0.0, |g| g.size().x + 2.0 * t.unit);
     let room = width - 2.0 * margin;
+    let state = cx.typeset.get(&range.start).cloned();
+    if let Some(FormulaState::Typeset(b)) = &state {
+        // At the size of the text, made smaller to fit the measure.
+        let scale = t.reading_size / cx.body_pt;
+        let natural = vec2(b.width_pt, b.height_pt + b.depth_pt) * scale;
+        let fit = (room / natural.x.max(1.0)).min(1.0);
+        let (rect, r) = ui.allocate_exact_size(vec2(width, natural.y * fit + 2.0 * pad.y), Sense::click());
+        let image = Rect::from_center_size(rect.center(), natural * fit);
+        if ui.is_rect_visible(rect) {
+            ink(ui, cx, b, image, scale * fit * ui.ctx().pixels_per_point(), t.text);
+        }
+        if let Some(tag) = tag {
+            let at = pos2(rect.right() - tag.size().x, rect.center().y - tag.size().y / 2.0);
+            ui.painter().galley(at, tag, color);
+        }
+        // Named by its source, as a picture of a formula is.
+        let label = collapse(math);
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, &label));
+        let r = r.on_hover_text(tl!("A formula. Double-click to edit its source."));
+        activate(ui, cx, &r, image.expand(t.unit), range.start, None);
+        return;
+    }
     let font = FontId::new(t.code_size, FontFamily::Monospace);
     let galley = ui.painter().layout_job(LayoutJob::simple(shown.clone(), font, t.syntax_math, room - 2.0 * pad.x));
     let (rect, r) = ui.allocate_exact_size(vec2(width, galley.size().y + 2.0 * pad.y), Sense::click());
@@ -915,13 +1149,22 @@ fn formula(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, source: &Ra
     // Lines of a multi-line formula start together, as the source aligns them.
     let origin = pos2(pill.left() + pad.x - galley.rect.left(), rect.top() + pad.y - galley.rect.top());
     ui.painter().galley(origin, galley, t.syntax_math);
+    if let Some(FormulaState::Failed(_)) = &state {
+        error_underline(ui, &t, pill.shrink2(vec2(pad.x / 2.0, 0.0)));
+    }
     if let Some(tag) = tag {
         let at = pos2(rect.right() - tag.size().x, rect.center().y - tag.size().y / 2.0);
         ui.painter().galley(at, tag, color);
     }
     let label = tl!("Formula: {text}").replace("{text}", &shown);
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Math, true, &label));
-    let r = r.on_hover_text(tl!("The formula's source. Typeset formulas come in a later version; double-click to edit it."));
+    let tip = match &state {
+        // Not closed: its tag says so.
+        Some(FormulaState::Failed(messages)) if closed => tl!("This formula has an error: {message}").replace("{message}", &messages.join("\n")),
+        Some(FormulaState::Pending) => tl!("The formula's source, while it is typeset. Double-click to edit it.").to_owned(),
+        _ => tl!("The formula's source: this version typesets formulas in the desktop app only. Double-click to edit it.").to_owned(),
+    };
+    let r = r.on_hover_text(tip);
     activate(ui, cx, &r, pill, range.start, None);
 }
 

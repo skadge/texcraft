@@ -65,4 +65,20 @@ impl Document {
         let raster = raster::render(page, &RenderCache::new(), &Default::default(), &options).map_err(|e| Error::Render(e.to_string()))?;
         Ok(Image { width: raster.width, height: raster.height, rgba: raster.bytes().to_vec() })
     }
+
+    /// Page `index` at `scale` as ink: white, its alpha how much the page is covered (a
+    /// premultiplied mask to draw in the colour of the text around it, on any background). The
+    /// page's own colours are lost.
+    pub fn render_ink(&self, index: usize, scale: f32) -> Result<Image, Error> {
+        let pages = self.pdf.pages();
+        let page = pages.get(index).ok_or(Error::NoSuchPage(index))?;
+        let options = Options { scale: [scale, scale], background: [0, 0, 0, 0], ..Options::default() };
+        let raster = raster::render(page, &RenderCache::new(), &Default::default(), &options).map_err(|e| Error::Render(e.to_string()))?;
+        let mut rgba = raster.bytes().to_vec();
+        for px in rgba.chunks_exact_mut(4) {
+            let a = px[3];
+            px.copy_from_slice(&[a, a, a, a]);
+        }
+        Ok(Image { width: raster.width, height: raster.height, rgba })
+    }
 }
