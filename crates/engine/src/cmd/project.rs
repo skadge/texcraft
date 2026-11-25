@@ -152,16 +152,16 @@ fn save_as(s: &mut Session, params: &Value) -> Result<Value> {
 fn save_to(s: &mut Session, dir: &Path) -> Result<Value> {
     let now = s.now().timestamp_millis();
     let moved = s.dir.as_deref() != Some(dir);
+    let mut result = json!({"path": dir.display().to_string()});
     match &mut s.library {
         Some(library) => {
             let review = s.review.files(&s.project).map_err(|e| format!("The review could not be saved: {e}"))?;
             library.save(&dir.display().to_string(), &s.project, review, now);
         }
-        None => save_dir(s, dir)?,
+        None => result["removed"] = save_dir(s, dir)?,
     }
     s.dir = Some(dir.to_path_buf());
     s.dirty = false;
-    let mut result = json!({"path": dir.display().to_string()});
     if s.library.is_none() {
         // The project is saved either way; the history says what became of the commit.
         result["history"] = super::history::after_save(s, moved);
@@ -228,14 +228,82 @@ fn open_dir(s: &Session, path: &str) -> Result<(Project, PathBuf)> {
     Ok((project, dir))
 }
 
+/// Writes the project into `dir`, then removes from the folder the files the project had there
+/// and no longer has (issue #2). Says what was removed, and what could not be.
 #[cfg(not(target_arch = "wasm32"))]
-fn save_dir(s: &mut Session, dir: &Path) -> Result<()> {
+fn save_dir(s: &mut Session, dir: &Path) -> Result<Value> {
     if let Some(roots) = &s.roots {
         roots.check(dir, Access::Write)?;
     }
     s.project.save_dir(dir).map_err(|e| e.to_string())?;
     let new_folder = s.dir.as_deref() != Some(dir);
-    s.save_review(dir, new_folder)
+    s.save_review(dir, new_folder)?;
+    // In another folder, the files there are not the project's: none is removed.
+    let gone: Vec<texcraft_project::ProjectPath> =
+        if new_folder { Vec::new() } else { s.on_disk.iter().filter(|p| s.project.get(p).is_none()).cloned().collect() };
+    let (mut deleted, mut trashed, mut left) = (Vec::new(), Vec::new(), Vec::new());
+    let mut still = Vec::new();
+    for path in gone {
+        match remove_dropped(s, dir, &path) {
+            Ok(Removed::Deleted) => deleted.push(path.as_str().to_owned()),
+            Ok(Removed::Trashed) => trashed.push(path.as_str().to_owned()),
+            Ok(Removed::Absent) => {}
+            Err(e) => {
+                log::warn!("{e}");
+                left.push(json!({"path": path.as_str(), "error": e}));
+                still.push(path);
+            }
+        }
+    }
+    // What could not be removed is tried again at the next save.
+    s.on_disk = s.project.paths().cloned().chain(still).collect();
+    Ok(json!({"deleted": deleted, "trashed": trashed, "left": left}))
+}
+
+/// How a file the project no longer has left its folder.
+#[cfg(not(target_arch = "wasm32"))]
+enum Removed {
+    /// Deleted: the repository's last commit holds it as it was.
+    Deleted,
+    /// Moved to the system's trash, where it can be brought back from.
+    Trashed,
+    /// It was not there any more (or is not a file now).
+    Absent,
+}
+
+/// Removes `path`, a file the project had in `dir` and no longer has. A file the repository's
+/// last commit holds as it is on disk is deleted (the history keeps it); any other goes to the
+/// system's trash, so nothing the user could not get back is lost. Agents have no trash outside
+/// their roots: theirs stay.
+#[cfg(not(target_arch = "wasm32"))]
+fn remove_dropped(s: &Session, dir: &Path, path: &texcraft_project::ProjectPath) -> Result<Removed> {
+    let file = dir.join(path.as_str());
+    if !std::fs::symlink_metadata(&file).is_ok_and(|m| m.is_file()) {
+        return Ok(Removed::Absent);
+    }
+    let bytes = std::fs::read(&file).map_err(|e| format!("{path} was removed from the project but could not be read in its folder: {e}"))?;
+    let committed = s.history.as_ref().and_then(|h| {
+        let head = h.head().ok()??;
+        h.file_at(&head, path.as_str()).ok()?
+    });
+    let removed = if committed.as_deref() == Some(bytes.as_slice()) {
+        std::fs::remove_file(&file).map_err(|e| format!("{path} was removed from the project but could not be deleted from its folder: {e}"))?;
+        Removed::Deleted
+    } else if s.roots.is_some() {
+        return Err(format!(
+            "{path} was removed from the project but stays in its folder: its last version is not in the project's history, and an agent cannot move it to the trash."
+        ));
+    } else {
+        trash::delete(&file).map_err(|e| format!("{path} was removed from the project but could not be moved to the trash: {e}"))?;
+        Removed::Trashed
+    };
+    // The folders it leaves empty go too, up to the project's folder.
+    for parent in file.ancestors().skip(1).take_while(|p| *p != dir && p.starts_with(dir)) {
+        if std::fs::remove_dir(parent).is_err() {
+            break;
+        }
+    }
+    Ok(removed)
 }
 
 /// Renames the project's folder `old` to `new`, a sibling that must not exist yet.
@@ -270,7 +338,7 @@ fn open_dir(_: &Session, _: &str) -> Result<(Project, PathBuf)> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn save_dir(_: &mut Session, _: &Path) -> Result<()> {
+fn save_dir(_: &mut Session, _: &Path) -> Result<Value> {
     Err(NO_FOLDERS.to_owned())
 }
 

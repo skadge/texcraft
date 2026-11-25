@@ -104,6 +104,10 @@ pub struct Session {
     /// these live in the session: shown in the file tree until a file is put in them, and not
     /// saved (a folder is written when it has a file).
     folders: std::collections::BTreeSet<ProjectPath>,
+    /// The project's files in its folder as last opened or saved there (issue #2): a save removes
+    /// from the folder those the project no longer has (deleted, renamed, moved), and no other.
+    #[cfg(not(target_arch = "wasm32"))]
+    on_disk: std::collections::BTreeSet<ProjectPath>,
     /// The git repository the project's folder is in (docs/ROADMAP.md, C8): found when the project
     /// is opened, made on its first save when there is none.
     history: Option<texcraft_history::History>,
@@ -153,6 +157,8 @@ impl Session {
             library: None,
             template_files: std::collections::BTreeMap::new(),
             folders: std::collections::BTreeSet::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            on_disk: std::collections::BTreeSet::new(),
             history: None,
             #[cfg(not(target_arch = "wasm32"))]
             export: None,
@@ -592,6 +598,10 @@ impl Session {
         self.folders.clear();
         // A project of the library has a name, not a folder on disk.
         let folder = dir.as_deref().filter(|_| self.library.is_none());
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.on_disk = if folder.is_some() { self.project.paths().cloned().collect() } else { Default::default() };
+        }
         self.language = language::Language::new(folder);
         self.review = match (&self.library, &dir) {
             (Some(library), Some(name)) => review_store::State::load_from_library(library, &name.display().to_string(), &self.project),

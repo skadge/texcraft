@@ -93,6 +93,8 @@ impl ChangeKind {
 pub struct Entry {
     /// The full hexadecimal id.
     pub id: String,
+    /// Its first parent's full id; none for the first commit.
+    pub parent: Option<String>,
     pub time: chrono::DateTime<chrono::Utc>,
     pub author: String,
     pub message: String,

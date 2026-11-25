@@ -12,6 +12,7 @@ mod formatted;
 mod frame;
 mod gallery;
 mod goto_file;
+mod history;
 mod image_drop;
 mod insert;
 mod log_copy;

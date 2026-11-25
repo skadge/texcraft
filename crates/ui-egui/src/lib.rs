@@ -28,6 +28,7 @@ pub mod prefs;
 mod source;
 pub use picks::{Pick, PickKind, PickRequest};
 pub use start::{THUMBNAIL_WIDTH, Thumbnail};
+mod history;
 mod picks;
 mod preview;
 mod rail;
@@ -81,6 +82,8 @@ pub enum Side {
     Review,
     /// Finding and replacing across the project's files.
     Search,
+    /// The project's saved versions (its git history).
+    History,
 }
 
 /// How the editor and the preview share the window.
@@ -130,6 +133,7 @@ pub struct App {
     editor: editor::Editor,
     review: review::ReviewView,
     search: search::Search,
+    history: history::HistoryView,
     figure: figure_view::FigureView,
     pdf: pdf_view::PdfView,
     applied: Option<Scheme>,
@@ -206,6 +210,7 @@ impl App {
             editor: editor::Editor::default(),
             review: review::ReviewView::default(),
             search: search::Search::default(),
+            history: history::HistoryView::default(),
             figure: figure_view::FigureView::default(),
             pdf: pdf_view::PdfView::default(),
             applied: None,
@@ -493,12 +498,28 @@ impl App {
                 {
                     goto_file::opened(&mut self.recent_files, path);
                 }
+                if matches!(id, "project.save" | "project.save_as") {
+                    self.saved(&v);
+                }
                 Some(v)
             }
             Err(e) => {
                 self.view.status = Some((e, true));
                 None
             }
+        }
+    }
+
+    /// After a save: says which removed files went to the trash, or could not leave the folder.
+    fn saved(&mut self, result: &Value) {
+        let names = |key: &str| -> Vec<String> {
+            result["removed"][key].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect()).unwrap_or_default()
+        };
+        let trashed = names("trashed");
+        if let Some(error) = result["removed"]["left"].get(0).and_then(|l| l["error"].as_str()) {
+            self.view.status = Some((error.to_owned(), true));
+        } else if !trashed.is_empty() {
+            self.view.status = Some((tl!("Moved to the trash: {files}").replace("{files}", &trashed.join(", ")), false));
         }
     }
 

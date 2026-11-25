@@ -129,9 +129,15 @@ impl History {
 
     /// Commits `snapshot` with `message`. `author` none: the repository's configured identity,
     /// else "TeXCraft". Returns the new commit's id, or none when the project is as in HEAD.
+    ///
+    /// In someone else's repository, refuses while changes are staged in git: the commit rewrites
+    /// the index from its tree, which would unstage them.
     pub fn commit(&self, snapshot: &Snapshot, message: &str, author: Option<&Person>, time: chrono::DateTime<chrono::Utc>) -> Result<Option<String>> {
         let head = self.head_id()?;
         let head_tree = head.map(|c| self.commit_tree(c)).transpose()?;
+        if self.owner == Owner::Theirs && self.staged(head_tree)? {
+            return Err("Some changes are staged in git: commit them with git first.".to_owned());
+        }
         let old = match head_tree {
             Some(t) => self.subtree(t, &self.prefix)?,
             None => None,
@@ -206,6 +212,22 @@ impl History {
         Ok(Some(id.to_string()))
     }
 
+    /// Whether the index differs from tree `head` (what `git diff --cached` would show).
+    fn staged(&self, head: Option<ObjectId>) -> Result<bool> {
+        if !self.repo.index_path().exists() {
+            return Ok(false);
+        }
+        let index = git!("The repository's index cannot be read", self.repo.open_index())?;
+        let expected = match head {
+            Some(tree) => git!("The repository's index cannot be compared", self.repo.index_from_tree(&tree))?,
+            None => return Ok(!index.entries().is_empty()),
+        };
+        let entries = |state: &gix::index::State| -> Vec<(BString, ObjectId, gix::index::entry::Mode, gix::index::entry::Stage)> {
+            state.entries().iter().map(|e| (e.path(state).to_owned(), e.id, e.mode, e.stage())).collect()
+        };
+        Ok(entries(&index) != entries(&expected))
+    }
+
     /// The identity of the repository's configuration (`user.name`, `user.email`), if any.
     fn configured_person(&self) -> Option<Person> {
         let sig = self.repo.committer()?.ok()?;
@@ -275,6 +297,7 @@ impl History {
             let seconds = git!("A commit's time cannot be read", author.time())?.seconds;
             out.push(Entry {
                 id: commit.id.to_string(),
+                parent: parent.map(|p| p.to_string()),
                 time: chrono::DateTime::from_timestamp(seconds, 0).unwrap_or_default(),
                 author: author.name.to_string(),
                 message: commit.message_raw_sloppy().to_str_lossy().trim().to_owned(),
@@ -315,6 +338,13 @@ impl History {
             }
         }
         Ok(out)
+    }
+
+    /// The first parent of commit `commit` (a full id); none for a first commit.
+    pub fn parent_of(&self, commit: &str) -> Result<Option<String>> {
+        let object = git!("A commit cannot be read", self.repo.find_object(self.parse(commit)?))?;
+        let commit = git!("A commit cannot be read", object.try_into_commit())?;
+        Ok(commit.parent_ids().next().map(|id| id.detach().to_string()))
     }
 
     fn full_path(&self, path: &str) -> String {

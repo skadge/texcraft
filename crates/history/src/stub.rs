@@ -54,6 +54,10 @@ impl History {
         Err(NOT_YET.to_owned())
     }
 
+    pub fn parent_of(&self, _commit: &str) -> Result<Option<String>> {
+        Err(NOT_YET.to_owned())
+    }
+
     pub fn files_at(&self, _commit: &str) -> Result<Vec<(String, Vec<u8>)>> {
         Err(NOT_YET.to_owned())
     }

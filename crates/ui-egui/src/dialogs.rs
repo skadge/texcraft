@@ -112,7 +112,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             },
             Some(Dialog::Prompt(p)) => {
                 let params = (p.params)(p.value.trim());
-                if app.run(p.command, params).is_some() {
+                if let Some(done) = app.run(p.command, params) {
                     match p.command {
                         "project.save_as" => {
                             app.remember_project();
@@ -121,6 +121,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                             }
                         }
                         "project.from_template" => app.template_project_opened(),
+                        "history.commit" => {
+                            let said = if done["commit"].is_string() { tl!("Committed.") } else { tl!("Nothing changed since the last commit.") };
+                            app.view.status = Some((said.to_owned(), false));
+                        }
                         _ => {}
                     }
                 }
@@ -131,6 +135,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                         app.prefs.recent.retain(|p| p != name);
                         app.prefs_changed = true;
                     }
+                }
+                Some(_) if c.command == "history.restore" => {
+                    let said = tl!("Restored, as unsaved changes: the next save makes a new version.");
+                    app.view.status = Some((said.to_owned(), false));
                 }
                 Some(done) if c.command == "project.replace" => {
                     let n = done["replaced"].as_u64().unwrap_or(0) as usize;

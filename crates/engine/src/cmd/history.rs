@@ -50,6 +50,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: false,
         },
         CommandSpec {
+            id: "history.diff",
+            label: "Compare a File With Its Previous Version",
+            menu: &[],
+            shortcut: None,
+            params: show_schema,
+            enabled: has_history,
+            run: diff,
+            changes: false,
+        },
+        CommandSpec {
             id: "history.restore",
             label: "Restore a Version",
             menu: &[],
@@ -216,6 +226,7 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
         .map(|e| {
             json!({
                 "id": e.id,
+                "parent": e.parent,
                 "time": e.time.to_rfc3339(),
                 "author": e.author,
                 "message": e.message,
@@ -234,6 +245,94 @@ fn show(s: &mut Session, p: &Value) -> Result<Value> {
         Contents::Text(text) => json!({"path": path.as_str(), "text": text}),
         Contents::Binary(bytes) => json!({"path": path.as_str(), "base64": base64::engine::general_purpose::STANDARD.encode(bytes)}),
     })
+}
+
+/// How a file changed in `commit`, line by line, against the commit's first parent: the changed
+/// lines with three lines around them, in hunks.
+fn diff(s: &mut Session, p: &Value) -> Result<Value> {
+    let commit = string(p, "commit")?.to_owned();
+    let path = path_param(p, "path")?;
+    let history = history(s, Access::Read)?;
+    let parent = history.parent_of(&commit)?;
+    let new = history.file_at(&commit, path.as_str())?;
+    let old = match &parent {
+        Some(parent) => history.file_at(parent, path.as_str())?,
+        None => None,
+    };
+    let change = match (&old, &new) {
+        (None, None) => return Err(format!("`{path}` is not in the project at commit {commit} nor before it.")),
+        (None, Some(_)) => "added",
+        (Some(_), None) => "deleted",
+        (Some(_), Some(_)) => "modified",
+    };
+    let mut result = json!({"path": path.as_str(), "commit": commit, "parent": parent, "change": change});
+    let text = |bytes: Option<Vec<u8>>| match bytes.map(Contents::from_bytes) {
+        None => Some(String::new()),
+        Some(Contents::Text(t)) => Some(t),
+        Some(Contents::Binary(_)) => None,
+    };
+    let (Some(old), Some(new)) = (text(old), text(new)) else {
+        result["binary"] = json!(true);
+        return Ok(result);
+    };
+    result["binary"] = json!(false);
+    let (hunks, added, removed, truncated) = line_diff(&old, &new);
+    result["hunks"] = json!(hunks);
+    result["added"] = json!(added);
+    result["removed"] = json!(removed);
+    result["truncated"] = json!(truncated);
+    Ok(result)
+}
+
+/// At most this many lines of a diff are given.
+const MAX_DIFF_LINES: usize = 5000;
+
+/// The hunks of a line diff from `old` to `new`, how many lines were added and removed, and
+/// whether lines were left out (past [`MAX_DIFF_LINES`]).
+fn line_diff(old: &str, new: &str) -> (Vec<Value>, usize, usize, bool) {
+    let mut config = similar::TextDiff::configure();
+    // A pathological pair of files gives a coarser diff rather than a stall (the browser has no
+    // clock similar can read).
+    if cfg!(not(target_arch = "wasm32")) {
+        config.timeout(std::time::Duration::from_millis(500));
+    }
+    let diff = config.diff_lines(old, new);
+    let (mut added, mut removed, mut shown, mut truncated) = (0, 0, 0, false);
+    let mut hunks = Vec::new();
+    for group in diff.grouped_ops(3) {
+        let mut lines = Vec::new();
+        for op in &group {
+            for change in diff.iter_changes(op) {
+                let kind = match change.tag() {
+                    similar::ChangeTag::Insert => {
+                        added += 1;
+                        "added"
+                    }
+                    similar::ChangeTag::Delete => {
+                        removed += 1;
+                        "removed"
+                    }
+                    similar::ChangeTag::Equal => "same",
+                };
+                if shown >= MAX_DIFF_LINES {
+                    truncated = true;
+                    continue;
+                }
+                shown += 1;
+                let text = change.value();
+                lines.push(json!({
+                    "kind": kind,
+                    "old": change.old_index().map(|i| i + 1),
+                    "new": change.new_index().map(|i| i + 1),
+                    "text": text.strip_suffix('\n').unwrap_or(text),
+                }));
+            }
+        }
+        if !lines.is_empty() {
+            hunks.push(json!({"lines": lines}));
+        }
+    }
+    (hunks, added, removed, truncated)
 }
 
 /// File `path` at `commit`, or an error saying it was not in that version.
