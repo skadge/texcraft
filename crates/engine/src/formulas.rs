@@ -210,7 +210,13 @@ fn find_block(text: &str, block: &Block, out: &mut Vec<Found>) {
         }
         BlockKind::Container { blocks, .. } => blocks.iter().for_each(|b| find_block(text, b, out)),
         BlockKind::Figure { caption, .. } => find_inlines(text, caption, out),
-        BlockKind::Preamble | BlockKind::Source => {}
+        BlockKind::Table(t) => {
+            t.cells.iter().flatten().for_each(|c| find_inlines(text, c, out));
+            if let Some(f) = &t.float {
+                find_inlines(text, &f.caption, out);
+            }
+        }
+        BlockKind::Preamble | BlockKind::Source | BlockKind::UnsupportedTable(_) => {}
     }
 }
 

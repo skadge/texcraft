@@ -37,10 +37,14 @@ fn a_document_maps_to_blocks_in_source_order() {
     for h in headings {
         assert!(MAIN[h.range.clone()].starts_with("\\section"));
     }
-    // Display formulas hold their math; the table is kept as its source.
+    // Display formulas hold their math; the table is a grid with its caption and label.
     let formula = blocks.iter().find_map(|b| if let BlockKind::Formula { source, .. } = &b.kind { Some(&MAIN[source.clone()]) } else { None });
     assert!(formula.is_some_and(|f| f.contains("\\ddot\\theta") && !f.contains("\\begin")));
-    assert!(blocks.iter().any(|b| b.kind == BlockKind::Source && MAIN[b.range.clone()].contains("\\begin{tabular}")));
+    let table = blocks.iter().find_map(|b| if let BlockKind::Table(t) = &b.kind { Some(t) } else { None });
+    let Some(table) = table else { panic!("the table is not a grid") };
+    assert_eq!((table.cells.len(), table.cells.iter().map(Vec::len).max()), (4, Some(3)));
+    let float = table.float.as_ref();
+    assert!(float.is_some_and(|f| !f.caption.is_empty() && !f.caption_above && f.label.is_some()));
 }
 
 #[test]

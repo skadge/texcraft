@@ -449,7 +449,7 @@ fn draw_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, block: &Block, depth: usize) {
         BlockKind::Container { name, blocks } => container(ui, cx, name, blocks, depth),
         BlockKind::Formula { source, env, closed } => formula(ui, cx, range, source, env.as_deref(), *closed),
         BlockKind::Figure { image, caption, label } => figure_card(ui, cx, range, image.as_ref(), caption, label.as_ref()),
-        BlockKind::Source => source_block(ui, cx, range),
+        BlockKind::Source | BlockKind::Table(_) | BlockKind::UnsupportedTable(_) => source_block(ui, cx, range),
     }
 }
 
