@@ -33,5 +33,6 @@ mod review;
 mod search;
 mod shortcuts;
 mod suggest;
+mod tables;
 mod unsaved;
 mod vim;

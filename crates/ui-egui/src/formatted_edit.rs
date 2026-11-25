@@ -44,7 +44,13 @@ pub(crate) struct Editing {
     /// Bring the caret into view next frame.
     pub reveal: bool,
     /// Take the keyboard next frame.
-    focus: bool,
+    pub focus: bool,
+    /// Give the keyboard to the toolbar of the table holding the caret, next frame.
+    pub focus_toolbar: bool,
+    /// A table's toolbar held the keyboard last frame.
+    pub toolbar_focused: bool,
+    /// The caret was in a table cell last frame: Tab moves between cells.
+    in_cell: bool,
     /// The view asked for the keyboard itself (its caret is where it wants it).
     ours: bool,
     was_focused: bool,
@@ -58,10 +64,15 @@ pub(crate) fn caret_byte(app: &App) -> usize {
 
 /// Before the view is drawn: the keyboard's edits of this frame (and those left from the last).
 pub(crate) fn begin(app: &mut App, ctx: &egui::Context, id: egui::Id, focused: bool) -> Vec<Edit> {
-    ctx.memory_mut(|m| {
-        m.set_focus_lock_filter(id, egui::EventFilter { tab: false, horizontal_arrows: true, vertical_arrows: true, escape: false });
-    });
     let e = &mut app.editor.formatted.editing;
+    let tab = e.in_cell;
+    ctx.memory_mut(|m| {
+        m.set_focus_lock_filter(id, egui::EventFilter { tab, horizontal_arrows: true, vertical_arrows: true, escape: false });
+    });
+    // Escape in a table cell (which takes the keyboard from the text) goes to the table's toolbar.
+    if e.was_focused && !focused && e.in_cell && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        e.focus_toolbar = true;
+    }
     if std::mem::take(&mut e.focus) {
         e.ours = true;
         ctx.memory_mut(|m| m.request_focus(id));
@@ -163,7 +174,11 @@ pub(crate) fn finish(
         ctx.request_repaint();
         return;
     }
-    let Some((a, h)) = selection(app, &f) else { return };
+    let Some((a, h)) = selection(app, &f) else {
+        app.editor.formatted.editing.in_cell = false;
+        return;
+    };
+    app.editor.formatted.editing.in_cell = focused && lines.get(h.line).is_some_and(|d| d.cell.is_some());
     paint(app, &ctx, &f, painter, (a, h), focused);
     accessibility(ui, response, path, &f, (a, h));
 }
@@ -264,11 +279,9 @@ fn pointer(app: &mut App, ctx: &egui::Context, f: &Frame<'_>) {
         return;
     }
     let Some(p) = ctx.pointer_interact_pos() else { return };
-    // The line under the pointer, or the nearest one above or below it.
-    let distance = |d: &DrawnLine| {
-        let r = d.response.rect;
-        if p.y < r.top() { r.top() - p.y } else { (p.y - r.bottom()).max(0.0) }
-    };
+    // The line under the pointer, or the nearest one (table cells side by side are told apart
+    // across too).
+    let distance = |d: &DrawnLine| d.response.rect.distance_sq_to_pos(p);
     let nearest = f.lines.iter().enumerate().min_by(|x, y| distance(x.1).total_cmp(&distance(y.1)));
     if let (Some((i, d)), Some((anchor, head))) = (nearest, selection(app, f)) {
         let to = Pos { line: i, at: stop_at(d, p) };
@@ -440,6 +453,7 @@ fn key_press(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, key: egui::Key, 
         K::Backspace => delete(app, f, true),
         K::Delete => delete(app, f, false),
         K::Enter => enter(app, f, edit),
+        K::Tab => next_cell(app, f, m.shift),
         K::Z if m.command => undo(app, m.shift),
         K::Y if m.command => undo(app, true),
         K::A if m.command => select_all(app, f),
@@ -533,7 +547,11 @@ fn vertical(app: &mut App, f: &Frame<'_>, up: bool, shift: bool) {
     let to = if inside(d) {
         Pos { line: h.line, at: stop_at(d, egui::pos2(x, y)) }
     } else {
-        let other = if up { h.line.checked_sub(1) } else { Some(h.line + 1) };
+        let other = match d.cell {
+            Some(c) => cell_neighbour(f, c, up),
+            None if up => h.line.checked_sub(1),
+            None => Some(h.line + 1),
+        };
         match other.and_then(|i| f.lines.get(i).map(|o| (i, o))) {
             Some((i, o)) => {
                 let row = if up { o.galley.rows.last() } else { o.galley.rows.first() };
@@ -549,6 +567,38 @@ fn vertical(app: &mut App, f: &Frame<'_>, up: bool, shift: bool) {
     };
     let (Some(ab), Some(tb)) = (f.doc.source(if shift { a } else { to }), f.doc.source(to)) else { return };
     set_bytes(app, (ab, tb), Some(to.line));
+}
+
+/// The line Up or Down goes to from a table cell: the cell above or below (the one taking its
+/// column), or the line before or after the table.
+fn cell_neighbour(f: &Frame<'_>, c: crate::formatted::CellAt, up: bool) -> Option<usize> {
+    let in_table = |d: &DrawnLine| d.cell.is_some_and(|o| o.table == c.table);
+    let row = if up { c.row.checked_sub(1) } else { Some(c.row + 1).filter(|r| *r < c.rows) };
+    match row {
+        Some(row) => f
+            .lines
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| d.cell.is_some_and(|o| o.table == c.table && o.row == row && o.column <= c.column))
+            .map(|(i, _)| i)
+            .next_back(),
+        None if up => f.lines.iter().position(in_table).and_then(|i| i.checked_sub(1)),
+        None => f.lines.iter().rposition(in_table).map(|i| i + 1),
+    }
+}
+
+/// Tab and Shift+Tab in a table: the next or the previous cell, its text selected.
+fn next_cell(app: &mut App, f: &Frame<'_>, back: bool) {
+    let Some((_, h)) = selection(app, f) else { return };
+    let Some(c) = f.lines.get(h.line).and_then(|d| d.cell) else { return };
+    let next = if back { h.line.checked_sub(1) } else { Some(h.line + 1) };
+    let Some((i, line)) = next.and_then(|i| Some((i, f.lines.get(i).filter(|d| d.cell.is_some_and(|o| o.table == c.table))?))) else {
+        say(app, if back { tl!("This is the table's first cell.") } else { tl!("This is the table's last cell.") });
+        return;
+    };
+    let (first, last) = (line.line.first_stop().unwrap_or(0), line.line.last_stop().unwrap_or(0));
+    app.editor.formatted.editing.want_x = None;
+    set_selection(app, f, Pos { line: i, at: first }, Pos { line: i, at: last });
 }
 
 /// Home and End: the start or end of the caret's row, or of the text with Ctrl.

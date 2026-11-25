@@ -60,7 +60,7 @@ impl CommandSpec {
     }
 }
 
-pub use image::is_image;
+pub use image::{is_image, relative as image_path};
 
 pub fn always(_: &Session) -> Result<()> {
     Ok(())

@@ -132,7 +132,7 @@ fn catch_up(doc: &mut Doc, path: &ProjectPath, since: u64, mine: &[u64], session
 }
 
 /// Sends the shown file's new edits to the session (`file.edit`); true when there were some.
-fn send_edits(app: &mut App) -> bool {
+pub(crate) fn send_edits(app: &mut App) -> bool {
     if let Some(sent) = crate::suggest::send(app) {
         return sent;
     }
