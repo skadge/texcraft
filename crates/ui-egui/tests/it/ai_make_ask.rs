@@ -42,7 +42,7 @@ fn caret_on_line_4(h: &mut Harness<'_, App>) {
 /// suggestions. Insert puts the LaTeX in the text at the caret, where it is seen, and Undo takes it
 /// out (issue #13: a suggestion there was nowhere to be seen).
 #[test]
-fn make_with_ai_asks_first_previews_the_typeset_latex_and_insert_puts_it_at_the_caret() -> Result<(), String> {
+fn make_with_ai_sends_at_once_previews_the_typeset_latex_and_insert_puts_it_at_the_caret() -> Result<(), String> {
     let prompts = Arc::new(Mutex::new(Vec::new()));
     let reply = "<<<LATEX\n\\begin{tabular}{cc}\nA & B\\\\\n1 & 2\n\\end{tabular}\nLATEX>>>";
     let mut h = editor(reply, DOC, &prompts, false, false)?;
@@ -55,10 +55,6 @@ fn make_with_ai_asks_first_previews_the_typeset_latex_and_insert_puts_it_at_the_
     h.get_by_label("Describe it").type_text("a table of two columns");
     h.run();
     h.get_by_label("Make").click();
-    h.run();
-    assert!(h.query_by_label_contains("https://api.example.com").is_some(), "the dialog does not say where the description goes");
-    assert_eq!(sent(&prompts), 0, "sent before the user agreed");
-    h.get_by_label("Agree and Make").click();
     h.step();
     assert!(settle(&mut h), "the LaTeX was not made");
     assert!(h.query_by_label("It typesets.").is_some(), "the dialog does not say it typesets");
@@ -86,7 +82,6 @@ fn make_with_ai_asks_first_previews_the_typeset_latex_and_insert_puts_it_at_the_
 fn latex_that_does_not_typeset_shows_why_and_can_be_asked_for_again_with_the_error() -> Result<(), String> {
     let prompts = Arc::new(Mutex::new(Vec::new()));
     let mut h = editor("<<<LATEX\n\\begin{equation}\n\\nosuchcommand x\n\\end{equation}\nLATEX>>>", DOC, &prompts, false, false)?;
-    engine(&mut h, "ai.consent", json!({"request": "make"}));
     caret_on_line_4(&mut h);
     ui_cmd::run(h.state_mut(), "edit.ai_make");
     h.run();
@@ -125,7 +120,6 @@ fn add_a_reference_warns_that_models_invent_them_and_suggests_the_entry_in_a_new
     h.run();
     h.get_by_label("Draft Entry").click();
     h.run();
-    h.get_by_label("Agree and Draft").click();
     h.step();
     assert!(settle(&mut h), "no entry was drafted");
     assert!(h.query_by_label_contains("suggested change at the end of references.bib").is_some(), "the dialog does not say where the draft is");
@@ -150,7 +144,6 @@ fn the_ask_panel_shows_the_answer_and_its_link_goes_to_the_line() -> Result<(), 
     h.run();
     h.get_by_label("Ask").click();
     h.run();
-    h.get_by_label("Agree and Ask").click();
     h.step();
     assert!(settle(&mut h), "no answer");
     assert!(prompts.lock().map(|p| p[0].contains("3| \\section{Results}")).unwrap_or(false), "the open file was not sent with numbered lines");
@@ -170,7 +163,6 @@ fn review_this_section_leaves_comments_and_says_how_many_remarks_were_dropped() 
     caret_on_line_4(&mut h);
     ui_cmd::run(h.state_mut(), "edit.ai_review");
     h.run();
-    h.get_by_label("Agree and Review").click();
     h.step();
     assert!(settle(&mut h), "the review did not end");
     assert!(prompts.lock().map(|p| p[0].contains("\\section{Results}") && !p[0].contains("documentclass")).unwrap_or(false), "not the section alone");

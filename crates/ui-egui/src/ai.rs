@@ -1,15 +1,19 @@
-//! AI assistance in the window (docs/ROADMAP.md, AI1 to AI5): Settings › AI, the dialog that shows
-//! what a kind of request sends before the first one goes, the explanations on build messages,
+//! AI assistance in the window (docs/ROADMAP.md, AI1 to AI5): Settings › AI (the connection, each
+//! kind of request with what it sends and its switch, agreed to by connecting, and each kind's
+//! prompt), the explanations on build messages,
 //! Rewrite with AI on a selection (Edit menu and the text's context menu), and the next words
 //! suggested after the caret as one types. Making LaTeX and drafting references are in
 //! [`crate::ai_make`], asking and reviewing in [`crate::ai_ask`]. Everything goes through the
 //! engine's `ai.*` commands.
 
-use egui::{Align, Layout, RichText};
+use egui::RichText;
 use serde_json::{Value, json};
 use texcraft_engine::ai::{Explanation, UNAVAILABLE, available};
 
 use crate::dialogs::Dialog;
+
+/// The icon of every AI entry point (decoration: names stay text first).
+pub(crate) const ICON: &str = "sparkles";
 use crate::theme::Tokens;
 use crate::{App, widgets};
 
@@ -33,9 +37,13 @@ pub(crate) struct AiView {
     pub(crate) ask: crate::ai_ask::AskForm,
     /// The request whose text the request log shows, and that text (or why it cannot).
     shown: Option<(String, String)>,
+    /// The token box hides what is typed.
+    hide_token: bool,
+    /// The prompts being edited, by kind, as typed (the engine keeps what is used).
+    prompts: std::collections::BTreeMap<String, String>,
 }
 
-/// A kind of request, as the consent dialog asks about it.
+/// A kind of request, as Settings › AI lists it.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Kind {
     Explain,
@@ -52,17 +60,31 @@ impl Kind {
     /// Every kind, in the order Settings › AI lists them.
     const ALL: [Kind; 8] = [Kind::Explain, Kind::Rewrite, Kind::Instruct, Kind::Complete, Kind::Make, Kind::Reference, Kind::Ask, Kind::Review];
 
-    /// What the user agrees to send, in Settings › AI's list.
-    fn label(self) -> &'static str {
+    /// Its name, in Settings › AI's list and in the reasons it is refused.
+    pub(crate) fn label(self) -> &'static str {
         match self {
-            Kind::Explain => tl!("Explaining build messages"),
-            Kind::Rewrite => tl!("Rewriting a selection"),
-            Kind::Instruct => tl!("Changing a selection as asked"),
-            Kind::Complete => tl!("Suggesting the next words"),
-            Kind::Make => tl!("Making LaTeX"),
-            Kind::Reference => tl!("Drafting references"),
-            Kind::Ask => tl!("Asking about the project"),
-            Kind::Review => tl!("Reviewing a section"),
+            Kind::Explain => tl!("Explain"),
+            Kind::Rewrite => tl!("Rewrite"),
+            Kind::Instruct => tl!("Change as asked"),
+            Kind::Complete => tl!("Next words"),
+            Kind::Make => tl!("Make LaTeX"),
+            Kind::Reference => tl!("Draft a reference"),
+            Kind::Ask => tl!("Ask"),
+            Kind::Review => tl!("Review"),
+        }
+    }
+
+    /// What it sends, in a sentence.
+    fn sends(self) -> &'static str {
+        match self {
+            Kind::Explain => tl!("The build message, its help and the source lines around it (and the preamble when the message is in it)."),
+            Kind::Rewrite => tl!("The selected text and a few lines around it."),
+            Kind::Instruct => tl!("Your instruction, the selected text and a few lines around it."),
+            Kind::Complete => tl!("The text before the caret in the current paragraph, after each pause in typing."),
+            Kind::Make => tl!("Your description, the main document's preamble and, for a figure, the names of the project's images."),
+            Kind::Reference => tl!("The title or DOI you type, and nothing of the project."),
+            Kind::Ask => tl!("Your question and the open file, or every text file of the project when you choose it."),
+            Kind::Review => tl!("The section at the caret."),
         }
     }
 
@@ -94,18 +116,6 @@ impl Kind {
     }
 }
 
-/// The dialog asking to send a kind of request's text, the first time.
-pub(crate) struct Consent {
-    kind: Kind,
-    /// The request's parameters (the message, the selection); none for continuations, which the
-    /// dialog turns on.
-    target: Value,
-    /// `ai.disclose`'s answer.
-    disclosure: Value,
-    /// The dialog it was asked from, open again once it is answered.
-    back: Option<Box<Dialog>>,
-}
-
 /// How a selection can be rewritten: `ai.rewrite`'s `how`, and the menu's label.
 pub(crate) const REWRITES: [(&str, &str); 4] =
     [("clearer", "Clearer"), ("shorter", "Shorter"), ("formal", "More Formal"), ("grammar", "Fix Grammar and Spelling")];
@@ -134,6 +144,20 @@ const PAUSE: f64 = 1.0;
 /// Whether the window offers AI actions: the build can, a model is connected.
 pub(crate) fn offered(app: &App) -> bool {
     available() && app.session.ai_saved().0.connection.is_some() && app.session.ai_saved().0.model.is_some()
+}
+
+/// Why requests of `kind` cannot be sent now, if they cannot: no model, switched off, not agreed.
+pub(crate) fn allowed(app: &App, kind: Kind) -> Result<(), String> {
+    if !offered(app) {
+        return Err(tl!("Connect a model first (Settings › AI).").to_owned());
+    }
+    match app.session.ai_permit(kind.request()) {
+        texcraft_engine::ai::Permit::On => Ok(()),
+        texcraft_engine::ai::Permit::Off => Err(tl!("{kind} is switched off: switch it on in Settings › AI.").replace("{kind}", kind.label())),
+        texcraft_engine::ai::Permit::NotAgreed => {
+            Err(tl!("{kind} is not agreed to for this connection and model: agree in Settings › AI.").replace("{kind}", kind.label()))
+        }
+    }
 }
 
 /// Each frame: what finished in the background, and the settings to keep.
@@ -222,44 +246,36 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
     }
 }
 
-/// Explains message `target`: at once when the user agreed before, else after the dialog.
+/// Explains message `target`.
 pub(crate) fn explain(app: &mut App, target: Value) {
     request(app, Kind::Explain, target, None);
 }
 
-/// Makes request `kind` with `target`'s parameters: at once when the user agreed to its kind
-/// before, else after the dialog that shows what it sends. `back`, the dialog it is asked from,
-/// is open again after.
+/// Makes request `kind` with `target`'s parameters, at once: agreeing happened when the model was
+/// connected. Refused, saying why, when its kind is switched off. `back`, the dialog it is asked
+/// from, stays open.
 pub(crate) fn request(app: &mut App, kind: Kind, target: Value, back: Option<Dialog>) {
-    let mut ask = target.clone();
-    ask["request"] = json!(kind.request());
-    let Some(disclosure) = app.run("ai.disclose", ask) else {
-        app.view.dialog = back;
-        return;
-    };
-    if disclosure["needs_consent"].as_bool().unwrap_or(true) {
-        app.view.dialog = Some(Dialog::AiConsent(Box::new(Consent { kind, target, disclosure, back: back.map(Box::new) })));
+    app.view.dialog = back;
+    if let Err(why) = allowed(app, kind) {
+        app.view.status = Some((why, true));
         return;
     }
-    app.view.dialog = back;
     start(app, kind, target);
 }
 
-/// Why the selection cannot be rewritten now, if it cannot.
-pub(crate) fn can_rewrite(app: &App) -> Result<(), String> {
-    if !offered(app) {
-        return Err(tl!("Connect a model first (Settings › AI).").to_owned());
-    }
+/// Why the selection cannot be rewritten (or changed as asked, `kind`) now, if it cannot.
+pub(crate) fn can_rewrite(app: &App, kind: Kind) -> Result<(), String> {
+    allowed(app, kind)?;
     if app.editor.source.selected().is_none() {
         return Err(tl!("Select the text to rewrite first.").to_owned());
     }
     Ok(())
 }
 
-/// `edit.rewrite {how, language?}`: rewrites the source's selection, at once when the user
-/// agreed before, else after the dialog. The rewrite arrives as a suggested change.
+/// `edit.rewrite {how, language?}`: rewrites the source's selection. The rewrite arrives as a
+/// suggested change.
 pub(crate) fn rewrite(app: &mut App, params: &Value) {
-    if let Err(why) = can_rewrite(app) {
+    if let Err(why) = can_rewrite(app, Kind::Rewrite) {
         app.view.status = Some((why, true));
         return;
     }
@@ -289,7 +305,7 @@ pub(crate) struct InstructForm {
 
 /// `edit.instruct`: asks how to change the selection.
 pub(crate) fn open_instruct(app: &mut App) {
-    if let Err(why) = can_rewrite(app) {
+    if let Err(why) = can_rewrite(app, Kind::Instruct) {
         app.view.status = Some((why, true));
         return;
     }
@@ -379,9 +395,7 @@ fn start(app: &mut App, kind: Kind, mut target: Value) {
     if let Some(map) = target.as_object_mut() {
         map.insert("background".to_owned(), json!(true));
     }
-    if app.run(kind.command(), target).is_none() {
-        return;
-    }
+    let Some(done) = app.run(kind.command(), target) else { return };
     match kind {
         Kind::Rewrite => app.view.status = Some((tl!("The model is rewriting the selection…").to_owned(), false)),
         Kind::Instruct => app.view.status = Some((tl!("The model is changing the selection…").to_owned(), false)),
@@ -391,13 +405,18 @@ fn start(app: &mut App, kind: Kind, mut target: Value) {
         Kind::Review => app.view.status = Some((tl!("The model is reviewing the section…").to_owned(), false)),
         Kind::Complete => {}
     }
+    // The person's prompt was set aside for the app's own: said over the rest.
+    if done["prompt_note"].is_string() {
+        let said = tl!("Your prompt for {kind} lacks a placeholder it needs, so the app's own was sent: fix it in Settings › AI › Prompts.");
+        app.view.status = Some((said.replace("{kind}", kind.label()), true));
+    }
 }
 
 /// The entries of Rewrite with AI (in the Edit menu and the text's context menu): what was
 /// chosen, as `edit.rewrite`'s parameters.
 pub(crate) fn rewrite_menu(app: &App, ui: &mut egui::Ui) -> Option<Value> {
     let t = app.tokens;
-    let enabled = can_rewrite(app);
+    let enabled = can_rewrite(app, Kind::Rewrite);
     let mut chosen = None;
     for (how, label) in REWRITES {
         if crate::top_bar::item(ui, &t, None, crate::i18n::t(label), None, enabled.clone()) {
@@ -418,7 +437,7 @@ pub(crate) fn rewrite_menu(app: &App, ui: &mut egui::Ui) -> Option<Value> {
         let _ = translate.inner.response.on_disabled_hover_text(why);
     }
     ui.separator();
-    if crate::top_bar::item(ui, &t, None, tl!("Ask AI to Change This…"), None, enabled.clone()) {
+    if crate::top_bar::item(ui, &t, Some(ICON), tl!("Ask AI to Change This…"), None, can_rewrite(app, Kind::Instruct)) {
         chosen = Some(json!({"instruct": true}));
     }
     if app.session.ai_busy() {
@@ -441,7 +460,7 @@ pub(crate) fn run_rewrite_choice(app: &mut App, choice: &Value) {
     }
 }
 
-/// Settings › AI › Suggest the next words as I type: turned on after the dialog, the first time.
+/// Settings › AI › Suggest the next words as I type.
 fn set_typing(app: &mut App, on: bool) {
     if !on {
         app.prefs.ai_complete = false;
@@ -500,103 +519,9 @@ pub(crate) fn typing(
         return;
     }
     app.ai.asked = Some(edited);
-    // Refused (no consent yet, the rate limit, the caret in the preamble): nothing is suggested.
+    // Refused (switched off, the rate limit, the caret in the preamble): nothing is suggested.
     if let Err(e) = app.session.execute("ai.complete", &json!({"path": path.as_str(), "at": caret, "background": true})) {
         log::debug!("no next words asked for: {e}");
-    }
-}
-
-/// The dialog: what is sent, to whom, asked once per connection.
-pub(crate) fn consent_dialog(app: &mut App, ctx: &egui::Context) {
-    let Some(Dialog::AiConsent(consent)) = &app.view.dialog else { return };
-    let t = app.tokens;
-    let d = &consent.disclosure;
-    let destination = d["destination"].as_str().unwrap_or_default().to_owned();
-    let prompt = d["sends"]["prompt"].as_str().unwrap_or_default().to_owned();
-    let preamble = d["sends"]["preamble"].is_string();
-    let kind = consent.kind;
-    let mut agree = false;
-    let mut close = false;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-ai-consent")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
-        ui.set_width(560.0);
-        ui.label(RichText::new(tl!("Send this to the model?")).font(t.title()));
-        ui.add_space(t.unit * 2.0);
-        let what = match kind {
-            Kind::Explain if preamble => {
-                tl!("Explaining a message sends it, its help, the source lines around it and the main document's preamble to {destination}.")
-            }
-            Kind::Explain => tl!("Explaining a message sends it, its help and the source lines around it to {destination}."),
-            Kind::Rewrite => tl!("Rewriting sends the selected text and a few lines around it to {destination}. The rewrite comes back as a suggested change."),
-            Kind::Instruct => tl!(
-                "Changing a selection as you ask sends your instruction, the selected text and a few lines around it to {destination}. The change comes back as a suggested change."
-            ),
-            Kind::Complete => tl!(
-                "Suggesting the next words sends the paragraph you are typing, up to the caret, to {destination} after each pause in typing, at most every two seconds."
-            ),
-            Kind::Make => tl!(
-                "Making LaTeX sends your description, the main document's preamble and, for a figure, the names of the project's images to {destination}. What comes back is typeset here first and inserted only as a suggested change."
-            ),
-            Kind::Reference => tl!("Drafting a reference sends the title or DOI you typed, and nothing of the project, to {destination}."),
-            Kind::Ask if d["sends"]["scope"] == "project" => {
-                tl!("Asking sends your question and every text file of the project, with numbered lines, to {destination}.")
-            }
-            Kind::Ask => tl!("Asking sends your question and the open file, with numbered lines, to {destination}."),
-            Kind::Review => tl!("Reviewing sends the section at the caret to {destination}. Its remarks come back as comments."),
-        };
-        ui.label(what.replace("{destination}", &destination));
-        let below = if kind == Kind::Complete {
-            tl!("You are asked once for this kind of request and this connection, then not again: Settings › AI lists what you agreed to, where you can withdraw it, and logs each request with what it sent. Below is an example of what is sent.")
-        } else {
-            tl!("You are asked once for this kind of request and this connection, then not again: Settings › AI lists what you agreed to, where you can withdraw it, and logs each request with what it sent. Below is exactly what is sent.")
-        };
-        ui.label(RichText::new(below).font(t.small()).color(t.text_muted));
-        ui.add_space(t.unit * 2.0);
-        egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner()).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
-            egui::ScrollArea::vertical().max_height(280.0).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                let text = ui.add(egui::Label::new(RichText::new(&prompt).font(t.code_font()).color(t.text)).wrap().selectable(true));
-                let _ = text.accessible_name(tl!("What is sent"));
-            });
-        });
-        ui.add_space(t.unit * 3.0);
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            let label = match kind {
-                Kind::Explain => tl!("Agree and Explain"),
-                Kind::Rewrite => tl!("Agree and Rewrite"),
-                Kind::Instruct => tl!("Agree and Send"),
-                Kind::Complete => tl!("Agree and Turn On"),
-                Kind::Make => tl!("Agree and Make"),
-                Kind::Reference => tl!("Agree and Draft"),
-                Kind::Ask => tl!("Agree and Ask"),
-                Kind::Review => tl!("Agree and Review"),
-            };
-            if ui.add(egui::Button::new(label).min_size(egui::vec2(120.0, 30.0))).clicked() {
-                agree = true;
-            }
-            let decline = ui.add(egui::Button::new(tl!("Don't Send")).min_size(egui::vec2(100.0, 30.0)));
-            if decline.clicked() {
-                close = true;
-            }
-            // The keyboard starts on the choice that sends nothing.
-            if ui.memory(|m| m.focused().is_none()) {
-                decline.request_focus();
-            }
-        });
-    });
-    if modal.should_close() {
-        close = true;
-    }
-    if agree {
-        let Some(Dialog::AiConsent(consent)) = app.view.dialog.take() else { return };
-        let Consent { target, back, .. } = *consent;
-        app.view.dialog = back.map(|b| *b);
-        if app.run("ai.consent", json!({"request": kind.request()})).is_some() {
-            start(app, kind, target);
-        }
-    } else if close {
-        let Some(Dialog::AiConsent(consent)) = app.view.dialog.take() else { return };
-        app.view.dialog = consent.back.map(|b| *b);
-        app.view.status = Some((tl!("Nothing was sent.").to_owned(), false));
     }
 }
 
@@ -607,8 +532,19 @@ pub(crate) enum Act {
     Cancel,
 }
 
-/// The explanation of a message, or the button that asks for it, inside its card or popup.
-pub(crate) fn explanation(ui: &mut egui::Ui, t: &Tokens, e: Option<&Explanation>, busy: bool) -> Act {
+/// Why a message cannot be explained now (another request in flight, the kind switched off), if
+/// it cannot: for [`explanation`].
+pub(crate) fn explain_blocked(app: &App) -> Option<String> {
+    if app.session.ai_busy() {
+        return Some(tl!("The model is still answering the last request.").to_owned());
+    }
+    allowed(app, Kind::Explain).err()
+}
+
+/// The explanation of a message, or the button that asks for it, inside its card or popup;
+/// `blocked` says why it cannot be asked for now.
+pub(crate) fn explanation(ui: &mut egui::Ui, t: &Tokens, e: Option<&Explanation>, blocked: Option<&str>) -> Act {
+    let busy = blocked.is_some();
     let mut act = Act::None;
     match e {
         Some(Explanation::Running) => {
@@ -639,14 +575,22 @@ pub(crate) fn explanation(ui: &mut egui::Ui, t: &Tokens, e: Option<&Explanation>
         Some(Explanation::Failed(why)) => {
             ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new(tl!("No explanation: {error}").replace("{error}", why)).font(t.small()).color(t.error));
-                if widgets::text_button(ui, t, tl!("Try Again"), !busy).clicked() {
+                let again = widgets::text_button(ui, t, tl!("Try Again"), !busy);
+                if let Some(why) = blocked {
+                    let _ = again.clone().on_disabled_hover_text(why);
+                }
+                if again.clicked() {
                     act = Act::Explain;
                 }
             });
         }
         Some(Explanation::Cancelled) | None => {
-            let r = ui.add_enabled(!busy, egui::Button::image_and_text(crate::icons::image("info", 14.0, t.text_muted), tl!("Explain")));
+            let r = ui.add_enabled(!busy, egui::Button::image_and_text(crate::icons::image(ICON, 14.0, t.text_muted), tl!("Explain")));
             let r = r.on_hover_text(tl!("Ask the connected model what this message means and how to fix it"));
+            let r = match blocked {
+                Some(why) => r.on_disabled_hover_text(why),
+                None => r,
+            };
             if r.clicked() {
                 act = Act::Explain;
             }
@@ -686,17 +630,25 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     ui.label(RichText::new(place).font(t.small()).color(t.text_muted));
     let has_token = status["token"].as_bool().unwrap_or(false);
     let hint = if has_token { tl!("A token is kept: type to replace it") } else { tl!("None") };
-    let token = field(ui, t, tl!("Token"), &mut app.ai.token, hint, true);
-    let kept = if status["token_kept"] == "the system's keychain" {
-        tl!("The token is kept in the system's keychain, never in the preferences.")
-    } else {
-        tl!("The token is kept for this session only.")
-    };
-    ui.label(RichText::new(kept).font(t.small()).color(t.text_muted));
+    let hide = app.ai.hide_token;
+    let token = field(ui, t, tl!("Token"), &mut app.ai.token, hint, hide);
+    ui.horizontal_wrapped(|ui| {
+        let kept = if status["token_kept"] == "the system's keychain" {
+            tl!("The token is kept in the system's keychain, never in the preferences.")
+        } else {
+            tl!("The token is kept for this session only.")
+        };
+        ui.label(RichText::new(kept).font(t.small()).color(t.text_muted));
+        ui.checkbox(&mut app.ai.hide_token, tl!("Hide the token"));
+    });
+    kinds(app, ui, t, &status);
     let enter = [endpoint, token].iter().any(|r| r.lost_focus()) && ui.input(|i| i.key_pressed(egui::Key::Enter));
     ui.horizontal(|ui| {
         let ready = !app.ai.endpoint.trim().is_empty();
-        if (ui.add_enabled(ready, egui::Button::new(tl!("Connect"))).clicked() || (enter && ready)) && connect(app) {
+        let connect_button = ui
+            .add_enabled(ready, egui::Button::new(tl!("Connect")))
+            .on_hover_text(tl!("Save the connection and agree to send the kinds of request switched on to it"));
+        if (connect_button.clicked() || (enter && ready)) && connect(app) {
             app.run("ai.models", json!({"background": true}));
         }
         if ui.add_enabled(connected && !busy, egui::Button::new(tl!("Test Connection"))).clicked() {
@@ -708,7 +660,7 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             .clicked()
             && app.run("ai.forget", json!({})).is_some()
         {
-            app.ai = AiView { kept: app.ai.kept, filled: true, ..AiView::default() };
+            app.ai = AiView { kept: app.ai.kept, filled: true, hide_token: app.ai.hide_token, ..AiView::default() };
             app.view.status = Some((tl!("The AI connection and its token are forgotten.").to_owned(), false));
         }
         if busy {
@@ -719,9 +671,136 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         model(app, ui, t, &status, busy);
         project(app, ui, t, &status);
         typing_setting(app, ui, t);
-        agreements(app, ui, t, &status);
         requests(app, ui, t, &status);
     }
+    prompts(app, ui, t);
+}
+
+/// Each kind of request: what it sends, where, and its switch (on by default). Connecting agrees
+/// to the ones switched on; switching one off stops it at once.
+fn kinds(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
+    ui.add_space(t.unit * 2.0);
+    ui.horizontal(|ui| {
+        ui.add(crate::icons::image(ICON, 14.0, t.text_muted));
+        ui.label(RichText::new(tl!("What may be sent")).font(t.strong()));
+    });
+    let connected = status["connected"] == true;
+    let to = status["destination"].as_str().unwrap_or_default();
+    let address = app.ai.endpoint.trim();
+    let said = if !connected {
+        if address.is_empty() {
+            tl!("Connecting agrees to send the kinds switched on below to the endpoint's address, without asking again.").to_owned()
+        } else {
+            tl!("Connecting agrees to send the kinds switched on below to {address}, without asking again.").replace("{address}", address)
+        }
+    } else if status["local"] == true {
+        tl!("Nothing leaves this computer. A kind switched off is never sent.").to_owned()
+    } else {
+        let model = status["model"].as_str().unwrap_or_default();
+        tl!("Sent to {destination} ({model}) without asking again. Switch a kind off to stop it.")
+            .replace("{destination}", to)
+            .replace("{model}", model)
+    };
+    ui.label(RichText::new(said).font(t.small()).color(t.text_muted));
+    let states: Vec<(String, String)> = status["kinds"]
+        .as_array()
+        .map(|k| {
+            k.iter().map(|k| (k["request"].as_str().unwrap_or_default().to_owned(), k["state"].as_str().unwrap_or_default().to_owned())).collect()
+        })
+        .unwrap_or_default();
+    let state = |kind: Kind| states.iter().find(|(r, _)| r == kind.request()).map_or("on", |(_, s)| s.as_str());
+    let pending = connected && Kind::ALL.iter().any(|k| state(*k) == "not agreed");
+    let mut switched = None;
+    for kind in Kind::ALL {
+        let mut on = state(kind) != "off";
+        ui.horizontal_wrapped(|ui| {
+            if ui.checkbox(&mut on, kind.label()).changed() {
+                switched = Some((kind, on));
+            }
+            ui.label(RichText::new(kind.sends()).font(t.small()).color(t.text_muted));
+            if connected && state(kind) == "not agreed" {
+                ui.label(RichText::new(tl!("Not agreed to yet")).font(t.small()).color(t.warning));
+            }
+        });
+    }
+    if let Some((kind, on)) = switched {
+        app.run("ai.switch", json!({"request": kind.request(), "on": on}));
+        if kind == Kind::Complete && !on {
+            app.prefs.ai_complete = false;
+            app.prefs_changed = true;
+        }
+    }
+    if pending {
+        ui.label(
+            RichText::new(tl!(
+                "The address, the model or a withdrawal changed what was agreed: the kinds marked are not sent until you agree again."
+            ))
+            .font(t.small())
+            .color(t.warning),
+        );
+        if ui.button(tl!("Agree to Send")).clicked() && app.run("ai.consent", json!({})).is_some() {
+            let said = tl!("Agreed: the kinds switched on are sent to {destination} without asking again.").replace("{destination}", to);
+            app.view.status = Some((said, false));
+        }
+    }
+}
+
+/// Settings › AI › Prompts: each kind's instructions, its placeholders, Reset to Default, and
+/// what is missing from a changed one (kept, but the app's own is sent until it is fixed).
+fn prompts(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    let Ok(list) = app.session.execute("ai.prompts", &json!({})) else { return };
+    let list = list["prompts"].as_array().cloned().unwrap_or_default();
+    egui::CollapsingHeader::new(RichText::new(tl!("Prompts")).font(t.strong())).id_salt("settings-ai-prompts").show(ui, |ui| {
+        ui.label(
+            RichText::new(tl!(
+                "What each kind of request tells the model. Names in braces are replaced by what the request sends. Whatever a prompt says, what comes back is checked the same way: a rewrite keeps the selection's LaTeX, made LaTeX is typeset first, and every change is a suggestion."
+            ))
+            .font(t.small())
+            .color(t.text_muted),
+        );
+        for kind in Kind::ALL {
+            let Some(p) = list.iter().find(|p| p["request"] == kind.request()) else { continue };
+            let changed = p["changed"] == true;
+            let default = p["default"].as_str().unwrap_or_default().to_owned();
+            let title = if changed { tl!("{kind} (changed)").replace("{kind}", kind.label()) } else { kind.label().to_owned() };
+            egui::CollapsingHeader::new(title).id_salt(("settings-ai-prompt", kind.request())).show(ui, |ui| {
+                let text = app.ai.prompts.entry(kind.request().to_owned()).or_insert_with(|| p["current"].as_str().unwrap_or_default().to_owned());
+                let name = tl!("Prompt for {kind}").replace("{kind}", kind.label());
+                let label = ui.label(RichText::new(&name).font(t.small()).color(t.text_muted));
+                let edit = egui::TextEdit::multiline(text).font(t.code_font()).desired_rows(6).desired_width(f32::INFINITY).margin(egui::vec2(8.0, 6.0));
+                let r = ui.add(edit).labelled_by(label.id);
+                let typed = r.changed().then(|| text.clone());
+                let placeholders = texcraft_engine::ai::prompts::spec(kind.request()).map(|s| s.placeholders).unwrap_or_default();
+                for ph in placeholders {
+                    let name = format!("{{{}}}", ph.name);
+                    let means = crate::i18n::t(ph.means);
+                    let line = if ph.required {
+                        tl!("{name} (needed): {means}").replace("{name}", &name).replace("{means}", means)
+                    } else {
+                        tl!("{name}: {means}").replace("{name}", &name).replace("{means}", means)
+                    };
+                    ui.label(RichText::new(line).font(t.small()).color(t.text));
+                }
+                let missing: Vec<String> =
+                    p["missing"].as_array().map(|m| m.iter().filter_map(|m| m.as_str().map(|m| format!("{{{m}}}"))).collect()).unwrap_or_default();
+                if !missing.is_empty() {
+                    let said = tl!("It lacks {missing}: the app's own prompt is sent until they are back.").replace("{missing}", &missing.join(", "));
+                    let warn = ui.label(RichText::new(&said).font(t.small()).color(t.warning));
+                    crate::status::announce(ui, &warn, &said);
+                }
+                let reset = ui.add_enabled(changed, egui::Button::new(tl!("Reset to Default")));
+                let reset_name = tl!("Reset to Default: {kind}").replace("{kind}", kind.label());
+                reset.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, changed, &reset_name));
+                if reset.clicked() {
+                    app.run("ai.set_prompt", json!({"request": kind.request()}));
+                    app.ai.prompts.insert(kind.request().to_owned(), default.clone());
+                    app.view.status = Some((tl!("The prompt for {kind} is the app's own again.").replace("{kind}", kind.label()), false));
+                } else if let Some(text) = typed {
+                    app.run("ai.set_prompt", json!({"request": kind.request(), "text": text}));
+                }
+            });
+        }
+    });
 }
 
 fn typing_setting(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
@@ -811,43 +890,6 @@ fn project(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
             .font(t.small())
             .color(t.text_muted),
     );
-}
-
-/// What the user agreed to send to this connection, each with Withdraw.
-fn agreements(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
-    let agreed: Vec<&str> = status["agreed"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
-    ui.label(RichText::new(tl!("Agreed to send")).font(t.strong()));
-    if status["local"] == true {
-        ui.label(RichText::new(tl!("Nothing leaves this computer: requests to it are not asked about.")).font(t.small()).color(t.text_muted));
-        return;
-    }
-    if agreed.is_empty() {
-        let said = tl!("Nothing yet: the first request of each kind shows what it sends and asks.");
-        ui.label(RichText::new(said).font(t.small()).color(t.text_muted));
-        return;
-    }
-    let to = status["destination"].as_str().unwrap_or_default();
-    let said = tl!("You are not asked again before these are sent to {destination}. Withdraw one to be asked before it is next sent.");
-    ui.label(RichText::new(said.replace("{destination}", to)).font(t.small()).color(t.text_muted));
-    let mut withdraw = None;
-    for kind in Kind::ALL.into_iter().filter(|k| agreed.contains(&k.request())) {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(kind.label()).color(t.text));
-            let name = tl!("Withdraw: {kind}").replace("{kind}", kind.label());
-            let r = widgets::text_button(ui, t, tl!("Withdraw"), true);
-            let r = r.on_hover_text(tl!("Ask again before the next request of this kind is sent"));
-            r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
-            if r.clicked() {
-                withdraw = Some(kind);
-            }
-        });
-    }
-    if let Some(kind) = withdraw
-        && app.run("ai.revoke", json!({"request": kind.request()})).is_some()
-    {
-        let said = tl!("Withdrawn: the next request of this kind asks first.");
-        app.view.status = Some((said.to_owned(), false));
-    }
 }
 
 /// The request log: when, where, how much, how it ended; what was sent on demand, for the last

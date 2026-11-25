@@ -15,12 +15,12 @@
 use std::sync::{Arc, OnceLock};
 
 use craft_ai_core::history::{EndRecord, HISTORY_SCHEMA, Outcome as Logged};
-use craft_ai_core::{CapabilityId, HistoryRecord, InputRole, Payload, Request};
+use craft_ai_core::{HistoryRecord, InputRole, Request};
 use serde_json::{Value, json};
 use texcraft_project::{Contents, Project, ProjectPath};
 
 use super::write::{between, unfenced};
-use super::{Answer, Event, MAKE, MAX_PREAMBLE_CHARS, REFERENCE, Task, Work, kind_of, now_ms};
+use super::{Answer, Event, MAKE, MAX_PREAMBLE_CHARS, REFERENCE, Task, Work, kind_of, now_ms, prompts};
 use crate::{Change, Origin, Result, Session, Transaction};
 
 /// The longest description or query sent, in characters.
@@ -70,11 +70,6 @@ impl MakeKind {
     }
 }
 
-const MAKE_INSTRUCTIONS: &str = "You write LaTeX for a document whose preamble is shown. \
-Write only what is asked, to go in the document's body as it is: no \\documentclass, no \\begin{document}. \
-Use the packages the preamble loads; if what you write needs another one, give its \\usepackage lines (and any \\usetikzlibrary lines) between a line <<<PACKAGES and a line PACKAGES>>>. \
-Answer with the LaTeX between a line <<<LATEX and a line LATEX>>>.";
-
 /// What making sends: exactly these parts, in [`Making::prompt`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Making {
@@ -92,48 +87,43 @@ pub struct Making {
 }
 
 impl Making {
-    fn instructions(&self) -> String {
-        format!("{MAKE_INSTRUCTIONS} {}\n\nWhat to write: {}", self.kind.instruction(), self.description)
+    fn parts(&self) -> prompts::Parts {
+        let preamble = if self.preamble.trim().is_empty() {
+            String::new()
+        } else {
+            format!("The document's preamble:\n<<<PREAMBLE\n{}\nPREAMBLE>>>", self.preamble)
+        };
+        let images = if self.kind == MakeKind::Figure { format!("The project's images:\n{}", self.image_list()) } else { String::new() };
+        let again = match &self.again {
+            Some((latex, messages)) => format!(
+                "Your last answer did not typeset:\n<<<LAST\n{latex}\nLAST>>>\nThe typesetting engine said:\n{}\nCorrect it.",
+                messages.join("\n")
+            ),
+            None => String::new(),
+        };
+        vec![
+            ("kind", self.kind.instruction().to_owned(), None),
+            ("description", self.description.clone(), None),
+            ("preamble", preamble, Some(InputRole::Context)),
+            ("images", images, Some(InputRole::Context)),
+            ("again", again, Some(InputRole::Context)),
+        ]
     }
 
-    /// The whole text sent to the model.
-    pub fn prompt(&self) -> String {
-        let mut out = format!("{}\n", self.instructions());
-        if !self.preamble.trim().is_empty() {
-            out.push_str(&format!("\nThe document's preamble:\n<<<PREAMBLE\n{}\nPREAMBLE>>>\n", self.preamble));
-        }
-        if self.kind == MakeKind::Figure {
-            out.push_str(&format!("\nThe project's images:\n{}\n", self.image_list()));
-        }
-        if let Some((latex, messages)) = &self.again {
-            out.push_str(&format!(
-                "\nYour last answer did not typeset:\n<<<LAST\n{latex}\nLAST>>>\nThe typesetting engine said:\n{}\nCorrect it.\n",
-                messages.join("\n")
-            ));
-        }
-        out
+    /// The whole text sent to the model, with `template` (the prompt for making).
+    pub fn prompt(&self, template: &str) -> String {
+        prompts::prompt(template, &self.parts())
     }
 
     fn image_list(&self) -> String {
         if self.images.is_empty() { "(none)".to_owned() } else { self.images.join("\n") }
     }
 
-    pub(super) fn request(&self) -> Result<Request> {
-        let capability = CapabilityId::parse(MAKE).map_err(|e| e.to_string())?;
-        let mut r = Request::new(capability).with_input(InputRole::Prompt, Payload::text(self.instructions()));
-        if !self.preamble.trim().is_empty() {
-            r = r.with_input(InputRole::Context, Payload::text(self.preamble.clone()));
-        }
-        if self.kind == MakeKind::Figure {
-            r = r.with_input(InputRole::Context, Payload::text(self.image_list()));
-        }
-        if let Some((latex, messages)) = &self.again {
-            r = r.with_input(InputRole::Source, Payload::text(latex.clone())).with_input(InputRole::Context, Payload::text(messages.join("\n")));
-        }
-        Ok(r)
+    pub(super) fn request(&self, template: &str) -> Result<Request> {
+        prompts::request(MAKE, template, &self.parts())
     }
 
-    pub(super) fn describe(&self) -> Value {
+    pub(super) fn describe(&self, template: &str) -> Value {
         json!({
             "kind": self.kind.id(),
             "description": self.description,
@@ -142,7 +132,7 @@ impl Making {
             "preamble": self.preamble,
             "images": (self.kind == MakeKind::Figure).then_some(&self.images),
             "again": self.again.as_ref().map(|(latex, messages)| json!({"latex": latex, "messages": messages})),
-            "prompt": self.prompt(),
+            "prompt": self.prompt(template),
         })
     }
 }
@@ -271,10 +261,6 @@ fn preview_preamble(preamble: &str) -> String {
     }
 }
 
-const REFERENCE_INSTRUCTIONS: &str = "You draft a BibTeX entry for the work a title or a DOI names. \
-Give only the fields you know (author, title, year, and journal, booktitle or publisher, volume, number, pages, doi); leave out what you do not know rather than guess. \
-Answer with the entry alone between a line <<<BIB and a line BIB>>>.";
-
 /// What drafting a reference sends: the title or DOI, nothing of the project.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lookup {
@@ -284,20 +270,21 @@ pub struct Lookup {
 }
 
 impl Lookup {
-    /// The whole text sent to the model.
-    pub fn prompt(&self) -> String {
-        format!("{REFERENCE_INSTRUCTIONS}\n\nThe work: {}\n", self.query)
+    fn parts(&self) -> prompts::Parts {
+        vec![("work", self.query.clone(), Some(InputRole::Source))]
     }
 
-    pub(super) fn request(&self) -> Result<Request> {
-        let capability = CapabilityId::parse(REFERENCE).map_err(|e| e.to_string())?;
-        Ok(Request::new(capability)
-            .with_input(InputRole::Prompt, Payload::text(REFERENCE_INSTRUCTIONS))
-            .with_input(InputRole::Source, Payload::text(self.query.clone())))
+    /// The whole text sent to the model, with `template` (the prompt for references).
+    pub fn prompt(&self, template: &str) -> String {
+        prompts::prompt(template, &self.parts())
     }
 
-    pub(super) fn describe(&self) -> Value {
-        json!({"query": self.query, "bib": self.bib, "prompt": self.prompt()})
+    pub(super) fn request(&self, template: &str) -> Result<Request> {
+        prompts::request(REFERENCE, template, &self.parts())
+    }
+
+    pub(super) fn describe(&self, template: &str) -> Value {
+        json!({"query": self.query, "bib": self.bib, "prompt": self.prompt(template)})
     }
 }
 
@@ -427,11 +414,9 @@ impl Session {
             Answer::Made { latex, packages, preview }
         };
         let opts = craft_ai::GenOpts { max_tokens: 2400, temperature: 0.2 };
-        let (model, run, answer) = self.begin(&making.request()?, ("make", "Make with AI"), making.prompt(), opts, after, |to| {
-            format!(
-                "Making LaTeX sends the description, the main document's preamble and, for a figure, the names of the project's images to {to}. Agree to it first (the window asks; agents: ai.disclose with request make shows it, ai.consent agrees)."
-            )
-        })?;
+        let (template, note) = self.ai_template("make");
+        let (model, run, answer) = self.begin(&making.request(&template)?, ("make", "Make with AI"), making.prompt(&template), opts, after)?;
+        self.ai.prompt_note = note;
         self.ai.made = Some(Made::Running);
         self.ai.task = Some(Task { work: Work::Make { making: Box::new(making), model, run, insert }, answer, cancelled: Default::default() });
         if background {
@@ -614,11 +599,10 @@ impl Session {
         self.ai_ready()?;
         let lookup = self.ai_lookup(p)?;
         let opts = craft_ai::GenOpts { max_tokens: 800, temperature: 0.0 };
-        let (model, run, answer) = self.begin(&lookup.request()?, ("reference", "Add a Reference"), lookup.prompt(), opts, Answer::Text, |to| {
-            format!(
-                "Drafting a reference sends the title or DOI to {to}. Agree to it first (the window asks; agents: ai.disclose with request reference shows it, ai.consent agrees)."
-            )
-        })?;
+        let (template, note) = self.ai_template("reference");
+        let (model, run, answer) =
+            self.begin(&lookup.request(&template)?, ("reference", "Add a Reference"), lookup.prompt(&template), opts, Answer::Text)?;
+        self.ai.prompt_note = note;
         self.ai.reference = Some(Referenced::Running);
         self.ai.task = Some(Task { work: Work::Reference { lookup: Box::new(lookup), model, run }, answer, cancelled: Default::default() });
         if background {

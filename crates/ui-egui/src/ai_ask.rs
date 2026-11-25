@@ -23,7 +23,7 @@ pub(crate) struct AskForm {
 
 /// Why the section at the caret cannot be reviewed now, if it cannot.
 pub(crate) fn can_review(app: &App) -> Result<(), String> {
-    crate::ai_make::can_make(app)
+    crate::ai_make::can_make(app, Kind::Review)
 }
 
 /// `edit.ai_review`: sends the section at the caret for review.
@@ -72,6 +72,8 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
         return;
     }
     let busy = app.session.ai_busy();
+    let ask_ok = crate::ai::allowed(app, Kind::Ask);
+    let review_ok = crate::ai::allowed(app, Kind::Review);
     let file = app.session.current().map(|p| p.as_str().to_owned());
     let mut asked = false;
     let mut goto: Option<(String, u32)> = None;
@@ -94,12 +96,24 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
     ui.radio_value(&mut form.project, false, this_file);
     ui.radio_value(&mut form.project, true, tl!("The whole project"));
     ui.horizontal_wrapped(|ui| {
-        let ready = !form.question.trim().is_empty() && !busy && (form.project || file.is_some());
-        if ui.add_enabled(ready, egui::Button::new(tl!("Ask"))).on_hover_text(tl!("Ctrl+Enter in the question")).clicked() {
+        let ready = !form.question.trim().is_empty() && !busy && (form.project || file.is_some()) && ask_ok.is_ok();
+        let r = ui.add_enabled(ready, egui::Button::image_and_text(crate::icons::image(crate::ai::ICON, 14.0, t.text_muted), tl!("Ask")));
+        let r = r.on_hover_text(tl!("Ctrl+Enter in the question"));
+        let r = match &ask_ok {
+            Err(why) => r.on_disabled_hover_text(why),
+            Ok(()) => r,
+        };
+        if r.clicked() {
             asked = true;
         }
-        let r = ui.add_enabled(!busy && file.is_some(), egui::Button::new(tl!("Review This Section")));
-        if r.on_hover_text(tl!("Send the section at the caret for review; the remarks arrive as comments")).clicked() {
+        let image = crate::icons::image(crate::ai::ICON, 14.0, t.text_muted);
+        let r = ui.add_enabled(!busy && file.is_some() && review_ok.is_ok(), egui::Button::image_and_text(image, tl!("Review This Section")));
+        let r = r.on_hover_text(tl!("Send the section at the caret for review; the remarks arrive as comments"));
+        let r = match &review_ok {
+            Err(why) => r.on_disabled_hover_text(why),
+            Ok(()) => r,
+        };
+        if r.clicked() {
             review = true;
         }
     });

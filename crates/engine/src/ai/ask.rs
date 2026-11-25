@@ -9,12 +9,12 @@
 use std::sync::OnceLock;
 
 use craft_ai_core::history::{EndRecord, HISTORY_SCHEMA, Outcome as Logged};
-use craft_ai_core::{CapabilityId, HistoryRecord, InputRole, Payload, Request};
+use craft_ai_core::{HistoryRecord, InputRole, Request};
 use serde_json::{Value, json};
 use texcraft_project::{Contents, Project, ProjectPath};
 
 use super::write::bytes_of;
-use super::{ASK, Answer, Event, REVIEW, Task, Work, kind_of, now_ms};
+use super::{ASK, Answer, Event, REVIEW, Task, Work, kind_of, now_ms, prompts};
 use crate::{Result, Session};
 
 /// The longest question, in characters.
@@ -53,10 +53,6 @@ impl Scope {
         }
     }
 }
-
-const ASK_INSTRUCTIONS: &str = "You answer questions about a LaTeX project from its files, shown below with their lines numbered. \
-Answer in plain language, briefly. When you refer to a place in a file, write it as path:line (such as main.tex:12), with the numbers shown. \
-If the files do not answer the question, say so.";
 
 /// What a question sends: exactly these parts, in [`Question::prompt`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,34 +112,26 @@ impl Question {
         Ok(Self { question: question.to_owned(), scope, files })
     }
 
-    fn instructions(&self) -> String {
-        format!("{ASK_INSTRUCTIONS}\n\nThe question: {}", self.question)
+    fn parts(&self) -> prompts::Parts {
+        let files: Vec<String> = self.files.iter().map(|(path, text)| format!("<<<FILE {path}\n{}\nFILE>>>", numbered(text))).collect();
+        vec![("question", self.question.clone(), None), ("files", files.join("\n\n"), Some(InputRole::Context))]
     }
 
-    /// The whole text sent to the model.
-    pub fn prompt(&self) -> String {
-        let mut out = format!("{}\n", self.instructions());
-        for (path, text) in &self.files {
-            out.push_str(&format!("\n<<<FILE {path}\n{}\nFILE>>>\n", numbered(text)));
-        }
-        out
+    /// The whole text sent to the model, with `template` (the prompt for questions).
+    pub fn prompt(&self, template: &str) -> String {
+        prompts::prompt(template, &self.parts())
     }
 
-    pub(super) fn request(&self) -> Result<Request> {
-        let capability = CapabilityId::parse(ASK).map_err(|e| e.to_string())?;
-        let mut r = Request::new(capability).with_input(InputRole::Prompt, Payload::text(self.instructions()));
-        for (_, text) in &self.files {
-            r = r.with_input(InputRole::Context, Payload::text(numbered(text)));
-        }
-        Ok(r)
+    pub(super) fn request(&self, template: &str) -> Result<Request> {
+        prompts::request(ASK, template, &self.parts())
     }
 
-    pub(super) fn describe(&self) -> Value {
+    pub(super) fn describe(&self, template: &str) -> Value {
         json!({
             "question": self.question,
             "scope": self.scope.id(),
             "files": self.files.iter().map(|(p, _)| p).collect::<Vec<_>>(),
-            "prompt": self.prompt(),
+            "prompt": self.prompt(template),
         })
     }
 }
@@ -190,12 +178,6 @@ pub enum Answered {
     Cancelled { question: String },
 }
 
-const REVIEW_INSTRUCTIONS: &str = "You review a section of a LaTeX document as a careful colleague would: \
-point out unclear sentences, mistakes in reasoning, grammar or LaTeX, and what needs explaining. \
-For each remark, copy the exact words it is about, as written in the text (a short passage, at most one sentence), and write the remark, as\n\
-QUOTE: the exact words\nREMARK: the remark\n\
-with a blank line between remarks. Give at most 12 remarks; when there is nothing to remark, answer NONE.";
-
 /// What reviewing sends: the section.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Section {
@@ -223,20 +205,21 @@ impl Section {
         Ok(Self { path: path.to_owned(), start, end, text })
     }
 
-    /// The whole text sent to the model.
-    pub fn prompt(&self) -> String {
-        format!("{REVIEW_INSTRUCTIONS}\n\n<<<SECTION\n{}\nSECTION>>>\n", self.text)
+    fn parts(&self) -> prompts::Parts {
+        vec![("section", self.text.clone(), Some(InputRole::Source))]
     }
 
-    pub(super) fn request(&self) -> Result<Request> {
-        let capability = CapabilityId::parse(REVIEW).map_err(|e| e.to_string())?;
-        Ok(Request::new(capability)
-            .with_input(InputRole::Prompt, Payload::text(REVIEW_INSTRUCTIONS))
-            .with_input(InputRole::Source, Payload::text(self.text.clone())))
+    /// The whole text sent to the model, with `template` (the prompt for reviews).
+    pub fn prompt(&self, template: &str) -> String {
+        prompts::prompt(template, &self.parts())
     }
 
-    pub(super) fn describe(&self) -> Value {
-        json!({"path": self.path, "start": self.start, "end": self.end, "text": self.text, "prompt": self.prompt()})
+    pub(super) fn request(&self, template: &str) -> Result<Request> {
+        prompts::request(REVIEW, template, &self.parts())
+    }
+
+    pub(super) fn describe(&self, template: &str) -> Value {
+        json!({"path": self.path, "start": self.start, "end": self.end, "text": self.text, "prompt": self.prompt(template)})
     }
 }
 
@@ -377,13 +360,9 @@ impl Session {
         self.ai_ready()?;
         let question = self.ai_question(p)?;
         let opts = craft_ai::GenOpts { max_tokens: 1500, temperature: 0.2 };
-        let project = question.scope == Scope::Project;
-        let (model, run, answer) = self.begin(&question.request()?, ("ask", "Ask"), question.prompt(), opts, Answer::Text, |to| {
-            format!(
-                "Asking sends the question and {} to {to}. Agree to it first (the window asks; agents: ai.disclose with request ask shows it, ai.consent agrees).",
-                if project { "every text file of the project" } else { "the open file" }
-            )
-        })?;
+        let (template, note) = self.ai_template("ask");
+        let (model, run, answer) = self.begin(&question.request(&template)?, ("ask", "Ask"), question.prompt(&template), opts, Answer::Text)?;
+        self.ai.prompt_note = note;
         self.push_answer(Answered::Running { question: question.question.clone() });
         self.ai.task = Some(Task { work: Work::Ask { question: Box::new(question), model, run }, answer, cancelled: Default::default() });
         if background {
@@ -447,11 +426,10 @@ impl Session {
         self.ai_ready()?;
         let section = self.ai_section(p)?;
         let opts = craft_ai::GenOpts { max_tokens: 2000, temperature: 0.2 };
-        let (model, run, answer) = self.begin(&section.request()?, ("review", "Review This Section"), section.prompt(), opts, Answer::Text, |to| {
-            format!(
-                "Reviewing sends the section to {to}. Agree to it first (the window asks; agents: ai.disclose with request review shows it, ai.consent agrees)."
-            )
-        })?;
+        let (template, note) = self.ai_template("review");
+        let (model, run, answer) =
+            self.begin(&section.request(&template)?, ("review", "Review This Section"), section.prompt(&template), opts, Answer::Text)?;
+        self.ai.prompt_note = note;
         self.ai.reviewed = Some(Reviewed::Running);
         self.ai.task = Some(Task { work: Work::Review { section: Box::new(section), model, run }, answer, cancelled: Default::default() });
         if background {

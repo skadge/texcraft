@@ -20,16 +20,19 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         spec("ai.disclose", "What an AI Request Sends", disclose_schema, connected, disclose, false),
         spec("ai.consent", "Agree to Send", consent_schema, connected, consent, true),
         spec("ai.revoke", "Withdraw an Agreement to Send", revoke_schema, connected, revoke, true),
+        spec("ai.switch", "Switch a Kind of AI Request On or Off", switch_schema, always, switch, true),
+        spec("ai.prompts", "AI Prompts", no_params, always, prompts, false),
+        spec("ai.set_prompt", "Change an AI Prompt", set_prompt_schema, always, set_prompt, true),
         spec("ai.sent", "What an AI Request Sent", sent_schema, connected, sent, false),
-        spec("ai.explain", "Explain", explain_schema, connected, explain, true),
-        spec("ai.rewrite", "Rewrite with AI", rewrite_schema, connected, rewrite, true),
-        spec("ai.instruct", "Ask AI to Change This", instruct_schema, connected, instruct, true),
-        spec("ai.complete", "Suggest the Next Words", complete_schema, connected, complete, true),
-        spec("ai.make", "Make with AI", make_schema, connected, make, true),
+        spec("ai.explain", "Explain", explain_schema, explain_on, explain, true),
+        spec("ai.rewrite", "Rewrite with AI", rewrite_schema, rewrite_on, rewrite, true),
+        spec("ai.instruct", "Ask AI to Change This", instruct_schema, instruct_on, instruct, true),
+        spec("ai.complete", "Suggest the Next Words", complete_schema, complete_on, complete, true),
+        spec("ai.make", "Make with AI", make_schema, make_on, make, true),
         spec("ai.insert_made", "Insert What AI Made", insert_made_schema, connected, insert_made, true),
-        spec("ai.reference", "Add a Reference with AI", reference_schema, connected, reference, true),
-        spec("ai.ask", "Ask AI", ask_schema, connected, ask, true),
-        spec("ai.review", "Review with AI", review_schema, connected, review, true),
+        spec("ai.reference", "Add a Reference with AI", reference_schema, reference_on, reference, true),
+        spec("ai.ask", "Ask AI", ask_schema, ask_on, ask, true),
+        spec("ai.review", "Review with AI", review_schema, review_on, review, true),
         spec("ai.cancel", "Cancel the AI Request", cancel_schema, always, cancel, true),
     ]
 }
@@ -46,12 +49,95 @@ fn connected(s: &Session) -> Result<()> {
     }
 }
 
+fn kind_on(s: &Session, name: &str) -> Result<()> {
+    connected(s)?;
+    s.ai_permitted(name)
+}
+
+fn explain_on(s: &Session) -> Result<()> {
+    kind_on(s, "explain")
+}
+fn rewrite_on(s: &Session) -> Result<()> {
+    kind_on(s, "rewrite")
+}
+fn instruct_on(s: &Session) -> Result<()> {
+    kind_on(s, "instruct")
+}
+fn complete_on(s: &Session) -> Result<()> {
+    kind_on(s, "complete")
+}
+fn make_on(s: &Session) -> Result<()> {
+    kind_on(s, "make")
+}
+fn reference_on(s: &Session) -> Result<()> {
+    kind_on(s, "reference")
+}
+fn ask_on(s: &Session) -> Result<()> {
+    kind_on(s, "ask")
+}
+fn review_on(s: &Session) -> Result<()> {
+    kind_on(s, "review")
+}
+
+fn switch_schema() -> Value {
+    json!({"type": "object", "description": "Switches a kind of request on or off (ai.status's `kinds`). Off withdraws its agreement and refuses it until it is switched on again. \
+On agrees to send it to the connection: the person's to do, in Settings › AI; an agent session can only switch kinds off.", "properties": {
+        "request": {"type": "string", "enum": crate::ai::REQUESTS},
+        "on": {"type": "boolean"}
+    }, "required": ["request", "on"], "additionalProperties": false})
+}
+
+fn set_prompt_schema() -> Value {
+    json!({"type": "object", "description": "Changes the prompt a kind of request sends (ai.prompts lists each with its default and placeholders, such as {passage} or {description}). \
+Without `text`, or with the default's, it goes back to the app's own. A prompt that lacks a required placeholder is kept but not used: the app's own is sent, and the request's `prompt_note` says so. \
+Changing one is the person's (Settings › AI › Prompts); an agent session can only reset.", "properties": {
+        "request": {"type": "string", "enum": crate::ai::REQUESTS},
+        "text": {"type": "string"}
+    }, "required": ["request"], "additionalProperties": false})
+}
+
+fn person(s: &Session) -> bool {
+    // An agent session is confined to its roots: it acts for no one at the window.
+    s.roots.is_none()
+}
+
+fn switch(s: &mut Session, p: &Value) -> Result<Value> {
+    let request = string(p, "request")?.to_owned();
+    let on = p.get("on").and_then(Value::as_bool).ok_or("`on` (true or false) is missing")?;
+    let person = person(s);
+    s.ai_switch(&request, on, person)
+}
+
+fn prompts(s: &mut Session, _: &Value) -> Result<Value> {
+    Ok(s.ai_prompts())
+}
+
+fn set_prompt(s: &mut Session, p: &Value) -> Result<Value> {
+    let request = string(p, "request")?.to_owned();
+    let text = match p.get("text") {
+        None | Some(Value::Null) => None,
+        Some(t) => Some(t.as_str().ok_or("`text` is a string")?.to_owned()),
+    };
+    let person = person(s);
+    s.ai_set_prompt(&request, text.as_deref(), person)
+}
+
+/// A request's answer, with the note about its prompt when the user's was set aside.
+fn noted(s: &mut Session, r: Result<Value>) -> Result<Value> {
+    let note = s.ai_take_prompt_note();
+    let mut v = r?;
+    if let (Some(note), Some(map)) = (note, v.as_object_mut()) {
+        map.insert("prompt_note".to_owned(), json!(note));
+    }
+    Ok(v)
+}
+
 fn connect_schema() -> Value {
     json!({"type": "object", "properties": {
         "endpoint": {"type": "string", "description": "The OpenAI-compatible API's base address, such as https://api.example.com/v1, or http://127.0.0.1:11434/v1 for a server on this computer."},
         "token": {"type": "string", "description": "The API token, kept in the system's keychain (in this session only where there is none). Leave it out to keep the saved one; empty for an endpoint that needs none."},
         "model": {"type": "string", "description": "The model, as the endpoint lists it (ai.models)."}
-    }, "required": ["endpoint"], "additionalProperties": false})
+    }, "required": ["endpoint"], "description": "The person connecting agrees to send the kinds of request switched on (ai.status's `kinds`) to it; an agent's connection is agreed to by no one. A new address or another model asks again.", "additionalProperties": false})
 }
 
 fn model_schema() -> Value {
@@ -163,7 +249,7 @@ fn rewrite_schema() -> Value {
 fn instruct_schema() -> Value {
     json!({"type": "object", "description": "Changes characters `start..end` of `path` (from 0) as `instruction` says, in the user's words (\"flesh out these bullet points\"). \
 Sends the instruction, the selection and a few lines around it. The change arrives as a suggested change on exactly them, by \"AI (<model>)\", never as an edit. \
-It may add text and LaTeX, and change markup, but is refused, saying why, when it dropped or altered a label, reference, citation or formula. Its own kind of request for consent (instruct).", "properties": {
+It may add text and LaTeX, and change markup, but is refused, saying why, when it dropped or altered a label, reference, citation or formula. Its own kind of request, with its own switch (instruct).", "properties": {
         "path": {"type": "string"},
         "start": {"type": "integer", "minimum": 0},
         "end": {"type": "integer", "minimum": 0},
@@ -196,13 +282,13 @@ fn explain_schema() -> Value {
 }
 
 fn consent_schema() -> Value {
-    json!({"type": "object", "properties": {
+    json!({"type": "object", "description": "The person agrees to send a kind of request (and switches it on), or without `request` every kind switched on, to the connection and its model. Not for agent sessions.", "properties": {
         "request": {"type": "string", "enum": crate::ai::REQUESTS, "description": "The kind of request agreed to, for the connection's endpoint: what ai.disclose shows it sends."}
-    }, "required": ["request"], "additionalProperties": false})
+    }, "additionalProperties": false})
 }
 
 fn revoke_schema() -> Value {
-    json!({"type": "object", "description": "Withdraws the user's agreement to send a kind of request to the connection's endpoint (all of them without `request`): the next one asks again. ai.status's `agreed` lists what is agreed.", "properties": {
+    json!({"type": "object", "description": "Withdraws the user's agreement to send a kind of request to the connection's endpoint (all of them without `request`): it is refused until the person agrees again in Settings › AI. ai.status's `agreed` lists what is agreed.", "properties": {
         "request": {"type": "string", "enum": crate::ai::REQUESTS}
     }, "additionalProperties": false})
 }
@@ -240,7 +326,8 @@ fn connect(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => None,
         Some(m) => Some(m.as_str().ok_or("`model` is a string")?),
     };
-    s.ai_connect(&endpoint, token, model)
+    let person = person(s);
+    s.ai_connect(&endpoint, token, model, person)
 }
 
 fn model(s: &mut Session, p: &Value) -> Result<Value> {
@@ -268,32 +355,37 @@ fn disclose(s: &mut Session, p: &Value) -> Result<Value> {
 fn consent(s: &mut Session, p: &Value) -> Result<Value> {
     // Agreeing to send the project's text elsewhere is the person's to give, at the window: an
     // agent session (confined to its roots) cannot give it for them.
-    if s.roots.is_some() {
+    if !person(s) {
         return Err("Agreeing to send text to an AI service is for the person at the window, not an agent session.".to_owned());
     }
-    let request = string(p, "request")?.to_owned();
-    s.ai_consent(&request)
+    let request = p.get("request").and_then(Value::as_str).map(str::to_owned);
+    s.ai_consent(request.as_deref())
 }
 
 fn explain(s: &mut Session, p: &Value) -> Result<Value> {
-    s.ai_explain(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+    let r = s.ai_explain(p, cfg!(target_arch = "wasm32") || flag(p, "background"));
+    noted(s, r)
 }
 
 fn rewrite(s: &mut Session, p: &Value) -> Result<Value> {
-    s.ai_rewrite(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+    let r = s.ai_rewrite(p, cfg!(target_arch = "wasm32") || flag(p, "background"));
+    noted(s, r)
 }
 
 fn instruct(s: &mut Session, p: &Value) -> Result<Value> {
     string(p, "instruction")?;
-    s.ai_rewrite(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+    let r = s.ai_rewrite(p, cfg!(target_arch = "wasm32") || flag(p, "background"));
+    noted(s, r)
 }
 
 fn complete(s: &mut Session, p: &Value) -> Result<Value> {
-    s.ai_complete(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+    let r = s.ai_complete(p, cfg!(target_arch = "wasm32") || flag(p, "background"));
+    noted(s, r)
 }
 
 fn make(s: &mut Session, p: &Value) -> Result<Value> {
-    s.ai_make(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+    let r = s.ai_make(p, cfg!(target_arch = "wasm32") || flag(p, "background"));
+    noted(s, r)
 }
 
 fn insert_made(s: &mut Session, p: &Value) -> Result<Value> {
@@ -301,15 +393,18 @@ fn insert_made(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn reference(s: &mut Session, p: &Value) -> Result<Value> {
-    s.ai_reference(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+    let r = s.ai_reference(p, cfg!(target_arch = "wasm32") || flag(p, "background"));
+    noted(s, r)
 }
 
 fn ask(s: &mut Session, p: &Value) -> Result<Value> {
-    s.ai_ask(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+    let r = s.ai_ask(p, cfg!(target_arch = "wasm32") || flag(p, "background"));
+    noted(s, r)
 }
 
 fn review(s: &mut Session, p: &Value) -> Result<Value> {
-    s.ai_review(p, cfg!(target_arch = "wasm32") || flag(p, "background"))
+    let r = s.ai_review(p, cfg!(target_arch = "wasm32") || flag(p, "background"));
+    noted(s, r)
 }
 
 fn cancel(s: &mut Session, p: &Value) -> Result<Value> {

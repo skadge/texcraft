@@ -18,7 +18,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 (Side::Search, "search", tl!("Search")),
                 (Side::History, "rotate-ccw-clock", tl!("History")),
                 (Side::Review, "message-square-text", tl!("Review")),
-                (Side::Ask, "info", tl!("Ask AI")),
+                (Side::Ask, crate::ai::ICON, tl!("Ask AI")),
             ];
             for (side, icon, label) in sections {
                 let active = app.view.side == Some(side);

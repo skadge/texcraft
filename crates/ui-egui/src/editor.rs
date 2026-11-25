@@ -774,7 +774,7 @@ fn apply_wrap(app: &mut App, _ctx: &egui::Context, w: &Wrap) {
 /// The problem popup's AI part: for a build message, when a model is connected, its explanation.
 fn explanation_in_popup(app: &mut App, path: &ProjectPath) {
     let offered = crate::ai::offered(app);
-    let busy = app.session.ai_busy();
+    let blocked = crate::ai::explain_blocked(app);
     let Some(popup) = app.editor.source.popup.as_mut() else { return };
     popup.ai = None;
     if !(offered && popup.problem.build) {
@@ -785,7 +785,7 @@ fn explanation_in_popup(app: &mut App, path: &ProjectPath) {
         o.diagnostics.iter().find(|d| d.file.as_deref() == Some(path.as_str()) && d.line == line && d.message == popup.problem.message).cloned()
     });
     if let Some(d) = message {
-        popup.ai = Some((app.session.ai_explanation(&d).cloned(), busy));
+        popup.ai = Some((app.session.ai_explanation(&d).cloned(), blocked));
     }
 }
 
@@ -989,7 +989,7 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, r: &egui::Response) {
         }
         if rewrite_offered {
             ui.separator();
-            ui.menu_button(tl!("Rewrite with AI"), |ui| {
+            ui.menu_image_text_button(crate::icons::image(crate::ai::ICON, 14.0, t.text_muted), tl!("Rewrite with AI"), |ui| {
                 ui.set_min_width(220.0);
                 rewrite = crate::ai::rewrite_menu(app, ui);
             });

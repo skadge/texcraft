@@ -148,8 +148,10 @@ pub const MENUS: &[&str] = &["File", "Edit", "Insert", "Help"];
 pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
     match id {
         "edit.cut" | "edit.copy" if app.editor.source.selected().is_none() => Err(tl!("Select some text first.").to_owned()),
-        "edit.rewrite" | "edit.instruct" => crate::ai::can_rewrite(app),
-        "edit.ai_make" | "edit.ai_reference" => crate::ai_make::can_make(app),
+        "edit.rewrite" => crate::ai::can_rewrite(app, crate::ai::Kind::Rewrite),
+        "edit.instruct" => crate::ai::can_rewrite(app, crate::ai::Kind::Instruct),
+        "edit.ai_make" => crate::ai_make::can_make(app, crate::ai::Kind::Make),
+        "edit.ai_reference" => crate::ai_make::can_make(app, crate::ai::Kind::Reference),
         "edit.ai_review" => crate::ai_ask::can_review(app),
         "edit.accept_all" | "edit.reject_all" if crate::review::open_suggestions_in_current(app) == 0 => {
             Err(tl!("There are no open suggestions in this file.").to_owned())

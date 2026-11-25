@@ -1,5 +1,6 @@
-//! AI1 and AI2 (docs/ROADMAP.md): the connection and explaining build messages, against a fake
-//! model behind the suite's provider trait. Nothing here reaches a network.
+//! AI1 to AI5 (docs/ROADMAP.md): the connection, what is agreed to and the prompts, and each kind
+//! of request, against a fake model behind the suite's provider trait. Nothing here reaches a
+//! network.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -138,28 +139,142 @@ fn without_a_connection_every_request_is_refused_plainly() -> R {
     Ok(())
 }
 
+/// An agent session: confined to a folder of its own.
+fn confined(s: &mut Session, name: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let dir = std::env::temp_dir().join(format!("texcraft-ai-roots-{name}-{}", std::process::id()));
+    std::fs::create_dir_all(&dir)?;
+    let roots = texcraft_engine::file_access::AutomationRoots::new(std::slice::from_ref(&dir), std::slice::from_ref(&dir))?;
+    s.confine(roots);
+    Ok(dir)
+}
+
+/// Issue #15: the person connecting agrees to every kind switched on, so nothing asks again; a new
+/// address or another model is a new recipient, refused until the person agrees again.
 #[test]
-fn an_explanation_is_refused_until_the_user_agrees_and_nothing_is_sent_before() -> R {
+fn connecting_agrees_to_the_kinds_switched_on_and_another_model_asks_again() -> R {
     let seen = Seen::default();
     let mut s = session(20, "It is a brace.", &seen)?;
     connect_remote(&mut s)?;
-    let e = s.execute("ai.explain", &json!({"index": 0})).err().ok_or("explained without consent")?;
-    assert!(e.contains("Agree") && e.contains("https://api.example.com"), "{e}");
-    assert!(seen.prompts().is_empty(), "something was sent before the user agreed");
-    let d = s.execute("ai.disclose", &json!({"index": 0}))?;
-    assert_eq!(d["needs_consent"], true);
-    s.execute("ai.consent", &json!({"request": "explain"}))?;
-    assert_eq!(s.execute("ai.disclose", &json!({"index": 0}))?["needs_consent"], false, "agreeing did not stick");
+    assert_eq!(s.execute("ai.status", &json!({}))?["agreed"].as_array().map(Vec::len), Some(texcraft_engine::ai::REQUESTS.len()));
+    assert_eq!(s.execute("ai.disclose", &json!({"index": 0}))?["needs_consent"], false);
     s.execute("ai.explain", &json!({"index": 0}))?;
     assert_eq!(seen.prompts().len(), 1);
-    // A new address is a new destination: asked again.
+    // Another model: refused, saying where to agree, and nothing is sent.
+    s.execute("ai.model", &json!({"model": "large"}))?;
+    let e = s.execute("ai.explain", &json!({"index": 0})).err().ok_or("explained for another model without asking")?;
+    assert!(e.contains("not agreed") && e.contains("Settings › AI") && e.contains("https://api.example.com"), "{e}");
+    assert_eq!(seen.prompts().len(), 1, "sent to another model before the person agreed");
+    s.execute("ai.consent", &json!({}))?;
+    s.execute("ai.explain", &json!({"index": 0}))?;
+    assert_eq!(seen.prompts().len(), 2);
+    // A new address set by an agent is agreed to by no one.
+    let dir = confined(&mut s, "address")?;
     s.execute("ai.connect", &json!({"endpoint": "https://other.example.org/v1"}))?;
-    assert!(s.execute("ai.explain", &json!({"index": 0})).is_err(), "consent carried over to another endpoint");
+    assert!(s.execute("ai.explain", &json!({"index": 0})).is_err(), "the agreement carried over to another address");
+    assert_eq!(seen.prompts().len(), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+/// Issue #15: a kind switched off is refused in words that say where to switch it on, and its
+/// command is disabled with that reason; the others still go.
+#[test]
+fn a_kind_switched_off_is_refused_and_its_command_says_why() -> R {
+    let seen = Seen::default();
+    let mut s = session(20, "It is a brace.", &seen)?;
+    connect_remote(&mut s)?;
+    s.execute("ai.switch", &json!({"request": "explain", "on": false}))?;
+    let e = s.execute("ai.explain", &json!({"index": 0})).err().ok_or("a kind switched off was sent")?;
+    assert!(e.contains("switched off") && e.contains("Settings › AI"), "{e}");
+    let enabled = |s: &Session, id: &str| texcraft_engine::cmd::all().iter().find(|c| c.id == id).map(|c| (c.enabled)(s));
+    assert!(
+        enabled(&s, "ai.explain").is_some_and(|r| r.is_err_and(|why| why.contains("switched off"))),
+        "the command is not disabled with the reason"
+    );
+    assert_eq!(enabled(&s, "ai.review"), Some(Ok(())), "switching one kind off disabled another");
+    assert!(seen.prompts().is_empty(), "something was sent");
+    // Kept with the settings, and switched on again by the person.
+    assert!(serde_json::to_string(s.ai_saved().0)?.contains("explain"));
+    s.execute("ai.switch", &json!({"request": "explain", "on": true}))?;
+    s.execute("ai.explain", &json!({"index": 0}))?;
+    assert_eq!(seen.prompts().len(), 1);
+    Ok(())
+}
+
+/// Issue #15: an agent can switch a kind off, never on, and its connection agrees to nothing.
+#[test]
+fn an_agent_can_switch_kinds_off_but_not_on() -> R {
+    let seen = Seen::default();
+    let mut s = session(20, "fine", &seen)?;
+    connect_remote(&mut s)?;
+    let dir = confined(&mut s, "switch")?;
+    s.execute("ai.switch", &json!({"request": "review", "on": false}))?;
+    assert!(s.execute("ai.switch", &json!({"request": "review", "on": true})).is_err(), "an agent switched a kind on");
+    assert!(s.execute("ai.consent", &json!({})).is_err(), "an agent agreed for the person");
+    let kinds = s.execute("ai.status", &json!({}))?["kinds"].clone();
+    let review = kinds.as_array().and_then(|k| k.iter().find(|k| k["request"] == "review").cloned()).unwrap_or_default();
+    assert_eq!(review["state"], "off", "{kinds}");
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+/// Issue #15: a changed prompt is what is sent; a reset sends the app's own again; one that lost a
+/// required placeholder is kept but not used, the app's own sent instead, and said.
+#[test]
+fn an_edited_prompt_is_sent_a_reset_restores_the_default_and_a_broken_one_is_set_aside() -> R {
+    let seen = Seen::default();
+    let mut s = session(20, "It is a brace.", &seen)?;
+    connect_remote(&mut s)?;
+    let list = s.execute("ai.prompts", &json!({}))?;
+    let explain = list["prompts"].as_array().and_then(|l| l.iter().find(|p| p["request"] == "explain").cloned()).unwrap_or_default();
+    let default = explain["default"].as_str().unwrap_or_default().to_owned();
+    assert!(explain["placeholders"].to_string().contains("message"), "{explain}");
+    s.execute("ai.set_prompt", &json!({"request": "explain", "text": "OWN WORDS. {message}\n{source}"}))?;
+    s.execute("ai.explain", &json!({"index": 0}))?;
+    let sent = seen.prompts();
+    let first = sent.first().cloned().unwrap_or_default();
+    assert!(first.starts_with("OWN WORDS. Message: Missing } inserted.") && first.contains("\\textbf{bold word"), "{first}");
+    assert!(!first.contains("plain language"), "the app's own instructions were sent too");
+    // Without {source}: kept for the person to fix, but the app's own is sent, and that is said.
+    s.execute("ai.set_prompt", &json!({"request": "explain", "text": "BROKEN {message}"}))?;
+    let missing = s.execute("ai.prompts", &json!({}))?["prompts"][0]["missing"].clone();
+    assert_eq!(missing, json!(["source"]));
+    let r = s.execute("ai.explain", &json!({"index": 0}))?;
+    assert!(r["prompt_note"].as_str().is_some_and(|n| n.contains("{source}") && n.contains("Prompts")), "{r}");
+    let second = seen.prompts().get(1).cloned().unwrap_or_default();
+    assert!(!second.contains("BROKEN") && second.contains("plain language"), "{second}");
+    // Reset: the app's own, and nothing kept.
+    s.execute("ai.set_prompt", &json!({"request": "explain"}))?;
+    s.execute("ai.explain", &json!({"index": 0}))?;
+    let third = seen.prompts().get(2).cloned().unwrap_or_default();
+    assert!(third.starts_with(default.lines().next().unwrap_or_default()), "{third}");
+    assert_eq!(third, second, "a reset prompt differs from the default");
+    Ok(())
+}
+
+/// Only changed prompts are kept: a prompt set back to the default's text is not stored, so the
+/// app's own wording reaches a kind the user left alone.
+#[test]
+fn the_settings_keep_only_the_prompts_that_were_changed() -> R {
+    let seen = Seen::default();
+    let mut s = session(20, "", &seen)?;
+    let review = s.execute("ai.prompts", &json!({}))?["prompts"][7].clone();
+    assert_eq!(review["request"], "review");
+    s.execute("ai.set_prompt", &json!({"request": "review", "text": review["default"]}))?;
+    s.execute("ai.set_prompt", &json!({"request": "ask", "text": "Q {question} F {files}"}))?;
+    let kept = serde_json::to_value(s.ai_saved().0)?;
+    assert_eq!(kept["prompts"], json!({"ask": "Q {question} F {files}"}));
+    // An agent cannot put its own words in the person's prompts, only reset them.
+    let dir = confined(&mut s, "prompts")?;
+    assert!(s.execute("ai.set_prompt", &json!({"request": "review", "text": "agent {section}"})).is_err());
+    s.execute("ai.set_prompt", &json!({"request": "ask"}))?;
+    assert!(serde_json::to_value(s.ai_saved().0)?.get("prompts").is_none(), "a reset prompt is still kept");
+    let _ = std::fs::remove_dir_all(&dir);
     Ok(())
 }
 
 /// Issue #15: an agreement is to a kind of request, kept with the settings (never any text) so a
-/// new session restored from them does not ask again; withdrawing it asks again.
+/// new session restored from them does not ask again; withdrawing one refuses that kind alone.
 #[test]
 fn an_agreement_outlives_the_session_until_it_is_withdrawn() -> R {
     let seen = Seen::default();
@@ -168,25 +283,21 @@ fn an_agreement_outlives_the_session_until_it_is_withdrawn() -> R {
     let mut s = session(20, "It is a brace.", &seen)?;
     s.set_ai_secrets(keychain.clone());
     connect_remote(&mut s)?;
-    s.execute("ai.consent", &json!({"request": "explain"}))?;
     s.execute("ai.explain", &json!({"index": 0}))?;
     let kept = serde_json::to_string(s.ai_saved().0)?;
     assert!(!kept.contains("Missing } inserted") && !kept.contains("bold word"), "the settings hold what was sent: {kept}");
     let mut again = session(20, "It is a brace.", &seen)?;
     again.set_ai_secrets(keychain);
     again.restore_ai(serde_json::from_str(&kept)?);
-    assert_eq!(again.execute("ai.status", &json!({}))?["agreed"], json!(["explain"]));
-    // Another message, another session: the same kind is not asked about again.
+    assert!(again.execute("ai.status", &json!({}))?["agreed"].as_array().is_some_and(|a| a.contains(&json!("explain"))));
+    // Another message, another session: not asked about again.
     again.execute("ai.explain", &json!({"index": 0}))?;
     assert_eq!(seen.prompts().len(), 2);
-    assert_eq!(
-        again.execute("ai.disclose", &json!({"request": "make", "kind": "table", "description": "x", "path": "main.tex", "at": 0}))?["needs_consent"],
-        true,
-        "agreeing to one kind covered another"
-    );
     again.execute("ai.revoke", &json!({"request": "explain"}))?;
     assert!(again.execute("ai.explain", &json!({"index": 0})).is_err(), "a withdrawn agreement still holds");
-    assert_eq!(again.execute("ai.status", &json!({}))?["agreed"], json!([]));
+    assert!(
+        again.execute("ai.status", &json!({}))?["agreed"].as_array().is_some_and(|a| !a.contains(&json!("explain")) && a.contains(&json!("make")))
+    );
     Ok(())
 }
 
@@ -197,7 +308,6 @@ fn what_a_request_sent_can_be_shown_afterwards_but_is_not_logged() -> R {
     let seen = Seen::default();
     let mut s = session(20, "It is a brace.", &seen)?;
     connect_remote(&mut s)?;
-    s.execute("ai.consent", &json!({"request": "explain"}))?;
     s.execute("ai.explain", &json!({"index": 0}))?;
     let status = s.execute("ai.status", &json!({}))?;
     let run = status["requests"][0]["run"].as_str().ok_or("no run in the log")?.to_owned();
@@ -214,7 +324,6 @@ fn what_an_explanation_sends_is_what_was_disclosed_and_no_more() -> R {
     let mut s = session(20, "The bold group is not closed.", &seen)?;
     connect_remote(&mut s)?;
     let disclosed = s.execute("ai.disclose", &json!({"index": 0}))?;
-    s.execute("ai.consent", &json!({"request": "explain"}))?;
     let r = s.execute("ai.explain", &json!({"index": 0}))?;
     assert!(r["explanation"].as_str().unwrap_or_default().contains("not closed"), "{r}");
     let sent = seen.prompts();
@@ -240,7 +349,6 @@ fn an_error_in_the_preamble_sends_the_preamble() -> R {
     connect_remote(&mut s)?;
     let d = s.execute("ai.disclose", &json!({"path": "main.tex", "line": 2}))?;
     assert!(d["sends"]["preamble"].as_str().unwrap_or_default().contains("private-preamble"), "{d}");
-    s.execute("ai.consent", &json!({"request": "explain"}))?;
     s.execute("ai.explain", &json!({"path": "main.tex", "line": 2}))?;
     assert!(seen.prompts().first().is_some_and(|p| p.contains("PREAMBLE")));
     Ok(())
@@ -251,7 +359,6 @@ fn a_proposed_fix_becomes_a_suggestion_by_the_model_never_an_edit() -> R {
     let seen = Seen::default();
     let mut s = session(20, "", &seen)?;
     connect_remote(&mut s)?;
-    s.execute("ai.consent", &json!({"request": "explain"}))?;
     // The model gives back the lines it was sent, with the brace closed.
     let lines = s.execute("ai.disclose", &json!({"index": 0}))?["sends"]["lines"]["text"].as_str().unwrap_or_default().to_owned();
     let fixed = lines.replace("\\textbf{bold word", "\\textbf{bold} word");
@@ -453,17 +560,9 @@ fn a_rewrite_sends_what_was_disclosed_and_becomes_a_suggestion_on_the_selection_
     let (mut s, start, end) = paper(&seen, "<<<TEXT\nSection~\\ref{sec:a} shows that $x^2$ is large.\nTEXT>>>")?;
     connect_remote(&mut s)?;
     let p = json!({"path": "main.tex", "start": start, "end": end, "how": "shorter"});
-    let e = s.execute("ai.rewrite", &p).err().ok_or("rewrote without consent")?;
-    assert!(e.contains("Agree") && e.contains("https://api.example.com"), "{e}");
-    assert!(seen.prompts().is_empty(), "something was sent before the user agreed");
-    // Agreeing to explanations does not cover rewrites.
-    s.execute("ai.consent", &json!({"request": "explain"}))?;
-    assert!(s.execute("ai.rewrite", &p).is_err(), "consent to explain covered rewriting");
     let mut d = p.clone();
     d["request"] = json!("rewrite");
     let disclosed = s.execute("ai.disclose", &d)?;
-    assert_eq!(disclosed["needs_consent"], true);
-    s.execute("ai.consent", &json!({"request": "rewrite"}))?;
     let r = s.execute("ai.rewrite", &p)?;
     let sent = seen.prompts();
     assert_eq!(sent.first().map(String::as_str), disclosed["sends"]["prompt"].as_str(), "the request differs from its disclosure");
@@ -500,15 +599,16 @@ fn a_rewrite_that_drops_a_reference_is_refused_saying_so() -> R {
 }
 
 #[test]
-fn a_continuation_needs_consent_and_typing_on_drops_it() -> R {
+fn a_continuation_switched_off_is_not_asked_for_and_typing_on_drops_it() -> R {
     let seen = Seen::default();
     let (mut s, _, end) = paper(&seen, " It grows fast.")?;
     connect_remote(&mut s)?;
     let p = json!({"path": "main.tex", "at": end});
-    let e = s.execute("ai.complete", &p).err().ok_or("continued without consent")?;
-    assert!(e.contains("Agree"), "{e}");
-    assert!(seen.prompts().is_empty(), "the paragraph was sent before the user agreed");
-    s.execute("ai.consent", &json!({"request": "complete"}))?;
+    s.execute("ai.switch", &json!({"request": "complete", "on": false}))?;
+    let e = s.execute("ai.complete", &p).err().ok_or("continued while switched off")?;
+    assert!(e.contains("switched off"), "{e}");
+    assert!(seen.prompts().is_empty(), "the paragraph was sent while switched off");
+    s.execute("ai.switch", &json!({"request": "complete", "on": true}))?;
     let r = s.execute("ai.complete", &p)?;
     assert_eq!(r["text"], " It grows fast.");
     let prompt = seen.prompts().first().cloned().unwrap_or_default();
@@ -552,23 +652,22 @@ fn cancelling_a_continuation_leaves_an_explanation_in_flight_alone() -> R {
     Ok(())
 }
 
-/// Issue #14: a change in the user's words is its own kind of request, sends the instruction,
+/// Issue #14: a change in the user's words is its own kind of request (its own switch), sends the instruction,
 /// may grow the passage, and is refused when it drops a reference or alters a formula.
 #[test]
-fn a_change_as_asked_needs_its_own_consent_may_add_text_and_keeps_references_and_formulas() -> R {
+fn a_change_as_asked_has_its_own_switch_may_add_text_and_keeps_references_and_formulas() -> R {
     let seen = Seen::default();
     let longer = "<<<TEXT\nAs Section~\\ref{sec:a} shows, the value $x^2$ is very large: it grows with $n$, as \\cite{knuth84} found.\nTEXT>>>";
     let (mut s, start, end) = paper(&seen, longer)?;
     connect_remote(&mut s)?;
     let p = json!({"path": "main.tex", "start": start, "end": end, "instruction": "Flesh this out"});
-    s.execute("ai.consent", &json!({"request": "rewrite"}))?;
-    let e = s.execute("ai.instruct", &p).err().ok_or("changed with a rewrite's consent")?;
-    assert!(e.contains("instruction") && e.contains("Agree"), "{e}");
+    s.execute("ai.switch", &json!({"request": "instruct", "on": false}))?;
+    let e = s.execute("ai.instruct", &p).err().ok_or("changed while switched off, rewrites on")?;
+    assert!(e.contains("Change as asked") && e.contains("switched off"), "{e}");
+    s.execute("ai.switch", &json!({"request": "instruct", "on": true}))?;
     let mut d = p.clone();
     d["request"] = json!("instruct");
     let disclosed = s.execute("ai.disclose", &d)?;
-    assert_eq!(disclosed["needs_consent"], true);
-    s.execute("ai.consent", &json!({"request": "instruct"}))?;
     let before = text(&s);
     s.execute("ai.instruct", &p)?;
     let prompt = seen.prompts().first().cloned().unwrap_or_default();
@@ -619,14 +718,9 @@ fn making_sends_what_was_disclosed_and_a_typeset_answer_becomes_suggestions_neve
     connect_remote(&mut s)?;
     let at = caret(&s);
     let p = json!({"kind": "tikz", "description": "a line from the origin", "path": "main.tex", "at": at});
-    let e = s.execute("ai.make", &p).err().ok_or("made without consent")?;
-    assert!(e.contains("Agree") && e.contains("https://api.example.com"), "{e}");
-    assert!(seen.prompts().is_empty(), "something was sent before the user agreed");
     let mut d = p.clone();
     d["request"] = json!("make");
     let disclosed = s.execute("ai.disclose", &d)?;
-    assert_eq!(disclosed["needs_consent"], true);
-    s.execute("ai.consent", &json!({"request": "make"}))?;
     let before = text(&s);
     let r = s.execute("ai.make", &p)?;
     let prompt = seen.prompts().first().cloned().unwrap_or_default();
@@ -714,11 +808,9 @@ fn a_reference_is_a_suggestion_in_the_bib_marked_as_drafted_by_the_model() -> R 
     s.execute("file.new", &json!({"path": "refs.bib", "text": "@article{knuth84,\n  title = {Other}\n}\n"}))?;
     connect_remote(&mut s)?;
     let p = json!({"query": "The TeXbook", "bib": "refs.bib"});
-    assert!(s.execute("ai.reference", &p).is_err(), "drafted without consent");
     let mut d = p.clone();
     d["request"] = json!("reference");
     let disclosed = s.execute("ai.disclose", &d)?;
-    s.execute("ai.consent", &json!({"request": "reference"}))?;
     let r = s.execute("ai.reference", &p)?;
     let prompt = seen.prompts().first().cloned().unwrap_or_default();
     assert_eq!(Some(prompt.as_str()), disclosed["sends"]["prompt"].as_str());
@@ -743,11 +835,9 @@ fn a_question_sends_the_open_file_or_the_project_and_its_answer_links_the_lines_
     let mut s = session(20, "The bold group opens at main.tex:20 and other.tex:1; nowhere.tex:3 is not a file.", &seen)?;
     connect_remote(&mut s)?;
     let p = json!({"question": "Where is the bold word?", "scope": "file", "path": "main.tex"});
-    assert!(s.execute("ai.ask", &p).is_err(), "asked without consent");
     let mut d = p.clone();
     d["request"] = json!("ask");
     let disclosed = s.execute("ai.disclose", &d)?;
-    s.execute("ai.consent", &json!({"request": "ask"}))?;
     let r = s.execute("ai.ask", &p)?;
     let prompt = seen.prompts().first().cloned().unwrap_or_default();
     assert_eq!(Some(prompt.as_str()), disclosed["sends"]["prompt"].as_str());
@@ -773,8 +863,6 @@ fn a_review_leaves_comments_on_the_quotes_it_finds_and_counts_those_it_does_not(
     let start = t[..t.find("Line 15").unwrap_or_default()].chars().count();
     let end = t[..t.find("Line 25").unwrap_or_default()].chars().count();
     let p = json!({"path": "main.tex", "start": start, "end": end});
-    assert!(s.execute("ai.review", &p).is_err(), "reviewed without consent");
-    s.execute("ai.consent", &json!({"request": "review"}))?;
     let r = s.execute("ai.review", &p)?;
     let prompt = seen.prompts().first().cloned().unwrap_or_default();
     assert!(prompt.contains("Line 16") && !prompt.contains("FAR-AWAY-TEXT") && !prompt.contains("Line 26"), "more or less than the section was sent");

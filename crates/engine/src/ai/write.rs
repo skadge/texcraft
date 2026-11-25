@@ -8,11 +8,11 @@
 //! still the text sent, for the editor to show after the caret.
 
 use craft_ai_core::history::{EndRecord, HISTORY_SCHEMA, Outcome as Logged};
-use craft_ai_core::{CapabilityId, HistoryRecord, InputRole, Payload, Request};
+use craft_ai_core::{HistoryRecord, InputRole, Request};
 use serde_json::{Value, json};
 use texcraft_project::{Project, ProjectPath};
 
-use super::{Answer, COMPLETE, Event, INSTRUCT, REWRITE, Task, Work, kind_of, now_ms};
+use super::{Answer, COMPLETE, Event, INSTRUCT, REWRITE, Task, Work, kind_of, now_ms, prompts};
 use crate::{Result, Session};
 
 /// Characters of text sent on each side of a selection to rewrite, at most (whole lines).
@@ -89,12 +89,9 @@ impl How {
         if matches!(self, Self::Instruct(_)) { INSTRUCT } else { REWRITE }
     }
 
-    /// What the model is told: the rules, then how.
-    fn instructions(&self) -> String {
-        match self {
-            Self::Instruct(i) => format!("{INSTRUCT_INSTRUCTIONS}\n\nThe author's request: {i}"),
-            _ => format!("{REWRITE_INSTRUCTIONS} {}", self.instruction()),
-        }
+    /// Its prompt's name ([`prompts`]).
+    pub fn prompt_kind(&self) -> &'static str {
+        if matches!(self, Self::Instruct(_)) { "instruct" } else { "rewrite" }
     }
 
     fn instruction(&self) -> String {
@@ -108,15 +105,6 @@ impl How {
         }
     }
 }
-
-const REWRITE_INSTRUCTIONS: &str = "You rewrite a passage of a LaTeX document. \
-Keep every LaTeX command, every \\label, \\ref and \\cite with its key, and every formula exactly as written; change only the words around them. \
-Answer with the rewritten passage alone, between a line <<<TEXT and a line TEXT>>>.";
-
-const INSTRUCT_INSTRUCTIONS: &str = "You change a passage of a LaTeX document as its author asks. \
-Keep every \\label, \\ref and \\cite of the passage with its key, and every formula of it exactly as written; \
-you may add text, and new LaTeX, as the request needs. \
-Answer with the changed passage alone, between a line <<<TEXT and a line TEXT>>>.";
 
 /// The longest instruction, in characters.
 pub const MAX_INSTRUCTION_CHARS: usize = 500;
@@ -168,29 +156,35 @@ impl Passage {
         Ok(Self { path: path.to_owned(), start, end, how, before: before[from..].to_owned(), text, after: after[..to].to_owned() })
     }
 
-    /// The whole text sent to the model.
-    pub fn prompt(&self) -> String {
-        let mut out = format!("{}\n", self.how.instructions());
-        if !self.before.trim().is_empty() {
-            out.push_str(&format!("\nThe text just before the passage, for context only:\n<<<BEFORE\n{}\nBEFORE>>>\n", self.before));
+    fn parts(&self) -> prompts::Parts {
+        let block = |text: &str, said: &str, name: &str| {
+            if text.trim().is_empty() { String::new() } else { format!("{said}:\n<<<{name}\n{text}\n{name}>>>") }
+        };
+        let mut parts: prompts::Parts = vec![
+            ("passage", self.text.clone(), Some(InputRole::Source)),
+            ("before", block(&self.before, "The text just before the passage, for context only", "BEFORE"), Some(InputRole::Context)),
+            ("after", block(&self.after, "The text just after it, for context only", "AFTER"), Some(InputRole::Context)),
+        ];
+        match &self.how {
+            How::Instruct(i) => parts.push(("instruction", i.clone(), None)),
+            how => {
+                parts.push(("how", how.instruction(), None));
+                parts.push(("language", if let How::Translate(l) = how { l.clone() } else { String::new() }, None));
+            }
         }
-        out.push_str(&format!("\nThe passage:\n<<<PASSAGE\n{}\nPASSAGE>>>\n", self.text));
-        if !self.after.trim().is_empty() {
-            out.push_str(&format!("\nThe text just after it, for context only:\n<<<AFTER\n{}\nAFTER>>>\n", self.after));
-        }
-        out
+        parts
     }
 
-    pub(super) fn request(&self) -> Result<Request> {
-        let capability = CapabilityId::parse(self.how.capability()).map_err(|e| e.to_string())?;
-        Ok(Request::new(capability)
-            .with_input(InputRole::Prompt, Payload::text(self.how.instructions()))
-            .with_input(InputRole::Source, Payload::text(self.text.clone()))
-            .with_input(InputRole::Context, Payload::text(self.before.clone()))
-            .with_input(InputRole::Context, Payload::text(self.after.clone())))
+    /// The whole text sent to the model, with `template` (its kind's prompt).
+    pub fn prompt(&self, template: &str) -> String {
+        prompts::prompt(template, &self.parts())
     }
 
-    pub(super) fn describe(&self) -> Value {
+    pub(super) fn request(&self, template: &str) -> Result<Request> {
+        prompts::request(self.how.capability(), template, &self.parts())
+    }
+
+    pub(super) fn describe(&self, template: &str) -> Value {
         json!({
             "path": self.path,
             "start": self.start,
@@ -201,7 +195,7 @@ impl Passage {
             "before": self.before,
             "text": self.text,
             "after": self.after,
-            "prompt": self.prompt(),
+            "prompt": self.prompt(template),
         })
     }
 }
@@ -265,10 +259,6 @@ pub enum Rewritten {
     Cancelled,
 }
 
-const COMPLETE_INSTRUCTIONS: &str = "You continue a paragraph of a LaTeX document as its author would. \
-Give only the next few words that follow the text (at most one sentence, on one line), in its language and style, as valid LaTeX. \
-Do not repeat the text. Answer with the continuation alone.";
-
 /// What a continuation sends: the paragraph up to the caret.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Paragraph {
@@ -319,20 +309,21 @@ impl Paragraph {
         Self { path: String::new(), at: 0, byte_at: 0, text: "(the paragraph you are typing, up to the caret)".to_owned(), rest: String::new() }
     }
 
-    /// The whole text sent to the model.
-    pub fn prompt(&self) -> String {
-        format!("{COMPLETE_INSTRUCTIONS}\n\n<<<TEXT\n{}\nTEXT>>>\n", self.text)
+    fn parts(&self) -> prompts::Parts {
+        vec![("text", self.text.clone(), Some(InputRole::Source))]
     }
 
-    pub(super) fn request(&self) -> Result<Request> {
-        let capability = CapabilityId::parse(COMPLETE).map_err(|e| e.to_string())?;
-        Ok(Request::new(capability)
-            .with_input(InputRole::Prompt, Payload::text(COMPLETE_INSTRUCTIONS))
-            .with_input(InputRole::Source, Payload::text(self.text.clone())))
+    /// The whole text sent to the model, with `template` (the continuation's prompt).
+    pub fn prompt(&self, template: &str) -> String {
+        prompts::prompt(template, &self.parts())
     }
 
-    pub(super) fn describe(&self) -> Value {
-        json!({"path": self.path, "at": self.at, "paragraph": self.text, "prompt": self.prompt()})
+    pub(super) fn request(&self, template: &str) -> Result<Request> {
+        prompts::request(COMPLETE, template, &self.parts())
+    }
+
+    pub(super) fn describe(&self, template: &str) -> Value {
+        json!({"path": self.path, "at": self.at, "paragraph": self.text, "prompt": self.prompt(template)})
     }
 
     /// Whether `source` is still as it was around the caret: the text sent before it, the rest
@@ -403,7 +394,7 @@ impl Session {
     }
 
     /// `ai.rewrite`: asks the model to rewrite a selection; its rewrite becomes a suggested
-    /// change on that selection. Refused before anything is sent when the user has not agreed.
+    /// change on that selection. Refused before anything is sent while its kind is switched off.
     pub(crate) fn ai_rewrite(&mut self, p: &Value, background: bool) -> Result<Value> {
         self.ai_ready()?;
         let passage = self.ai_passage(p)?;
@@ -412,17 +403,9 @@ impl Session {
         let tokens = if instructed { 4000 } else { u32::try_from(passage.text.len() / 2 + 400).unwrap_or(4000).min(4000) };
         let opts = craft_ai::GenOpts { max_tokens: tokens, temperature: 0.3 };
         let role = if instructed { ("instruct", "Change as Asked") } else { ("rewrite", "Rewrite") };
-        let (model, run, answer) = self.begin(&passage.request()?, role, passage.prompt(), opts, Answer::Text, |to| {
-            if instructed {
-                format!(
-                    "Changing a selection as asked sends your instruction, the selected text and a few lines around it to {to}. Agree to it first (the window asks; agents: ai.disclose with request instruct shows it, ai.consent agrees)."
-                )
-            } else {
-                format!(
-                    "Rewriting sends the selected text and a few lines around it to {to}. Agree to it first (the window asks; agents: ai.disclose with request rewrite shows it, ai.consent agrees)."
-                )
-            }
-        })?;
+        let (template, note) = self.ai_template(passage.how.prompt_kind());
+        let (model, run, answer) = self.begin(&passage.request(&template)?, role, passage.prompt(&template), opts, Answer::Text)?;
+        self.ai.prompt_note = note;
         self.ai.rewrite = Some(Rewritten::Running);
         self.ai.task = Some(Task { work: Work::Rewrite { passage: Box::new(passage), model, run }, answer, cancelled: Default::default() });
         if background {
@@ -436,8 +419,8 @@ impl Session {
         }
     }
 
-    /// `ai.complete`: asks the model how the paragraph at the caret goes on. Refused without
-    /// consent, while another request is in flight, and more often than every
+    /// `ai.complete`: asks the model how the paragraph at the caret goes on. Refused while
+    /// switched off or not agreed to, while another request is in flight, and more often than every
     /// [`COMPLETE_EVERY_MS`].
     pub(crate) fn ai_complete(&mut self, p: &Value, background: bool) -> Result<Value> {
         self.ai_ready()?;
@@ -445,19 +428,17 @@ impl Session {
             return Err("The model is still answering the last request.".to_owned());
         }
         let paragraph = self.ai_paragraph(p)?;
-        let request = paragraph.request()?;
-        // Refused for consent before the rate limit counts it.
-        let (_, ask) = self.disclosure(&request)?;
-        if !ask && now_ms().saturating_sub(self.ai.last_complete) < COMPLETE_EVERY_MS {
+        // Refused when switched off before the rate limit counts it.
+        self.ai_permitted("complete")?;
+        if now_ms().saturating_sub(self.ai.last_complete) < COMPLETE_EVERY_MS {
             return Err(format!("The next words are suggested at most once every {} seconds.", COMPLETE_EVERY_MS / 1000));
         }
         self.ai.ghost = None;
         let opts = craft_ai::GenOpts { max_tokens: 60, temperature: 0.3 };
-        let (_, run, answer) = self.begin(&request, ("complete", "Suggest the next words"), paragraph.prompt(), opts, Answer::Text, |to| {
-            format!(
-                "Suggesting the next words sends the paragraph before the caret to {to} after each pause in typing. Agree to it first (Settings › AI asks when it is turned on)."
-            )
-        })?;
+        let (template, note) = self.ai_template("complete");
+        let request = paragraph.request(&template)?;
+        let (_, run, answer) = self.begin(&request, ("complete", "Suggest the next words"), paragraph.prompt(&template), opts, Answer::Text)?;
+        self.ai.prompt_note = note;
         self.ai.last_complete = now_ms();
         self.ai.task = Some(Task { work: Work::Complete { paragraph: Box::new(paragraph), run }, answer, cancelled: Default::default() });
         if background {

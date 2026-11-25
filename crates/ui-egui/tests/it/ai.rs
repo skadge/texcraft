@@ -1,12 +1,13 @@
-//! AI1 and AI2 in the window: Settings › AI connects through the engine and keeps no token in the
-//! preferences; a build message's Explain asks before the first request and shows the answer in
-//! its card. A fake model answers; nothing reaches a network.
+//! AI1 and AI2 in the window: Settings › AI connects through the engine, keeps no token in the
+//! preferences and lists each kind of request with its switch; a build message's Explain sends at
+//! once (connecting agreed to it) and shows the answer in its card. A fake model answers; nothing
+//! reaches a network.
 
 use std::sync::{Arc, Mutex};
 
 use craft_ai::{AiError, GenOpts, Provider, ProviderInfo};
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use serde_json::json;
 use texcraft_compile::{Backend, Diagnostic, Job, Outcome, Severity, Status};
 use texcraft_engine::Session;
@@ -117,8 +118,14 @@ fn settings_connect_lists_models_and_keep_the_token_out_of_the_preferences() -> 
     Ok(())
 }
 
+/// The dialog open, by its name (null for none).
+fn dialog(h: &mut Harness<'_, App>) -> serde_json::Value {
+    h.state_mut().control("ui.inspect", &json!({}))["result"]["dialog"].clone()
+}
+
+/// Issue #15: connected, Explain sends at once: no dialog asks first.
 #[test]
-fn explain_asks_once_shows_what_is_sent_and_puts_the_answer_in_the_card() -> Result<(), String> {
+fn explain_sends_at_once_without_a_dialog_and_puts_the_answer_in_the_card() -> Result<(), String> {
     let prompts = Arc::new(Mutex::new(Vec::new()));
     let mut s = session(&prompts)?;
     s.execute("ai.connect", &json!({"endpoint": "https://api.example.com/v1", "token": TOKEN, "model": "small"}))?;
@@ -127,32 +134,21 @@ fn explain_asks_once_shows_what_is_sent_and_puts_the_answer_in_the_card() -> Res
     let mut h = harness(s);
     h.state_mut().control("engine.execute", &json!({"command": "view.logs"}));
     h.run();
-    // Declined: nothing goes.
     h.get_by_label("Explain").click();
     h.run();
-    assert!(h.query_by_label_contains("https://api.example.com").is_some(), "the dialog does not say where it goes");
-    assert!(h.query_by_label_contains("\\textbf{x").is_some(), "the dialog does not show the source lines sent");
-    h.get_by_label("Don't Send").click();
-    h.run();
-    assert_eq!(sent(&prompts), 0, "a declined request was sent");
-    // Agreed: the answer comes into the card.
-    h.get_by_label("Explain").click();
-    h.run();
-    h.get_by_label("Agree and Explain").click();
-    h.run();
+    assert_eq!(dialog(&mut h), json!(null), "a dialog opened to ask first");
     assert!(settle(&mut h), "the explanation did not arrive");
     assert!(h.query_by_label_contains("never closed").is_some(), "the explanation is not in the card");
     assert_eq!(sent(&prompts), 1);
     Ok(())
 }
 
-/// Issue #15: agreed to in the dialog once, a kind of request is not asked about again, after a
-/// restart either (the preferences keep the agreement); Settings › AI lists it, shows what a
-/// request sent, and withdraws it.
+/// Issue #15: Settings › AI lists each kind of request with what it sends and a switch; one
+/// switched off is not sent and its button is disabled with the reason, kept over a restart; the
+/// request log still shows what a request sent; another model asks to agree again.
 #[test]
-fn an_agreement_is_asked_once_kept_over_a_restart_and_withdrawn_in_settings() -> Result<(), String> {
+fn a_kind_switched_off_in_settings_disables_its_entry_and_another_model_asks_again() -> Result<(), String> {
     let prompts = Arc::new(Mutex::new(Vec::new()));
-    // The keychain outlives the app.
     let keychain: Arc<dyn texcraft_engine::ai::Secrets> = Arc::new(texcraft_engine::ai::SessionSecrets::default());
     let compiled = |prompts: &Arc<Mutex<Vec<String>>>| -> Result<Session, String> {
         let mut s = session(prompts)?;
@@ -163,33 +159,22 @@ fn an_agreement_is_asked_once_kept_over_a_restart_and_withdrawn_in_settings() ->
     };
     let mut s = compiled(&prompts)?;
     s.execute("ai.connect", &json!({"endpoint": "https://api.example.com/v1", "token": TOKEN, "model": "small"}))?;
-    let mut h = harness(s);
+    // Tall enough for the whole of Settings › AI.
+    let prefs = Prefs { auto_compile: false, ai: s.ai_saved().0.clone(), ..Prefs::default() };
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1400.0, 2000.0))
+        .with_max_steps(60)
+        .build_ui_state(|ui, app: &mut App| app.frame(ui), App::with_prefs(s, prefs));
     h.state_mut().control("engine.execute", &json!({"command": "view.logs"}));
     h.run();
     h.get_by_label("Explain").click();
     h.run();
-    h.get_by_label("Agree and Explain").click();
-    h.run();
     assert!(settle(&mut h), "the explanation did not arrive");
-    let prefs = h.state_mut().take_changed_prefs().ok_or("the agreement was not kept in the preferences")?;
-    let kept = serde_json::to_string(&prefs).map_err(|e| e.to_string())?;
-    assert!(!kept.contains("Missing } inserted"), "the preferences hold what was sent");
-    // The next run of the app, from the stored preferences.
-    let prefs: Prefs = serde_json::from_str(&kept).map_err(|e| e.to_string())?;
-    let app = App::with_prefs(compiled(&prompts)?, Prefs { auto_compile: false, ..prefs });
-    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).with_max_steps(60).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
-    h.state_mut().control("engine.execute", &json!({"command": "view.logs"}));
-    h.run();
-    h.get_by_label("Explain").click();
-    h.run();
-    assert!(h.query_by_label("Agree and Explain").is_none(), "asked again after a restart");
-    assert!(settle(&mut h), "the explanation did not arrive");
-    assert_eq!(sent(&prompts), 2, "the second explanation was not sent");
     ui_cmd::run(h.state_mut(), "app.settings");
     h.run();
     h.get_by_label("AI").click();
     h.run();
-    assert!(h.query_by_label("Explaining build messages").is_some(), "Settings › AI does not list the agreement");
+    assert!(h.query_by_label_contains("The section at the caret.").is_some(), "Settings › AI does not say what a kind sends");
     h.get_by_label_contains("1 request sent").click();
     h.run();
     let shown = |h: &Harness<'_, App>| h.query_all_by_label_contains("Missing } inserted").count();
@@ -197,9 +182,37 @@ fn an_agreement_is_asked_once_kept_over_a_restart_and_withdrawn_in_settings() ->
     h.get_by_label("Show What Was Sent").click();
     h.run();
     assert!(shown(&h) > before, "what was sent is not shown");
-    h.get_by_label("Withdraw: Explaining build messages").click();
+    // Switched off from the keyboard: kept in the preferences.
+    h.get_by_role_and_label(egui::accesskit::Role::CheckBox, "Explain").focus();
     h.run();
-    assert!(h.query_by_label("Explaining build messages").is_none(), "the agreement was not withdrawn");
+    h.key_press(egui::Key::Space);
+    h.run();
+    let prefs = h.state_mut().take_changed_prefs().ok_or("the switch was not kept in the preferences")?;
+    assert_eq!(prefs.ai.off, vec!["explain".to_owned()]);
+    let kept = serde_json::to_string(&prefs).map_err(|e| e.to_string())?;
+    assert!(!kept.contains("Missing } inserted"), "the preferences hold what was sent");
+    // The next run of the app: the Explain button is disabled, and nothing more is sent.
+    let prefs: Prefs = serde_json::from_str(&kept).map_err(|e| e.to_string())?;
+    let mut again = compiled(&prompts)?;
+    again.restore_ai(prefs.ai.clone());
+    let app = App::with_prefs(again, Prefs { auto_compile: false, ..prefs });
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).with_max_steps(60).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    h.state_mut().control("engine.execute", &json!({"command": "view.logs"}));
+    h.run();
+    let explain = h.get_by_role_and_label(egui::accesskit::Role::Button, "Explain");
+    assert!(explain.accesskit_node().is_disabled(), "the Explain button of a kind switched off is enabled");
+    h.state_mut().control("engine.execute", &json!({"command": "ai.explain", "params": {"index": 0}}));
+    assert_eq!(sent(&prompts), 1, "a kind switched off was sent");
+    // Another model: Settings › AI asks to agree again.
+    h.state_mut().control("engine.execute", &json!({"command": "ai.model", "params": {"model": "large"}}));
+    ui_cmd::run(h.state_mut(), "app.settings");
+    h.run();
+    h.get_by_label("AI").click();
+    h.run();
+    assert!(h.query_by_label("Agree to Send").is_some(), "another model did not ask to agree again");
+    h.get_by_label("Agree to Send").click();
+    h.run();
+    assert!(h.query_by_label("Agree to Send").is_none(), "agreeing did not hold");
     Ok(())
 }
 
@@ -225,7 +238,7 @@ impl Provider for Says {
 }
 
 /// The editor on `text`, connected to a model that answers `reply`; with `complete`, the next
-/// words are suggested as one types (and the user agreed to it).
+/// words are suggested as one types.
 pub(crate) fn editor(
     reply: &'static str,
     text: &str,
@@ -238,9 +251,6 @@ pub(crate) fn editor(
     s.set_ai_connect(Arc::new(move |_: &Target| Ok(Box::new(Says(reply, sent.clone())) as Box<dyn Provider>)));
     s.execute("file.write", &json!({"path": "main.tex", "text": text}))?;
     s.execute("ai.connect", &json!({"endpoint": "https://api.example.com/v1", "token": TOKEN, "model": "small"}))?;
-    if complete {
-        s.execute("ai.consent", &json!({"request": "complete"}))?;
-    }
     let prefs =
         Prefs { auto_compile: false, layout: "editor".to_owned(), ai: s.ai_saved().0.clone(), ai_complete: complete, vim, ..Prefs::default() };
     Ok(Harness::builder()
@@ -250,7 +260,7 @@ pub(crate) fn editor(
 }
 
 #[test]
-fn rewrite_shorter_on_a_selection_asks_first_and_makes_a_suggestion_card() -> Result<(), String> {
+fn rewrite_shorter_on_a_selection_sends_at_once_without_a_dialog_and_makes_a_suggestion_card() -> Result<(), String> {
     let prompts = Arc::new(Mutex::new(Vec::new()));
     let text = "The quick brown fox jumps over the lazy dog again and again.\n";
     let mut h = editor("<<<TEXT\nThe fox jumps over the dog.\nTEXT>>>", text, &prompts, false, false)?;
@@ -266,10 +276,7 @@ fn rewrite_shorter_on_a_selection_asks_first_and_makes_a_suggestion_card() -> Re
     h.run();
     h.get_by_label("Shorter").click();
     h.run();
-    assert!(h.query_by_label_contains("https://api.example.com").is_some(), "the dialog does not say where the selection goes");
-    assert_eq!(sent(&prompts), 0, "the selection was sent before the user agreed");
-    h.get_by_label("Agree and Rewrite").click();
-    h.run();
+    assert_eq!(dialog(&mut h), json!(null), "a dialog opened to ask first");
     assert!(settle(&mut h), "the rewrite did not arrive");
     assert_eq!(sent(&prompts), 1);
     let file =
@@ -303,9 +310,6 @@ fn ask_ai_to_change_this_sends_the_instruction_and_the_change_is_a_suggestion() 
     h.get_by_label("How to change the selection").type_text("Flesh out these bullet points");
     h.run();
     h.key_press(egui::Key::Enter);
-    h.run();
-    assert_eq!(sent(&prompts), 0, "sent before the user agreed");
-    h.get_by_label("Agree and Send").click();
     h.run();
     assert!(settle(&mut h), "the change did not arrive");
     assert!(prompts.lock().map(|p| p[0].contains("Flesh out these bullet points")).unwrap_or(false), "the instruction was not sent");

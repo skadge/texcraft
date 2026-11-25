@@ -8,9 +8,13 @@
 //! token is never in the saved settings: they hold the connection's `SecretRef`, the token is in
 //! [`Secrets`] (the system's keychain on the desktop, this session only elsewhere).
 //!
-//! Nothing is sent before the user agreed to that kind of request for that connection: the first
-//! explanation shows what it sends (the build message, its help, the source lines around it, the
-//! preamble when the error is in it) and where. A fix the model proposes becomes a suggested
+//! Nothing is sent before the user agreed to that kind of request for that connection and model.
+//! The person agrees once, when connecting the model in Settings › AI, which lists each kind, what
+//! it sends and where, each with a switch: connecting agrees to the kinds switched on
+//! ([`KINDS`]). A kind switched off is refused, saying where to switch it on; a new address or
+//! another model asks again. Agents can switch kinds off, never on, and cannot agree. Each kind's
+//! instructions are the app's own unless the user changed them ([`prompts`]). A fix the model
+//! proposes becomes a suggested
 //! change by "AI (<model>)", never an edit. A project can turn AI off for itself
 //! (`.texcraft/ai.json`).
 //!
@@ -18,7 +22,7 @@
 //! comes back as a suggested change on exactly that selection, and only when it kept the
 //! selection's LaTeX ([`texcraft_latex::keep`]); a paragraph being typed can be continued, the
 //! continuation shown after the caret until it is accepted or typed over. Each is its own kind of
-//! request, agreed to on its own.
+//! request, with its own switch.
 //!
 //! AI4 ([`make`]): a table, an equation, a TikZ diagram or a figure made from a description,
 //! typeset after the preamble before it is offered and inserted as a suggested change; a BibTeX
@@ -28,6 +32,7 @@
 
 mod ask;
 mod make;
+pub mod prompts;
 mod write;
 
 use std::path::PathBuf;
@@ -97,6 +102,12 @@ pub struct Saved {
     pub connection: Option<Connection>,
     pub model: Option<String>,
     pub consent: ConsentLedger,
+    /// The kinds of request the user switched off (as [`REQUESTS`] names them).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub off: Vec<String>,
+    /// The prompts the user changed, by kind; a kind not here sends the app's own.
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub prompts: std::collections::BTreeMap<String, String>,
 }
 
 /// Where tokens are kept. The desktop uses the system's keychain ([`Keychain`]); the browser, the
@@ -181,6 +192,9 @@ pub fn openai_compatible() -> Connect {
     Arc::new(|_: &Target| Err(UNAVAILABLE.to_owned()))
 }
 
+/// Why a request cannot be made before a model is connected.
+const OFF: &str = "AI is off: connect a model first (Settings › AI).";
+
 /// Why AI does not work in this build, if it does not.
 pub const UNAVAILABLE: &str =
     "AI is not available in the browser yet: the suite's AI layer cannot reach an endpoint from a web page. Use the desktop app.";
@@ -263,11 +277,6 @@ pub struct Context {
     pub preamble: Option<String>,
 }
 
-const INSTRUCTIONS: &str = "You help someone writing a LaTeX document understand a message from building it. \
-Explain in plain language, in a few sentences, what the message means and what in the source causes it. \
-If changing the source lines shown would fix it, end your answer with all of those lines as they should be, \
-between a line <<<FIX and a line FIX>>>, changing nothing else. If no change to them fixes it, leave the markers out.";
-
 impl Context {
     /// What explaining `d` sends, from `project`'s text.
     pub fn of(d: &Diagnostic, project: &Project) -> Self {
@@ -279,17 +288,22 @@ impl Context {
         Self { message: d.message.clone(), origin: d.origin.clone(), help: d.help.clone(), file: d.file.clone(), line: d.line, lines, preamble }
     }
 
-    /// The whole text sent to the model.
-    pub fn prompt(&self) -> String {
-        let mut out = format!("{INSTRUCTIONS}\n\n{}\n", self.message_part());
-        if let Some((from, text)) = &self.lines {
-            let to = from + text.lines().count().saturating_sub(1) as u32;
-            out.push_str(&format!("\nSource lines {from} to {to}:\n<<<SOURCE\n{text}\nSOURCE>>>\n"));
-        }
-        if let Some(preamble) = &self.preamble {
-            out.push_str(&format!("\nThe main document's preamble:\n<<<PREAMBLE\n{preamble}\nPREAMBLE>>>\n"));
-        }
-        out
+    /// Its parts, for its prompt ([`prompts`]).
+    fn parts(&self) -> prompts::Parts {
+        let source = match &self.lines {
+            Some((from, text)) => {
+                let to = from + text.lines().count().saturating_sub(1) as u32;
+                format!("Source lines {from} to {to}:\n<<<SOURCE\n{text}\nSOURCE>>>")
+            }
+            None => String::new(),
+        };
+        let preamble = self.preamble.as_ref().map(|p| format!("The main document's preamble:\n<<<PREAMBLE\n{p}\nPREAMBLE>>>")).unwrap_or_default();
+        vec![("message", self.message_part(), None), ("source", source, Some(InputRole::Context)), ("preamble", preamble, Some(InputRole::Context))]
+    }
+
+    /// The whole text sent to the model, with `template` (the explanation's prompt).
+    pub fn prompt(&self, template: &str) -> String {
+        prompts::prompt(template, &self.parts())
     }
 
     /// The message, where it comes from, its help and its place.
@@ -310,20 +324,12 @@ impl Context {
     }
 
     /// The request as the suite's consent and log see it: its parts by role and size.
-    fn request(&self) -> Result<Request> {
-        let capability = CapabilityId::parse(EXPLAIN).map_err(|e| e.to_string())?;
-        let mut request = Request::new(capability).with_input(InputRole::Prompt, Payload::text(format!("{INSTRUCTIONS}\n\n{}", self.message_part())));
-        if let Some((_, text)) = &self.lines {
-            request = request.with_input(InputRole::Context, Payload::text(text.clone()));
-        }
-        if let Some(preamble) = &self.preamble {
-            request = request.with_input(InputRole::Context, Payload::text(preamble.clone()));
-        }
-        Ok(request)
+    fn request(&self, template: &str) -> Result<Request> {
+        prompts::request(EXPLAIN, template, &self.parts())
     }
 
-    /// For automation and the consent dialog: each part and the whole text.
-    fn describe(&self) -> Value {
+    /// For automation: each part and the whole text.
+    fn describe(&self, template: &str) -> Value {
         json!({
             "message": self.message,
             "origin": self.origin,
@@ -332,7 +338,7 @@ impl Context {
             "line": self.line,
             "lines": self.lines.as_ref().map(|(from, text)| json!({"from": from, "to": from + text.lines().count().saturating_sub(1) as u32, "text": text})),
             "preamble": self.preamble,
-            "prompt": self.prompt(),
+            "prompt": self.prompt(template),
         })
     }
 }
@@ -459,6 +465,8 @@ pub(crate) struct State {
     project_off: Option<(Option<PathBuf>, bool)>,
     /// Goes up when `saved` changes, so the window keeps it in the preferences.
     revision: u64,
+    /// The last request sent the app's prompt because the user's lacked a placeholder: why.
+    prompt_note: Option<String>,
     runs: u64,
 }
 
@@ -483,6 +491,7 @@ impl Default for State {
             reviewed: None,
             project_off: None,
             revision: 0,
+            prompt_note: None,
             runs: 0,
         }
     }
@@ -508,6 +517,34 @@ fn destination(c: &Connection) -> String {
 
 /// The kinds of request, as `ai.disclose` and `ai.consent` name them.
 pub const REQUESTS: [&str; 8] = ["explain", "rewrite", "instruct", "complete", "make", "reference", "ask", "review"];
+
+/// Each kind of request, as [`REQUESTS`] names it: what Settings › AI calls it, and what it sends.
+pub const KINDS: [(&str, &str, &str); 8] = [
+    ("explain", "Explain", "the build message, its help and the source lines around it (and the preamble when the message is in it)"),
+    ("rewrite", "Rewrite", "the selected text and a few lines around it"),
+    ("instruct", "Change as asked", "your instruction, the selected text and a few lines around it"),
+    ("complete", "Next words", "the text before the caret in the current paragraph, after each pause in typing"),
+    ("make", "Make LaTeX", "your description, the main document's preamble and, for a figure, the names of the project's images"),
+    ("reference", "Draft a reference", "the title or DOI you type, and nothing of the project"),
+    ("ask", "Ask", "your question and the open file, or every text file of the project when you choose it"),
+    ("review", "Review", "the section at the caret"),
+];
+
+/// What a kind of request's label is in [`KINDS`].
+fn label_of(name: &str) -> &'static str {
+    KINDS.iter().find(|(n, ..)| *n == name).map_or("This request", |(_, l, _)| *l)
+}
+
+/// Whether a kind of request may be sent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Permit {
+    /// Switched on and agreed to (or the model is on this computer).
+    On,
+    /// The user switched it off.
+    Off,
+    /// Switched on, but not agreed to for this address and model: connecting (or Agree) does it.
+    NotAgreed,
+}
 
 /// The name `ai.disclose` and `ai.consent` give a kind of request (its capability id).
 fn request_name(capability: &str) -> Option<&'static str> {
@@ -643,6 +680,17 @@ impl Session {
             "models": a.models,
             "project_off": project_off,
             "agreed": c.map(|c| agreed(&a.saved.consent, c)).unwrap_or_default(),
+            "off": a.saved.off,
+            "kinds": KINDS.iter().map(|(name, label, sends)| json!({
+                "request": name,
+                "label": label,
+                "sends": sends,
+                "state": match self.ai_permit(name) {
+                    Permit::On => "on",
+                    Permit::Off => "off",
+                    Permit::NotAgreed => "not agreed",
+                },
+            })).collect::<Vec<_>>(),
             "busy": a.task.as_ref().map(|t| match t.work {
                 Work::Models { .. } => "models",
                 Work::Explain { .. } => "explain",
@@ -659,7 +707,10 @@ impl Session {
     }
 
     /// `ai.connect`: the endpoint, the token (absent: keep the saved one; empty: none) and the model.
-    pub(crate) fn ai_connect(&mut self, endpoint: &str, token: Option<&str>, model: Option<&str>) -> Result<Value> {
+    /// The `person` connecting agrees to send the kinds of request switched on to it; an agent's
+    /// connection is agreed to by no one, and a new address or another model voids what was.
+    pub(crate) fn ai_connect(&mut self, endpoint: &str, token: Option<&str>, model: Option<&str>, person: bool) -> Result<Value> {
+        let old_model = self.ai.saved.model.clone();
         let existing: Vec<Connection> = self.ai.saved.connection.iter().cloned().collect();
         let mut draft = existing.first().map(ConnectionDraft::from_connection).unwrap_or_default();
         let moved = draft.endpoint.trim() != endpoint.trim();
@@ -702,9 +753,20 @@ impl Session {
         if moved {
             self.ai.models.clear();
         }
+        let to = destination(&prepared.connection);
+        let id = prepared.connection.id.clone();
         self.ai.saved.connection = Some(prepared.connection);
+        let app = app()?;
+        // What was agreed for another address is void.
+        self.ai.saved.consent.records.retain(|r| !(r.app == app && r.connection == id && r.destination != to));
         if let Some(m) = model.map(str::trim).filter(|m| !m.is_empty()) {
             self.ai.saved.model = Some(m.to_owned());
+        }
+        if old_model.is_some() && self.ai.saved.model != old_model {
+            self.ai.saved.consent.revoke(&app, &id);
+        }
+        if person {
+            self.agree_to_all()?;
         }
         self.changed_ai();
         Ok(self.ai_status())
@@ -716,9 +778,16 @@ impl Session {
         if model.is_empty() || model.len() > 256 || model.chars().any(char::is_control) {
             return Err("Name a model: one line, as the endpoint lists it.".to_owned());
         }
+        // Another model is another recipient: asked again. The first one chosen completes the
+        // connection the person agreed to.
+        let other = self.ai.saved.model.as_deref().is_some_and(|m| m != model);
         self.ai.saved.model = Some(model.to_owned());
+        if other && let Some(c) = &self.ai.saved.connection {
+            let id = c.id.clone();
+            self.ai.saved.consent.revoke(&app()?, &id);
+        }
         self.changed_ai();
-        Ok(json!({"model": model}))
+        Ok(json!({"model": model, "agree_again": other}))
     }
 
     /// `ai.forget`: the connection, its token and the agreements given for it.
@@ -776,7 +845,7 @@ impl Session {
 
     /// The disclosure of a request and whether the user must still agree to it.
     fn disclosure(&self, request: &Request) -> Result<(Disclosure, bool)> {
-        let c = self.ai.saved.connection.as_ref().ok_or("AI is off: connect a model first (Settings › AI).")?;
+        let c = self.ai.saved.connection.as_ref().ok_or(OFF)?;
         let d = Disclosure::for_request(&app()?, c, request);
         let now = u64::try_from(chrono::Utc::now().timestamp()).unwrap_or_default();
         let ask = self.ai.saved.consent.needs_consent(&d, now);
@@ -788,38 +857,41 @@ impl Session {
     pub(crate) fn ai_disclose(&mut self, p: &Value) -> Result<Value> {
         self.ai_ready()?;
         let kind = capability(p.get("request").and_then(Value::as_str).unwrap_or("explain"))?;
+        let name = request_name(kind).unwrap_or("explain");
+        let (template, note) = self.ai_template(name);
+        let t = template.as_str();
         let (request, sends) = match kind {
             REWRITE | INSTRUCT => {
                 let passage = self.ai_passage(p)?;
                 if (kind == INSTRUCT) != matches!(passage.how, How::Instruct(_)) {
                     return Err("A change as asked takes an `instruction`; a rewrite takes `how`.".to_owned());
                 }
-                (passage.request()?, passage.describe())
+                (passage.request(t)?, passage.describe(t))
             }
             COMPLETE => {
                 let paragraph = if p.get("path").is_some() { self.ai_paragraph(p)? } else { Paragraph::example() };
-                (paragraph.request()?, paragraph.describe())
+                (paragraph.request(t)?, paragraph.describe(t))
             }
             MAKE => {
                 let making = self.ai_making(p)?;
-                (making.request()?, making.describe())
+                (making.request(t)?, making.describe(t))
             }
             REFERENCE => {
                 let lookup = self.ai_lookup(p)?;
-                (lookup.request()?, lookup.describe())
+                (lookup.request(t)?, lookup.describe(t))
             }
             ASK => {
                 let question = self.ai_question(p)?;
-                (question.request()?, question.describe())
+                (question.request(t)?, question.describe(t))
             }
             REVIEW => {
                 let section = self.ai_section(p)?;
-                (section.request()?, section.describe())
+                (section.request(t)?, section.describe(t))
             }
             _ => {
                 let d = self.ai_diagnostic(p)?;
                 let context = Context::of(&d, &self.project);
-                (context.request()?, context.describe())
+                (context.request(t)?, context.describe(t))
             }
         };
         let (disclosure, ask) = self.disclosure(&request)?;
@@ -830,20 +902,174 @@ impl Session {
             "local": disclosure.locality == Locality::Local,
             "model": self.ai.saved.model,
             "needs_consent": ask,
+            "switched_off": self.ai_permit(name) == Permit::Off,
+            "prompt_note": note,
             "bytes": bytes,
             "sends": sends,
         }))
     }
 
-    /// `ai.consent`: the user agrees to send one kind of request (explanations, rewrites,
-    /// continuations) to the connection.
-    pub(crate) fn ai_consent(&mut self, request: &str) -> Result<Value> {
+    /// `ai.consent`: the person agrees to send one kind of request (and switches it on), or
+    /// without `request` every kind switched on, to the connection and its model.
+    pub(crate) fn ai_consent(&mut self, request: Option<&str>) -> Result<Value> {
+        let Some(request) = request else {
+            let to = self.agree_to_all()?;
+            self.changed_ai();
+            let c = self.ai.saved.connection.as_ref().ok_or(OFF)?;
+            return Ok(json!({"agreed": agreed(&self.ai.saved.consent, c), "destination": to}));
+        };
         let kind = capability(request)?;
-        let probe = Request::new(CapabilityId::parse(kind).map_err(|e| e.to_string())?).with_input(InputRole::Prompt, Payload::text(""));
+        let name = request_name(kind).unwrap_or_default();
+        self.ai.saved.off.retain(|o| o != name);
+        let to = self.grant(kind)?;
+        self.changed_ai();
+        Ok(json!({"agreed": kind, "destination": to}))
+    }
+
+    /// Records the person's agreement to send kind `capability` to the connection: where it goes.
+    fn grant(&mut self, capability: &str) -> Result<String> {
+        let probe = Request::new(CapabilityId::parse(capability).map_err(|e| e.to_string())?).with_input(InputRole::Prompt, Payload::text(""));
         let (d, _) = self.disclosure(&probe)?;
         self.ai.saved.consent.grant(&d);
+        Ok(d.destination)
+    }
+
+    /// Agrees to every kind of request switched on, for the connection: where they go.
+    fn agree_to_all(&mut self) -> Result<String> {
+        let mut to = String::new();
+        for name in REQUESTS {
+            if !self.ai.saved.off.iter().any(|o| o == name) {
+                to = self.grant(capability(name)?)?;
+            }
+        }
+        Ok(to)
+    }
+
+    /// Whether kind `name` (as [`REQUESTS`] names it) may be sent now: switched on and agreed to.
+    pub fn ai_permit(&self, name: &str) -> Permit {
+        if self.ai.saved.off.iter().any(|o| o == name) {
+            return Permit::Off;
+        }
+        let Some(c) = &self.ai.saved.connection else { return Permit::NotAgreed };
+        if c.locality == Locality::Local || agreed(&self.ai.saved.consent, c).contains(&name) { Permit::On } else { Permit::NotAgreed }
+    }
+
+    /// Why kind `name` may not be sent, if it may not.
+    pub(crate) fn ai_permitted(&self, name: &str) -> Result<()> {
+        let label = label_of(name);
+        match self.ai_permit(name) {
+            Permit::On => Ok(()),
+            Permit::Off => Err(format!("{label} is switched off: switch it on in Settings › AI to send it.")),
+            Permit::NotAgreed => {
+                let to = self.ai.saved.connection.as_ref().map(destination).unwrap_or_default();
+                Err(format!(
+                    "{label} is not agreed to for {to} with this model: agree in Settings › AI (connecting agrees to the kinds switched on; agents cannot agree for the person)."
+                ))
+            }
+        }
+    }
+
+    /// `ai.switch`: switches kind `request` on or off. Off withdraws its agreement too; on (the
+    /// person's only) agrees to it for the connection, when there is one.
+    pub(crate) fn ai_switch(&mut self, request: &str, on: bool, person: bool) -> Result<Value> {
+        let kind = capability(request)?;
+        let name = request_name(kind).unwrap_or_default();
+        if on {
+            if !person {
+                return Err("Switching a kind of AI request on agrees to send text for the person: only they can, in Settings › AI.".to_owned());
+            }
+            self.ai.saved.off.retain(|o| o != name);
+            if self.ai.saved.connection.is_some() {
+                self.grant(kind)?;
+            }
+        } else {
+            if !self.ai.saved.off.iter().any(|o| o == name) {
+                self.ai.saved.off.push(name.to_owned());
+            }
+            let app = app()?;
+            self.ai.saved.consent.records.retain(|r| !(r.app == app && r.capability.as_ref().is_some_and(|k| k.as_str() == kind)));
+            if name == "complete" {
+                self.ai_cancel(true);
+            }
+        }
         self.changed_ai();
-        Ok(json!({"agreed": kind, "destination": d.destination}))
+        let state = match self.ai_permit(name) {
+            Permit::On => "on",
+            Permit::Off => "off",
+            Permit::NotAgreed => "not agreed",
+        };
+        Ok(json!({"request": name, "state": state}))
+    }
+
+    /// The prompt kind `name` sends: the user's when they changed it and it has its required
+    /// placeholders, else the app's own, with why when the user's was set aside.
+    pub(crate) fn ai_template(&self, name: &str) -> (String, Option<String>) {
+        let Some(spec) = prompts::spec(name) else { return (String::new(), None) };
+        match self.ai.saved.prompts.get(name) {
+            None => (spec.default.to_owned(), None),
+            Some(own) => {
+                let missing = prompts::missing(spec, own);
+                if missing.is_empty() {
+                    (own.clone(), None)
+                } else {
+                    let lacks = missing.iter().map(|m| format!("{{{m}}}")).collect::<Vec<_>>().join(", ");
+                    let note =
+                        format!("Your prompt for {} lacks {lacks}, so the app's own was sent: fix it in Settings › AI › Prompts.", label_of(name));
+                    (spec.default.to_owned(), Some(note))
+                }
+            }
+        }
+    }
+
+    /// `ai.prompts`: each kind's prompt, its default, its placeholders and what is wrong with it.
+    pub(crate) fn ai_prompts(&self) -> Value {
+        let list: Vec<Value> = prompts::PROMPTS
+            .iter()
+            .map(|spec| {
+                let own = self.ai.saved.prompts.get(spec.kind);
+                let missing = own.map(|o| prompts::missing(spec, o)).unwrap_or_default();
+                json!({
+                    "request": spec.kind,
+                    "label": label_of(spec.kind),
+                    "default": spec.default,
+                    "current": own.map_or(spec.default, String::as_str),
+                    "changed": own.is_some(),
+                    "missing": missing,
+                    "used": if missing.is_empty() { "current" } else { "default" },
+                    "placeholders": spec.placeholders.iter().map(|p| json!({"name": p.name, "required": p.required, "means": p.means})).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        json!({"prompts": list})
+    }
+
+    /// `ai.set_prompt`: the person's prompt for kind `request`; none (or the default's text)
+    /// resets it. One lacking a required placeholder is kept, to be fixed, but not used.
+    pub(crate) fn ai_set_prompt(&mut self, request: &str, text: Option<&str>, person: bool) -> Result<Value> {
+        let name = request_name(capability(request)?).unwrap_or_default();
+        let spec = prompts::spec(name).ok_or_else(|| format!("There is no prompt for `{request}`."))?;
+        match text.filter(|t| *t != spec.default) {
+            None => {
+                self.ai.saved.prompts.remove(name);
+            }
+            Some(t) => {
+                if !person {
+                    return Err("A prompt is the person's to change, in Settings › AI › Prompts: an agent session can only reset one.".to_owned());
+                }
+                if t.chars().count() > prompts::MAX_PROMPT_CHARS {
+                    return Err(format!("A prompt is at most {} characters.", prompts::MAX_PROMPT_CHARS));
+                }
+                self.ai.saved.prompts.insert(name.to_owned(), t.to_owned());
+            }
+        }
+        self.changed_ai();
+        let missing = self.ai.saved.prompts.get(name).map(|o| prompts::missing(spec, o)).unwrap_or_default();
+        Ok(json!({"request": name, "changed": self.ai.saved.prompts.contains_key(name), "missing": missing}))
+    }
+
+    /// Takes the note about the last request's prompt: the user's was set aside for the app's own.
+    pub(crate) fn ai_take_prompt_note(&mut self) -> Option<String> {
+        self.ai.prompt_note.take()
     }
 
     /// `ai.revoke`: withdraws the agreement to one kind of request (`request`), or to all of them,
@@ -903,14 +1129,10 @@ impl Session {
         self.ai.saved.model.clone().ok_or("Choose a model first (Settings › AI).")?;
         let d = self.ai_diagnostic(p)?;
         let context = Context::of(&d, &self.project);
-        let preamble = context.preamble.is_some();
         let opts = craft_ai::GenOpts { max_tokens: 1200, temperature: 0.2 };
-        let (model, run, answer) = self.begin(&context.request()?, ("explain", "Explain"), context.prompt(), opts, Answer::Text, |to| {
-            format!(
-                "Explaining sends the message, the source lines around it{} to {to}. Agree to it first (the window asks; agents: ai.disclose shows it, ai.consent agrees).",
-                if preamble { " and the preamble" } else { "" },
-            )
-        })?;
+        let (template, note) = self.ai_template("explain");
+        let (model, run, answer) = self.begin(&context.request(&template)?, ("explain", "Explain"), context.prompt(&template), opts, Answer::Text)?;
+        self.ai.prompt_note = note;
         let key = Key::of(&d);
         self.set_explanation(key.clone(), Explanation::Running);
         self.ai.task = Some(Task {
@@ -973,8 +1195,8 @@ impl Session {
         true
     }
 
-    /// Starts `request` on the connection, `prompt` being its whole text: refused, with `ask`'s
-    /// message, while the user has not agreed to its kind; logged (its size and destination,
+    /// Starts `request` on the connection, `prompt` being its whole text: refused while its kind is
+    /// switched off or not agreed to; logged (its size and destination,
     /// never its text); sent from its own thread, where `after` makes the answer of its text. A
     /// continuation being asked for is dropped first. Gives the model and the run's id.
     fn begin(
@@ -984,12 +1206,14 @@ impl Session {
         prompt: String,
         opts: craft_ai::GenOpts,
         after: impl FnOnce(String) -> Answer + Send + 'static,
-        ask: impl FnOnce(&str) -> String,
     ) -> Result<(String, String, Pending)> {
         let model = self.ai.saved.model.clone().ok_or("Choose a model first (Settings › AI).")?;
+        let name = request_name(request.capability.as_str()).unwrap_or("explain");
+        self.ai_permitted(name)?;
         let (disclosure, needs) = self.disclosure(request)?;
         if needs {
-            return Err(ask(&disclosure.destination));
+            // The ledger and the switches disagree: never send on doubt.
+            return Err(format!("{} is not agreed to for {}: agree in Settings › AI.", label_of(name), disclosure.destination));
         }
         let c = self.ai.saved.connection.clone().ok_or("AI is off: connect a model first (Settings › AI).")?;
         let token = self.token(&c)?;
