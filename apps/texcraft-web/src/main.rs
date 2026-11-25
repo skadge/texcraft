@@ -365,6 +365,25 @@ mod web {
         (page, Some(params.into()))
     }
 
+    /// The page's query when it is a link that proposes a server (`?gitlab=…&client_id=…`,
+    /// docs/forges.md); it is taken out of the address bar, so a reload does not ask again.
+    fn server_link() -> Option<String> {
+        let window = web_sys::window()?;
+        let location = window.location();
+        let search = location.search().ok()?;
+        let pairs = texcraft_engine::forge::oauth::parse_query(&search);
+        if !pairs.iter().any(|(k, _)| k == "gitlab" || k == "github") {
+            return None;
+        }
+        let path = location.pathname().unwrap_or_else(|_| "/".to_owned());
+        if let Ok(history) = window.history()
+            && let Err(e) = history.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&path))
+        {
+            log::warn!("the server link could not be taken out of the address: {e:?}");
+        }
+        Some(search)
+    }
+
     /// The engine worker's script, made by Trunk (`index.html`), under its plain name.
     const WORKER: &str = "engine-worker_loader.js";
 
@@ -394,6 +413,7 @@ mod web {
             };
             let mut session = texcraft_engine::Session::in_browser(&worker_url());
             let (page, returned) = sign_in_return();
+            let link = if returned.is_none() { server_link() } else { None };
             session.set_forge_secrets(std::sync::Arc::new(TabStorage));
             session.set_forge_redirect(&page);
             let errors = Errors::default();
@@ -430,6 +450,9 @@ mod web {
             app.show_start_page();
             if let Some(params) = returned {
                 app.forge_sign_in_returned(params);
+            }
+            if let Some(query) = link {
+                app.forge_propose_server(&query);
             }
             let chosen = Chosen::default();
             let repaint = Repaint::default();

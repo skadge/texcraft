@@ -136,6 +136,8 @@ const USAGE: &str = "usage: texcraft [--control [PORT]] [FOLDER | FILE]
 
   FOLDER            open the project in this folder
   FILE              open the project in the file's folder, showing the file
+  LINK              a link that proposes a GitLab or GitHub Enterprise server to sign in to
+                    (https://…?gitlab=…&client_id=…): TeXCraft asks before adding it
   --control [PORT]  start the control channel for agents and scripts on PORT (default: the first
                     free port from 7841); see docs/control-protocol.md. Also TEXCRAFT_CONTROL_PORT.
   --version         print the version";
@@ -177,6 +179,54 @@ fn parse_args() -> Result<Args, String> {
     Ok(args)
 }
 
+/// Whether `arg` is a link that proposes a server (docs/forges.md): its query, if so.
+fn server_link(arg: &str) -> Option<&str> {
+    let (_, query) = arg.strip_prefix("https://").or_else(|| arg.strip_prefix("http://"))?.split_once('?')?;
+    let pairs = texcraft_engine::forge::oauth::parse_query(query);
+    pairs.iter().any(|(k, _)| k == "gitlab" || k == "github").then_some(query)
+}
+
+/// The servers an organisation provides (docs/forges.md, "Self-managed servers"): the
+/// `texcraft-forges.toml` of the system-wide folder (`/etc/texcraft`, `/Library/Application
+/// Support/TeXCraft`, `%ProgramData%\TeXCraft`), then of the preferences' folder; the first to
+/// list a server wins. What cannot be read is said in Settings › Accounts.
+fn provided_servers(config: Option<&std::path::Path>) -> (Vec<texcraft_engine::forge::servers::Server>, Vec<String>) {
+    use texcraft_engine::forge::servers;
+    let mut dirs: Vec<std::path::PathBuf> = Vec::new();
+    #[cfg(target_os = "macos")]
+    dirs.push("/Library/Application Support/TeXCraft".into());
+    #[cfg(all(unix, not(target_os = "macos")))]
+    dirs.push("/etc/texcraft".into());
+    #[cfg(windows)]
+    if let Some(data) = std::env::var_os("ProgramData") {
+        dirs.push(std::path::PathBuf::from(data).join("TeXCraft"));
+    }
+    dirs.extend(config.map(std::path::Path::to_path_buf));
+    let (mut found, mut problems) = (Vec::<servers::Server>::new(), Vec::new());
+    for dir in dirs {
+        let file = dir.join(servers::CONFIG_FILE);
+        match std::fs::read_to_string(&file) {
+            Ok(text) => match servers::parse_config(&text) {
+                Ok((listed, left_out)) => {
+                    for server in listed {
+                        if !found.iter().any(|s| s.instance == server.instance) {
+                            found.push(server);
+                        }
+                    }
+                    problems.extend(left_out.into_iter().map(|p| format!("{}: {p}", file.display())));
+                }
+                Err(e) => problems.push(format!("{}: {e}", file.display())),
+            },
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => problems.push(format!("{}: {e}", file.display())),
+        }
+    }
+    for problem in &problems {
+        log::warn!("the organisation's servers: {problem}");
+    }
+    (found, problems)
+}
+
 fn main() -> std::process::ExitCode {
     // Started again as the build worker (retex's `worker`): run that, and nothing of the window.
     if let Some(code) = texcraft_compile::worker_entry() {
@@ -213,6 +263,8 @@ fn run() -> eframe::Result {
     session.set_ai_secrets(Arc::new(texcraft_engine::ai::Keychain));
     // Sign-ins to GitLab and GitHub too, so a restart stays signed in (docs/forges.md, step 4).
     session.set_forge_secrets(Arc::new(texcraft_engine::ai::Keychain));
+    let (provided, problems) = provided_servers(settings.dir());
+    session.set_forge_provided_servers(provided, problems);
     if let Some(data) = dirs::data_dir() {
         session.set_template_store(data.join("TeXCraft").join("templates"));
     }
@@ -224,9 +276,13 @@ fn run() -> eframe::Result {
             app.set_thumbnail(thumbnail);
         }
     }
-    match &args.folder {
-        Some(path) => app.open_path(path),
-        None => app.show_start_page(),
+    match (&args.folder, args.folder.as_deref().and_then(server_link)) {
+        (_, Some(query)) => {
+            app.show_start_page();
+            app.forge_propose_server(query);
+        }
+        (Some(path), None) => app.open_path(path),
+        (None, None) => app.show_start_page(),
     }
     // Without the system's title bar, the top bar holds the window's controls.
     app.set_desktop_window(true);
