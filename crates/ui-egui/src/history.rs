@@ -208,7 +208,8 @@ fn change_icon(change: &str) -> &'static str {
 /// Why the project has no history to show (AGENTS.md rule 15).
 fn no_history(session: &texcraft_engine::Session) -> &'static str {
     if session.library().is_some() {
-        tl!("A project's history is not kept in the browser yet.")
+        // A project of the browser's library: its history starts at its first save.
+        tl!("The project has no history yet: save it to start one.")
     } else if session.dir().is_none() {
         tl!("The project has no history yet: save it in a folder to start one.")
     } else {

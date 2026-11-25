@@ -87,3 +87,30 @@ fn without_a_folder_the_history_says_why_it_is_empty() {
     harness.run();
     assert!(harness.query_by_label_contains("save it in a folder").is_some(), "no reason is given");
 }
+
+fn in_library() -> Session {
+    let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    s.use_library(texcraft_engine::library::Library::default());
+    s
+}
+
+#[test]
+fn a_browser_project_lists_each_save_as_a_version() {
+    let mut s = in_library();
+    s.execute("file.write", &json!({"path": "main.tex", "text": "first line\n"})).unwrap();
+    s.execute("project.save_as", &json!({"path": "Paper"})).unwrap();
+    s.execute("file.write", &json!({"path": "main.tex", "text": "second line\n"})).unwrap();
+    s.execute("project.save", &json!({})).unwrap();
+    let mut harness = harness(s);
+    ui_cmd::run(harness.state_mut(), "view.side.history");
+    harness.run();
+    assert_eq!(harness.query_all_by_label_contains("Saved with TeXCraft").count(), 2, "each save is a version");
+}
+
+#[test]
+fn an_untitled_browser_project_says_its_history_starts_at_its_first_save() {
+    let mut harness = harness(in_library());
+    ui_cmd::run(harness.state_mut(), "view.side.history");
+    harness.run();
+    assert!(harness.query_by_label_contains("save it to start one").is_some(), "no reason is given");
+}
