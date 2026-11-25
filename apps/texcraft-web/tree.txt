@@ -63,3 +63,37 @@ package pgfgantt minted luacode emoji fontawesome qrcode upquote environ
 package tabu ltablex threeparttablex outlines dirtree svg standalone
 package animate media9 multimedia beamerposter acronym nomencl
 package glossaries-extra datetime2 fmtcount xfrac
+
+# Bibliography styles: BibTeX reads them, and the documents above, typeset
+# without BibTeX, never record them (#4). The standard styles and the
+# publishers' (IEEE, Elsevier, ACM, Springer, APS/AIP, AMS, APA, Chicago,
+# Harvard, chemistry, astronomy, Nature, IOP, RSC, Cell, SAGE, AGU, PNAS,
+# OUP); a folder missing from the TeX installation is left out. About 3 MB,
+# fetched per folder only when a bibliography uses one.
+dir bibtex/bst/base
+dir bibtex/bst/ieeetran
+dir bibtex/bst/elsarticle
+dir bibtex/bst/natbib
+dir bibtex/bst/acmart
+dir bibtex/bst/llncs
+dir bibtex/bst/sn-jnl
+dir bibtex/bst/revtex
+dir bibtex/bst/amscls
+dir bibtex/bst/amsrefs
+dir bibtex/bst/apacite
+dir bibtex/bst/chicago
+dir bibtex/bst/harvard
+dir bibtex/bst/plainyr
+dir bibtex/bst/achemso
+dir bibtex/bst/aastex
+dir bibtex/bst/mnras
+dir bibtex/bst/nature
+dir bibtex/bst/iopart-num
+dir bibtex/bst/rsc
+dir bibtex/bst/cell
+dir bibtex/bst/sageep
+dir bibtex/bst/aguplus
+dir bibtex/bst/copernicus
+dir bibtex/bst/pnas2009
+dir bibtex/bst/oup-authoring-template
+dir bibtex/bst/biblatex
