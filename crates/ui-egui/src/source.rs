@@ -8,6 +8,10 @@
 //! - **Key bindings** are the standard ones, or Vim's ([`Vim`]) when the setting is on. In Vim
 //!   mode, Vim's Ctrl keys are taken from the input before the window's shortcuts see them
 //!   ([`SourceEditor::claim_keys`]); the others (Ctrl+S) still run the window's commands.
+//! - **Folding:** environments, sections and the preamble fold ([`texcraft_latex::fold`]) from
+//!   their gutter marker, the Fold commands or Vim's `z` keys. A folded region keeps its first line,
+//!   with a "…" chip, and its other lines take no room; folds follow edits through buffer marks,
+//!   and open when the caret lands inside or the region's structure breaks.
 //! - **Accessibility:** the editor is an editable multi-line text node with its value, caret and
 //!   selection, one text run per line. Escape leaves the editor in the standard bindings, and F6
 //!   moves between regions in both, so the keyboard is never trapped.
@@ -20,23 +24,45 @@ use std::sync::Arc;
 use craft_ui::ime::{Composer, Edit};
 use egui::text::{CCursor, LayoutJob, TextFormat};
 use egui::{Align2, Galley, Pos2, Rect, Sense, Vec2, pos2, vec2};
-use texcraft_buffer::{Buffer, EditKind, Selection, Transaction};
+use texcraft_buffer::{Bias, Buffer, EditKind, MarkId, Selection, Transaction};
 use texcraft_engine::Severity;
-use texcraft_vim::{Ctx, Effect, Key, Mode, Vim};
+use texcraft_latex::fold::{FoldKind, FoldRegion};
+use texcraft_vim::{Ctx, Effect, Fold, Key, Mode, Vim};
 
 use crate::icons;
 use crate::theme::Tokens;
 
-/// One file's text and where its caret is.
+/// One file's text, where its caret is, and what of it is folded.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Doc {
     pub buffer: Buffer,
     pub selection: Selection,
+    /// The folded regions: a mark at the start of each one's first line, which follows edits, and
+    /// what the region is. A fold whose region is no longer there (its structure broke) unfolds.
+    folds: Vec<(MarkId, FoldKind)>,
 }
 
 impl Doc {
     pub fn new(text: &str) -> Self {
-        Self { buffer: Buffer::new(text), selection: Selection::point(0) }
+        Self { buffer: Buffer::new(text), selection: Selection::point(0), folds: Vec::new() }
+    }
+}
+
+/// Whether a fold of `kind` still stands for `region`: the same environment, or a heading of the
+/// same level (its title may change), or the preamble.
+fn same_kind(fold: &FoldKind, region: &FoldKind) -> bool {
+    match (fold, region) {
+        (FoldKind::Section { level: a, .. }, FoldKind::Section { level: b, .. }) => a == b,
+        _ => fold == region,
+    }
+}
+
+/// What a region is, for its fold marker's name and the announcements.
+fn describe(kind: &FoldKind) -> String {
+    match kind {
+        FoldKind::Section { title, .. } => tl!("section {title}").replace("{title}", title),
+        FoldKind::Environment(name) => tl!("environment {name}").replace("{name}", name),
+        FoldKind::Preamble => tl!("the preamble").to_owned(),
     }
 }
 
@@ -89,6 +115,8 @@ pub(crate) struct Output {
     pub apply_fix: Option<texcraft_engine::Fix>,
     /// What was being dragged was let go over the text, at this position.
     pub dropped_at: Option<usize>,
+    /// Something to tell the user (and announce): a fold or an unfold.
+    pub announce: Option<String>,
     /// The text's response, for its context menu.
     pub response: Option<egui::Response>,
 }
@@ -212,6 +240,15 @@ pub(crate) struct SourceEditor {
     /// When the window was asked for the clipboard's text (Edit › Paste): the paste that comes
     /// back inserts it, even in Vim's Normal mode, where Ctrl+V's paste is Vim's own key.
     paste_asked: Option<f64>,
+    /// The text's foldable regions and the text version they are of.
+    regions: (Option<u64>, Vec<FoldRegion>),
+    /// The folded regions this frame, as lines (first, last), by their first line, with each
+    /// one's mark.
+    folded: Vec<(usize, usize, MarkId)>,
+    /// Per line: hidden in a fold.
+    hidden: Vec<bool>,
+    /// A fold or unfold to announce, for [`Output::announce`].
+    announce: Option<String>,
 }
 
 impl Default for SourceEditor {
@@ -246,6 +283,10 @@ impl Default for SourceEditor {
             shown: None,
             accept_drop: false,
             paste_asked: None,
+            regions: (None, Vec::new()),
+            folded: Vec::new(),
+            hidden: Vec::new(),
+            announce: None,
         }
     }
 }
@@ -332,6 +373,8 @@ impl SourceEditor {
     pub fn set_doc(&mut self, doc: Doc) {
         self.doc = doc;
         self.layout = Layout::default();
+        self.regions = (None, Vec::new());
+        self.resolve_folds();
         self.drag = None;
         self.want_x = None;
         if let Some(vim) = &mut self.vim {
@@ -419,6 +462,176 @@ impl SourceEditor {
         self.paste_asked = Some(now);
     }
 
+    // ----- Folding -----
+
+    /// The text's foldable regions, made again when the text changed.
+    pub fn regions(&mut self) -> &[FoldRegion] {
+        let version = self.doc.buffer.version();
+        if self.regions.0 != Some(version) {
+            self.regions = (Some(version), texcraft_latex::fold::regions(&self.doc.buffer.text()));
+        }
+        &self.regions.1
+    }
+
+    /// Finds each fold's region again after edits; a fold whose region is gone unfolds. Then marks
+    /// the lines the folds hide.
+    fn resolve_folds(&mut self) {
+        self.regions();
+        let (regions, buffer) = (&self.regions.1, &mut self.doc.buffer);
+        let mut folded = Vec::new();
+        let mut gone = Vec::new();
+        self.doc.folds.retain(|(mark, kind)| {
+            let line = buffer.mark(*mark).map(|p| buffer.char_to_line(p));
+            let region = line.and_then(|l| regions.iter().find(|r| r.start == l && same_kind(kind, &r.kind)));
+            match region {
+                Some(r) if !folded.iter().any(|(s, _, _)| *s == r.start) => {
+                    folded.push((r.start, r.end, *mark));
+                    true
+                }
+                _ => {
+                    gone.push(*mark);
+                    false
+                }
+            }
+        });
+        for mark in gone {
+            buffer.remove_mark(mark);
+        }
+        folded.sort_unstable_by_key(|(s, _, _)| *s);
+        let mut hidden = vec![false; buffer.len_lines()];
+        for (s, e, _) in &folded {
+            for h in hidden.iter_mut().take(e + 1).skip(s + 1) {
+                *h = true;
+            }
+        }
+        self.folded = folded;
+        self.hidden = hidden;
+    }
+
+    fn is_hidden(&self, line: usize) -> bool {
+        self.hidden.get(line).copied().unwrap_or(false)
+    }
+
+    /// The outermost fold that hides `line`.
+    fn fold_hiding(&self, line: usize) -> Option<(usize, usize, MarkId)> {
+        self.folded.iter().find(|(s, e, _)| *s < line && line <= *e).copied()
+    }
+
+    /// Whether the region that starts on `line` is folded.
+    pub fn is_folded(&self, line: usize) -> bool {
+        self.folded.iter().any(|(s, _, _)| *s == line)
+    }
+
+    fn unfold_mark(&mut self, mark: MarkId) {
+        self.doc.folds.retain(|(m, _)| *m != mark);
+        self.doc.buffer.remove_mark(mark);
+    }
+
+    /// Unfolds what hides the caret: a jump, a search or a motion landed inside a fold.
+    fn reveal_caret(&mut self) {
+        let line = self.doc.buffer.char_to_line(self.caret());
+        if !self.is_hidden(line) {
+            return;
+        }
+        while let Some((_, _, mark)) = self.fold_hiding(line) {
+            self.unfold_mark(mark);
+            self.resolve_folds();
+        }
+        self.reveal = true;
+    }
+
+    /// After folding: a caret inside a fold goes to its first line.
+    fn caret_out_of_folds(&mut self) {
+        let b = &self.doc.buffer;
+        let caret = self.caret();
+        let line = b.char_to_line(caret);
+        let Some((start, _, _)) = self.fold_hiding(line) else { return };
+        let col = caret - b.line_to_char(line);
+        let to = b.line_to_char(start) + col.min(b.line(start).chars().count());
+        self.doc.selection = Selection::point(to);
+        self.doc.buffer.seal();
+        self.vim_sync();
+        self.reveal = true;
+    }
+
+    /// Folds the region that starts on `line`.
+    fn fold_line(&mut self, line: usize) -> Option<String> {
+        if self.is_folded(line) {
+            return None;
+        }
+        let region = self.regions().iter().find(|r| r.start == line)?.clone();
+        let at = self.doc.buffer.line_to_char(line);
+        let mark = self.doc.buffer.add_mark(at, Bias::Right);
+        self.doc.folds.push((mark, region.kind.clone()));
+        self.resolve_folds();
+        self.caret_out_of_folds();
+        Some(fold_message(true, &region))
+    }
+
+    /// Unfolds the region that starts on `line`.
+    fn unfold_line(&mut self, line: usize) -> Option<String> {
+        let (s, e, mark) = self.folded.iter().find(|(s, _, _)| *s == line).copied()?;
+        let region = self.regions().iter().find(|r| r.start == s && r.end == e).cloned();
+        self.unfold_mark(mark);
+        self.resolve_folds();
+        Some(region.map_or_else(|| tl!("Unfolded").to_owned(), |r| fold_message(false, &r)))
+    }
+
+    /// Folds or unfolds the region that starts on `line` (its gutter marker, its "…" chip).
+    pub fn toggle_fold(&mut self, line: usize) -> Option<String> {
+        if self.is_folded(line) { self.unfold_line(line) } else { self.fold_line(line) }
+    }
+
+    /// Fold, Unfold, Fold All and Unfold All (and Vim's `zc`, `zo`, `za`, `zM`, `zR`): what to
+    /// announce, or why nothing changed.
+    pub fn fold(&mut self, action: Fold) -> String {
+        self.resolve_folds();
+        let line = self.doc.buffer.char_to_line(self.caret());
+        // The innermost region around the caret that is not folded yet.
+        let innermost_open = |me: &mut Self| {
+            let folded: Vec<usize> = me.folded.iter().map(|(s, _, _)| *s).collect();
+            me.regions().iter().filter(|r| r.start <= line && line <= r.end && !folded.contains(&r.start)).max_by_key(|r| r.start).map(|r| r.start)
+        };
+        let said = match action {
+            Fold::Close => innermost_open(self).and_then(|l| self.fold_line(l)),
+            Fold::Open => self.unfold_line(line),
+            Fold::Toggle if self.is_folded(line) => self.unfold_line(line),
+            Fold::Toggle => innermost_open(self).and_then(|l| self.fold_line(l)),
+            Fold::CloseAll => {
+                let starts: Vec<usize> = self.regions().iter().map(|r| r.start).collect();
+                let mut n = 0;
+                for start in starts {
+                    if !self.is_folded(start) {
+                        let at = self.doc.buffer.line_to_char(start);
+                        let kind = self.regions.1.iter().find(|r| r.start == start).map(|r| r.kind.clone());
+                        if let Some(kind) = kind {
+                            let mark = self.doc.buffer.add_mark(at, Bias::Right);
+                            self.doc.folds.push((mark, kind));
+                            n += 1;
+                        }
+                    }
+                }
+                self.resolve_folds();
+                self.caret_out_of_folds();
+                (n > 0).then(|| crate::i18n::trn(n, "Folded {n} region", "Folded {n} regions"))
+            }
+            Fold::OpenAll => {
+                let n = self.doc.folds.len();
+                for (mark, _) in std::mem::take(&mut self.doc.folds) {
+                    self.doc.buffer.remove_mark(mark);
+                }
+                self.resolve_folds();
+                (n > 0).then(|| crate::i18n::trn(n, "Unfolded {n} region", "Unfolded {n} regions"))
+            }
+        };
+        said.unwrap_or_else(|| match action {
+            Fold::Close | Fold::Toggle => tl!("There is nothing to fold at the caret.").to_owned(),
+            Fold::Open => tl!("There is no fold at the caret.").to_owned(),
+            Fold::CloseAll => tl!("There is nothing to fold in this file.").to_owned(),
+            Fold::OpenAll => tl!("Nothing in this file is folded.").to_owned(),
+        })
+    }
+
     fn lay_out(&mut self, ui: &egui::Ui, t: &Tokens, width: f32) {
         let version = self.doc.buffer.version();
         let theme = (t.text, t.code_font());
@@ -433,10 +646,13 @@ impl SourceEditor {
         let mut tops = Vec::with_capacity(self.layout.jobs.len() + 1);
         let mut y = 0.0;
         ui.fonts_mut(|f| {
-            for job in &self.layout.jobs {
+            for (line, job) in self.layout.jobs.iter().enumerate() {
                 let galley = f.layout_job(job.clone());
                 tops.push(y);
-                y += galley.size().y.max(t.code_line_height);
+                // A line hidden in a fold takes no room.
+                if !self.hidden.get(line).copied().unwrap_or(false) {
+                    y += galley.size().y.max(t.code_line_height);
+                }
                 galleys.push(galley);
             }
         });
@@ -476,7 +692,10 @@ impl SourceEditor {
 
     fn line_at_y(&self, y: f32) -> usize {
         let tops = &self.layout.tops;
-        tops.partition_point(|top| *top <= y).saturating_sub(1).min(self.layout.galleys.len().saturating_sub(1))
+        // A hidden line has no height: the last line starting above `y` is a shown one, except
+        // past the end of a fold that ends the text, where its first line is.
+        let line = tops.partition_point(|top| *top <= y).saturating_sub(1).min(self.layout.galleys.len().saturating_sub(1));
+        self.fold_hiding(line).map_or(line, |(start, _, _)| start)
     }
 
     /// The position under `p` (relative to the text's top left).
@@ -544,11 +763,15 @@ impl SourceEditor {
             }
         }
         out.changed = self.doc.buffer.version() != version;
+        // Folds follow the edits; a jump or a motion into one unfolds it.
+        self.resolve_folds();
+        self.reveal_caret();
 
         let lines = self.doc.buffer.len_lines();
         let digits = lines.to_string().len().max(2) as f32;
         let char_w = ui.fonts_mut(|f| f.glyph_width(&t.code_font(), '0'));
-        let gutter = digits * char_w + 9.0 * t.unit;
+        // The numbers, then the fold markers.
+        let gutter = digits * char_w + 13.0 * t.unit;
         let margin = vec2(4.0, 8.0);
         let mut scroll = egui::ScrollArea::vertical().id_salt(id.with("scroll")).auto_shrink([false, false]);
         if let Some(request) = self.scroll.take() {
@@ -581,6 +804,7 @@ impl SourceEditor {
             let area = Area { rect, origin, gutter, lines: (first, last), focused };
             self.shown = Some((origin, ui.clip_rect()));
             self.paint(ui, t, &area, markers);
+            self.fold_controls(ui, t, &area, id);
             if self.accept_drop
                 && response.contains_pointer()
                 && let Some(p) = ctx.pointer_interact_pos()
@@ -651,6 +875,7 @@ impl SourceEditor {
             out.fixes_for = Some(popup.problem.line);
         }
         out.apply_fix = self.apply_fix.take();
+        out.announce = self.announce.take();
         if let Some((p, since)) = self.resting
             && now - since >= 0.6
             && self.hover.is_none()
@@ -768,17 +993,43 @@ impl SourceEditor {
     fn vim_key(&mut self, key: Key, now: f64, indent: &str, ctx: &egui::Context, out: &mut Output) {
         let Some(vim) = &mut self.vim else { return };
         let (rows, top) = (self.view.1, self.view.0);
+        let from = self.doc.buffer.char_to_line(vim.cursor());
         let mut vctx =
             Ctx { buffer: &mut self.doc.buffer, selection: &mut self.doc.selection, now, view_top: top, view_rows: rows, clipboard: None, indent };
         let result = vim.key(key, &mut vctx);
+        // `j` and `k` step over a fold, as Vim's do, rather than open it.
+        if matches!(key, Key::Char('j' | 'k') | Key::Down | Key::Up) && vim.mode() == Mode::Normal {
+            self.step_over_fold(from);
+        }
         for effect in result.effects {
             match effect {
                 Effect::Copy(text) => ctx.copy_text(text),
                 Effect::Scroll(s) => self.scroll = Some(s),
+                Effect::Fold(f) => {
+                    let said = self.fold(f);
+                    self.announce = Some(said);
+                }
                 other => out.effects.push(other),
             }
         }
         self.reveal = true;
+    }
+
+    /// After a line motion from line `from` that landed inside a fold: the caret goes on to the
+    /// line after the fold going down, or to its first line going up.
+    fn step_over_fold(&mut self, from: usize) {
+        if self.regions.0 != Some(self.doc.buffer.version()) {
+            return;
+        }
+        let b = &self.doc.buffer;
+        let caret = self.caret();
+        let line = b.char_to_line(caret);
+        let Some((start, end, _)) = self.fold_hiding(line) else { return };
+        let target = if line > from && end + 1 < b.len_lines() { end + 1 } else { start };
+        let col = caret - b.line_to_char(line);
+        let to = b.line_to_char(target) + col.min(b.line(target).chars().count().saturating_sub(1));
+        self.doc.selection = Selection::point(to);
+        self.vim_sync();
     }
 
     fn replace_range(&mut self, start: usize, end: usize, text: &str, kind: EditKind) {
@@ -871,6 +1122,13 @@ impl SourceEditor {
                     pos.saturating_sub(1)
                 } else {
                     (pos + 1).min(b.len_chars())
+                };
+                // Over a fold rather than into it.
+                let to = match self.fold_hiding(b.char_to_line(to)) {
+                    Some((start, _, _)) if left => b.line_end(start),
+                    Some((_, end, _)) if end + 1 < b.len_lines() => b.line_to_char(end + 1),
+                    Some((start, _, _)) => b.line_end(start),
+                    None => to,
                 };
                 self.move_to(to, m.shift);
             }
@@ -1485,10 +1743,13 @@ impl SourceEditor {
         let caret = self.caret();
         let caret_line = b.char_to_line(caret);
         let font = egui::FontId::new(t.code_size - 1.5, egui::FontFamily::Monospace);
-        let number_right = rect.left() + gutter - 3.0 * t.unit;
+        let number_right = rect.left() + gutter - 7.0 * t.unit;
         let sel = self.doc.selection.primary();
         let highlight = self.vim.as_ref().and_then(Vim::highlighted);
         for line in first..=last.min(self.layout.galleys.len().saturating_sub(1)) {
+            if self.is_hidden(line) {
+                continue;
+            }
             let (Some(galley), Some(top)) = (self.layout.galleys.get(line), self.layout.tops.get(line)) else { continue };
             let bottom = self.layout.tops.get(line + 1).copied().unwrap_or(*top);
             let y0 = origin.y + top;
@@ -1574,7 +1835,7 @@ impl SourceEditor {
         }
         // The bracket at the caret and its match, outlined.
         if focused && let Some((a, z)) = self.bracket_pair() {
-            for p in [a, z] {
+            for p in [a, z].into_iter().filter(|p| !self.is_hidden(b.char_to_line(*p))) {
                 let r = self.rect_at(p).translate(origin.to_vec2());
                 let w = ui.fonts_mut(|f| f.glyph_width(&t.code_font(), b.char_at(p).unwrap_or(' ')));
                 painter.rect_stroke(
@@ -1625,6 +1886,73 @@ impl SourceEditor {
                 painter.galley(c.min, g, t.text);
                 painter.hline(r.x_range(), r.bottom(), egui::Stroke::new(1.0, t.text));
             }
+        }
+    }
+
+    /// The fold markers in the gutter, on the shown lines that start a region, and the "…" chip
+    /// after a folded region's first line. Both are buttons: a click folds or unfolds.
+    fn fold_controls(&mut self, ui: &egui::Ui, t: &Tokens, area: &Area, id: egui::Id) {
+        let Area { rect, origin, gutter, lines: (first, last), focused } = *area;
+        let caret_line = self.doc.buffer.char_to_line(self.caret());
+        let in_gutter = ui.ctx().pointer_hover_pos().is_some_and(|p| p.x < rect.left() + gutter && rect.contains(p));
+        let regions: Vec<FoldRegion> = self.regions().iter().filter(|r| r.start >= first && r.start <= last).cloned().collect();
+        let mut toggled = None;
+        for region in regions {
+            let line = region.start;
+            if self.is_hidden(line) {
+                continue;
+            }
+            let (Some(galley), Some(top)) = (self.layout.galleys.get(line), self.layout.tops.get(line)) else { continue };
+            let folded = self.is_folded(line);
+            let first_row = galley.rows.first().map_or(t.code_line_height, |r| r.max_y());
+            let mid = origin.y + top + first_row / 2.0;
+            let marker = Rect::from_center_size(pos2(rect.left() + gutter - 4.5 * t.unit, mid), vec2(3.5 * t.unit, first_row.max(3.5 * t.unit)));
+            let what = describe(&region.kind);
+            let (from, to) = ((region.start + 1).to_string(), (region.end + 1).to_string());
+            let name = if folded { tl!("Unfold lines {from}–{to}, {what}") } else { tl!("Fold lines {from}–{to}, {what}") }
+                .replace("{from}", &from)
+                .replace("{to}", &to)
+                .replace("{what}", &what);
+            let r = ui.interact(marker, id.with(("fold", line)), Sense::click());
+            r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+            ui.ctx().accesskit_node_builder(r.id, |node| node.set_expanded(!folded));
+            let shown = folded || in_gutter || r.hovered() || r.has_focus() || (focused && line == caret_line);
+            if shown {
+                if r.hovered() || r.has_focus() {
+                    ui.painter().rect_filled(marker, t.corner(), t.hover);
+                }
+                let color = if folded || r.hovered() { t.text } else { t.text_muted };
+                icons::paint(ui, marker, if folded { "chevron-right" } else { "chevron-down" }, 3.0 * t.unit, color);
+            }
+            if r.has_focus() {
+                ui.painter().rect_stroke(marker, t.corner(), egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Inside);
+            }
+            let r = r.on_hover_text(&name);
+            if r.clicked() {
+                toggled = Some(line);
+            }
+            // The chip that stands for the hidden lines.
+            if folded && let Some(row) = galley.rows.last() {
+                let label = ui.fonts_mut(|f| f.layout_no_wrap("…".to_owned(), t.code_font(), t.text_muted));
+                let at = origin + vec2(row.rect().right() + 2.0 * t.unit, top + row.min_y());
+                let chip = Rect::from_min_size(at, vec2(label.size().x + 3.0 * t.unit, row.height())).shrink2(vec2(0.0, 1.0));
+                let c = ui.interact(chip, id.with(("fold-chip", line)), Sense::click());
+                let unfold = tl!("Unfold lines {from}–{to}, {what}").replace("{from}", &from).replace("{to}", &to).replace("{what}", &what);
+                c.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &unfold));
+                let fill = if c.hovered() || c.has_focus() { t.hover } else { t.raised };
+                ui.painter().rect(chip, t.corner(), fill, t.hairline(), egui::StrokeKind::Inside);
+                if c.has_focus() {
+                    ui.painter().rect_stroke(chip, t.corner(), egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Inside);
+                }
+                ui.painter().galley(chip.center() - label.size() / 2.0, label, t.text_muted);
+                if c.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(&unfold).clicked() {
+                    toggled = Some(line);
+                }
+            }
+        }
+        if let Some(line) = toggled {
+            self.announce = self.toggle_fold(line);
+            ui.ctx().memory_mut(|m| m.request_focus(id));
         }
     }
 
@@ -1790,4 +2118,10 @@ fn underline(painter: &egui::Painter, galley: &Galley, at: Pos2, (s, e): (usize,
         }
         row_start += n;
     }
+}
+
+/// "Folded lines 12–40, section Introduction", or Unfolded.
+fn fold_message(folded: bool, r: &FoldRegion) -> String {
+    let text = if folded { tl!("Folded lines {from}–{to}, {what}") } else { tl!("Unfolded lines {from}–{to}, {what}") };
+    text.replace("{from}", &(r.start + 1).to_string()).replace("{to}", &(r.end + 1).to_string()).replace("{what}", &describe(&r.kind))
 }

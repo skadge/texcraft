@@ -93,6 +93,21 @@ pub enum Scroll {
     Lines(isize),
 }
 
+/// What a fold key asks of the editor's folds (`zc`, `zo`, `za`, `zM`, `zR`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Fold {
+    /// Fold the region at the caret.
+    Close,
+    /// Unfold the region at the caret.
+    Open,
+    /// Fold or unfold the region at the caret.
+    Toggle,
+    /// Fold every region.
+    CloseAll,
+    /// Unfold every region.
+    OpenAll,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Effect {
     Save,
@@ -107,6 +122,8 @@ pub enum Effect {
     Message(String),
     Error(String),
     Scroll(Scroll),
+    /// Fold or unfold regions of the text: the editor keeps the folds.
+    Fold(Fold),
     /// Comment on `start..end` (`:comment [text]`): the lines of the range, or the caret's line.
     Comment {
         start: usize,
@@ -1145,6 +1162,7 @@ impl Vim {
             Simple::ScrollCenter => out.effects.push(Effect::Scroll(Scroll::Center)),
             Simple::ScrollTop => out.effects.push(Effect::Scroll(Scroll::Top)),
             Simple::ScrollBottom => out.effects.push(Effect::Scroll(Scroll::Bottom)),
+            Simple::Fold(f) => out.effects.push(Effect::Fold(f)),
             Simple::HalfDown | Simple::HalfUp | Simple::PageDown | Simple::PageUp => {
                 let rows = ctx.view_rows.max(2);
                 let amount = match s {

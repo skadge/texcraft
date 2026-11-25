@@ -87,8 +87,12 @@ pub(crate) enum Simple {
     ChangeToEnd,
     YankLine,
     Replace(char),
-    Join { spaces: bool },
-    Put { before: bool },
+    Join {
+        spaces: bool,
+    },
+    Put {
+        before: bool,
+    },
     Undo,
     Redo,
     Repeat,
@@ -116,6 +120,8 @@ pub(crate) enum Simple {
     ScrollCenter,
     ScrollTop,
     ScrollBottom,
+    /// `zc`, `zo`, `za`, `zM`, `zR`.
+    Fold(crate::Fold),
     HalfDown,
     HalfUp,
     PageDown,
@@ -373,6 +379,11 @@ fn simple(keys: &[Key], i: usize, visual: bool) -> Parse<(Simple, usize)> {
                 (Some(Some('z' | '.')), _) => Parse::Done((S::ScrollCenter, 2)),
                 (Some(Some('t')), _) | (_, Some(Key::Enter)) => Parse::Done((S::ScrollTop, 2)),
                 (Some(Some('b' | '-')), _) => Parse::Done((S::ScrollBottom, 2)),
+                (Some(Some('c')), _) => Parse::Done((S::Fold(crate::Fold::Close), 2)),
+                (Some(Some('o')), _) => Parse::Done((S::Fold(crate::Fold::Open), 2)),
+                (Some(Some('a')), _) => Parse::Done((S::Fold(crate::Fold::Toggle), 2)),
+                (Some(Some('M')), _) => Parse::Done((S::Fold(crate::Fold::CloseAll), 2)),
+                (Some(Some('R')), _) => Parse::Done((S::Fold(crate::Fold::OpenAll), 2)),
                 _ => Parse::Invalid,
             },
             ('g', _) => match next {

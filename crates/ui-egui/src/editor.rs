@@ -479,6 +479,18 @@ pub(crate) fn edit(app: &mut App, id: &str) -> bool {
             crate::review::step(app, id == "edit.next_comment");
             return true;
         }
+        "edit.fold" | "edit.unfold" | "edit.fold_all" | "edit.unfold_all" => {
+            let action = match id {
+                "edit.fold" => texcraft_vim::Fold::Close,
+                "edit.unfold" => texcraft_vim::Fold::Open,
+                "edit.fold_all" => texcraft_vim::Fold::CloseAll,
+                _ => texcraft_vim::Fold::OpenAll,
+            };
+            let said = source.fold(action);
+            app.view.status = Some((said, false));
+            app.editor.focus = true;
+            return true;
+        }
         "edit.select_all" => {
             let len = source.doc.buffer.len_chars();
             source.select(0, len);
@@ -1003,6 +1015,9 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         insert_image(app, &image.0, Some(at));
         ui.memory_mut(|m| m.request_focus(id));
     }
+    if let Some(said) = out.announce {
+        app.view.status = Some((said, false));
+    }
     if let Some(fix) = out.apply_fix {
         app.editor.source.apply_fix(&fix);
     }
@@ -1027,7 +1042,7 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
                     crate::suggest::toggle(app);
                 }
             }
-            Effect::Copy(_) | Effect::Scroll(_) => {}
+            Effect::Copy(_) | Effect::Scroll(_) | Effect::Fold(_) => {}
         }
     }
 }
