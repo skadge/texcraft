@@ -1,4 +1,4 @@
-//! Projects from a git forge (docs/forges.md; docs/ROADMAP.md, C5), GitLab first: open a
+//! Projects from a git forge (docs/forges.md; docs/ROADMAP.md, C5), GitLab or GitHub: open a
 //! project's branch with a personal access token, see what changed, commit it back to the branch.
 //!
 //! On the desktop the project opens in memory, linked to its branch and in no folder: commits go
@@ -9,7 +9,7 @@
 //! `forge.pull` takes in the branch's new commits, merging files changed on both sides line by
 //! line; a file that does not merge is a conflict, listed by `forge.status`, which a pull or a
 //! commit with `resolve` (keep mine, take theirs) settles, or a commit to a new branch with a merge
-//! request (`new_branch`) avoids. The review threads (`.texcraft/review/`) go with the files.
+//! request (a pull request on GitHub; `new_branch`) avoids. The review threads (`.texcraft/review/`) go with the files.
 //!
 //! The forge's API is reached over the network, so `forge.open`, `forge.pull` and `forge.commit`
 //! take `background`: they return at once and [`Session::poll_forge`] gives their outcome (the
@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 use serde_json::{Value, json};
 use texcraft_forge::task::Pending;
-use texcraft_forge::{Address, Choice, Choices, Committed, GitLab, Link, Loaded, Pulled, Skipped, Token, Update};
+use texcraft_forge::{Address, Choice, Choices, Client, Committed, Link, Loaded, Pulled, Service, Skipped, Token, Update};
 use texcraft_project::{Contents, Project, ProjectPath};
 
 use super::{CommandSpec, always, no_params, string};
@@ -49,7 +49,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec {
             id: "forge.open",
-            label: "Open from GitLab…",
+            label: "Open from GitLab or GitHub…",
             menu: &["File"],
             shortcut: None,
             params: open_schema,
@@ -59,7 +59,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         },
         CommandSpec {
             id: "forge.commit",
-            label: "Commit to GitLab…",
+            label: "Commit to GitLab or GitHub…",
             menu: &["File"],
             shortcut: None,
             params: commit_schema,
@@ -69,7 +69,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         },
         CommandSpec {
             id: "forge.pull",
-            label: "Update from GitLab",
+            label: "Update from GitLab or GitHub",
             menu: &["File"],
             shortcut: None,
             params: pull_schema,
@@ -79,7 +79,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         },
         CommandSpec {
             id: "forge.status",
-            label: "GitLab Status",
+            label: "GitLab or GitHub Status",
             menu: &[],
             shortcut: None,
             params: no_params,
@@ -92,8 +92,9 @@ pub(super) fn specs() -> Vec<CommandSpec> {
 
 fn open_schema() -> Value {
     json!({"type": "object", "properties": {
-        "url": {"type": "string", "description": "The project's address: https://gitlab.com/group/project, a page under it, its clone address, or group/project on gitlab.com."},
-        "token": {"type": "string", "description": "A personal access token with the read_api scope (api to commit). Kept for this session only. May be left out when one was given for the same instance in this session."},
+        "url": {"type": "string", "description": "The project's address: https://gitlab.com/group/project or https://github.com/owner/repository, a page under it, its clone address, or group/project (on gitlab.com, or github.com with service github)."},
+        "service": {"enum": ["gitlab", "github"], "description": "The forge's kind, for an address that does not say it (github.com's are GitHub's, gitlab.com's GitLab's): a bare owner/repository, or a GitHub Enterprise Server. Default: gitlab."},
+        "token": {"type": "string", "description": "A personal access token. GitLab: the read_api scope (api to commit). GitHub: a fine-grained token with Contents read-only (read and write to commit) and Pull requests read and write for new_branch, or a classic token with the repo scope. Kept for this session only. May be left out when one was given for the same instance in this session."},
         "ref": {"type": "string", "description": "The branch; the project's default branch if left out."},
         "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_forge` (the window's status line). Default: wait for it (not in the browser, which always works so)."}
     }, "required": ["url"], "additionalProperties": false})
@@ -105,16 +106,16 @@ const RESOLVE: &str =
 fn commit_schema() -> Value {
     json!({"type": "object", "properties": {
         "message": {"type": "string", "description": "The commit's message."},
-        "token": {"type": "string", "description": "A personal access token with the api scope; may be left out when one was given for the project's instance in this session."},
+        "token": {"type": "string", "description": "A personal access token that can commit (GitLab: the api scope; GitHub: Contents read and write); may be left out when one was given for the project's instance in this session."},
         "resolve": {"type": "object", "additionalProperties": {"enum": ["mine", "theirs"]}, "description": RESOLVE},
-        "new_branch": {"type": "string", "description": "Commit to this new branch, from the base (no merge needed), and open a merge request of it into the project's branch; the project then follows the new branch. For a protected branch, one the user cannot push to, or conflicts left to GitLab."},
+        "new_branch": {"type": "string", "description": "Commit to this new branch, from the base (no merge needed), and open a merge request (GitHub: a pull request) of it into the project's branch; the project then follows the new branch. For a protected branch, one the user cannot push to, or conflicts left to the forge."},
         "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_forge`. Default: wait for it (not in the browser)."}
     }, "required": ["message"], "additionalProperties": false})
 }
 
 fn pull_schema() -> Value {
     json!({"type": "object", "properties": {
-        "token": {"type": "string", "description": "A personal access token with the read_api scope; may be left out when one was given for the project's instance in this session."},
+        "token": {"type": "string", "description": "A personal access token that can read the project (GitLab: read_api; GitHub: Contents read-only); may be left out when one was given for the project's instance in this session."},
         "resolve": {"type": "object", "additionalProperties": {"enum": ["mine", "theirs"]}, "description": RESOLVE},
         "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_forge`. Default: wait for it (not in the browser)."}
     }, "additionalProperties": false})
@@ -134,14 +135,14 @@ fn choices(p: &Value) -> Result<Choices> {
 
 fn idle(s: &Session) -> Result<()> {
     match &s.forge_task {
-        Some(_) => Err("GitLab is still answering the last request: wait for it to end.".to_owned()),
+        Some(_) => Err("The forge is still answering the last request: wait for it to end.".to_owned()),
         None => Ok(()),
     }
 }
 
 fn can_commit(s: &Session) -> Result<()> {
     if s.forge.is_none() {
-        return Err("This project was not opened from GitLab: use Open from GitLab… first.".to_owned());
+        return Err("This project was not opened from GitLab or GitHub: use Open from GitLab or GitHub… first.".to_owned());
     }
     idle(s)
 }
@@ -181,18 +182,22 @@ where
 }
 
 fn open(s: &mut Session, p: &Value) -> Result<Value> {
-    let address = Address::parse(string(p, "url")?).map_err(|e| e.to_string())?;
+    let service = match p.get("service").and_then(Value::as_str) {
+        Some(s) => Some(Service::parse(s).ok_or_else(|| format!("service: say \"gitlab\" or \"github\", not {s:?}."))?),
+        None => None,
+    };
+    let address = Address::parse_as(string(p, "url")?, service).map_err(|e| e.to_string())?;
     let token = token_for(s, p, &address)?;
     let branch = p.get("ref").and_then(Value::as_str).map(str::trim).filter(|b| !b.is_empty()).map(str::to_owned);
-    let (connect, path, sent) = (s.forge_transport.clone(), address.path.clone(), token.clone());
+    let (connect, path, sent, service_id) = (s.forge_transport.clone(), address.path.clone(), token.clone(), address.service.id());
     let make = move || async move {
-        let client = GitLab::new(connect(), address, sent);
+        let client = Client::new(connect(), address, sent);
         texcraft_forge::open(&client, branch.as_deref()).await
     };
     match start(p, make).map_err(|e| e.to_string())? {
         Ok(pending) => {
             s.forge_task = Some(Task::Open { pending, token });
-            Ok(json!({"operation": "open", "started": true, "project": path}))
+            Ok(json!({"operation": "open", "started": true, "project": path, "service": service_id}))
         }
         Err(loaded) => opened(s, loaded, token),
     }
@@ -211,8 +216,8 @@ fn pick_main(project: &Project) -> Option<ProjectPath> {
 }
 
 /// A name for a project the library does not have yet: `name`, or `name (2)`…
-fn unused_name(library: &crate::library::Library, name: &str) -> String {
-    let name = crate::library::check_name(name).unwrap_or_else(|_| "GitLab project".to_owned());
+fn unused_name(library: &crate::library::Library, name: &str, service: Service) -> String {
+    let name = crate::library::check_name(name).unwrap_or_else(|_| format!("{} project", service.name()));
     (1..).map(|i| if i == 1 { name.clone() } else { format!("{name} ({i})") }).find(|n| !library.contains(n)).unwrap_or(name)
 }
 
@@ -233,12 +238,13 @@ fn opened(s: &mut Session, loaded: Loaded, token: Token) -> Result<Value> {
         project.set_main(&main).map_err(|e| e.to_string())?;
     }
     let count = project.len();
-    let name = s.library.as_ref().map(|library| unused_name(library, link.address.name()));
+    let name = s.library.as_ref().map(|library| unused_name(library, link.address.name(), link.address.service));
     s.replace_project(project, name.as_ref().map(PathBuf::from));
     s.load_forge_review(review);
     s.forge_tokens.insert(link.address.instance.clone(), token);
     let result = json!({
         "operation": "open",
+        "service": link.address.service.id(),
         "project": link.address.path,
         "web_url": link.web_url,
         "branch": link.branch,
@@ -260,7 +266,7 @@ fn skipped_json(skipped: &[Skipped]) -> Value {
 }
 
 fn commit(s: &mut Session, p: &Value) -> Result<Value> {
-    let link = s.forge.clone().ok_or("This project was not opened from GitLab.")?;
+    let link = s.forge.clone().ok_or("This project was not opened from GitLab or GitHub.")?;
     let message = string(p, "message")?.trim().to_owned();
     if message.is_empty() {
         return Err("Say what the commit changes: its message cannot be empty.".to_owned());
@@ -275,7 +281,7 @@ fn commit(s: &mut Session, p: &Value) -> Result<Value> {
     let files = s.forge_files(true)?;
     let (connect, sent, snapshot) = (s.forge_transport.clone(), token.clone(), files.clone());
     let make = move || async move {
-        let client = GitLab::new(connect(), link.address.clone(), sent);
+        let client = Client::new(connect(), link.address.clone(), sent);
         match new_branch {
             Some(name) => texcraft_forge::commit_to_new_branch(&client, &link, &snapshot, &message, &name).await,
             None => texcraft_forge::commit(&client, &link, &snapshot, &message, &choices).await,
@@ -292,13 +298,13 @@ fn commit(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn pull(s: &mut Session, p: &Value) -> Result<Value> {
-    let link = s.forge.clone().ok_or("This project was not opened from GitLab.")?;
+    let link = s.forge.clone().ok_or("This project was not opened from GitLab or GitHub.")?;
     let token = token_for(s, p, &link.address)?;
     let choices = choices(p)?;
     let files = s.forge_files(false)?;
     let (connect, sent, snapshot) = (s.forge_transport.clone(), token.clone(), files.clone());
     let make = move || async move {
-        let client = GitLab::new(connect(), link.address.clone(), sent);
+        let client = Client::new(connect(), link.address.clone(), sent);
         texcraft_forge::pull(&client, &link, &snapshot, &choices).await
     };
     match start(p, make) {
@@ -406,8 +412,9 @@ fn committed(s: &mut Session, done: Committed, token: Token, files: &[(String, V
     let changes: Vec<Value> = done.changes.iter().map(change_json).collect();
     let result = json!({
         "operation": "commit",
+        "service": done.link.address.service.id(),
         "commit": done.commit,
-        "web_url": done.commit.as_ref().map(|id| format!("{web_url}/-/commit/{id}")),
+        "web_url": done.commit.as_ref().map(|id| done.link.address.commit_url(&web_url, id)),
         "branch": done.link.branch,
         "changes": changes,
         "taken": taken,
@@ -432,6 +439,7 @@ fn status(s: &mut Session, _: &Value) -> Result<Value> {
     let changes: Vec<Value> = s.forge_changes()?.iter().map(change_json).collect();
     Ok(json!({
         "linked": true,
+        "service": link.address.service.id(),
         "instance": link.address.instance,
         "project": link.address.path,
         "web_url": link.web_url,

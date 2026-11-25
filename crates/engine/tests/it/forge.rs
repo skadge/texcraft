@@ -313,3 +313,33 @@ fn review_threads_go_to_the_branch_and_come_back_from_it() -> Result<(), String>
     assert!(changed(&mut alice)?.is_empty());
     Ok(())
 }
+
+#[test]
+fn a_github_repository_opens_commits_and_takes_a_pull_request() -> Result<(), String> {
+    const GH_TOKEN: &str = "github_pat_engine_test";
+    let fake = texcraft_engine::forge::fake::Fake::github("owner/paper", GH_TOKEN, &[("main.tex", PAPER.as_bytes()), ("intro.tex", b"Intro\n")]);
+    let mut s = session(&fake);
+    // A bare owner/repository is GitHub's when the service says so.
+    let opened = s.execute("forge.open", &json!({"url": "owner/paper", "service": "github", "token": GH_TOKEN}))?;
+    assert_eq!((opened["service"].as_str(), opened["branch"].as_str()), (Some("github"), Some("main")));
+    assert_eq!(s.execute("forge.status", &json!({}))?["service"], "github");
+
+    write(&mut s, "intro.tex", "Better intro\n")?;
+    let done = s.execute("forge.commit", &json!({"message": "Better intro"}))?;
+    let id = done["commit"].as_str().unwrap_or_default();
+    assert_eq!(done["web_url"].as_str(), Some(format!("https://github.com/owner/paper/commit/{id}").as_str()));
+    assert_eq!(fake.files("main")["intro.tex"], b"Better intro\n");
+
+    // A protected branch: the refusal speaks of a pull request, and one is opened.
+    fake.protect("main");
+    write(&mut s, "intro.tex", "Even better\n")?;
+    let refused = s.execute("forge.commit", &json!({"message": "Mine"}));
+    assert!(refused.is_err_and(|e| e.contains("pull request")));
+    let done = s.execute("forge.commit", &json!({"message": "Mine", "new_branch": "even-better"}))?;
+    let url = done["merge_request"]["web_url"].as_str().unwrap_or_default();
+    assert!(url.starts_with("https://github.com/owner/paper/pull/"), "{done}");
+    assert_eq!(fake.files("even-better")["intro.tex"], b"Even better\n");
+    // A gitlab.com address is not taken for GitHub.
+    assert!(s.execute("forge.open", &json!({"url": "https://gitlab.com/group/paper", "service": "github", "token": GH_TOKEN})).is_err());
+    Ok(())
+}
