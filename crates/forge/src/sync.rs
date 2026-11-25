@@ -7,7 +7,7 @@ use crate::forge::{Forge, Made, Target};
 use crate::gitlab::is_object_id;
 use crate::{Address, Error, MAX_PROJECT, PARALLEL, Result, TreeEntry};
 
-/// Where a project opened from GitLab came from, and the state of its files there.
+/// Where a project opened from a forge came from, and the state of its files there.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Link {
     pub address: Address,
@@ -232,7 +232,10 @@ pub async fn open(client: &impl Forge, branch: Option<&str>) -> Result<Loaded> {
     let info = client.project().await?;
     let name = match branch.map(str::trim).filter(|b| !b.is_empty()) {
         Some(b) => b.to_owned(),
-        None => info.default_branch.clone().ok_or_else(|| Error::NotFound { what: format!("branch in {} (its repository is empty)", info.path) })?,
+        None => info
+            .default_branch
+            .clone()
+            .ok_or_else(|| Error::NotFound { forge: client.address().service, what: format!("branch in {} (its repository is empty)", info.path) })?,
     };
     let head = client.branch(&name).await?;
     let tree = client.tree(&head.commit).await?;
@@ -360,7 +363,7 @@ async fn catch_up(client: &impl Forge, link: &Link, head: &str, files: &[(String
     }
     if !conflicts.is_empty() {
         conflicts.sort_by(|a, b| a.path.cmp(&b.path));
-        return Err(Error::Conflict { branch: link.branch.clone(), files: conflicts });
+        return Err(Error::Conflict { forge: client.address().service, branch: link.branch.clone(), files: conflicts });
     }
     // The files changed there only, taken.
     let wanted: Vec<(String, String)> = take.iter().filter_map(|(p, id)| Some((p.clone(), id.clone()?))).collect();
@@ -442,7 +445,7 @@ pub async fn commit(client: &impl Forge, link: &Link, files: &[(String, Vec<u8>)
         attempts += 1;
         let head = client.branch(&link.branch).await?;
         if !head.can_push {
-            return Err(Error::CannotPush { branch: link.branch.clone() });
+            return Err(Error::CannotPush { forge: client.address().service, branch: link.branch.clone() });
         }
         let up = catch_up(client, link, &head.commit, files, choices).await?;
         let integrated: Vec<(String, Vec<u8>)> = up.files.iter().map(|(p, b)| (p.clone(), b.clone())).collect();
@@ -453,7 +456,7 @@ pub async fn commit(client: &impl Forge, link: &Link, files: &[(String, Vec<u8>)
         }
         let target = Target::Branch { name: &link.branch, head: &head.commit };
         let made = client.commit(target, message, &to_commit, &integrated).await.map_err(|e| match e {
-            Error::Forbidden { .. } => Error::CannotPush { branch: link.branch.clone() },
+            Error::Forbidden { .. } => Error::CannotPush { forge: client.address().service, branch: link.branch.clone() },
             e => e,
         })?;
         match made {
@@ -523,7 +526,8 @@ pub fn check_branch_name(name: &str) -> Result<()> {
 /// Commits the project's changes since `link`'s base to a new branch `branch` started from the
 /// base (so they need no merge), opens a merge request of it into `link`'s branch, and moves the
 /// link to the new branch: the way when the branch cannot take the commit (protected, a role
-/// that cannot push, or a conflict), where GitLab shows the conflict.
+/// that cannot push, or a conflict), where the forge shows the conflict. GitHub calls it a pull
+/// request.
 pub async fn commit_to_new_branch(client: &impl Forge, link: &Link, files: &[(String, Vec<u8>)], message: &str, branch: &str) -> Result<Committed> {
     let branch = branch.trim();
     check_branch_name(branch)?;

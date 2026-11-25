@@ -292,7 +292,7 @@ fn threads_of(name: &str) -> Result<IdbKeyRange, String> {
 }
 
 /// A project as IndexedDB keeps it: `{main, saved, names, contents, forge}`, the files' paths and
-/// their bytes in two arrays, and the GitLab branch it is linked to as JSON (no token). Its
+/// their bytes in two arrays, and the forge branch it is linked to as JSON (no token). Its
 /// threads are in the `reviews` store.
 fn project_to(project: &Stored) -> JsValue {
     let names = Array::new();

@@ -1,6 +1,8 @@
-//! A GitLab in memory, for tests: one project, its branches and commits, answering the API's calls
+//! A forge in memory, for tests: one project, its branches and commits, answering the API's calls
 //! that [`crate::GitLab`] makes as gitlab.com does (pagination, raw blobs, commits with actions,
-//! error statuses). No test reaches the network.
+//! error statuses), or those [`crate::GitHub`] makes as github.com does (trees, blobs in base64,
+//! the Git Data API's blobs, trees, commits and references, pull requests). No test reaches the
+//! network.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -8,7 +10,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use base64::Engine as _;
 use serde_json::{Value, json};
 
-use crate::{Request, Response, Sending, Transport};
+use crate::{Address, GITHUB_COM, Request, Response, Sending, Service, Transport};
 
 /// A file of a commit: its mode (`100644`, `120000` for a symbolic link, `160000` for a
 /// submodule) and its object id.
@@ -22,10 +24,13 @@ struct Entry {
 struct Commit {
     parent: Option<String>,
     files: BTreeMap<String, Entry>,
+    /// Its tree's id (GitHub's API names trees).
+    tree: String,
 }
 
 #[derive(Debug, Default)]
 struct State {
+    service: Service,
     instance: String,
     path: String,
     token: String,
@@ -39,6 +44,15 @@ struct State {
     fail: Option<Response>,
     requests: Vec<String>,
     last_actions: Vec<Value>,
+    /// The paths the last commit request named.
+    last_paths: Vec<String>,
+    /// Trees made by GitHub's API, by id: their files.
+    trees: BTreeMap<String, BTreeMap<String, Entry>>,
+    /// Branches whose rules (GitHub's rulesets) refuse this user's commits, although the branch
+    /// does not say it is protected.
+    rules: std::collections::BTreeSet<String>,
+    /// Whether GitHub says its tree is truncated.
+    truncated: bool,
     /// A commit someone else makes just before the next commit request: branch, path, bytes.
     race: Option<(String, String, Vec<u8>)>,
     counter: u64,
@@ -47,7 +61,7 @@ struct State {
     merge_requests: Vec<FakeMergeRequest>,
 }
 
-/// A merge request opened on the fake.
+/// A merge request (a pull request on GitHub) opened on the fake.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FakeMergeRequest {
     pub iid: u64,
@@ -58,19 +72,33 @@ pub struct FakeMergeRequest {
 
 /// The fake instance; clones share it.
 #[derive(Clone)]
-pub struct FakeGitLab {
+pub struct Fake {
     state: Arc<Mutex<State>>,
 }
+
+/// The fake as a GitLab ([`Fake::new`]).
+pub type FakeGitLab = Fake;
 
 fn id_of(text: &str) -> String {
     texcraft_history::store::blob_id(text.as_bytes()).unwrap_or_default()
 }
 
-impl FakeGitLab {
-    /// Project `path` (`group/project`) on `instance` (`https://gitlab.example`), whose API
-    /// accepts `token`, with a branch `main` holding `files`.
+impl Fake {
+    /// A GitLab: project `path` (`group/project`) on `instance` (`https://gitlab.example`), whose
+    /// API accepts `token`, with a branch `main` holding `files`.
     pub fn new(instance: &str, path: &str, token: &str, files: &[(&str, &[u8])]) -> Self {
+        Self::with(Service::GitLab, instance, path, token, files)
+    }
+
+    /// A GitHub: repository `path` (`owner/repository`) on github.com, whose API accepts
+    /// `token`, with a branch `main` holding `files`.
+    pub fn github(path: &str, token: &str, files: &[(&str, &[u8])]) -> Self {
+        Self::with(Service::GitHub, GITHUB_COM, path, token, files)
+    }
+
+    fn with(service: Service, instance: &str, path: &str, token: &str, files: &[(&str, &[u8])]) -> Self {
         let state = State {
+            service,
             instance: instance.to_owned(),
             path: path.to_owned(),
             token: token.to_owned(),
@@ -88,6 +116,12 @@ impl FakeGitLab {
 
     fn lock(&self) -> MutexGuard<'_, State> {
         self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// The project's address.
+    pub fn address(&self) -> Address {
+        let s = self.lock();
+        Address { instance: s.instance.clone(), path: s.path.clone(), service: s.service }
     }
 
     /// A transport to this instance.
@@ -127,6 +161,24 @@ impl FakeGitLab {
         new_commit(&mut s, branch, parent, files)
     }
 
+    /// Gives file `path` of `branch` git's mode `mode` (`100755`: executable), in a commit of its
+    /// own.
+    pub fn chmod(&self, branch: &str, path: &str, mode: &str) -> String {
+        let mut s = self.lock();
+        let parent = s.branches.get(branch).cloned();
+        let mut files = parent.as_ref().and_then(|p| s.commits.get(p)).map(|c| c.files.clone()).unwrap_or_default();
+        if let Some(e) = files.get_mut(path) {
+            e.mode = mode.to_owned();
+        }
+        new_commit(&mut s, branch, parent, files)
+    }
+
+    /// The mode of file `path` at `branch`'s head.
+    pub fn mode(&self, branch: &str, path: &str) -> Option<String> {
+        let s = self.lock();
+        s.branches.get(branch).and_then(|c| s.commits.get(c)).and_then(|c| c.files.get(path)).map(|e| e.mode.clone())
+    }
+
     /// The files of `branch` at its head: paths and bytes.
     pub fn files(&self, branch: &str) -> BTreeMap<String, Vec<u8>> {
         let s = self.lock();
@@ -144,7 +196,18 @@ impl FakeGitLab {
         self.lock().commits.get(id).and_then(|c| c.parent.clone())
     }
 
-    /// The actions of the last commit requested.
+    /// The paths the last commit request named: its actions' (GitLab), its tree's entries'
+    /// (GitHub).
+    pub fn last_paths(&self) -> Vec<String> {
+        self.lock().last_paths.clone()
+    }
+
+    /// Whether GitHub answers that its trees are truncated (too many entries).
+    pub fn set_truncated(&self, on: bool) {
+        self.lock().truncated = on;
+    }
+
+    /// The actions of the last commit requested (GitLab).
     pub fn last_actions(&self) -> Vec<Value> {
         self.lock().last_actions.clone()
     }
@@ -174,6 +237,12 @@ impl FakeGitLab {
         self.lock().protected.insert(branch.to_owned());
     }
 
+    /// Gives `branch` a rule that refuses the user's commits when the branch is moved, which the
+    /// branch does not show (GitHub).
+    pub fn rule(&self, branch: &str) {
+        self.lock().rules.insert(branch.to_owned());
+    }
+
     /// The merge requests opened so far.
     pub fn merge_requests(&self) -> Vec<FakeMergeRequest> {
         self.lock().merge_requests.clone()
@@ -196,18 +265,45 @@ impl FakeGitLab {
         self.lock().fail = None;
     }
 
-    /// Just before the next commit request, someone else commits `bytes` to `path` on `branch`.
+    /// Just before the next commit request (GitLab), or the next move of a branch (GitHub),
+    /// someone else commits `bytes` to `path` on `branch`.
     pub fn race(&self, branch: &str, path: &str, bytes: &[u8]) {
         self.lock().race = Some((branch.to_owned(), path.to_owned(), bytes.to_vec()));
     }
 }
 
-fn new_commit(s: &mut State, branch: &str, parent: Option<String>, files: BTreeMap<String, Entry>) -> String {
+/// A commit of `files` on `parent`, on no branch.
+fn make_commit(s: &mut State, parent: Option<String>, files: BTreeMap<String, Entry>) -> String {
     s.counter += 1;
     let id = id_of(&format!("commit {}", s.counter));
-    s.commits.insert(id.clone(), Commit { parent, files });
+    let tree = make_tree(s, files.clone());
+    s.commits.insert(id.clone(), Commit { parent, files, tree });
+    id
+}
+
+fn make_tree(s: &mut State, files: BTreeMap<String, Entry>) -> String {
+    s.counter += 1;
+    let id = id_of(&format!("tree {}", s.counter));
+    s.trees.insert(id.clone(), files);
+    id
+}
+
+fn new_commit(s: &mut State, branch: &str, parent: Option<String>, files: BTreeMap<String, Entry>) -> String {
+    let id = make_commit(s, parent, files);
     s.branches.insert(branch.to_owned(), id.clone());
     id
+}
+
+/// Someone else's commit, made just before the request that `race` waits for.
+fn run_race(s: &mut State) {
+    if let Some((branch, path, bytes)) = s.race.take() {
+        let parent = s.branches.get(&branch).cloned();
+        let mut files = parent.as_ref().and_then(|p| s.commits.get(p)).map(|c| c.files.clone()).unwrap_or_default();
+        let id = texcraft_history::store::blob_id(&bytes).unwrap_or_default();
+        s.blobs.insert(id.clone(), bytes);
+        files.insert(path, Entry { mode: "100644".to_owned(), id });
+        new_commit(s, &branch, parent, files);
+    }
 }
 
 fn decode(s: &str) -> String {
@@ -255,7 +351,10 @@ impl State {
         }
         let auth = request.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("authorization")).map(|(_, v)| v.as_str());
         if auth != Some(format!("Bearer {}", self.token).as_str()) {
-            return message(401, "401 Unauthorized");
+            return message(401, if self.service == Service::GitHub { "Bad credentials" } else { "401 Unauthorized" });
+        }
+        if self.service == Service::GitHub {
+            return self.github(request);
         }
         let prefix = format!("{}/api/v4/projects/{}", self.instance, crate::encode(&self.path));
         let Some(rest) = request.url.strip_prefix(&prefix) else { return message(404, "404 Project Not Found") };
@@ -328,20 +427,14 @@ impl State {
     }
 
     fn commit(&mut self, request: &Request) -> Response {
-        if let Some((branch, path, bytes)) = self.race.take() {
-            let parent = self.branches.get(&branch).cloned();
-            let mut files = parent.as_ref().and_then(|p| self.commits.get(p)).map(|c| c.files.clone()).unwrap_or_default();
-            let id = texcraft_history::store::blob_id(&bytes).unwrap_or_default();
-            self.blobs.insert(id.clone(), bytes);
-            files.insert(path, Entry { mode: "100644".to_owned(), id });
-            new_commit(self, &branch, parent, files);
-        }
+        run_race(self);
         let Ok(body) = serde_json::from_slice::<Value>(request.body.as_deref().unwrap_or_default()) else { return message(400, "bad JSON") };
         let (Some(branch), Some(_message), Some(actions)) = (body["branch"].as_str(), body["commit_message"].as_str(), body["actions"].as_array())
         else {
             return message(400, "branch, commit_message and actions are required");
         };
         self.last_actions = actions.clone();
+        self.last_paths = actions.iter().filter_map(|a| a["file_path"].as_str().map(str::to_owned)).collect();
         if !self.can_push || self.protected.contains(branch) {
             return message(403, "403 Forbidden - You are not allowed to push into this branch");
         }
@@ -420,6 +513,187 @@ impl State {
         let iid = self.merge_requests.len() as u64 + 1;
         self.merge_requests.push(FakeMergeRequest { iid, source: source.to_owned(), target: target.to_owned(), title: title.to_owned() });
         json_response(201, &json!({"iid": iid, "web_url": format!("{}/{}/-/merge_requests/{iid}", self.instance, self.path)}))
+    }
+}
+
+/// GitHub's answers.
+impl State {
+    fn github(&mut self, request: &Request) -> Response {
+        let prefix = format!("https://api.github.com/repos/{}", self.path);
+        let Some(rest) = request.url.strip_prefix(&prefix) else { return message(404, "Not Found") };
+        let route = rest.split('?').next().unwrap_or_default().to_owned();
+        let body = serde_json::from_slice::<Value>(request.body.as_deref().unwrap_or_default()).unwrap_or(Value::Null);
+        let writes = request.method != "GET";
+        if writes && !self.can_push {
+            return message(403, "Resource not accessible by personal access token");
+        }
+        match (request.method, route.as_str()) {
+            ("GET", "") => json_response(
+                200,
+                &json!({
+                    "id": 4242,
+                    "full_name": self.path,
+                    "default_branch": self.default_branch,
+                    "html_url": format!("{}/{}", self.instance, self.path),
+                    "permissions": {"admin": false, "push": self.can_push, "pull": true},
+                }),
+            ),
+            ("GET", r) if r.starts_with("/branches/") => {
+                let name = decode(&r["/branches/".len()..]);
+                match self.branches.get(&name) {
+                    Some(commit) => {
+                        json_response(200, &json!({"name": name, "commit": {"sha": commit}, "protected": self.protected.contains(&name)}))
+                    }
+                    None => message(404, "Branch not found"),
+                }
+            }
+            ("GET", r) if r.starts_with("/git/trees/") => self.github_tree(&r["/git/trees/".len()..]),
+            ("GET", r) if r.starts_with("/git/blobs/") => match self.blobs.get(&r["/git/blobs/".len()..]) {
+                Some(bytes) => {
+                    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+                    // In lines of 60 characters, as GitHub sends it.
+                    let lines: Vec<String> = encoded.as_bytes().chunks(60).map(|l| String::from_utf8_lossy(l).into_owned()).collect();
+                    let id = &r["/git/blobs/".len()..];
+                    let response = json_response(200, &json!({"sha": id, "size": bytes.len(), "content": lines.join("\n"), "encoding": "base64"}));
+                    if response.body.len() as u64 > request.max_body {
+                        Response { status: 200, too_large: true, ..Default::default() }
+                    } else {
+                        response
+                    }
+                }
+                None => message(404, "Not Found"),
+            },
+            ("GET", r) if r.starts_with("/git/commits/") => match self.commits.get(&r["/git/commits/".len()..]) {
+                Some(c) => json_response(
+                    200,
+                    &json!({"sha": &r["/git/commits/".len()..], "tree": {"sha": c.tree}, "parents": c.parent.iter().map(|p| json!({"sha": p})).collect::<Vec<_>>()}),
+                ),
+                None => message(404, "Not Found"),
+            },
+            ("POST", "/git/blobs") => {
+                let Some(bytes) = body["content"].as_str().and_then(|c| base64::engine::general_purpose::STANDARD.decode(c).ok()) else {
+                    return message(422, "Invalid request.");
+                };
+                let id = texcraft_history::store::blob_id(&bytes).unwrap_or_default();
+                self.blobs.insert(id.clone(), bytes);
+                json_response(201, &json!({"sha": id}))
+            }
+            ("POST", "/git/trees") => self.github_new_tree(&body),
+            ("POST", "/git/commits") => {
+                let (Some(tree), Some(parents)) = (body["tree"].as_str(), body["parents"].as_array()) else {
+                    return message(422, "Invalid request.");
+                };
+                let Some(files) = self.trees.get(tree).cloned() else { return message(422, "Tree SHA does not exist") };
+                let parent = parents.first().and_then(Value::as_str).map(str::to_owned);
+                if parent.as_ref().is_some_and(|p| !self.commits.contains_key(p)) {
+                    return message(422, "Parent SHA does not exist or is not a commit object");
+                }
+                let id = make_commit(self, parent.clone(), files);
+                json_response(201, &json!({"sha": id, "parents": parent.iter().map(|p| json!({"sha": p})).collect::<Vec<_>>()}))
+            }
+            ("PATCH", r) if r.starts_with("/git/refs/heads/") => {
+                run_race(self);
+                let name = decode(&r["/git/refs/heads/".len()..]);
+                let Some(sha) = body["sha"].as_str().filter(|s| self.commits.contains_key(*s)).map(str::to_owned) else {
+                    return message(422, "Object does not exist");
+                };
+                let Some(head) = self.branches.get(&name).cloned() else { return message(422, "Reference does not exist") };
+                if self.protected.contains(&name) {
+                    return message(422, &format!("Protected branch update failed for refs/heads/{name}."));
+                }
+                if self.rules.contains(&name) {
+                    return message(422, "Repository rule violations found");
+                }
+                if body["force"] != true && !self.descends(&sha, &head) {
+                    return message(422, "Update is not a fast forward");
+                }
+                self.branches.insert(name.clone(), sha.clone());
+                json_response(200, &json!({"ref": format!("refs/heads/{name}"), "object": {"sha": sha, "type": "commit"}}))
+            }
+            ("POST", "/git/refs") => {
+                let (Some(name), Some(sha)) = (body["ref"].as_str().and_then(|r| r.strip_prefix("refs/heads/")), body["sha"].as_str()) else {
+                    return message(422, "Invalid request.");
+                };
+                if self.branches.contains_key(name) {
+                    return message(422, "Reference already exists");
+                }
+                if !self.commits.contains_key(sha) {
+                    return message(422, "Object does not exist");
+                }
+                self.branches.insert(name.to_owned(), sha.to_owned());
+                json_response(201, &json!({"ref": format!("refs/heads/{name}"), "object": {"sha": sha, "type": "commit"}}))
+            }
+            ("POST", "/pulls") => {
+                let (Some(head), Some(base), Some(title)) = (body["head"].as_str(), body["base"].as_str(), body["title"].as_str()) else {
+                    return message(422, "Validation Failed");
+                };
+                if !self.branches.contains_key(head) || !self.branches.contains_key(base) {
+                    return message(422, "Validation Failed");
+                }
+                let iid = self.merge_requests.len() as u64 + 1;
+                self.merge_requests.push(FakeMergeRequest { iid, source: head.to_owned(), target: base.to_owned(), title: title.to_owned() });
+                json_response(201, &json!({"number": iid, "html_url": format!("{}/{}/pull/{iid}", self.instance, self.path)}))
+            }
+            _ => message(404, "Not Found"),
+        }
+    }
+
+    /// Whether commit `id` is `ancestor` or has it among its parents' parents.
+    fn descends(&self, id: &str, ancestor: &str) -> bool {
+        let mut at = Some(id.to_owned());
+        while let Some(c) = at {
+            if c == ancestor {
+                return true;
+            }
+            at = self.commits.get(&c).and_then(|c| c.parent.clone());
+        }
+        false
+    }
+
+    /// A commit's or a tree's entries, folders too, as `?recursive=1` lists them.
+    fn github_tree(&self, id: &str) -> Response {
+        let Some(files) = self.commits.get(id).map(|c| &c.files).or_else(|| self.trees.get(id)) else { return message(404, "Not Found") };
+        let mut entries: BTreeMap<String, Value> = BTreeMap::new();
+        for (path, e) in files {
+            let mut at = 0;
+            while let Some(i) = path[at..].find('/') {
+                let dir = &path[..at + i];
+                entries.entry(dir.to_owned()).or_insert_with(|| json!({"path": dir, "mode": "040000", "type": "tree", "sha": id_of(dir)}));
+                at += i + 1;
+            }
+            let kind = if e.mode == "160000" { "commit" } else { "blob" };
+            entries.insert(path.clone(), json!({"path": path, "mode": e.mode, "type": kind, "sha": e.id}));
+        }
+        let tree: Vec<Value> = entries.into_values().collect();
+        json_response(200, &json!({"sha": id, "tree": tree, "truncated": self.truncated}))
+    }
+
+    /// A tree made from `base_tree` with the entries given: a blob's id, or none to remove it.
+    fn github_new_tree(&mut self, body: &Value) -> Response {
+        let Some(entries) = body["tree"].as_array() else { return message(422, "Invalid tree info") };
+        let mut files = match body["base_tree"].as_str() {
+            Some(base) => match self.trees.get(base) {
+                Some(files) => files.clone(),
+                None => return message(422, "base_tree is not a valid tree oid"),
+            },
+            None => BTreeMap::new(),
+        };
+        self.last_paths.clear();
+        for e in entries {
+            let Some(path) = e["path"].as_str() else { return message(422, "Invalid tree info") };
+            self.last_paths.push(path.to_owned());
+            match e["sha"].as_str() {
+                Some(sha) if self.blobs.contains_key(sha) => {
+                    files.insert(path.to_owned(), Entry { mode: e["mode"].as_str().unwrap_or("100644").to_owned(), id: sha.to_owned() });
+                }
+                Some(_) => return message(422, "GitRPC::BadObjectState"),
+                None => {
+                    files.remove(path);
+                }
+            }
+        }
+        let id = make_tree(self, files);
+        json_response(201, &json!({"sha": id}))
     }
 }
 

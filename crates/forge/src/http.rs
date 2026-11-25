@@ -5,10 +5,14 @@
 use std::future::Future;
 use std::pin::Pin;
 
+use serde_json::Value;
+
+use crate::{Error, Service};
+
 /// One HTTP request.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Request {
-    /// `GET` or `POST`.
+    /// `GET`, `POST` or `PATCH`.
     pub method: &'static str,
     pub url: String,
     pub headers: Vec<(String, String)>,
@@ -51,6 +55,51 @@ pub trait Transport {
     fn send(&self, request: Request) -> Sending<'_>;
 }
 
+/// `response` when it is a success; otherwise the error its status means, about `what`, from
+/// `forge`. A 403 or 429 that says no requests are left (GitHub's `X-RateLimit-Remaining: 0`) is
+/// the rate limit, with the time until it resets.
+pub(crate) fn check(forge: Service, response: Response, what: &str) -> crate::Result<Response> {
+    let limited = response.header("x-ratelimit-remaining").is_some_and(|n| n.trim() == "0");
+    let retry_after = || {
+        let after = response.header("retry-after").and_then(|s| s.trim().parse().ok());
+        let reset = response.header("x-ratelimit-reset").and_then(|s| s.trim().parse::<u64>().ok());
+        after.or_else(|| Some(reset?.saturating_sub(now_secs()?)))
+    };
+    match response.status {
+        200..=299 => Ok(response),
+        401 => Err(Error::Unauthorized { forge }),
+        403 | 429 if limited || response.header("retry-after").is_some() => Err(Error::RateLimited { forge, retry_after: retry_after() }),
+        403 => Err(Error::Forbidden { forge, what: what.to_owned() }),
+        404 => Err(Error::NotFound { forge, what: what.to_owned() }),
+        429 => Err(Error::RateLimited { forge, retry_after: retry_after() }),
+        status @ 400..=499 => Err(Error::Refused { forge, status, message: message_of(&response.body) }),
+        status => Err(Error::Server { forge, status }),
+    }
+}
+
+/// The forge's message in an error's body (`{"message": …}` or `{"error": …}`), or the body's
+/// start.
+fn message_of(body: &[u8]) -> String {
+    let text = match serde_json::from_slice::<Value>(body) {
+        Ok(v) => match v.get("message").or_else(|| v.get("error")) {
+            Some(Value::String(s)) => s.clone(),
+            Some(other) => other.to_string(),
+            None => v.to_string(),
+        },
+        Err(_) => String::from_utf8_lossy(body).into_owned(),
+    };
+    let text = text.trim();
+    if text.chars().count() > 300 { format!("{}…", text.chars().take(300).collect::<String>()) } else { text.to_owned() }
+}
+
+/// Seconds since 1970 by this computer's clock, to tell how long until a rate limit resets.
+fn now_secs() -> Option<u64> {
+    #[cfg(not(target_arch = "wasm32"))]
+    return std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs());
+    #[cfg(target_arch = "wasm32")]
+    Some((js_sys::Date::now() / 1000.0) as u64)
+}
+
 /// The transport this build uses to reach a forge: the desktop's HTTP client, or the browser's
 /// `fetch`.
 pub fn transport() -> Box<dyn Transport> {
@@ -82,8 +131,8 @@ mod native {
 
         fn send_now(&self, request: &Request) -> Result<Response, String> {
             let sent = match request.method {
-                "POST" => {
-                    let mut builder = self.agent.post(&request.url);
+                "POST" | "PATCH" => {
+                    let mut builder = if request.method == "PATCH" { self.agent.patch(&request.url) } else { self.agent.post(&request.url) };
                     for (k, v) in &request.headers {
                         builder = builder.header(k, v);
                     }
@@ -126,9 +175,9 @@ mod web {
     use super::{Request, Response, Sending, Transport};
 
     /// The headers the API's logic reads; the browser lists only those the server exposes.
-    const HEADERS: &[&str] = &["link", "x-next-page", "retry-after", "content-length", "content-type"];
+    const HEADERS: &[&str] = &["link", "x-next-page", "retry-after", "x-ratelimit-remaining", "x-ratelimit-reset", "content-length", "content-type"];
 
-    /// The browser's `fetch`, as a CORS request (GitLab's API allows any origin).
+    /// The browser's `fetch`, as a CORS request (GitLab's and GitHub's APIs allow any origin).
     pub struct Fetch;
 
     fn why(e: wasm_bindgen::JsValue) -> String {

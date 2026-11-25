@@ -8,7 +8,8 @@ use std::collections::BTreeMap;
 use base64::Engine as _;
 
 use crate::forge::{Forge, Made, Target};
-use crate::{Address, ChangeKind, Error, FileChange, MAX_FILE, Request, Response, Result, Token, Transport, encode};
+use crate::http::check;
+use crate::{Address, ChangeKind, Error, FileChange, MAX_FILE, Request, Response, Result, Service, Token, Transport, encode};
 
 /// Largest answer of the API read (a page of the tree, a commit), apart from files' contents.
 const MAX_JSON: u64 = 16 * 1024 * 1024;
@@ -92,8 +93,8 @@ impl GitLab {
 
     /// Sends `request`; an answer that is not a success is an error about `what`.
     async fn send(&self, request: Request, what: &str) -> Result<Response> {
-        let response = self.transport.send(request).await.map_err(Error::Network)?;
-        check(response, what)
+        let response = self.transport.send(request).await.map_err(|why| Error::Network { forge: Service::GitLab, why })?;
+        check(Service::GitLab, response, what)
     }
 
     async fn get_json(&self, url: String, what: &str) -> Result<(Value, Response)> {
@@ -269,33 +270,6 @@ fn actions(changes: &[FileChange], files: &[(String, Vec<u8>)]) -> Vec<Value> {
             ChangeKind::Moved => json!({"action": "move", "file_path": c.path, "previous_path": c.from}),
         })
         .collect()
-}
-
-/// `response` when it is a success; otherwise the error its status means, about `what`.
-pub fn check(response: Response, what: &str) -> Result<Response> {
-    match response.status {
-        200..=299 => Ok(response),
-        401 => Err(Error::Unauthorized),
-        403 => Err(Error::Forbidden { what: what.to_owned() }),
-        404 => Err(Error::NotFound { what: what.to_owned() }),
-        429 => Err(Error::RateLimited { retry_after: response.header("retry-after").and_then(|s| s.trim().parse().ok()) }),
-        status @ 400..=499 => Err(Error::Refused { status, message: message_of(&response.body) }),
-        status => Err(Error::Server { status }),
-    }
-}
-
-/// GitLab's message in an error's body (`{"message": …}` or `{"error": …}`), or the body's start.
-fn message_of(body: &[u8]) -> String {
-    let text = match serde_json::from_slice::<Value>(body) {
-        Ok(v) => match v.get("message").or_else(|| v.get("error")) {
-            Some(Value::String(s)) => s.clone(),
-            Some(other) => other.to_string(),
-            None => v.to_string(),
-        },
-        Err(_) => String::from_utf8_lossy(body).into_owned(),
-    };
-    let text = text.trim();
-    if text.chars().count() > 300 { format!("{}…", text.chars().take(300).collect::<String>()) } else { text.to_owned() }
 }
 
 /// The `rel="next"` address of a `Link` header.

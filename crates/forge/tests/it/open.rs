@@ -2,19 +2,20 @@
 
 use texcraft_forge::{MAX_FILE, Request, Sending, Transport, open};
 
-use crate::{block_on, client, client_with, paper};
+use crate::{block_on, client, client_with, paper, papers};
 
 #[test]
 fn every_file_of_the_branch_is_loaded_with_its_blob_id() {
-    let fake = paper();
-    let loaded = block_on(open(&client(&fake).unwrap(), None)).unwrap();
-    let files: Vec<&str> = loaded.files.iter().map(|(p, _)| p.as_str()).collect();
-    assert_eq!(files, ["chapters/intro.tex", "fig/plot.png", "main.tex"]);
-    assert_eq!(loaded.link.branch, "main");
-    assert_eq!(Some(loaded.link.base.clone()), fake.head("main"));
-    for (path, bytes) in &loaded.files {
-        assert_eq!(fake.files("main").get(path), Some(bytes), "{path} came back changed");
-        assert_eq!(loaded.link.files.get(path), Some(&texcraft_history::store::blob_id(bytes).unwrap()));
+    for fake in papers() {
+        let loaded = block_on(open(&client(&fake).unwrap(), None)).unwrap();
+        let files: Vec<&str> = loaded.files.iter().map(|(p, _)| p.as_str()).collect();
+        assert_eq!(files, ["chapters/intro.tex", "fig/plot.png", "main.tex"]);
+        assert_eq!(loaded.link.branch, "main");
+        assert_eq!(Some(loaded.link.base.clone()), fake.head("main"));
+        for (path, bytes) in &loaded.files {
+            assert_eq!(fake.files("main").get(path), Some(bytes), "{path} came back changed");
+            assert_eq!(loaded.link.files.get(path), Some(&texcraft_history::store::blob_id(bytes).unwrap()));
+        }
     }
 }
 
@@ -36,38 +37,41 @@ fn a_tree_of_many_pages_is_read_to_its_end_either_way_gitlab_pages_it() {
 
 #[test]
 fn hidden_files_links_and_submodules_stay_on_the_branch() {
-    let fake = paper();
-    fake.push("main", &[(".gitlab-ci.yml", Some(b"build:\n".as_slice())), (".gitignore", Some(b"*.aux\n".as_slice()))]);
-    fake.push_entry("main", "latest.pdf", "120000");
-    fake.push_entry("main", "vendor/styles", "160000");
-    let loaded = block_on(open(&client(&fake).unwrap(), None)).unwrap();
-    let paths: Vec<&str> = loaded.files.iter().map(|(p, _)| p.as_str()).collect();
-    for left in [".gitlab-ci.yml", ".gitignore", "latest.pdf", "vendor/styles"] {
-        assert!(!paths.contains(&left), "{left} was loaded");
-        assert!(!loaded.link.files.contains_key(left), "{left} is tracked");
+    for fake in papers() {
+        fake.push("main", &[(".gitlab-ci.yml", Some(b"build:\n".as_slice())), (".gitignore", Some(b"*.aux\n".as_slice()))]);
+        fake.push_entry("main", "latest.pdf", "120000");
+        fake.push_entry("main", "vendor/styles", "160000");
+        let loaded = block_on(open(&client(&fake).unwrap(), None)).unwrap();
+        let paths: Vec<&str> = loaded.files.iter().map(|(p, _)| p.as_str()).collect();
+        for left in [".gitlab-ci.yml", ".gitignore", "latest.pdf", "vendor/styles"] {
+            assert!(!paths.contains(&left), "{left} was loaded");
+            assert!(!loaded.link.files.contains_key(left), "{left} is tracked");
+        }
+        assert!(loaded.link.skipped.iter().any(|s| s.path == "latest.pdf"), "the link is not said to be left out");
     }
-    assert!(loaded.link.skipped.iter().any(|s| s.path == "latest.pdf"), "the link is not said to be left out");
 }
 
 #[test]
 fn a_file_over_the_limit_is_skipped_and_said() {
-    let fake = paper();
-    let big = vec![b'x'; MAX_FILE as usize + 1];
-    fake.push("main", &[("data/big.csv", Some(big.as_slice()))]);
-    let loaded = block_on(open(&client(&fake).unwrap(), None)).unwrap();
-    assert!(!loaded.files.iter().any(|(p, _)| p == "data/big.csv"));
-    assert!(!loaded.link.files.contains_key("data/big.csv"), "a skipped file would count as deleted");
-    assert!(loaded.link.skipped.iter().any(|s| s.path == "data/big.csv"));
-    assert!(loaded.files.iter().any(|(p, _)| p == "main.tex"), "the rest of the project was not loaded");
+    for fake in papers() {
+        let big = vec![b'x'; MAX_FILE as usize + 1];
+        fake.push("main", &[("data/big.csv", Some(big.as_slice()))]);
+        let loaded = block_on(open(&client(&fake).unwrap(), None)).unwrap();
+        assert!(!loaded.files.iter().any(|(p, _)| p == "data/big.csv"));
+        assert!(!loaded.link.files.contains_key("data/big.csv"), "a skipped file would count as deleted");
+        assert!(loaded.link.skipped.iter().any(|s| s.path == "data/big.csv"));
+        assert!(loaded.files.iter().any(|(p, _)| p == "main.tex"), "the rest of the project was not loaded");
+    }
 }
 
 #[test]
 fn another_branch_can_be_opened() {
-    let fake = paper();
-    fake.push("draft", &[("main.tex", Some(b"draft\n".as_slice()))]);
-    let loaded = block_on(open(&client(&fake).unwrap(), Some("draft"))).unwrap();
-    assert_eq!(loaded.link.branch, "draft");
-    assert_eq!(loaded.files, vec![("main.tex".to_owned(), b"draft\n".to_vec())]);
+    for fake in papers() {
+        fake.push("draft", &[("main.tex", Some(b"draft\n".as_slice()))]);
+        let loaded = block_on(open(&client(&fake).unwrap(), Some("draft"))).unwrap();
+        assert_eq!(loaded.link.branch, "draft");
+        assert_eq!(loaded.files, vec![("main.tex".to_owned(), b"draft\n".to_vec())]);
+    }
 }
 
 /// The fake, with every file's contents changed on the way.
