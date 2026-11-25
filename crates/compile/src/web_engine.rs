@@ -489,6 +489,9 @@ impl Engine {
         let names: Array = get(msg, "names").unchecked_into();
         let contents: Array = get(msg, "contents").unchecked_into();
         let flags: Array = get(msg, "args").unchecked_into();
+        // An export (`{type: "export", format}`): retex's `-output-format`, run once from the start
+        // and apart from the preview's snapshot.
+        let export = get(msg, "format").as_string().filter(|f| f != "pdf");
         let mut now = HashSet::new();
         for (name, bytes) in names.iter().zip(contents.iter()) {
             let name = format!("{PROJECT}/{}", name.as_string().unwrap_or_default());
@@ -507,6 +510,11 @@ impl Engine {
         let mut args: Vec<String> =
             vec!["retex".into(), "--color=never".into(), "--message-format=json".into(), "--symbols".into(), "-synctex=-1".into()];
         args.extend(flags.iter().filter_map(|a| a.as_string()));
+        let output = export.as_ref().map(|f| format!("{cwd}/{job}.{f}"));
+        if let (Some(f), Some(o)) = (&export, &output) {
+            args.push(format!("-output-format={f}"));
+            self.fs.remove(o);
+        }
         args.push(main.clone());
         let key = format!("{}\u{0}{cwd}", args.join("\u{0}"));
         let mut env: Vec<(String, String)> = ENV.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect();
@@ -519,7 +527,7 @@ impl Engine {
             self.web.fetched.borrow_mut().run_started = js_sys::Date::now();
             let wasi = Wasi::new(self.fs.clone(), self.web.clone(), args.clone(), env.clone());
             let instance = Instance::new(&module, wasi, true).map_err(|e| format!("instantiating retex: {e:?}"))?;
-            let resumed = matches!(&self.snapshot, Some((k, _)) if *k == key);
+            let resumed = export.is_none() && matches!(&self.snapshot, Some((k, _)) if *k == key);
             let (ended, instance) = match (&self.snapshot, resumed) {
                 (Some((_, image)), true) => instance.resume(image),
                 _ => instance.start(),
@@ -532,7 +540,7 @@ impl Engine {
                 }
                 Ended::Exit(RERUN) if resumed && reruns < 10 => reruns += 1,
                 Ended::Exit(code) => {
-                    if let Some(image) = image {
+                    if let Some(image) = image.filter(|_| export.is_none()) {
                         self.snapshot = Some((key.clone(), image));
                     }
                     break code;
@@ -562,6 +570,11 @@ impl Engine {
         self.fs.remove("/.retex-resume");
         let out = std::mem::take(&mut *self.web.out.borrow_mut());
         let seconds = (js_sys::Date::now() - started) / 1000.0;
+        if let Some(output) = output {
+            self.exported(id, &cwd, &job, &output, &self.written, &out.text);
+            self.keep().await;
+            return Ok(());
+        }
         let mut fields = vec![("code", JsValue::from(code)), ("output", out.text.into()), ("seconds", seconds.into()), ("stops", stops.into())];
         let mut transfer = Vec::new();
         for (key, path) in [("pdf", &pdf), ("synctex", &synctex)] {
@@ -574,6 +587,47 @@ impl Engine {
         post("done", id, &fields, &transfer);
         self.keep().await;
         Ok(())
+    }
+
+    /// Sends an export's files (`{type: "exported", id, names, contents}`: the document, then the
+    /// pictures Markdown writes beside it), or why there is none (`{..., error}`: retex's first
+    /// error).
+    fn exported(&self, id: f64, cwd: &str, job: &str, output: &str, project: &HashSet<String>, text: &str) {
+        let Some(data) = self.fs.read(output) else {
+            let why = text
+                .lines()
+                .filter_map(|l| crate::records::parse(l, None))
+                .find_map(|r| match r {
+                    crate::records::Record::Diagnostic(d) if d.severity == crate::Severity::Error => Some(d.message),
+                    _ => None,
+                })
+                .unwrap_or_else(|| "retex wrote no file".to_owned());
+            post("exported", id, &[("error", why.into())], &[]);
+            return;
+        };
+        let names = Array::new();
+        let contents = Array::new();
+        let mut transfer = Vec::new();
+        let mut add = |name: &str, bytes: &[u8]| {
+            let arr = Uint8Array::from(bytes);
+            transfer.push(JsValue::from(arr.buffer()));
+            names.push(&name.into());
+            contents.push(&arr.into());
+        };
+        add(output.rsplit('/').next().unwrap_or(output), &data);
+        // Markdown's pictures: the files retex wrote beside it, under a name of the job's.
+        const BUILD_FILES: &[&str] = &["aux", "log", "fls", "toc", "out", "synctex", "pdf", "nav", "snm", "bbl", "blg", "bcf", "xml"];
+        for (path, _) in self.fs.files(cwd) {
+            let Some(rel) = path.strip_prefix(&format!("{cwd}/")) else { continue };
+            let ext = rel.rsplit('.').next().unwrap_or_default();
+            if path == output || project.contains(&path) || !rel.starts_with(job) || rel.starts_with(".retex") || BUILD_FILES.contains(&ext) {
+                continue;
+            }
+            if let Some(bytes) = self.fs.read(&path) {
+                add(rel, &bytes);
+            }
+        }
+        post("exported", id, &[("names", names.into()), ("contents", contents.into())], &transfer);
     }
 
     /// Keeps what this build fetched while it ran and what the engine made, for later visits.
@@ -640,7 +694,8 @@ pub fn worker_main() {
                 let result = e.build(&msg).await;
                 *engine.borrow_mut() = Some(e);
                 if let Err(e) = result {
-                    post("done", id, &[("error", e.into())], &[]);
+                    let kind = if get(&msg, "type").as_string().as_deref() == Some("export") { "exported" } else { "done" };
+                    post(kind, id, &[("error", e.into())], &[]);
                 }
             }
             *busy.borrow_mut() = false;

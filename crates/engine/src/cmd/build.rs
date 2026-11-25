@@ -172,11 +172,8 @@ fn export_schema() -> Value {
 }
 
 fn can_export(s: &Session) -> Result<()> {
-    if cfg!(target_arch = "wasm32") {
-        return Err("Exporting is not available in the browser yet.".to_owned());
-    }
     has_main(s)?;
-    if s.exporter().is_none() && s.pdf.is_none() {
+    if !s.can_convert() && s.pdf.is_none() {
         return Err("This typesetting engine cannot export: it has no converter to other formats.".to_owned());
     }
     Ok(())
@@ -190,12 +187,32 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let name = p.get("format").and_then(Value::as_str).ok_or("the parameter `format` (a string) is missing")?;
     let format =
         texcraft_compile::Export::parse(name).ok_or_else(|| format!("unknown format `{name}`: pdf, odt, docx, odp, pptx, html, markdown or svg"))?;
+    let path = std::path::PathBuf::from(p.get("path").and_then(Value::as_str).ok_or("the parameter `path` (a string) is missing")?);
+    export_to(s, p, format, path)
+}
+
+/// In the browser: the last build's PDF is handed to the shell, the other formats are made by the
+/// engine's worker; the shell downloads the files (`Session::take_exported_files`). `path` is only
+/// the file's name.
+#[cfg(target_arch = "wasm32")]
+fn export_to(s: &mut Session, _: &Value, format: texcraft_compile::Export, path: std::path::PathBuf) -> Result<Value> {
+    let name = path.file_name().map_or_else(|| format!("document.{}", format.extension()), |n| n.to_string_lossy().into_owned());
+    if format == texcraft_compile::Export::Pdf {
+        let pdf = s.pdf.clone().ok_or("There is no PDF yet.")?;
+        s.hand_out(name.clone(), pdf.to_vec());
+        return Ok(json!({"format": "pdf", "path": name, "bytes": pdf.len()}));
+    }
+    s.start_web_export(format, name)?;
+    Ok(json!({"format": format, "started": true}))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn export_to(s: &mut Session, p: &Value, format: texcraft_compile::Export, path: std::path::PathBuf) -> Result<Value> {
     if format == texcraft_compile::Export::Pdf {
         let mut written = save_pdf(s, p)?;
         written["format"] = json!("pdf");
         return Ok(written);
     }
-    let path = std::path::PathBuf::from(p.get("path").and_then(Value::as_str).ok_or("the parameter `path` (a string) is missing")?);
     if s.roots.is_some() {
         // As build.compile: retex cannot yet confine the files a document reads (RFC-0015).
         return Err("Exporting is not available to agents yet: the engine cannot confine the files a document reads.".to_owned());
@@ -208,7 +225,6 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
         let exported = exporter(&job, format, &media).map_err(|e| format!("Export to {} failed: {e}", format.extension()))?;
         write_export(format, &path, &exported)
     };
-    #[cfg(not(target_arch = "wasm32"))]
     if p.get("background").and_then(Value::as_bool).unwrap_or(false) {
         if s.exporting() {
             return Err("An export is already running.".to_owned());
@@ -227,6 +243,7 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Writes an export's file and its media beside it; what was written, for the command's result.
+#[cfg(not(target_arch = "wasm32"))]
 fn write_export(format: texcraft_compile::Export, path: &std::path::Path, exported: &texcraft_compile::Exported) -> Result<Value> {
     std::fs::write(path, &exported.data).map_err(|e| format!("writing {}: {e}", path.display()))?;
     let dir = path.parent().map(std::path::Path::to_path_buf).unwrap_or_default();

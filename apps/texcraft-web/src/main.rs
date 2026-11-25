@@ -201,6 +201,12 @@ mod web {
             let ctx = ui.ctx().clone();
             self.picks(&ctx);
             self.keep(&ctx);
+            for (name, data) in self.app.take_exported_files() {
+                if let Err(e) = download(&name, &data) {
+                    let what = texcraft_ui_egui::i18n::t("The browser did not download {file}: {error}");
+                    self.app.report(what.replace("{file}", &name).replace("{error}", &e), true);
+                }
+            }
         }
     }
 
@@ -209,6 +215,21 @@ mod web {
         if let Some(e) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id("loading")) {
             e.remove();
         }
+    }
+
+    /// Hands `data` to the browser as a download named `name` (a link to a blob, clicked).
+    fn download(name: &str, data: &[u8]) -> Result<(), String> {
+        let document = web_sys::window().and_then(|w| w.document()).ok_or("no document")?;
+        let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(data));
+        let blob = web_sys::Blob::new_with_u8_array_sequence(&parts).map_err(|e| format!("{e:?}"))?;
+        let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(|e| format!("{e:?}"))?;
+        let link: web_sys::HtmlAnchorElement =
+            document.create_element("a").map_err(|e| format!("{e:?}"))?.dyn_into().map_err(|_| "no link element")?;
+        link.set_href(&url);
+        link.set_download(name);
+        link.click();
+        let _ = web_sys::Url::revoke_object_url(&url);
+        Ok(())
     }
 
     /// Drops that bring no file to eframe: its handler takes `dataTransfer.files` only, which some

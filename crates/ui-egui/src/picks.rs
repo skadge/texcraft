@@ -149,7 +149,7 @@ impl App {
     }
 
     /// The main document's name without its extension, for a suggested file name.
-    fn main_stem(&self) -> String {
+    pub(crate) fn main_stem(&self) -> String {
         self.session.project().main().map_or("document".to_owned(), |m| m.file_name().rsplit_once('.').map_or(m.file_name(), |(s, _)| s).to_owned())
     }
 

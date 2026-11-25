@@ -181,6 +181,15 @@ pub fn run(app: &mut App, id: &str) {
 /// Exports to `format`: asks where (a native picker, or a typed path), then runs `build.export`.
 /// The PDF is the last build's (`build.save_pdf`).
 pub(crate) fn export(app: &mut App, format: texcraft_engine::Export) {
+    // In the browser there is no file to choose: the shell downloads what the export makes.
+    if app.session.library().is_some() {
+        let name = format!("{}.{}", app.main_stem(), format.extension());
+        if app.run("build.export", json!({"format": format, "path": name, "background": true})).is_some() && format != texcraft_engine::Export::Pdf {
+            let label = crate::preview::export_label(format);
+            app.view.status = Some((tl!("Exporting as {format}…").replace("{format}", label), false));
+        }
+        return;
+    }
     if format == texcraft_engine::Export::Pdf {
         return run(app, "build.save_pdf");
     }

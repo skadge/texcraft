@@ -96,7 +96,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 
 | Code | | Feature | Description |
 |---|---|---|---|
-| O1 | 🚧 | Export | The PDF pane's Export menu: PDF, Word, OpenDocument text, PowerPoint and OpenDocument presentations (first for beamer), HTML, Markdown, SVG. Done on the desktop; the browser is next. The pane always shows the PDF: HTML and Markdown are exports only (operator's decision, 2026-11-25). |
+| O1 | ✅ 0.5.0 | Export | The PDF pane's Export menu: PDF, Word, OpenDocument text, PowerPoint and OpenDocument presentations (first for beamer), HTML, Markdown, SVG; on the desktop and in the browser (as downloads). The pane always shows the PDF: HTML and Markdown are exports only (operator's decision, 2026-11-25). |
 | O2 | ⬜ | Accessible PDF | PDF/UA output, with retex's accessibility findings linked to the source. |
 | O3 | ⬜ | Print | PDF/X with bleed and crop marks, and preflight checks placed on the page and in the source. |
 

@@ -398,6 +398,11 @@ impl App {
         }
     }
 
+    /// The files an export made in the browser, for the shell to hand to the browser as downloads.
+    pub fn take_exported_files(&mut self) -> Vec<(String, Vec<u8>)> {
+        self.session.take_exported_files()
+    }
+
     /// The library's changes since the last call (the browser's projects), for the shell to
     /// store.
     pub fn take_library_changes(&mut self) -> Vec<texcraft_engine::library::Change> {

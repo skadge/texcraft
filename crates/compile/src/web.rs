@@ -19,7 +19,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::{MessageEvent, Worker};
 
 use crate::records::{self, Record};
-use crate::{Diagnostic, Draft, Engine, Event, Job, Outcome, Progress, Severity};
+use crate::{Diagnostic, Draft, Engine, Event, Exported, Job, Outcome, Progress, Severity};
 
 fn get(obj: &JsValue, key: &str) -> JsValue {
     Reflect::get(obj, &JsValue::from_str(key)).unwrap_or(JsValue::UNDEFINED)
@@ -45,9 +45,16 @@ pub struct WebWorker {
     progress: Progress,
     draft: Option<Draft>,
     started: f64,
-    /// Whether the worker said it takes messages; until then the build to send waits here.
+    /// Whether the worker said it takes messages; until then what to send waits here.
     ready: bool,
-    unsent: Option<JsValue>,
+    unsent: Vec<JsValue>,
+    /// The worker's messages about builds, apart from those about exports.
+    builds: VecDeque<JsValue>,
+    /// The export running (its message id), then its outcome: the files, or why there are none.
+    export: Option<(f64, Option<Result<Exported, String>>)>,
+    next_export: f64,
+    /// The worker stopped: why.
+    crashed: Option<String>,
     _onmessage: Option<Closure<dyn FnMut(MessageEvent)>>,
 }
 
@@ -74,7 +81,11 @@ impl WebWorker {
             draft: None,
             started: 0.0,
             ready: false,
-            unsent: None,
+            unsent: Vec::new(),
+            builds: VecDeque::new(),
+            export: None,
+            next_export: 0.0,
+            crashed: None,
             _onmessage: Some(onmessage),
         }
     }
@@ -103,76 +114,77 @@ impl WebWorker {
     }
 
     fn start(&mut self, job: Job) {
-        let Some(worker) = &self.worker else {
-            self.running = Some((job.id, None));
-            return;
-        };
         let dir = main_dir(&job);
-        let names = Array::new();
-        let contents = Array::new();
-        for (path, data) in &job.files {
-            // The whole project: retex starts in the main document's folder (its `PWD`), so
-            // `../shared/macros.tex` is found as on the desktop.
-            names.push(&path.as_str().into());
-            contents.push(&Uint8Array::from(&data[..]).into());
-        }
-        let main = job.main.as_str().rsplit('/').next().unwrap_or(job.main.as_str()).to_owned();
-        let args = Array::new();
-        match job.options.engine {
-            Engine::Auto => {}
-            Engine::LuaLatex => {
-                args.push(&"--compat=lualatex".into());
-            }
-            Engine::PdfLatex => {
-                args.push(&"--compat=pdflatex".into());
-            }
-        }
-        if job.options.halt_on_error {
-            args.push(&"--halt-on-error".into());
-        }
-        if job.options.draft_images {
-            args.push(&"--draft-images".into());
-        }
-        let msg = Object::new();
-        for (k, v) in [
-            ("type", JsValue::from("build")),
-            ("id", JsValue::from(job.id as f64)),
-            ("main", main.into()),
-            ("dir", dir.clone().unwrap_or_default().into()),
-            ("names", names.into()),
-            ("contents", contents.into()),
-            ("args", args.into()),
-        ] {
-            let _ = Reflect::set(&msg, &k.into(), &v);
-        }
-        if !self.ready {
-            self.unsent = Some(msg.into());
-        } else if let Err(e) = worker.post_message(&msg) {
-            self.error = Some(format!("The typesetting engine did not take the build ({e:?})."));
-        }
+        let msg = message("build", job.id as f64, &job);
+        self.send(msg.into());
         self.running = Some((job.id, dir));
         self.progress = Progress::default();
         self.draft = None;
         self.started = js_sys::Date::now();
     }
 
-    /// Takes the messages that arrived; returns the running job's outcome when it ended.
-    fn receive(&mut self) -> Option<Outcome> {
-        let (id, dir) = self.running.clone()?;
-        if let Some(error) = &self.error {
-            return Some(Outcome::unavailable(id, error.clone()));
+    /// Sends `msg` to the worker, or keeps it until the worker is ready.
+    fn send(&mut self, msg: JsValue) {
+        let Some(worker) = &self.worker else { return };
+        if !self.ready {
+            self.unsent.push(msg);
+        } else if let Err(e) = worker.post_message(&msg) {
+            self.error = Some(format!("The typesetting engine did not take the build ({e:?})."));
         }
+    }
+
+    /// Exports `job` as `format` (retex's `-output-format` name: odt, docx, odp, pptx, html, md,
+    /// svg); [`WebWorker::poll_export`] gives the files.
+    pub fn export(&mut self, job: &Job, format: &str) -> Result<(), String> {
+        if let Some(error) = self.error.as_ref().or(self.crashed.as_ref()) {
+            return Err(error.clone());
+        }
+        if self.export.is_some() {
+            return Err("An export is already running.".to_owned());
+        }
+        // Ids of their own, apart from the builds' (which count up from 1).
+        self.next_export -= 1.0;
+        let msg = message("export", self.next_export, job);
+        let _ = Reflect::set(&msg, &"format".into(), &format.into());
+        self.export = Some((self.next_export, None));
+        self.send(msg.into());
+        Ok(())
+    }
+
+    pub fn exporting(&self) -> bool {
+        self.export.is_some()
+    }
+
+    /// The running export's files (the document first), once it ended, or why it failed.
+    pub fn poll_export(&mut self) -> Option<Result<Exported, String>> {
+        self.pump();
+        if let Some(why) = &self.crashed
+            && self.export.is_some()
+        {
+            self.export = None;
+            return Some(Err(why.clone()));
+        }
+        match &mut self.export {
+            Some((_, outcome @ Some(_))) => {
+                let outcome = outcome.take();
+                self.export = None;
+                outcome
+            }
+            _ => None,
+        }
+    }
+
+    /// Sorts the worker's messages: the handshake, its log, a crash and exports are handled here,
+    /// builds' messages wait in `builds`.
+    fn pump(&mut self) {
         loop {
-            let msg = self.inbox.borrow_mut().pop_front()?;
+            let Some(msg) = self.inbox.borrow_mut().pop_front() else { return };
             match get(&msg, "type").as_string().as_deref() {
                 Some("ready") => {
                     self.ready = true;
-                    if let (Some(worker), Some(unsent)) = (&self.worker, self.unsent.take())
-                        && let Err(e) = worker.post_message(&unsent)
-                    {
-                        self.error = Some(format!("The typesetting engine did not take the build ({e:?})."));
+                    for unsent in std::mem::take(&mut self.unsent) {
+                        self.send(unsent);
                     }
-                    continue;
                 }
                 Some("log") => {
                     let text = get(&msg, "text").as_string().unwrap_or_default();
@@ -181,17 +193,96 @@ impl WebWorker {
                         Some("WARN") => log::warn!("engine: {text}"),
                         _ => log::info!("engine: {text}"),
                     }
-                    continue;
                 }
                 Some("crash") => {
                     let why = get(&msg, "error").as_string().unwrap_or_default();
                     // The worker is gone: later builds fail at once with the same reason.
-                    self.error = Some(format!("The typesetting engine stopped unexpectedly: {why}"));
+                    self.crashed = Some(format!("The typesetting engine stopped unexpectedly: {why}"));
                     self.worker = None;
-                    return Some(failure(id, &format!("The typesetting engine stopped unexpectedly: {why}")));
                 }
-                _ => {}
+                Some("exported") => {
+                    if let Some((id, outcome)) = &mut self.export
+                        && get(&msg, "id").as_f64() == Some(*id)
+                    {
+                        *outcome = Some(match get(&msg, "error").as_string() {
+                            Some(error) => Err(error),
+                            None => Ok(exported(&msg)),
+                        });
+                    }
+                }
+                _ => self.builds.push_back(msg),
             }
+        }
+    }
+}
+
+/// The files of an `exported` message: the document, then its pictures.
+fn exported(msg: &JsValue) -> Exported {
+    let names: Array = get(msg, "names").unchecked_into();
+    let contents: Array = get(msg, "contents").unchecked_into();
+    let mut files: Vec<(String, Vec<u8>)> =
+        names.iter().zip(contents.iter()).filter_map(|(n, c)| Some((n.as_string()?, c.dyn_into::<Uint8Array>().ok()?.to_vec()))).collect();
+    let data = if files.is_empty() { Vec::new() } else { files.remove(0).1 };
+    Exported { data, media: files }
+}
+
+/// A `build` or `export` message for `job`: the main document's name and folder, the project's
+/// files at their paths, retex's extra arguments.
+fn message(kind: &str, id: f64, job: &Job) -> Object {
+    let dir = main_dir(job);
+    let names = Array::new();
+    let contents = Array::new();
+    for (path, data) in &job.files {
+        // The whole project: retex starts in the main document's folder (its `PWD`), so
+        // `../shared/macros.tex` is found as on the desktop.
+        names.push(&path.as_str().into());
+        contents.push(&Uint8Array::from(&data[..]).into());
+    }
+    let main = job.main.as_str().rsplit('/').next().unwrap_or(job.main.as_str()).to_owned();
+    let args = Array::new();
+    match job.options.engine {
+        Engine::Auto => {}
+        Engine::LuaLatex => {
+            args.push(&"--compat=lualatex".into());
+        }
+        Engine::PdfLatex => {
+            args.push(&"--compat=pdflatex".into());
+        }
+    }
+    if job.options.halt_on_error {
+        args.push(&"--halt-on-error".into());
+    }
+    if job.options.draft_images {
+        args.push(&"--draft-images".into());
+    }
+    let msg = Object::new();
+    for (k, v) in [
+        ("type", JsValue::from(kind)),
+        ("id", JsValue::from(id)),
+        ("main", main.into()),
+        ("dir", dir.unwrap_or_default().into()),
+        ("names", names.into()),
+        ("contents", contents.into()),
+        ("args", args.into()),
+    ] {
+        let _ = Reflect::set(&msg, &k.into(), &v);
+    }
+    msg
+}
+
+impl WebWorker {
+    /// Takes the messages that arrived; returns the running job's outcome when it ended.
+    fn receive(&mut self) -> Option<Outcome> {
+        let (id, dir) = self.running.clone()?;
+        if let Some(error) = &self.error {
+            return Some(Outcome::unavailable(id, error.clone()));
+        }
+        self.pump();
+        if let Some(why) = &self.crashed {
+            return Some(failure(id, why));
+        }
+        loop {
+            let msg = self.builds.pop_front()?;
             if get(&msg, "id").as_f64() != Some(id as f64) {
                 continue;
             }

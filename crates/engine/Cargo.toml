@@ -38,6 +38,8 @@ log = { workspace = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 chrono = { workspace = true, features = ["wasmbind"] }
 getrandom = { workspace = true, features = ["wasm_js"] }
+# An export with pictures (Markdown) is downloaded as one zip in the browser.
+craft-zip = { workspace = true }
 
 [dev-dependencies]
 texcraft-templates = { workspace = true }

@@ -107,6 +107,11 @@ pub struct Session {
     /// The export running on its own thread (`build.export` with `background`).
     #[cfg(not(target_arch = "wasm32"))]
     export: Option<std::sync::mpsc::Receiver<Result<Value>>>,
+    /// In the browser: the running export's file name, then its files, for the shell to download.
+    #[cfg(target_arch = "wasm32")]
+    export_name: Option<String>,
+    #[cfg(target_arch = "wasm32")]
+    exported: Vec<(String, Vec<u8>)>,
 }
 
 impl Session {
@@ -147,6 +152,10 @@ impl Session {
             folders: std::collections::BTreeSet::new(),
             #[cfg(not(target_arch = "wasm32"))]
             export: None,
+            #[cfg(target_arch = "wasm32")]
+            export_name: None,
+            #[cfg(target_arch = "wasm32")]
+            exported: Vec::new(),
         }
     }
 
@@ -355,7 +364,38 @@ impl Session {
         #[cfg(not(target_arch = "wasm32"))]
         return self.export.is_some();
         #[cfg(target_arch = "wasm32")]
-        false
+        match &self.builder {
+            Builder::Web(w) => w.exporting(),
+            Builder::Inline(..) => false,
+        }
+    }
+
+    /// In the browser: starts exporting the project as `format` in the engine's worker, the file
+    /// named `name`; [`Session::poll_export`] says when it is done.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn start_web_export(&mut self, format: texcraft_compile::Export, name: String) -> Result<()> {
+        let job = self.export_job()?;
+        match &mut self.builder {
+            Builder::Web(w) => w.export(&job, format.extension())?,
+            Builder::Inline(..) => return Err("This build of TeXCraft cannot export to other formats than PDF.".to_owned()),
+        }
+        self.export_name = Some(name);
+        Ok(())
+    }
+
+    /// In the browser: `name` for the shell to download (a PDF exported as it is).
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn hand_out(&mut self, name: String, data: Vec<u8>) {
+        self.exported = vec![(name, data)];
+    }
+
+    /// In the browser: the last export's files (the document first, then its pictures), for the
+    /// shell to hand to the browser as downloads.
+    pub fn take_exported_files(&mut self) -> Vec<(String, Vec<u8>)> {
+        #[cfg(target_arch = "wasm32")]
+        return std::mem::take(&mut self.exported);
+        #[cfg(not(target_arch = "wasm32"))]
+        Vec::new()
     }
 
     /// The outcome of the export running on its thread, once it has ended (what was written, or
@@ -372,11 +412,41 @@ impl Session {
             Some(outcome)
         }
         #[cfg(target_arch = "wasm32")]
-        None
+        {
+            let outcome = match &mut self.builder {
+                Builder::Web(w) => w.poll_export()?,
+                Builder::Inline(..) => return None,
+            };
+            let name = self.export_name.take().unwrap_or_else(|| "document".to_owned());
+            Some(outcome.and_then(|exported| {
+                let names: Vec<String> = std::iter::once(name.clone()).chain(exported.media.iter().map(|(n, _)| n.clone())).collect();
+                // A download is one file: a document with pictures (Markdown) goes as a zip of
+                // both, so its links to them still work.
+                let download = if exported.media.is_empty() {
+                    (name, exported.data)
+                } else {
+                    let mut zip = craft_zip::Writer::new();
+                    let zipped = |e: craft_zip::Error| format!("The export could not be zipped: {e}");
+                    zip.add(&name, &exported.data, craft_zip::Compression::Deflated).map_err(zipped)?;
+                    for (path, data) in &exported.media {
+                        zip.add(path, data, craft_zip::Compression::Deflated).map_err(zipped)?;
+                    }
+                    let stem = name.rsplit_once('.').map_or(name.as_str(), |(s, _)| s);
+                    (format!("{stem}.zip"), zip.finish().map_err(zipped)?)
+                };
+                let result = serde_json::json!({"path": download.0, "files": names});
+                self.exported = vec![download];
+                Ok(result)
+            }))
+        }
     }
 
     /// Whether the engine converts projects to other formats than its PDF (`build.export`).
     pub fn can_convert(&self) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        if matches!(self.builder, Builder::Web(_)) {
+            return true;
+        }
         self.exporter().is_some()
     }
 
