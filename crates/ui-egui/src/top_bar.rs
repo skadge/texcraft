@@ -296,6 +296,7 @@ pub(crate) fn icon_for(id: &str) -> Option<&'static str> {
         "build.compile" => "play",
         "build.auto" => "refresh-cw",
         "view.logs" => "scroll-text",
+        "view.pdf_window" => "window-out",
         "view.zoom_in" => "zoom-in",
         "view.zoom_out" => "zoom-out",
         "help.shortcuts" => "text-cursor-input",
@@ -489,8 +490,14 @@ fn layout_switch(app: &mut App, ui: &mut egui::Ui) {
         (Layout::EditorOnly, "code", tl!("Editor only")),
         (Layout::Split, "columns-2", tl!("Editor and PDF")),
     ] {
-        if widgets::icon_toggle(ui, &t, icon, label, app.view.layout == layout).clicked() {
-            app.view.layout = layout;
+        let shown = if app.view.pdf_window { Layout::EditorOnly } else { app.view.layout };
+        if widgets::icon_toggle(ui, &t, icon, label, shown == layout).clicked() {
+            let id = match layout {
+                Layout::Split => "view.layout.split",
+                Layout::EditorOnly => "view.layout.editor",
+                Layout::PreviewOnly => "view.layout.preview",
+            };
+            ui_cmd::run(app, id);
         }
     }
 }

@@ -40,7 +40,8 @@ impl App {
     fn commands(&self) -> Value {
         let engine = cmd::all().iter().map(|c| c.info(&self.session));
         let ui = UI_COMMANDS.iter().map(|c| {
-            json!({"id": c.id, "label": c.label, "menu": [c.menu], "shortcut": self.keys.shortcut_text(c.id), "interface": true, "enabled": true})
+            let enabled = crate::ui_cmd::enabled(self, c.id);
+            json!({"id": c.id, "label": c.label, "menu": [c.menu], "shortcut": self.keys.shortcut_text(c.id), "interface": true, "enabled": enabled.is_ok(), "disabledReason": enabled.err()})
         });
         Value::Array(engine.chain(ui).collect())
     }
@@ -87,6 +88,7 @@ impl App {
             "side": side,
             "log": self.view.logs,
             "focus_mode": self.view.focus_mode,
+            "pdf_window": self.view.pdf_window,
             "dialog": dialog,
             "theme": if self.tokens.scheme == crate::theme::Scheme::Dark { "dark" } else { "light" },
             "cursor": self.view.cursor.map(|(line, column)| json!({"line": line, "column": column})),

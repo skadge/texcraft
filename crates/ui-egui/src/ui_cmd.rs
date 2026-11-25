@@ -80,6 +80,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.side.hide", "Hide Side Panel", "View", "side", None),
     ui("view.comments", "Show or Hide the Comments Beside the Text", "View", "side", None),
     ui("view.logs", "Build Log", "View", "pdf", None),
+    // Desktop only; closing the window, or choosing a layout, puts the PDF back.
+    ui("view.pdf_window", "PDF in Its Own Window", "View", "pdf", None),
     ui("view.zoom_in", "Zoom In", "View", "pdf", Some("Cmd+=")),
     ui("view.zoom_out", "Zoom Out", "View", "pdf", Some("Cmd+-")),
     ui("view.fit_width", "Fit Width", "View", "pdf", None),
@@ -121,6 +123,9 @@ pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
         "edit.accept_all" | "edit.reject_all" if crate::review::open_suggestions_in_current(app) == 0 => {
             Err(tl!("There are no open suggestions in this file.").to_owned())
         }
+        "view.pdf_window" if cfg!(target_arch = "wasm32") => {
+            Err(tl!("In the browser the PDF stays in the page: a web page cannot open a second window of the app.").to_owned())
+        }
         // The browser gives a page the clipboard's text only with the paste keys.
         "edit.paste" if cfg!(target_arch = "wasm32") => {
             Err(tl!("In the browser, paste with Ctrl+V (Cmd+V on a Mac): a menu cannot read the clipboard there.").to_owned())
@@ -143,9 +148,27 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             Some(p) if (25.0..=400.0).contains(&p) => app.pdf.set_fit(crate::pdf_view::Fit::Zoom(p as f32 / 100.0)),
             _ => app.view.status = Some((tl!("Give the zoom as a percentage from 25 to 400.").to_owned(), true)),
         },
-        "view.layout.split" => app.view.layout = Layout::Split,
-        "view.layout.editor" => app.view.layout = Layout::EditorOnly,
-        "view.layout.preview" => app.view.layout = Layout::PreviewOnly,
+        "view.layout.split" | "view.layout.editor" | "view.layout.preview" => {
+            app.view.layout = match id {
+                "view.layout.split" => Layout::Split,
+                "view.layout.editor" => Layout::EditorOnly,
+                _ => Layout::PreviewOnly,
+            };
+            // A layout is the main window's: the PDF comes back into it.
+            app.view.pdf_window = false;
+        }
+        "view.pdf_window" => match enabled(app, id) {
+            Err(reason) => app.view.status = Some((reason, true)),
+            Ok(()) => {
+                app.view.pdf_window = !app.view.pdf_window;
+                let said = if app.view.pdf_window {
+                    tl!("The PDF is in its own window; close it to put the PDF back.")
+                } else {
+                    tl!("The PDF is back in the main window.")
+                };
+                app.view.status = Some((said.to_owned(), false));
+            }
+        },
         "view.side.files" => app.view.side = Some(Side::Files),
         "view.side.outline" => app.view.side = Some(Side::Outline),
         "view.side.review" => app.view.side = Some(Side::Review),

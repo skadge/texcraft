@@ -23,6 +23,7 @@ mod log_copy;
 mod menu_bar;
 mod output_log;
 mod pdf_preview;
+mod pdf_window;
 mod progress;
 mod recent;
 mod regions;

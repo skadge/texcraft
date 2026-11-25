@@ -133,6 +133,9 @@ pub(crate) struct View {
     /// Focus mode (`view.focus_mode`): the menu bar, the rail and the side panel are hidden, for
     /// this session only.
     pub focus_mode: bool,
+    /// The PDF pane is in its own window (`view.pdf_window`, desktop only); the main window then
+    /// shows the editor alone.
+    pub pdf_window: bool,
     /// The control with the keyboard at the end of the last frame (Escape clears the focus before
     /// a frame sees it).
     pub focused_last: Option<egui::Id>,
@@ -227,6 +230,7 @@ impl App {
                 menu_nav: None,
                 menu_ids: Vec::new(),
                 focus_mode: false,
+                pdf_window: false,
                 focused_last: None,
             },
             editor: editor::Editor::default(),
@@ -478,8 +482,12 @@ impl App {
         self.apply_editor_font();
     }
 
-    /// Records `id` as `region`'s first focusable control, once a frame.
+    /// Records `id` as `region`'s first focusable control, once a frame. Only the main window's
+    /// regions count: F6 does not cross into the PDF's own window.
     pub(crate) fn region(&mut self, region: Region, id: egui::Id) {
+        if self.ctx.viewport_id() != egui::ViewportId::ROOT {
+            return;
+        }
         if !self.view.regions.iter().any(|(r, _)| *r == region) {
             self.view.regions.push((region, id));
         }
@@ -646,6 +654,9 @@ impl App {
             }
         }
         self.panes(ui);
+        if self.view.pdf_window {
+            preview::window(self, ctx);
+        }
         gallery::show(self, ctx);
         dialogs::show(self, ctx);
         window::edges(self, ctx);
@@ -678,7 +689,8 @@ impl App {
     fn panes(&mut self, ui: &mut egui::Ui) {
         let t = self.tokens;
         let frame = egui::Frame::new().fill(t.frame);
-        match self.view.layout {
+        let layout = if self.view.pdf_window { Layout::EditorOnly } else { self.view.layout };
+        match layout {
             Layout::Split => {
                 let width = ui.available_width() * 0.5;
                 egui::Panel::right("preview").resizable(true).default_size(width).min_size(280.0).frame(frame).show(ui, |ui| preview::show(self, ui));

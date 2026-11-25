@@ -73,6 +73,28 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     }
 }
 
+/// The PDF's own window, while the PDF is out of the main one.
+pub(crate) const WINDOW: &str = "texcraft-pdf";
+
+/// The PDF pane in its own window (`view.pdf_window`): an immediate viewport on the desktop, a
+/// floating window inside the main one where the shell cannot open another (tests). The window's
+/// keys run the same shortcuts; closing it puts the PDF back in the main window.
+pub(crate) fn window(app: &mut App, ctx: &egui::Context) {
+    let title = tl!("{project}: PDF").replace("{project}", &app.project_name());
+    let builder = egui::ViewportBuilder::default().with_title(title).with_inner_size([720.0, 900.0]).with_min_inner_size([320.0, 240.0]);
+    let closed = ctx.show_viewport_immediate(egui::ViewportId::from_hash_of(WINDOW), builder, |ui, _class| {
+        for id in app.keys.dispatch(ui.ctx()) {
+            ui_cmd::run(app, &id);
+        }
+        let frame = egui::Frame::new().fill(app.tokens.frame);
+        egui::CentralPanel::default().frame(frame).show(ui, |ui| show(app, ui));
+        ui.input(|i| i.viewport().close_requested())
+    });
+    if closed && app.view.pdf_window {
+        ui_cmd::run(app, "view.pdf_window");
+    }
+}
+
 /// Shows the PDF to show: the running build's draft, or the last build's.
 pub(crate) fn sync(app: &mut App) {
     app.pdf.sync(app.view.draft.as_ref().map(|d| &d.pdf).or(app.session.pdf()));
@@ -153,6 +175,14 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         widgets::badge(ui, &t, log.rect.right_top() + vec2(-4.0, 6.0), badge.0, badge.1);
         if log.clicked() {
             app.view.logs = !app.view.logs;
+        }
+        // The browser cannot open a second window of the app: no button there (the command
+        // says why).
+        if ui_cmd::enabled(app, "view.pdf_window").is_ok() {
+            let label = if app.view.pdf_window { tl!("Put the PDF back in the main window") } else { tl!("Open the PDF in its own window") };
+            if widgets::icon_toggle(ui, &t, "window-out", label, app.view.pdf_window).clicked() {
+                ui_cmd::run(app, "view.pdf_window");
+            }
         }
         let ready = cmd_enabled(app, "build.save_pdf").or_else(|_| cmd_enabled(app, "build.export"));
         let save = widgets::icon_button(ui, &t, "download", tl!("Export…"), ready.is_ok());
@@ -612,12 +642,19 @@ fn print_summary_text(outcome: &Outcome) -> String {
 
 /// Shows a print check's area on its page of the PDF, marked for a moment.
 fn show_on_page(app: &mut App, rect: PageRect) {
-    if app.view.layout == crate::Layout::EditorOnly {
-        app.view.layout = crate::Layout::Split;
-    }
+    reveal(app);
     app.view.logs = false;
     let now = app.ctx.input(|i| i.time);
     app.pdf.show_place(vec![rect], now);
+}
+
+/// Brings the PDF into view: its own window forward, or the main window's split layout.
+fn reveal(app: &mut App) {
+    if app.view.pdf_window {
+        app.ctx.send_viewport_cmd_to(egui::ViewportId::from_hash_of(WINDOW), egui::ViewportCommand::Focus);
+    } else if app.view.layout == crate::Layout::EditorOnly {
+        app.view.layout = crate::Layout::Split;
+    }
 }
 
 /// A point of the PDF double-clicked or Ctrl+clicked: its source line, shown in the editor.
@@ -629,6 +666,9 @@ fn go_to_source(app: &mut App, page: usize, x: f32, y: f32) {
             }
             app.view.goto = Some((path, line));
             app.editor.focus = true;
+            if app.view.pdf_window {
+                app.ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+            }
         }
         None => app.view.status = Some((tl!("No source line is known for that place; compile the project first.").to_owned(), false)),
     }
@@ -641,9 +681,7 @@ pub(crate) fn show_in_pdf(app: &mut App, path: &texcraft_engine::project::Projec
         app.view.status = Some((tl!("This line is not in the PDF yet; compile the project first.").to_owned(), false));
         return;
     }
-    if app.view.layout == crate::Layout::EditorOnly {
-        app.view.layout = crate::Layout::Split;
-    }
+    reveal(app);
     app.view.logs = false;
     let now = app.ctx.input(|i| i.time);
     app.pdf.show_place(rects, now);
