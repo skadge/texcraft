@@ -179,3 +179,32 @@ fn the_branch_is_checked_when_the_window_comes_back() {
     let text = h.state().session().project().text(&texcraft_engine::project::ProjectPath::new("intro.tex").unwrap()).ok().map(str::to_owned);
     assert_eq!(text.as_deref(), Some("Their intro\n"));
 }
+
+#[test]
+fn a_github_repository_is_opened_and_its_pull_request_link_shown() {
+    const GH_TOKEN: &str = "github_pat_ui_test";
+    let fake = texcraft_engine::forge::fake::Fake::github("owner/paper", GH_TOKEN, &[("main.tex", PAPER), ("intro.tex", b"Intro\n")]);
+    let mut h = harness(&fake);
+    ui_cmd::run(h.state_mut(), "forge.open");
+    h.run();
+    // The address on github.com chooses GitHub, whose token permissions the dialog explains.
+    type_into(&mut h, "Project address", "https://github.com/owner/paper");
+    type_into(&mut h, "Personal access token", GH_TOKEN);
+    assert!(h.query_by_label_contains("Contents read and write").is_some(), "the dialog does not say what a GitHub token needs");
+    h.get_by_role_and_label(Role::Button, "Open").click();
+    assert!(settle(&mut h), "the GitHub operation did not end");
+    assert!(h.query_by_label_contains("Opened owner/paper from GitHub").is_some(), "the status line does not say it opened");
+
+    fake.protect("main");
+    write(&mut h, "intro.tex", "Mine\n");
+    ui_cmd::run(h.state_mut(), "forge.commit");
+    h.run();
+    assert!(h.query_by_label("Commit to GitHub").is_some(), "the dialog does not name GitHub");
+    type_into(&mut h, "What this commit changes", "Mine");
+    h.get_by_role_and_label(Role::Button, "Commit").click();
+    assert!(settle(&mut h), "the GitHub operation did not end");
+    h.get_by_role_and_label(Role::Button, "Commit and Open Pull Request").click();
+    assert!(settle(&mut h), "the GitHub operation did not end");
+    assert!(h.query_by_label("Open the pull request on GitHub").is_some(), "the pull request's link is not shown");
+    assert_eq!(fake.merge_requests().len(), 1);
+}

@@ -1,6 +1,6 @@
-//! Projects from GitLab (docs/forges.md): the Open from GitLab and Commit to GitLab dialogs, the
-//! files in conflict with the branch (keep mine or take theirs, or a new branch with a merge
-//! request), the project and branch in the top bar, the branch checked for new commits every two
+//! Projects from GitLab or GitHub (docs/forges.md): the Open from GitLab or GitHub and Commit
+//! dialogs, the files in conflict with the branch (keep mine or take theirs, or a new branch with
+//! a merge request, a pull request on GitHub), the project and branch in the top bar, the branch checked for new commits every two
 //! minutes and when the window comes back, and the outcomes of the engine's forge operations on
 //! the status line. Everything goes through `forge.open`, `forge.pull`, `forge.commit` and
 //! `forge.status`.
@@ -8,24 +8,27 @@
 use egui::RichText;
 use serde_json::{Value, json};
 use texcraft_engine::ForgeProblem;
-use texcraft_engine::forge::{Choice, ConflictKind};
+use texcraft_engine::forge::{Choice, ConflictKind, Service};
 
 use crate::dialogs::{Dialog, Outcome, button_row, buttons, title};
 use crate::i18n::trn;
 use crate::theme::Tokens;
 use crate::{App, icons, widgets};
 
-/// The Open from GitLab dialog's fields.
+/// The Open from GitLab or GitHub dialog's fields.
 pub(crate) struct OpenForm {
+    /// The service chosen; an address on gitlab.com or github.com chooses it as it is typed.
+    pub service: Service,
     pub address: String,
     pub branch: String,
     pub token: String,
     pub focus: bool,
 }
 
-/// The Commit to GitLab dialog: the changes it lists, the files in conflict with the branch, the
+/// The Commit dialog: the changes it lists, the files in conflict with the branch, the
 /// message, where the commit goes and, when the session has no token for the instance, the token.
 pub(crate) struct CommitForm {
+    pub service: Service,
     pub project: String,
     pub branch: String,
     pub changes: Vec<(String, String)>,
@@ -47,14 +50,16 @@ pub(crate) struct ConflictRow {
     pub choice: Option<Choice>,
 }
 
-/// The files in conflict after Update from GitLab, to decide before the branch is taken in.
+/// The files in conflict after an update from the branch, to decide before it is taken in.
 pub(crate) struct ResolveForm {
+    pub service: Service,
     pub branch: String,
     pub conflicts: Vec<ConflictRow>,
 }
 
-/// A merge request just opened: its link.
+/// A merge request (a pull request on GitHub) just opened: its link.
 pub(crate) struct MergeRequestNote {
+    pub service: Service,
     pub branch: String,
     pub target: String,
     pub iid: u64,
@@ -79,10 +84,37 @@ pub(crate) struct Check {
     message: String,
     /// The branch a commit to a new branch asks to merge into.
     target: String,
+    /// The service of the project being opened.
+    opening: Service,
 }
 
 /// How often the branch is checked for new commits, in seconds.
 const CHECK_EVERY: f64 = 120.0;
+
+/// `gitlab`'s words or `github`'s, as `service` is: each a whole sentence, for translators.
+fn say(service: Service, gitlab: &'static str, github: &'static str) -> &'static str {
+    match service {
+        Service::GitLab => gitlab,
+        Service::GitHub => github,
+    }
+}
+
+/// The service of the project open, GitLab when it is linked to none.
+fn linked(app: &App) -> Service {
+    app.session.forge().map(|l| l.address.service).unwrap_or_default()
+}
+
+/// The menu label of forge command `id` for the project open: it names its service. None for
+/// another command, or when no project from a forge is open (the command's own label then).
+pub(crate) fn label(app: &App, id: &str) -> Option<&'static str> {
+    let service = app.session.forge()?.address.service;
+    Some(match id {
+        "forge.commit" => say(service, tl!("Commit to GitLab…"), tl!("Commit to GitHub…")),
+        "forge.pull" => say(service, tl!("Update from GitLab"), tl!("Update from GitHub")),
+        "forge.status" => say(service, tl!("GitLab Status"), tl!("GitHub Status")),
+        _ => return None,
+    })
+}
 
 /// A conflict's reason, in words.
 fn why(kind: ConflictKind) -> &'static str {
@@ -114,15 +146,16 @@ fn resolve(rows: &[ConflictRow]) -> Value {
         .into()
 }
 
-/// Opens the Open from GitLab dialog.
+/// Opens the Open from GitLab or GitHub dialog, on the service last opened from.
 pub(crate) fn ask_open(app: &mut App) {
-    app.view.dialog = Some(Dialog::ForgeOpen(OpenForm { address: String::new(), branch: String::new(), token: String::new(), focus: true }));
+    let service = app.forge_check.opening;
+    app.view.dialog = Some(Dialog::ForgeOpen(OpenForm { service, address: String::new(), branch: String::new(), token: String::new(), focus: true }));
 }
 
-/// Opens the Commit to GitLab dialog, with the files changed since the base.
+/// Opens the Commit dialog, with the files changed since the base.
 pub(crate) fn ask_commit(app: &mut App) {
     let Some(link) = app.session.forge().cloned() else {
-        let why = tl!("This project was not opened from GitLab: use Open from GitLab… first.");
+        let why = tl!("This project was not opened from GitLab or GitHub: use Open from GitLab or GitHub… first.");
         app.view.status = Some((why.to_owned(), true));
         return;
     };
@@ -153,6 +186,7 @@ pub(crate) fn ask_commit(app: &mut App) {
     let cannot_push = app.session.forge_problem() == Some(&ForgeProblem::CannotPush);
     let new_branch = format!("{}-{}", link.branch, chrono::Utc::now().format("%Y%m%d-%H%M"));
     app.view.dialog = Some(Dialog::ForgeCommit(CommitForm {
+        service: link.address.service,
         project: link.address.path.clone(),
         branch: link.branch.clone(),
         changes,
@@ -166,19 +200,24 @@ pub(crate) fn ask_commit(app: &mut App) {
     }));
 }
 
-/// Update from GitLab: takes in the branch's new commits, in the background.
+/// What the status line says while the branch's new commits are taken in.
+fn updating(service: Service) -> &'static str {
+    say(service, tl!("Updating from GitLab…"), tl!("Updating from GitHub…"))
+}
+
+/// Update from the forge: takes in the branch's new commits, in the background.
 pub(crate) fn pull(app: &mut App) {
     if app.run("forge.pull", json!({"background": true})).is_some() {
         app.forge_check.quiet = false;
-        app.view.status = Some((tl!("Updating from GitLab…").to_owned(), false));
+        app.view.status = Some((updating(linked(app)).to_owned(), false));
     }
 }
 
 /// Opens the dialog of the files a pull found in conflict.
 fn ask_resolve(app: &mut App) {
     let Some(link) = app.session.forge() else { return };
-    let branch = link.branch.clone();
-    app.view.dialog = Some(Dialog::ForgeResolve(ResolveForm { branch, conflicts: conflict_rows(app) }));
+    let (service, branch) = (link.address.service, link.branch.clone());
+    app.view.dialog = Some(Dialog::ForgeResolve(ResolveForm { service, branch, conflicts: conflict_rows(app) }));
 }
 
 /// The open forge dialog, if any.
@@ -204,9 +243,16 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
         Outcome::Cancel => app.view.dialog = None,
         Outcome::Run => match app.view.dialog.take() {
             Some(Dialog::ForgeOpen(form)) => {
-                let params = json!({"url": form.address.trim(), "token": form.token.trim(), "ref": form.branch.trim(), "background": true});
+                let params = json!({
+                    "url": form.address.trim(),
+                    "service": form.service.id(),
+                    "token": form.token.trim(),
+                    "ref": form.branch.trim(),
+                    "background": true,
+                });
+                app.forge_check.opening = form.service;
                 if app.run("forge.open", params).is_some() {
-                    app.view.status = Some((tl!("Opening the project from GitLab…").to_owned(), false));
+                    app.view.status = Some((opening(form.service).to_owned(), false));
                 }
             }
             Some(Dialog::ForgeCommit(form)) => {
@@ -223,12 +269,12 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
                 app.forge_check.target = form.branch.clone();
                 if app.run("forge.commit", params).is_some() {
                     app.forge_check.quiet = false;
-                    app.view.status = Some((tl!("Committing to GitLab…").to_owned(), false));
+                    app.view.status = Some((committing(form.service).to_owned(), false));
                 }
             }
             Some(Dialog::ForgeResolve(form)) if app.run("forge.pull", json!({"resolve": resolve(&form.conflicts), "background": true})).is_some() => {
                 app.forge_check.quiet = false;
-                app.view.status = Some((tl!("Updating from GitLab…").to_owned(), false));
+                app.view.status = Some((updating(form.service).to_owned(), false));
             }
             _ => {}
         },
@@ -243,30 +289,73 @@ fn field(ui: &mut egui::Ui, t: &Tokens, label: &str, value: &mut String, hint: &
     ui.add(edit).labelled_by(label.id)
 }
 
-/// What the token is for and that it is not kept.
-fn token_note(ui: &mut egui::Ui, t: &Tokens, browser: bool) {
+/// What the status line says while a project is opened from `service`.
+fn opening(service: Service) -> &'static str {
+    say(service, tl!("Opening the project from GitLab…"), tl!("Opening the project from GitHub…"))
+}
+
+/// What the status line says while a commit goes to `service`.
+fn committing(service: Service) -> &'static str {
+    say(service, tl!("Committing to GitLab…"), tl!("Committing to GitHub…"))
+}
+
+/// What a token of `service` looks like.
+fn token_hint(service: Service) -> &'static str {
+    say(service, "glpat-…", "github_pat_…")
+}
+
+/// What the token is for, which permissions it needs on `service`, and that it is not kept.
+fn token_note(ui: &mut egui::Ui, t: &Tokens, browser: bool, service: Service) {
     let kept = if browser {
         tl!("TeXCraft keeps the token only while this page is open: it is never stored.")
     } else {
         tl!("TeXCraft keeps the token only while it runs: it is never written to disk.")
     };
-    let text = format!(
-        "{} {kept}",
-        tl!("Make one in GitLab under Preferences › Access tokens. The read_api scope opens projects; committing needs the api scope.")
+    let how = say(
+        service,
+        tl!("Make one in GitLab under Preferences › Access tokens. The read_api scope opens projects; committing needs the api scope."),
+        tl!(
+            "Make a fine-grained one on GitHub under Settings › Developer settings › Personal access tokens, for this repository. Contents read-only opens it; committing needs Contents read and write, and opening a pull request Pull requests read and write. A classic token needs the repo scope."
+        ),
     );
+    let text = format!("{how} {kept}");
     ui.label(RichText::new(text).font(t.small()).color(t.text_muted));
 }
 
 fn open_form(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm, browser: bool) -> Outcome {
-    title(ui, t, tl!("Open from GitLab"));
-    let address = field(ui, t, tl!("Project address"), &mut form.address, "https://gitlab.com/group/project", false);
+    title(ui, t, tl!("Open from GitLab or GitHub"));
+    ui.add_space(t.unit * 2.0);
+    // The service, as two radio buttons named by the group's label (AGENTS.md rule 21).
+    let group = tl!("Service");
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(group).color(t.text_muted));
+        for service in [Service::GitLab, Service::GitHub] {
+            let on = form.service == service;
+            let r = ui.radio(on, service.name());
+            let name = format!("{}: {group}", service.name());
+            r.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, true, on, &name));
+            if r.clicked() {
+                form.service = service;
+            }
+        }
+    });
+    let example = say(form.service, "https://gitlab.com/group/project", "https://github.com/owner/repository");
+    let address = field(ui, t, tl!("Project address"), &mut form.address, example, false);
     if std::mem::take(&mut form.focus) {
         address.request_focus();
     }
+    if address.changed() {
+        // An address on gitlab.com or github.com says its service.
+        if let Ok(known) = texcraft_engine::forge::Address::parse(&form.address)
+            && matches!(known.instance.as_str(), texcraft_engine::forge::GITHUB_COM | texcraft_engine::forge::GITLAB_COM)
+        {
+            form.service = known.service;
+        }
+    }
     let branch = field(ui, t, tl!("Branch (the default branch if left empty)"), &mut form.branch, "main", false);
-    let token = field(ui, t, tl!("Personal access token"), &mut form.token, "glpat-…", true);
+    let token = field(ui, t, tl!("Personal access token"), &mut form.token, token_hint(form.service), true);
     ui.add_space(t.unit);
-    token_note(ui, t, browser);
+    token_note(ui, t, browser, form.service);
     let enter = [address, branch, token].iter().any(|r| r.lost_focus()) && ui.input(|i| i.key_pressed(egui::Key::Enter));
     let ready = !form.address.trim().is_empty() && !form.token.trim().is_empty();
     match buttons(ui, t, tl!("Open"), false, ready) {
@@ -276,10 +365,16 @@ fn open_form(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm, browser: bool) 
 }
 
 fn commit_form(ui: &mut egui::Ui, t: &Tokens, form: &mut CommitForm, browser: bool) -> Outcome {
-    title(ui, t, tl!("Commit to GitLab"));
+    title(ui, t, say(form.service, tl!("Commit to GitLab"), tl!("Commit to GitHub")));
     let to = if form.cannot_push {
-        tl!(
-            "The branch {branch} of {project} does not take your commits: it is protected, or your role cannot push to it. Your changes go to a new branch instead, with a merge request into {branch}."
+        say(
+            form.service,
+            tl!(
+                "The branch {branch} of {project} does not take your commits: it is protected, or your role cannot push to it. Your changes go to a new branch instead, with a merge request into {branch}."
+            ),
+            tl!(
+                "The branch {branch} of {project} does not take your commits: it is protected, or your access cannot push to it. Your changes go to a new branch instead, with a pull request into {branch}."
+            ),
         )
     } else {
         tl!("To the branch {branch} of {project}.")
@@ -308,10 +403,10 @@ fn commit_form(ui: &mut egui::Ui, t: &Tokens, form: &mut CommitForm, browser: bo
     });
     if !form.conflicts.is_empty() {
         ui.add_space(t.unit * 2.0);
-        conflicts(ui, t, &mut form.conflicts, !form.to_new_branch);
+        conflicts(ui, t, &mut form.conflicts, !form.to_new_branch, form.service);
     }
     ui.add_space(t.unit * 2.0);
-    let label = tl!("Commit to a new branch and open a merge request");
+    let label = say(form.service, tl!("Commit to a new branch and open a merge request"), tl!("Commit to a new branch and open a pull request"));
     ui.add_enabled(!form.cannot_push, egui::Checkbox::new(&mut form.to_new_branch, label));
     let mut responses = Vec::new();
     if form.to_new_branch {
@@ -323,14 +418,15 @@ fn commit_form(ui: &mut egui::Ui, t: &Tokens, form: &mut CommitForm, browser: bo
     }
     responses.push(message);
     if let Some(token) = &mut form.token {
-        responses.push(field(ui, t, tl!("Personal access token"), token, "glpat-…", true));
+        responses.push(field(ui, t, tl!("Personal access token"), token, token_hint(form.service), true));
         ui.add_space(t.unit);
-        token_note(ui, t, browser);
+        token_note(ui, t, browser, form.service);
     }
     let enter = responses.iter().any(|r| r.lost_focus()) && ui.input(|i| i.key_pressed(egui::Key::Enter));
     let decided = if form.to_new_branch { !form.new_branch.trim().is_empty() } else { form.conflicts.iter().all(|c| c.choice.is_some()) };
     let ready = decided && !form.message.trim().is_empty() && form.token.as_ref().is_none_or(|t| !t.trim().is_empty());
-    let action = if form.to_new_branch { tl!("Commit and Open Merge Request") } else { tl!("Commit") };
+    let action =
+        if form.to_new_branch { say(form.service, tl!("Commit and Open Merge Request"), tl!("Commit and Open Pull Request")) } else { tl!("Commit") };
     match buttons(ui, t, action, false, ready) {
         Outcome::Open if enter && ready => Outcome::Run,
         o => o,
@@ -339,10 +435,16 @@ fn commit_form(ui: &mut egui::Ui, t: &Tokens, form: &mut CommitForm, browser: bo
 
 /// The files in conflict, each with Keep mine and Take theirs (AGENTS.md rule 21: each named by
 /// its label and its file).
-fn conflicts(ui: &mut egui::Ui, t: &Tokens, rows: &mut [ConflictRow], enabled: bool) {
+fn conflicts(ui: &mut egui::Ui, t: &Tokens, rows: &mut [ConflictRow], enabled: bool, service: Service) {
     ui.label(RichText::new(trn(rows.len(), "{n} file in conflict with the branch", "{n} files in conflict with the branch")).font(t.strong()));
-    let note = tl!(
-        "The branch has new commits that change the same parts of these files. For each, keep your version or take the branch's; or commit to a new branch and open a merge request, where GitLab shows both."
+    let note = say(
+        service,
+        tl!(
+            "The branch has new commits that change the same parts of these files. For each, keep your version or take the branch's; or commit to a new branch and open a merge request, where GitLab shows both."
+        ),
+        tl!(
+            "The branch has new commits that change the same parts of these files. For each, keep your version or take the branch's; or commit to a new branch and open a pull request, where GitHub shows both."
+        ),
     );
     ui.label(RichText::new(note).font(t.small()).color(t.text_muted));
     egui::ScrollArea::vertical().id_salt("forge-conflicts").max_height(160.0).auto_shrink([false, true]).show(ui, |ui| {
@@ -368,23 +470,27 @@ fn conflicts(ui: &mut egui::Ui, t: &Tokens, rows: &mut [ConflictRow], enabled: b
 }
 
 fn resolve_form(ui: &mut egui::Ui, t: &Tokens, form: &mut ResolveForm) -> Outcome {
-    title(ui, t, tl!("Update from GitLab"));
+    title(ui, t, say(form.service, tl!("Update from GitLab"), tl!("Update from GitHub")));
     ui.label(tl!("Nothing was taken in from the branch {branch} yet: choose for each file below first.").replace("{branch}", &form.branch));
     ui.add_space(t.unit * 2.0);
-    conflicts(ui, t, &mut form.conflicts, true);
+    conflicts(ui, t, &mut form.conflicts, true, form.service);
     let ready = form.conflicts.iter().all(|c| c.choice.is_some());
     buttons(ui, t, tl!("Update"), false, ready)
 }
 
 fn merge_request_note(ui: &mut egui::Ui, t: &Tokens, note: &mut MergeRequestNote) -> Outcome {
-    title(ui, t, tl!("Merge Request Opened"));
-    let said = tl!("Your changes are on the new branch {branch}, in merge request !{iid} into {target}. The project now follows {branch}.")
-        .replace("{branch}", &note.branch)
-        .replace("{iid}", &note.iid.to_string())
-        .replace("{target}", &note.target);
+    title(ui, t, say(note.service, tl!("Merge Request Opened"), tl!("Pull Request Opened")));
+    let said = say(
+        note.service,
+        tl!("Your changes are on the new branch {branch}, in merge request !{iid} into {target}. The project now follows {branch}."),
+        tl!("Your changes are on the new branch {branch}, in pull request #{iid} into {target}. The project now follows {branch}."),
+    )
+    .replace("{branch}", &note.branch)
+    .replace("{iid}", &note.iid.to_string())
+    .replace("{target}", &note.target);
     ui.label(said);
     ui.add_space(t.unit * 2.0);
-    let link = ui.hyperlink_to(tl!("Open the merge request on GitLab"), &note.url);
+    let link = ui.hyperlink_to(say(note.service, tl!("Open the merge request on GitLab"), tl!("Open the pull request on GitHub")), &note.url);
     if std::mem::take(&mut note.focus) {
         link.request_focus();
     }
@@ -441,7 +547,7 @@ fn failed(app: &mut App, was: Option<&str>, e: String) {
 }
 
 /// Checks the branch for new commits every two minutes and when the window gets the focus back,
-/// while a project linked to it is open and a token was given (GitLab's limits without one are
+/// while a project linked to it is open and a token was given (the forges' limits without one are
 /// low); not while a dialog is open or another operation runs.
 fn check(app: &mut App, ctx: &egui::Context) {
     let (now, focused) = ctx.input(|i| (i.time, i.focused));
@@ -511,13 +617,16 @@ fn opened(app: &mut App, done: &Value) {
     app.pdf = crate::pdf_view::PdfView::default();
     app.view.last_edit = Some(0.0);
     app.remember_project();
-    let mut said = tl!("Opened {project} from GitLab: {files}, branch {branch}.")
-        .replace("{project}", done["project"].as_str().unwrap_or_default())
-        .replace("{files}", &trn(done["files"].as_u64().unwrap_or(0) as usize, "{n} file", "{n} files"))
-        .replace("{branch}", done["branch"].as_str().unwrap_or_default());
+    let service = done["service"].as_str().and_then(Service::parse).unwrap_or_default();
+    let mut said =
+        say(service, tl!("Opened {project} from GitLab: {files}, branch {branch}."), tl!("Opened {project} from GitHub: {files}, branch {branch}."))
+            .replace("{project}", done["project"].as_str().unwrap_or_default())
+            .replace("{files}", &trn(done["files"].as_u64().unwrap_or(0) as usize, "{n} file", "{n} files"))
+            .replace("{branch}", done["branch"].as_str().unwrap_or_default());
     let skipped = names(&done["skipped"]);
     if !skipped.is_empty() {
-        said = format!("{said} {}", tl!("Left on GitLab: {files}.").replace("{files}", &skipped.join(", ")));
+        let left = say(service, tl!("Left on GitLab: {files}."), tl!("Left on GitHub: {files}."));
+        said = format!("{said} {}", left.replace("{files}", &skipped.join(", ")));
     }
     app.view.status = Some((said, false));
 }
@@ -543,8 +652,9 @@ fn committed(app: &mut App, done: &Value) {
     }
     if let (Some(url), Some(iid)) = (done["merge_request"]["web_url"].as_str(), done["merge_request"]["iid"].as_u64()) {
         let target = std::mem::take(&mut app.forge_check.target);
-        app.view.dialog =
-            Some(Dialog::ForgeMergeRequest(MergeRequestNote { branch: branch.to_owned(), target, iid, url: url.to_owned(), focus: true }));
+        let service = done["service"].as_str().and_then(Service::parse).unwrap_or_default();
+        let note = MergeRequestNote { service, branch: branch.to_owned(), target, iid, url: url.to_owned(), focus: true };
+        app.view.dialog = Some(Dialog::ForgeMergeRequest(note));
     }
     app.view.status = Some((said, false));
 }
@@ -553,11 +663,11 @@ fn committed(app: &mut App, done: &Value) {
 pub(crate) fn busy_text(app: &App) -> Option<String> {
     Some(
         match app.session.forge_busy()? {
-            "open" => tl!("Opening the project from GitLab…"),
+            "open" => opening(app.forge_check.opening),
             // A periodic check says nothing while it runs.
             "pull" if app.forge_check.quiet => return None,
-            "pull" => tl!("Updating from GitLab…"),
-            _ => tl!("Committing to GitLab…"),
+            "pull" => updating(linked(app)),
+            _ => committing(linked(app)),
         }
         .to_owned(),
     )
@@ -580,8 +690,8 @@ fn changed_count(app: &mut App, now: f64) -> usize {
     }
 }
 
-/// The GitLab project and branch in the top bar, with how many files changed: a button to the
-/// Commit to GitLab dialog.
+/// The forge's project and branch in the top bar, with how many files changed: a button to the
+/// Commit dialog.
 pub(crate) fn badge(app: &mut App, ui: &mut egui::Ui) {
     let Some(link) = app.session.forge().cloned() else { return };
     let t = app.tokens;
@@ -598,8 +708,9 @@ pub(crate) fn badge(app: &mut App, ui: &mut egui::Ui) {
         .frame_when_inactive(false)
         .min_size(egui::vec2(0.0, t.toolbar_height - 8.0));
     let response = ui.add(button);
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{text}: {}", tl!("Commit to GitLab…"))));
-    if response.on_hover_text(tl!("Commit to GitLab…")).clicked() {
+    let commit = say(link.address.service, tl!("Commit to GitLab…"), tl!("Commit to GitHub…"));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{text}: {commit}")));
+    if response.on_hover_text(commit).clicked() {
         crate::ui_cmd::run(app, "forge.commit");
     }
 }

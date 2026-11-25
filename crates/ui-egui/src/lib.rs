@@ -187,9 +187,9 @@ pub struct App {
     pending_name: Option<String>,
     /// The files opened in this session, the latest first, for Go to File.
     recent_files: Vec<ProjectPath>,
-    /// The files changed since the GitLab branch's base, as the top bar last counted them.
+    /// The files changed since the forge branch's base, as the top bar last counted them.
     forge_count: forge::Count,
-    /// The GitLab branch checked for new commits.
+    /// The forge branch checked for new commits.
     forge_check: forge::Check,
     /// Alt pressed alone, to reach the menu bar when it is released.
     alt: top_bar::AltTap,
@@ -296,7 +296,7 @@ impl App {
         if std::mem::take(&mut self.prefs_changed) { Some(self.prefs.clone()) } else { None }
     }
 
-    /// The project's name: its folder's, the GitLab project's for one opened from GitLab in no
+    /// The project's name: its folder's, the forge project's for one opened from a forge in no
     /// folder, or "Untitled project".
     pub(crate) fn project_name(&self) -> String {
         if let Some(name) = self.session.dir().and_then(|d| d.file_name()) {

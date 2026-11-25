@@ -250,7 +250,7 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             Some(path) => app.guard(Next::OpenProject(path.to_owned())),
             None => app.guard(Next::PickProject),
         },
-        // Opening from GitLab replaces the project: unsaved changes are asked about first.
+        // Opening from a forge replaces the project: unsaved changes are asked about first.
         "forge.open" => app.guard(Next::OpenFromForge),
         "forge.commit" => crate::forge::ask_commit(app),
         "forge.pull" => crate::forge::pull(app),

@@ -37,7 +37,7 @@ pub(crate) enum Next {
     OpenProject(String),
     /// Choose a project folder, then open it.
     PickProject,
-    /// Ask for a GitLab project to open.
+    /// Ask for a project on GitLab or GitHub to open.
     OpenFromForge,
 }
 

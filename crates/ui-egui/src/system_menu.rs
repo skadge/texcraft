@@ -37,7 +37,8 @@ impl App {
         for title in MENUS {
             let mut children: Vec<Node> = Vec::new();
             for spec in cmd::all().iter().filter(|c| c.menu.first() == Some(title)) {
-                children.push(Item::new(spec.id, t(spec.label)).enabled((spec.enabled)(&self.session).is_ok()).into());
+                let label = crate::forge::label(self, spec.id).unwrap_or_else(|| t(spec.label));
+                children.push(Item::new(spec.id, label).enabled((spec.enabled)(&self.session).is_ok()).into());
             }
             if *title == "File" {
                 children.push(Node::Separator);

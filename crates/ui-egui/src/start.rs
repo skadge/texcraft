@@ -109,8 +109,8 @@ fn header(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         });
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = t.unit * 2.0;
-            let gitlab =
-                egui::Button::image_and_text(icons::image("download", t.icon_size, t.text), tl!("Open from GitLab…")).min_size(vec2(0.0, 34.0));
+            let gitlab = egui::Button::image_and_text(icons::image("download", t.icon_size, t.text), tl!("Open from GitLab or GitHub…"))
+                .min_size(vec2(0.0, 34.0));
             if ui.add(gitlab).clicked() {
                 crate::ui_cmd::run(app, "forge.open");
             }
