@@ -19,6 +19,7 @@ pub mod control;
 mod dialogs;
 mod drop;
 mod editor;
+mod fields;
 mod figure_dialog;
 mod figure_view;
 mod find_bar;
@@ -250,6 +251,8 @@ pub struct App {
     alt: top_bar::AltTap,
     /// The system's menu bar (macOS), when the shell installed it; the in-window one is hidden then.
     system_menu: Option<craft_menu::NativeMenu>,
+    /// The text field the Edit menu acts on, and what it is to do there.
+    fields: fields::Fields,
     /// Settings › AI's form, and the AI settings last kept in the preferences.
     ai: ai::AiView,
     /// The symbol palette's search.
@@ -347,6 +350,7 @@ impl App {
             forge_check: forge::Check::default(),
             alt: top_bar::AltTap::default(),
             system_menu: None,
+            fields: fields::Fields::default(),
             ai: ai::AiView::default(),
             symbols: symbols::Palette::default(),
         };
@@ -771,6 +775,7 @@ impl App {
         for id in self.keys.dispatch(ctx) {
             ui_cmd::run(self, &id);
         }
+        fields::deliver(self, ctx);
         self.escape_focus_mode(ctx);
         // Presentation mode: the PDF's page takes the whole window.
         if self.pdf.presenting().is_some() {
@@ -804,6 +809,7 @@ impl App {
             dialogs::show(self, ctx);
             self.modal_focus(ctx);
             window::edges(self, ctx);
+            fields::track(self, ctx);
             return;
         }
         if !focus_mode {
@@ -832,6 +838,7 @@ impl App {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
         self.view.focused_last = ctx.memory(egui::Memory::focused);
+        fields::track(self, ctx);
     }
 
     /// A dialog takes the keyboard once it is drawn, if it did not take it itself, and gives it

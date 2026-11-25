@@ -28,32 +28,39 @@ fn with_text(text: &str, vim: bool) -> Harness<'static, App> {
     h
 }
 
-/// What the window put on the clipboard in the next frame.
+/// The output commands of the next frames.
+fn commands(h: &mut Harness<'_, App>) -> Vec<egui::OutputCommand> {
+    let mut out = Vec::new();
+    for _ in 0..4 {
+        h.step();
+        out.extend(h.output().platform_output.commands.iter().cloned());
+    }
+    out
+}
+
+/// What the window put on the clipboard over the next frames.
 fn copied(h: &mut Harness<'_, App>) -> Option<String> {
-    h.step();
-    h.output().platform_output.commands.iter().find_map(|c| match c {
-        egui::OutputCommand::CopyText(t) => Some(t.clone()),
+    commands(h).into_iter().find_map(|c| match c {
+        egui::OutputCommand::CopyText(t) => Some(t),
         _ => None,
     })
 }
 
-/// A key's press alone: the harness runs a frame per event and keeps the last frame's output, so
-/// what the press puts out is read in the next step.
+/// A key's press alone: the harness runs a frame per event and keeps the last frame's output only,
+/// so the press is to be the step's one event.
 fn press(h: &Harness<'_, App>, modifiers: egui::Modifiers, key: egui::Key) {
     h.event(egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers });
 }
 
 /// What the window put in the primary selection over the next frames.
 fn primary(h: &mut Harness<'_, App>) -> Vec<String> {
-    let mut out = Vec::new();
-    for _ in 0..4 {
-        h.step();
-        out.extend(h.output().platform_output.commands.iter().filter_map(|c| match c {
-            egui::OutputCommand::TextSelectionSettled(t) => Some(t.clone()),
+    commands(h)
+        .into_iter()
+        .filter_map(|c| match c {
+            egui::OutputCommand::TextSelectionSettled(t) => Some(t),
             _ => None,
-        }));
-    }
-    out
+        })
+        .collect()
 }
 
 /// A middle click at `pos`, as egui-winit sends it on X11 and Wayland: the button, then the
@@ -188,4 +195,53 @@ fn selecting_text_in_the_editor_the_formatted_view_and_a_field_sets_the_primary_
     h.run();
     press(&h, egui::Modifiers::SHIFT, egui::Key::End);
     assert!(primary(&mut h).iter().any(|t| t == "First paragraph."), "the formatted view's selection is not the primary selection");
+}
+
+/// The find bar's field holding the keyboard, with `text` in it, the editor's text unselected.
+fn find_field(text: &str) -> Harness<'static, App> {
+    let mut h = harness(false);
+    ui_cmd::run(h.state_mut(), "edit.find");
+    h.run();
+    h.get_by_label("Find").type_text(text);
+    h.run();
+    h
+}
+
+fn menu(h: &mut Harness<'_, App>, entry: &str) {
+    h.get_by_label("Edit").click();
+    h.run();
+    h.get_by_label_contains(entry).click();
+    h.run();
+}
+
+#[test]
+fn the_edit_menu_acts_on_the_field_it_took_the_keyboard_from() {
+    let mut h = find_field("hel");
+    menu(&mut h, "Select All");
+    h.get_by_label("Edit").click();
+    h.run();
+    h.get_by_label_contains("Copy").click();
+    assert_eq!(copied(&mut h).as_deref(), Some("hel"), "Edit › Copy did not copy the field's selection");
+    h.run();
+    menu(&mut h, "Paste");
+    // The window's answer to the menu's request for the clipboard.
+    h.event(egui::Event::Paste("llo".into()));
+    h.run();
+    assert_eq!(h.get_by_label("Find").value().as_deref(), Some("llo"), "Edit › Paste did not paste in the field");
+    assert_eq!(text(&mut h), "hello\n", "Edit › Paste went to the editor");
+    menu(&mut h, "Undo");
+    assert_eq!(h.get_by_label("Find").value().as_deref(), Some("hel"), "Edit › Undo did not undo in the field");
+    assert_eq!(text(&mut h), "hello\n");
+}
+
+#[test]
+fn the_edit_menu_acts_on_the_editor_once_it_has_the_keyboard_again() {
+    let mut h = find_field("hel");
+    h.get_by_label("main.tex source").click();
+    h.run();
+    menu(&mut h, "Select All");
+    h.get_by_label("Edit").click();
+    h.run();
+    h.get_by_label_contains("Copy").click();
+    assert_eq!(copied(&mut h).as_deref(), Some("hello\n"), "Edit › Copy did not copy the editor's selection");
 }
