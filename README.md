@@ -41,6 +41,7 @@
   <a href="#why-texcraft">Why TeXCraft</a> ·
   <a href="#what-retex-brings">What retex brings</a> ·
   <a href="#quick-start">Quick start</a> ·
+  <a href="#features">Features</a> ·
   <a href="#status">Status</a> ·
   <a href="#downloads">Downloads</a> ·
   <a href="#license-and-credits">License</a>
@@ -123,25 +124,63 @@ claude mcp add texcraft -- /path/to/texcraft-cli mcp --automation-read-root /wor
 
 It refuses to start without both. The open window's control channel is described in [`docs/control-protocol.md`](docs/control-protocol.md).
 
+## Features
+
+**Writing**
+- TeXCraft's own source editor: completion, hover help, quick fixes, find and replace, search across
+  the project's files, folding, several carets, and Vim key bindings.
+- A formatted view that shows the document as prose: edit its text, headings, lists, tables (as a
+  grid) and figures there, each edit a small change to the source.
+- Typeset formulas in the formatted view, a symbol palette, spell checking that skips commands,
+  maths and code.
+
+**Building**
+- The PDF rebuilt as you type, a draft first while later passes run, and source ↔ PDF navigation
+  both ways.
+- A build log with search, plain explanations of the messages, and the build's files to save.
+- Export to Word, OpenDocument, PowerPoint (first choice for beamer slides), HTML, Markdown and SVG,
+  plus accessible and print-ready PDFs.
+
+**Projects, history and git forges**
+- Every project is a git repository, with its versions to compare and restore, whether or not it
+  is ever sent anywhere.
+- Projects from publishers' templates; drop in folders and zip files.
+- GitLab and GitHub, gitlab.com, github.com or your own servers: sign in, open a project with its
+  branches, commit, pull, open a merge request, save a new project as a repository, push and pull.
+
+**Working with others**
+- Comments on passages and suggested changes, in a margin beside the text or a review panel.
+
+**AI assistance (optional, desktop)**
+- Off until you connect a model of your choice, a service or one on your own computer. Settings
+  list what each kind of request may send, with a switch for each, and the prompts to change.
+- Explain build errors, rewrite or change a selection, make tables, equations and diagrams from a
+  description, draft references, ask about the project, and review a section in comments.
+
+**Everywhere**
+- Linux, Windows and macOS, and the browser (the engine runs in the page, projects stay in it).
+- Keyboard first and screen-reader aware, a layout for narrow windows and phones.
+- An automation channel and an MCP server, so agents can do everything the window does.
+
 ## Status
 
-TeXCraft is in early development. [`docs/ROADMAP.md`](docs/ROADMAP.md) has what works and what comes next; [`docs/retex-changes.md`](docs/retex-changes.md) what it uses of retex and asks of it.
+TeXCraft is young and moves fast: a release most days. It is used daily on Linux; the Windows and
+macOS builds are experimental (unsigned), and some features are new enough that they have only
+been tested by TeXCraft's own test suite so far. [`docs/ROADMAP.md`](docs/ROADMAP.md) lists what is
+done (with the release it came in) and what is planned; [`CHANGELOG.md`](CHANGELOG.md) what each
+release brought; [`docs/retex-changes.md`](docs/retex-changes.md) what TeXCraft uses of retex and
+asks of it.
 
-**What works:**
-- projects as folders, a start page with recent projects, publishers' templates, Go to File, folders and moving files;
-- TeXCraft's own source editor: completion, hover, quick fixes, find and replace, Vim key bindings;
-- a read-only formatted view of the source;
-- builds as you type, with a draft PDF while later passes run, a build log you can copy from, and source ↔ PDF navigation;
-- export to Word, OpenDocument, PowerPoint (first for beamer slides), HTML, Markdown and SVG, from the PDF pane;
-- comments on passages, in a margin beside the text;
-- the browser version: builds in the page, projects, comments and templates kept in the browser, its own TeX tree;
-- the control channel and the MCP server.
+**Next:** more of the formatted view, translations of the interface, grammar checking, a user
+guide, and packages downloaded in the browser.
 
-**What's next:** every project a git repository with its history, suggested changes, an editable formatted view, and packages downloaded in the browser. The full list is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+**Workspace:** `crates/{project, buffer, latex, compile, preview, history, forge, gitwire, review,
+templates, vim, wasi, engine, ui-egui, mcp}` and `apps/{texcraft, texcraft-cli, texcraft-web}`. The egui frontend is its
+own crate, so the interface can change without touching the engine; nothing below it depends on
+egui (`cargo xtask layers`). The interface's look is described in [`docs/design.md`](docs/design.md).
 
-**Workspace:** `crates/{project, latex, compile, preview, engine, ui-egui, mcp}` and `apps/{texcraft, texcraft-cli, texcraft-web}`. The egui frontend is its own crate, so the interface can change without touching the engine. The interface's look is described in [`docs/design.md`](docs/design.md).
-
-Agent and contributor rules are in [`AGENTS.md`](AGENTS.md), which also lists the checks for the crates you change.
+Agent and contributor rules are in [`AGENTS.md`](AGENTS.md), which also lists the checks for the
+crates you change.
 
 ## Downloads
 
