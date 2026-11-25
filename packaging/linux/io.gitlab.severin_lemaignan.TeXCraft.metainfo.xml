@@ -41,6 +41,18 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.7.0" date="2026-11-25" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.7.0</url>
+      <description>
+        <p>Suggested changes, history in the browser, folding and several carets.</p>
+        <ul>
+          <li>Suggest mode: changes proposed in the margin, accepted or rejected one by one</li>
+          <li>Browser projects keep a history of versions</li>
+          <li>Folding of sections, environments and the preamble</li>
+          <li>Several carets</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.6.0" date="2026-11-25" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.6.0</url>
       <description>

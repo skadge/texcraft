@@ -5,6 +5,35 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.7.0 (2026-11-25)
+
+Suggested changes, history in the browser, and folding.
+
+### Reviewing
+
+- Suggest mode (Edit › Suggest Changes, Ctrl+Shift+E, or the Suggest switch above the editor):
+  what you type is a suggestion instead of a change, shown struck through and underlined in your
+  colour, with a card in the margin to accept or reject it, one by one or all at once, and to reply
+  to it. Builds show the text as it is, or with the suggestions applied when you ask. Agents
+  suggest through `review.suggest`.
+
+### Projects
+
+- Browser projects keep their history too: each save that changes something is a version, listed
+  in the History panel, compared and restored as on the desktop.
+
+### Editing
+
+- Folding: sections, environments and the preamble fold from the gutter or with Ctrl+Shift+[ and
+  Ctrl+Shift+] (`zc`, `zo`, `za`, `zM`, `zR` in Vim), and open again when the caret lands inside.
+- Several carets: Alt+click adds one, Ctrl+D adds the next occurrence of the selection; typing,
+  deleting and moving act at all of them, as one step to undo.
+
+Known limits:
+
+- In Suggest mode, completion and hover are off for files showing suggestions.
+- Commands other than typing, deleting and moving act at the first caret only.
+
 ## 0.6.0 (2026-11-25)
 
 Formulas typeset in the formatted view, a better PDF preview, and PDFs for screen readers and for
