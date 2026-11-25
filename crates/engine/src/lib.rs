@@ -549,9 +549,23 @@ impl Session {
         }
         self.project.set(path, texcraft_project::Contents::Text(new)).map_err(|e| e.to_string())?;
         self.touch();
-        let changes: Vec<(usize, usize, usize)> = tx.changes().iter().map(|c| (c.start, c.end, c.text.chars().count())).collect();
-        self.review.review.follow(path.as_str(), &changes);
+        // The anchors follow; an undo or redo may also take back or make again an accept.
+        let changed = if matches!(origin, Origin::Undo | Origin::Redo) {
+            let changes: Vec<(usize, usize, String)> = tx.changes().iter().map(|c| (c.start, c.end, c.text.clone())).collect();
+            let now = self.now();
+            self.review.review.follow_undo(path.as_str(), &changes, self.author.as_ref(), now)
+        } else {
+            let changes: Vec<(usize, usize, usize)> = tx.changes().iter().map(|c| (c.start, c.end, c.text.chars().count())).collect();
+            self.review.review.follow(path.as_str(), &changes)
+        };
         self.edits.push(FileEdit { revision: self.revision, path: path.clone(), changes: tx.clone(), origin });
+        // Suggestions the edit outdated, reopened or accepted again: the edit is made either way,
+        // and a review file that could not be written is reported with the review's problems.
+        for id in changed {
+            if let Err(e) = self.review_changed(id) {
+                self.review.problems.push(e);
+            }
+        }
         Ok(())
     }
 

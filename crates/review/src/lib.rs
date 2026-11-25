@@ -1,6 +1,7 @@
-//! Review of a project's sources (docs/collaboration.md §6, docs/collaboration-roadmap.md R1):
-//! comment threads on passages of the text, who wrote what, and the `.texcraft/review/` file
-//! format ([`format`], documented in docs/review-format.md).
+//! Review of a project's sources (docs/collaboration.md §6, docs/collaboration-roadmap.md R1 and
+//! R2): comment threads on passages of the text, suggested changes (a thread that also proposes a
+//! replacement of its passage), who wrote what, and the `.texcraft/review/` file format
+//! ([`format`], documented in docs/review-format.md).
 //!
 //! The crate is pure: no I/O, no clock and no random source. The engine passes the time and the
 //! random bits of new ids, reads and writes the files, and feeds the text's edits to
@@ -10,13 +11,16 @@
 
 mod anchor;
 pub mod format;
+mod suggestions;
 mod threads;
+pub mod view;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 pub use anchor::{Anchor, CONTEXT, Placement, Quote};
-pub use threads::{Filter, Review};
+pub use suggestions::Accepted;
+pub use threads::{Filter, Kind, Review};
 
 /// What a review operation returns.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -31,6 +35,18 @@ pub enum Error {
     NotAuthor,
     #[error("a comment needs some text")]
     Empty,
+    #[error("the suggestion would change nothing: its text is the passage's")]
+    NoChange,
+    #[error("`{0}` is a comment, not a suggestion")]
+    NotSuggestion(Id),
+    #[error("`{0}` is a suggestion: accept or reject it instead")]
+    IsSuggestion(Id),
+    #[error("the suggestion is no longer open")]
+    NotOpen,
+    #[error("the passage changed since the suggestion was made, so it cannot be applied; reject it, or suggest again")]
+    Outdated,
+    #[error("an accepted suggestion is part of the text; undo the accept to reopen it")]
+    AlreadyAccepted,
     #[error("the passage {start}..{end} is not in the text ({len} characters)")]
     OutOfText { start: usize, end: usize, len: usize },
     #[error("this review file was written by a newer TeXCraft (format version {0}); update TeXCraft to read it")]
@@ -127,20 +143,52 @@ pub struct Message {
     pub deleted: bool,
 }
 
-/// Whether a thread is still being discussed.
+/// Whether a thread is still being discussed. A comment is resolved; a suggestion is accepted
+/// (its replacement is now in the text) or rejected.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "lowercase")]
 pub enum State {
     Open,
     Resolved { by: Author, at: DateTime<Utc> },
+    Accepted { by: Author, at: DateTime<Utc> },
+    Rejected { by: Author, at: DateTime<Utc> },
 }
 
-/// A discussion of a passage.
+impl State {
+    /// Who closed it and when; `None` while open.
+    pub fn closed(&self) -> Option<(&Author, DateTime<Utc>)> {
+        match self {
+            State::Open => None,
+            State::Resolved { by, at } | State::Accepted { by, at } | State::Rejected { by, at } => Some((by, *at)),
+        }
+    }
+}
+
+/// A proposed change of a thread's passage: replace it (the anchor's range) with `replacement`.
+/// An empty passage is an insertion, an empty replacement a deletion.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Suggestion {
+    pub author: Author,
+    pub time: DateTime<Utc>,
+    pub replacement: String,
+    /// When its text last changed (consecutive typing extends a suggestion).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edited: Option<DateTime<Utc>>,
+    /// The passage was changed by another edit (another suggestion accepted over it, someone
+    /// typing inside it): it can no longer be applied, only rejected.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub outdated: bool,
+}
+
+/// A discussion of a passage, and with a [`Suggestion`], a proposed change of it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Thread {
     pub id: Id,
     pub anchor: Anchor,
     pub state: State,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggestion: Option<Suggestion>,
+    #[serde(default)]
     pub messages: Vec<Message>,
 }
 
@@ -149,18 +197,25 @@ impl Thread {
         self.state == State::Open
     }
 
-    /// Who started it.
-    pub fn author(&self) -> Option<&Author> {
-        self.messages.first().map(|m| &m.author)
+    pub fn is_suggestion(&self) -> bool {
+        self.suggestion.is_some()
     }
 
-    /// When it last changed: its last message, edit or resolution.
+    /// An open suggestion that can be applied to the text now.
+    pub fn can_accept(&self) -> bool {
+        self.is_open() && self.anchor.placement != Placement::Unanchored && self.suggestion.as_ref().is_some_and(|s| !s.outdated)
+    }
+
+    /// Who started it: the suggestion's author, or the first message's.
+    pub fn author(&self) -> Option<&Author> {
+        self.suggestion.as_ref().map(|s| &s.author).or_else(|| self.messages.first().map(|m| &m.author))
+    }
+
+    /// When it last changed: its suggestion, last message, edit or closing.
     pub fn updated(&self) -> Option<DateTime<Utc>> {
         let messages = self.messages.iter().map(|m| m.edited.unwrap_or(m.time).max(m.time));
-        let resolved = match &self.state {
-            State::Resolved { at, .. } => Some(*at),
-            State::Open => None,
-        };
-        messages.chain(resolved).max()
+        let suggested = self.suggestion.as_ref().map(|s| s.edited.unwrap_or(s.time).max(s.time));
+        let closed = self.state.closed().map(|(_, at)| at);
+        messages.chain(suggested).chain(closed).max()
     }
 }

@@ -620,10 +620,7 @@ fn card(app: &mut App, ui: &mut egui::Ui, th: &Thread, in_panel: bool, actions: 
                 ui.horizontal(|ui| {
                     let (rect, _) = ui.allocate_exact_size(vec2(t.icon_size, t.icon_size), Sense::hover());
                     icons::paint(ui, rect, "circle-check", t.icon_size, t.success);
-                    let who = match &th.state {
-                        State::Resolved { by, .. } => by.name.clone(),
-                        State::Open => String::new(),
-                    };
+                    let who = th.state.closed().map(|(by, _)| by.name.clone()).unwrap_or_default();
                     let text = th.messages.first().map(|m| short(&m.text, 40)).unwrap_or_default();
                     ui.add(
                         egui::Label::new(

@@ -137,3 +137,18 @@ fn a_deleted_comment_is_removed_from_the_library_project() {
     s.execute("project.open", &json!({"path": "Memo"})).unwrap();
     assert!(s.review().threads().is_empty());
 }
+
+#[test]
+fn a_suggestion_is_kept_with_a_library_project_and_comes_back() {
+    let mut s = reviewer().unwrap();
+    s.execute("project.save_as", &json!({"path": "Suggested"})).unwrap();
+    s.execute("review.suggest", &json!({"path": "main.tex", "start": 4, "end": 9, "text": "slow"})).unwrap();
+    s.execute("project.new", &json!({})).unwrap();
+    s.execute("project.open", &json!({"path": "Suggested"})).unwrap();
+    let list = s.execute("review.list", &json!({"kind": "suggestion"})).unwrap();
+    assert_eq!(list["openSuggestions"], 1, "{list}");
+    assert_eq!(first_thread_quote(&mut s).as_deref(), Some("quick"));
+    let id = list["threads"][0]["id"].clone();
+    s.execute("review.accept", &json!({"id": id})).unwrap();
+    assert_eq!(s.execute("file.read", &json!({"path": "main.tex"})).unwrap()["text"], "The slow brown fox.");
+}
