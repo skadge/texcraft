@@ -383,6 +383,10 @@ pub(super) fn prepare_push(s: &mut Session, p: &Value) -> Result<Prepared> {
     }
     let message = p.get("message").and_then(Value::as_str).map(str::trim).filter(|m| !m.is_empty()).unwrap_or(SAVE_MESSAGE).to_owned();
     let ignore = dir.join(".gitignore");
+    // Agents write only inside their roots.
+    if let Some(roots) = &s.roots {
+        roots.check(&ignore, Access::Write)?;
+    }
     let wrote_ignore = if ignore.exists() {
         None
     } else {
