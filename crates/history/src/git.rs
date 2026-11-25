@@ -74,6 +74,15 @@ impl Folder {
     }
 }
 
+/// `repo` with a committer for its reflogs: gix takes it from the configuration, and without a
+/// `user.name` (a machine where git was never set up) writing `refs/remotes/origin/main` or
+/// moving the branch fails ("reflog messages need a committer"). Set in memory only, with the
+/// name commits fall back to; a configured identity wins.
+fn with_committer(mut repo: gix::Repository) -> gix::Repository {
+    repo.committer_or_set_fallback("TeXCraft", "texcraft@localhost").ok();
+    repo
+}
+
 impl History {
     /// The repository `dir` is in, if it is in one (its own, or a folder's above it).
     pub fn find(dir: &Path) -> Result<Option<Self>> {
@@ -81,7 +90,7 @@ impl History {
         if !dir.ancestors().any(|d| d.join(".git").exists()) {
             return Ok(None);
         }
-        let repo = git!("The project's git repository cannot be opened", gix::discover(&dir))?;
+        let repo = with_committer(git!("The project's git repository cannot be opened", gix::discover(&dir))?);
         let top = repo.workdir().ok_or("The project's folder is inside a git repository without files (a bare one).")?;
         let top = std::fs::canonicalize(top).map_err(|e| format!("The repository's folder {} cannot be read: {e}", top.display()))?;
         let relative = dir.strip_prefix(&top).map_err(|_| "The project's folder is not inside its repository's folder.".to_owned())?;

@@ -84,7 +84,7 @@ impl History {
         let path = self.config_path();
         write_locked(&path, &bytes)?;
         let git_dir = self.repo.git_dir().to_path_buf();
-        self.repo = git!("The project's git repository cannot be opened", gix::open(git_dir))?;
+        self.repo = super::with_committer(git!("The project's git repository cannot be opened", gix::open(git_dir))?);
         Ok(())
     }
 
