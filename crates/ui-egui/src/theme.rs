@@ -94,6 +94,11 @@ pub struct Tokens {
     pub row_height: f32,
     pub icon_size: f32,
     pub rail_icon_size: f32,
+    /// Below this window width (points) the window is laid out for a phone: the side panel is a
+    /// drawer over the rest, and the editor and the PDF are two tabs.
+    pub narrow_width: f32,
+    /// The side panel's width as a drawer, at most (a narrower window leaves a strip beside it).
+    pub drawer_width: f32,
     /// The grid unit; gaps are multiples of it.
     pub unit: f32,
 }
@@ -209,6 +214,8 @@ impl Tokens {
             row_height: 26.0,
             icon_size: 16.0,
             rail_icon_size: 18.0,
+            narrow_width: 700.0,
+            drawer_width: 300.0,
             unit: 4.0,
         }
     }

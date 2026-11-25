@@ -30,6 +30,7 @@ mod insert;
 mod keyboard_paths;
 mod log_copy;
 mod menu_bar;
+mod narrow;
 mod output_log;
 mod pdf_preview;
 mod pdf_window;

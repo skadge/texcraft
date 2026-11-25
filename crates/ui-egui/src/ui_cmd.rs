@@ -83,6 +83,9 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.layout.split", "Editor and PDF", "View", "layout", None),
     ui("view.layout.editor", "Editor Only", "View", "layout", None),
     ui("view.layout.preview", "PDF Only", "View", "layout", None),
+    // A narrow window's tabs (a phone); in a wide one, the layout shows that pane too.
+    ui("view.pane.source", "Show the Source", "View", "layout", None),
+    ui("view.pane.pdf", "Show the PDF", "View", "layout", None),
     ui("view.side.files", "Project Files", "View", "side", None),
     ui("view.side.outline", "Outline", "View", "side", None),
     ui("view.side.review", "Review", "View", "side", None),
@@ -187,6 +190,18 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             };
             // A layout is the main window's: the PDF comes back into it.
             app.view.pdf_window = false;
+        }
+        "view.pane.source" => {
+            app.view.pane = crate::Pane::Source;
+            if !app.view.narrow && app.view.layout == Layout::PreviewOnly {
+                app.view.layout = Layout::Split;
+            }
+        }
+        "view.pane.pdf" => {
+            app.view.pane = crate::Pane::Pdf;
+            if !app.view.narrow && app.view.layout == Layout::EditorOnly && !app.view.pdf_window {
+                app.view.layout = Layout::Split;
+            }
         }
         "view.pdf_window" => match enabled(app, id) {
             Err(reason) => app.view.status = Some((reason, true)),

@@ -24,8 +24,14 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 let active = app.view.side == Some(side);
                 let r = widgets::rail_button(ui, &t, icon, label, active);
                 app.region(crate::Region::Rail, r.id);
+                if active {
+                    app.view.rail_active = Some(r.id);
+                }
                 if r.clicked() {
                     app.view.side = if active { None } else { Some(side) };
+                    if !active {
+                        app.view.rail_active = Some(r.id);
+                    }
                 }
             }
             ui.with_layout(Layout::bottom_up(Align::Center), |ui| {

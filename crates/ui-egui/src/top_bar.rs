@@ -14,6 +14,8 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let frame = egui::Frame::new().fill(t.frame).inner_margin(egui::Margin::symmetric(12, 0));
     let shown = egui::Panel::top("top-bar").exact_size(t.top_bar_height).frame(frame).show(ui, |ui| {
         let bar = ui.max_rect();
+        // Where the menus end: a narrow window's title goes after them.
+        let mut menus_end = bar.left() + 30.0;
         // The bar's empty space moves the window; the controls drawn after it take the pointer.
         crate::window::bar_space(app, ui, ui.max_rect().expand2(vec2(12.0, 0.0)));
         ui.horizontal_centered(|ui| {
@@ -28,7 +30,25 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             navigate(app, ui.ctx());
             let mut ids = Vec::with_capacity(MENUS.len());
             let mut entered = None;
+            let narrow = app.view.narrow;
             egui::MenuBar::new().ui(ui, |ui| {
+                // A narrow window has room for one menu, holding the others.
+                if narrow {
+                    let r = ui
+                        .menu_button(tl!("Menu"), |ui| {
+                            for menu in MENUS {
+                                ui.menu_button(crate::i18n::t(menu), |ui| menu_items(app, ui, menu));
+                            }
+                        })
+                        .response;
+                    widgets::focus_ring(ui, &t, &r, r.rect, t.corner());
+                    if r.clicked() && !r.clicked_by(egui::PointerButton::Primary) && egui::Popup::is_id_open(ui.ctx(), popup_id(r.id)) {
+                        entered = Some(0);
+                    }
+                    ids.push(r.id);
+                    menus_end = r.rect.right();
+                    return;
+                }
                 for (i, menu) in MENUS.iter().enumerate() {
                     let r = ui.menu_button(crate::i18n::t(menu), |ui| menu_items(app, ui, menu)).response;
                     widgets::focus_ring(ui, &t, &r, r.rect, t.corner());
@@ -43,10 +63,18 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             settle(app, ui.ctx(), entered);
         });
         if !app.start {
-            project_title(app, ui, bar);
+            // Narrow, the title is between the menu and the controls at the bar's end (the
+            // window's, without the layout switch, which the tabs replace).
+            let room = if app.view.narrow {
+                let controls: f32 = ui.data(|d| d.get_temp(ui.scope_id().with("bar-end"))).unwrap_or(0.0);
+                egui::Rect::from_min_max(egui::pos2(menus_end + 2.0 * t.unit, bar.top()), egui::pos2(bar.right() - controls - t.unit, bar.bottom()))
+            } else {
+                bar
+            };
+            project_title(app, ui, room);
         }
         let rect = egui::Rect::from_min_max(egui::pos2(bar.center().x, bar.top()), bar.max);
-        ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(EguiLayout::right_to_left(Align::Center)), |ui| {
+        let end = ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(EguiLayout::right_to_left(Align::Center)), |ui| {
             if app.own_frame() {
                 crate::window::controls(app, ui);
                 if !app.start {
@@ -56,11 +84,15 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 }
             }
             if !app.start {
-                layout_switch(app, ui);
-                ui.add_space(t.unit * 2.0);
+                if !app.view.narrow {
+                    layout_switch(app, ui);
+                    ui.add_space(t.unit * 2.0);
+                }
                 crate::forge::badge(app, ui);
             }
         });
+        let width = end.response.rect.width();
+        ui.data_mut(|d| d.insert_temp(ui.scope_id().with("bar-end"), width));
     });
     app.region_area(crate::Region::TopBar, shown.response.rect);
 }
@@ -390,7 +422,7 @@ impl App {
     }
 }
 
-/// The project's name, centred: a button that edits it in place, and beside it the project's menu.
+/// The project's name, centred in `bar`: a button that edits it in place, and beside it the project's menu.
 fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
     if app.view.rename.is_some() {
         rename_field(app, ui, bar);
@@ -398,8 +430,11 @@ fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
     }
     let t = app.tokens;
     let name = app.project_name();
-    let galley = ui.painter().layout_no_wrap(name.clone(), t.strong(), t.text);
     let menu_width = t.icon_size + 2.0 * t.unit;
+    // A name longer than the room is cut short with an ellipsis (a narrow window).
+    let mut job = egui::text::LayoutJob::simple_singleline(name.clone(), t.strong(), t.text);
+    job.wrap = egui::text::TextWrapping::truncate_at_width((bar.width() - 7.0 * t.unit - menu_width).max(4.0 * t.unit));
+    let galley = ui.painter().layout_job(job);
     let width = galley.size().x + 3.0 * t.unit + menu_width + 4.0 * t.unit;
     let rect = egui::Rect::from_center_size(bar.center(), vec2(width, t.toolbar_height - 8.0));
     let (name_rect, menu_rect) = rect.split_left_right_at_x(rect.right() - menu_width - t.unit);
@@ -476,7 +511,7 @@ fn rename_field(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
     let t = app.tokens;
     let Some(rename) = app.view.rename.as_mut() else { return };
     let typed = ui.painter().layout_no_wrap(rename.text.clone(), t.strong(), t.text).size().x;
-    let width = (typed + 8.0 * t.unit).clamp(240.0, (bar.width() * 0.4).max(240.0));
+    let width = (typed + 8.0 * t.unit).clamp(240.0_f32.min(bar.width()), (bar.width() * 0.4).max(240.0).min(bar.width()));
     let rect = egui::Rect::from_center_size(bar.center(), vec2(width, t.toolbar_height - 8.0));
     let id = ui.scope_id().with("project-name-field");
     let field = egui::TextEdit::singleline(&mut rename.text)
