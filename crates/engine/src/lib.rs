@@ -34,6 +34,8 @@ use texcraft_project::{Project, ProjectPath};
 
 /// Why the last forge pull or commit was refused ([`Session::forge_problem`]).
 pub use cmd::forge::Problem as ForgeProblem;
+/// Where a sign-in to a forge stands, and why one is not offered.
+pub use cmd::forge_auth::{Progress as SignInProgress, Unavailable as SignInUnavailable};
 pub use texcraft_compile::{
     Diagnostic, Draft, Engine, Export, MAX_BLEED_MM, Options as BuildOptions, Outcome, Output, PdfX, Progress, Severity, Status,
 };
@@ -181,6 +183,8 @@ pub struct Session {
     forge_changes: Option<((u64, u64), Vec<texcraft_forge::FileChange>)>,
     /// Why the last pull or commit was refused, when the interface offers a way out.
     forge_problem: Option<cmd::forge::Problem>,
+    /// Sign-ins to GitLab and GitHub (C5, step 4): kept in the store the shell gives.
+    forge_auth: cmd::forge_auth::State,
     /// AI assistance: the connection, its requests and their answers (docs/ROADMAP.md, AI1, AI2).
     ai: ai::State,
     /// Spell checking: the dictionary, the word lists and each file's words.
@@ -244,6 +248,7 @@ impl Session {
             forge_transport: std::sync::Arc::new(texcraft_forge::transport),
             forge_changes: None,
             forge_problem: None,
+            forge_auth: cmd::forge_auth::State::default(),
             ai: ai::State::default(),
             spelling: spelling::State::default(),
             saved_outputs: std::collections::BTreeMap::new(),
