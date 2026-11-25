@@ -11,7 +11,8 @@ fn app() -> App {
 #[test]
 fn compiling_without_an_engine_says_why_instead_of_showing_success() {
     let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app());
-    harness.get_by_label("Compile").click();
+    // Compiling automatically (the default), the pill's click still compiles now.
+    harness.get_by_label("Auto-Compile: compile now").click();
     // The build runs on a thread, and its spinner repaints until it ends: step until it has.
     for _ in 0..400 {
         harness.step();
@@ -79,4 +80,30 @@ fn the_help_menu_opens_the_retex_manual_in_the_browser() {
         .iter()
         .any(|c| matches!(c, egui::OutputCommand::OpenUrl(open) if open.url == texcraft_ui_egui::ui_cmd::RETEX_MANUAL));
     assert!(opened, "the manual's address was not opened");
+}
+
+#[test]
+fn the_compile_pill_says_when_it_compiles_automatically_and_a_click_still_compiles_now() {
+    let prefs = |auto| texcraft_ui_egui::prefs::Prefs { auto_compile: auto, ..texcraft_ui_egui::prefs::Prefs::default() };
+    let session = || Session::with_backend(Box::new(Unavailable("No engine in this test.".into())));
+    let mut off = Harness::builder()
+        .with_size(egui::vec2(1200.0, 800.0))
+        .build_ui_state(|ui, app: &mut App| app.frame(ui), App::with_prefs(session(), prefs(false)));
+    off.run();
+    assert!(off.query_by_role_and_label(egui::accesskit::Role::Button, "Compile").is_some(), "no Compile pill with compiling automatically off");
+    let mut on = Harness::builder()
+        .with_size(egui::vec2(1200.0, 800.0))
+        .build_ui_state(|ui, app: &mut App| app.frame(ui), App::with_prefs(session(), prefs(true)));
+    on.run();
+    // The pill says it compiles automatically; its name, what a click does.
+    assert!(on.query_by_role_and_label(egui::accesskit::Role::Button, "Compile").is_none(), "the pill does not say it compiles automatically");
+    on.get_by_role_and_label(egui::accesskit::Role::Button, "Auto-Compile: compile now").click();
+    for _ in 0..400 {
+        on.step();
+        if on.query_all_by_label_contains("No engine in this test.").next().is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(on.query_all_by_label_contains("No engine in this test.").next().is_some(), "clicking the pill did not compile");
 }

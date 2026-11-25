@@ -162,9 +162,9 @@ pub fn segmented(ui: &mut Ui, t: &Tokens, id: &str, options: &[(&str, Option<&st
     clicked
 }
 
-/// The round primary button with an icon, a label, and a separate menu segment. Returns the
-/// main part's and the menu part's responses.
-pub fn primary_split(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, busy: bool) -> (Response, Response) {
+/// The round primary button with an icon, a label, and a separate menu segment; `name`, its
+/// accessible name, starts with the label. Returns the main part's and the menu part's responses.
+pub fn primary_split(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, name: &str, busy: bool) -> (Response, Response) {
     let height = t.toolbar_height - 2.0 * t.unit;
     let text = ui.painter().layout_no_wrap(label.to_owned(), t.strong(), t.on_accent);
     let main_w = 3.0 * t.unit + t.icon_size + 2.0 * t.unit + text.size().x + 3.0 * t.unit;
@@ -174,7 +174,7 @@ pub fn primary_split(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, busy: boo
     let menu_rect = Rect::from_min_size(outer.min + vec2(main_w, 0.0), vec2(menu_w, height));
     let main = ui.interact(main_rect, ui.scope_id().with(("primary", label)), if busy { Sense::hover() } else { Sense::click() });
     let menu = ui.interact(menu_rect, ui.scope_id().with(("primary-menu", label)), Sense::click());
-    main.widget_info(|| WidgetInfo::labeled(Role::Button, !busy, label));
+    main.widget_info(|| WidgetInfo::labeled(Role::Button, !busy, name));
     menu.widget_info(|| WidgetInfo::labeled(Role::Button, true, format!("{label} {}", tl!("options"))));
     let round = (height / 2.0) as u8;
     let fill = |r: &Response| {

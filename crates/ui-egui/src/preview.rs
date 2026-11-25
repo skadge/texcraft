@@ -158,13 +158,19 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         ui.spacing_mut().item_spacing.x = 2.0;
         ui.add_space(t.unit * 2.0);
         let building = app.session.is_building();
-        let label = if building { tl!("Compiling…") } else { tl!("Compile") };
-        let (main, menu) = widgets::primary_split(ui, &t, "play", label, building);
+        let auto = app.session.settings.auto_compile;
+        // Compiling automatically, the pill says so; clicking it still compiles now.
+        let (label, name, tip) = match (building, auto) {
+            (true, _) => (tl!("Compiling…"), tl!("Compiling…"), tl!("Compiling…")),
+            (false, true) => (tl!("Auto-Compile"), tl!("Auto-Compile: compile now"), tl!("Compiles as you type; click to compile now")),
+            (false, false) => (tl!("Compile"), tl!("Compile"), tl!("Compile")),
+        };
+        let (main, menu) = widgets::primary_split(ui, &t, "play", label, name, building);
         app.region(crate::Region::Preview, main.id);
         if main.clicked() {
             app.run("build.compile", json!({}));
         }
-        let tip = app.keys.shortcut_text("build.compile").map_or_else(|| label.to_owned(), |k| format!("{label} ({k})"));
+        let tip = app.keys.shortcut_text("build.compile").map_or_else(|| tip.to_owned(), |k| format!("{tip} ({k})"));
         let _ = main.on_hover_text(tip);
         crate::widgets::keyboard_menu(ui, &menu);
         egui::Popup::menu(&menu).show(|ui| compile_menu(app, ui));
