@@ -123,8 +123,8 @@ Off until the user connects a model (any OpenAI-compatible endpoint, a local one
 
 | Code | | Feature | Description |
 |---|---|---|---|
-| AI1 | ⬜ | The connection | Endpoint, token in the system's secret store, model; what is sent, and to whom, shown before it is sent. |
-| AI2 | ⬜ | Explaining build errors | A plain-language explanation and a proposed fix. |
+| AI1 | 🚧 | The connection | Endpoint, token in the system's secret store, model; what is sent, and to whom, shown before it is sent. Done on the desktop: Settings › AI (endpoint, token in the system's keychain, model from the endpoint's list, Test Connection, Forget), consent asked once per connection and kind of request, the request log, a project's own off switch. Still to come: the browser (the suite's AI layer has no provider for a web page yet). |
+| AI2 | 🚧 | Explaining build errors | A plain-language explanation and a proposed fix. Done on the desktop: Explain on build log cards and in the problem popup; a fix arrives as a suggested change by "AI (model)". Still to come: the browser, streaming the answer. |
 | AI3 | ⬜ | Rewriting and continuing | Rewrite a selection (clearer, shorter, translated) keeping its LaTeX; optional completion as you type. |
 | AI4 | ⬜ | Making LaTeX | Tables, equations, TikZ figures from a description; BibTeX entries from a title or DOI. |
 | AI5 | ⬜ | Asking and reviewing | Questions about the project; a review left as comments. |
