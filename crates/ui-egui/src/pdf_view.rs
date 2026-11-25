@@ -309,10 +309,6 @@ impl PdfView {
         self.set_fit(Fit::Zoom(self.zoom * factor));
     }
 
-    pub fn fit_width(&mut self) {
-        self.fit = Fit::Width;
-    }
-
     pub fn go_to_page(&mut self, page: usize) {
         if !self.sizes.is_empty() {
             self.scroll_to = Some(page.min(self.sizes.len() - 1));

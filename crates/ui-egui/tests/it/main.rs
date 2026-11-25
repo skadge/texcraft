@@ -16,6 +16,7 @@ mod history;
 mod image_drop;
 mod insert;
 mod log_copy;
+mod pdf_preview;
 mod progress;
 mod recent;
 mod regions;

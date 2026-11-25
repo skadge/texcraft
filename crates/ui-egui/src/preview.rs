@@ -107,11 +107,11 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.add_space(t.unit * 2.0);
             if widgets::icon_button(ui, &t, "zoom-in", tl!("Zoom In"), true).clicked() {
-                app.pdf.zoom_by(1.25);
+                ui_cmd::run(app, "view.zoom_in");
             }
             zoom_menu(app, ui);
             if widgets::icon_button(ui, &t, "zoom-out", tl!("Zoom Out"), true).clicked() {
-                app.pdf.zoom_by(0.8);
+                ui_cmd::run(app, "view.zoom_out");
             }
             ui.add_space(t.unit * 2.0);
             let (page, count) = (app.pdf.page, app.pdf.page_count());
@@ -198,6 +198,7 @@ fn export_menu(app: &mut App, ui: &mut egui::Ui) {
     }
 }
 
+/// The zoom menu: the zoom now, and the fits and fixed zooms, each a command.
 fn zoom_menu(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     let label = match app.pdf.fit() {
@@ -206,19 +207,29 @@ fn zoom_menu(app: &mut App, ui: &mut egui::Ui) {
         Fit::Zoom(_) => format!("{:.0} %", app.pdf.zoom() * 100.0),
     };
     let r = widgets::text_button(ui, &t, &label, true);
+    let _ = r.clone().on_hover_text(tl!("Zoom"));
     egui::Popup::menu(&r).show(|ui| {
         ui.set_min_width(140.0);
-        let mut choose = |ui: &mut egui::Ui, text: &str, fit: Fit| {
-            if ui.add(egui::Button::selectable(app.pdf.fit() == fit, text)).clicked() {
-                app.pdf.set_fit(fit);
+        let mut choose = |ui: &mut egui::Ui, text: &str, fit: Fit, id: &str, params: serde_json::Value| {
+            let mut button = egui::Button::selectable(app.pdf.fit() == fit, text);
+            if let Some(k) = app.keys.shortcut_text(id).filter(|_| params.is_null()) {
+                button = button.shortcut_text(k);
+            }
+            if ui.add(button).clicked() {
+                ui_cmd::run_with(app, id, &params);
                 ui.close();
             }
         };
-        choose(ui, tl!("Fit width"), Fit::Width);
-        choose(ui, tl!("Fit page"), Fit::Page);
+        choose(ui, tl!("Fit width"), Fit::Width, "view.fit_width", serde_json::Value::Null);
+        choose(ui, tl!("Fit page"), Fit::Page, "view.fit_page", serde_json::Value::Null);
         ui.separator();
         for z in [50, 75, 100, 125, 150, 200, 300, 400] {
-            choose(ui, &format!("{z} %"), Fit::Zoom(z as f32 / 100.0));
+            let text = format!("{z} %");
+            if z == 100 {
+                choose(ui, &text, Fit::Zoom(1.0), "view.actual_size", serde_json::Value::Null);
+            } else {
+                choose(ui, &text, Fit::Zoom(z as f32 / 100.0), "view.zoom", json!({"percent": z}));
+            }
         }
     });
 }
