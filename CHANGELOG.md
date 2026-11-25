@@ -5,7 +5,35 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
-## 0.5.0 (2026-11-25)
+## 0.6.0 (2026-11-25)
+
+Formulas typeset in the formatted view, a better PDF preview, and PDFs for screen readers and for
+print. 0.6.0 also brings everything listed under 0.5.0, whose Linux packages were never
+published (a test failed in CI).
+
+### The PDF
+
+- The preview draws pages in the background, follows links (to a page, or to the web after a
+  safety check), lets you select and copy text, has zoom presets (Ctrl+0 for 100 %), and shows the
+  PDF a page at a time in a presentation mode (F5).
+- Accessible PDFs (PDF/UA) and print PDFs (PDF/X-4 or PDF/X-1a, with bleed and crop marks), from
+  Settings › Building or the Compile button's menu. Their checks (missing alternative text, image
+  resolution, ink coverage…) have their own filters in the build log, each linked to its source
+  line, and print checks to their place on the page; a print build starts with "Ready for print"
+  or the number of problems.
+
+### Writing
+
+- The formatted view shows formulas typeset by retex with the document's own preamble, on the
+  desktop; editing one formula typesets only that one again.
+
+Known limits:
+
+- Formulas are typeset on the desktop only; the browser shows their source.
+- An accessible build does not use the build worker's preamble snapshot yet, so its rebuilds are
+  slower.
+
+## 0.5.0 (2026-11-25, not published)
 
 Every project now has a history, kept in git, and TeXCraft exports to Word, PowerPoint and
 more. First experimental builds for Windows and macOS.

@@ -41,7 +41,20 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.5.0" date="2026-11-25" type="development">
+    <release version="0.6.0" date="2026-11-25" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.6.0</url>
+      <description>
+        <p>Typeset formulas, a better preview, accessible and print PDFs; with everything of 0.5.0: project history in git, export, search.</p>
+        <ul>
+          <li>Formulas typeset in the formatted view</li>
+          <li>Links, text selection, zoom presets and a presentation mode in the preview</li>
+          <li>Accessible PDF/UA and print PDF/X output, with their checks in the build log</li>
+          <li>Every project a git repository, with a History panel</li>
+          <li>Export to Word, OpenDocument, PowerPoint, HTML, Markdown and SVG</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.5.0" date="2026-11-25" type="snapshot">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.5.0</url>
       <description>
         <p>Project history in git, export to other formats, and editing comforts.</p>
