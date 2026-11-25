@@ -639,6 +639,12 @@ impl Session {
         })
     }
 
+    /// Whether the session reaches `instance` of `service` with no token typed: one given earlier
+    /// in this session, or a sign-in to it.
+    pub fn forge_reaches(&self, instance: &str, service: Service) -> bool {
+        self.forge_tokens.contains_key(instance) || self.forge_grant(instance, service).is_some()
+    }
+
     /// Whether the session reaches the linked project with a sign-in that can only read (GitLab's
     /// read_api): committing then asks to sign in again, allowing commits.
     pub fn forge_needs_write(&self) -> bool {
