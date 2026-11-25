@@ -9,6 +9,9 @@
 //! - [`retex_backend::Retex`] (feature `retex`, not on wasm32): retex linked in process.
 //! - [`Unavailable`]: says why there is no engine (the web build, for now). It never pretends to
 //!   have built anything (AGENTS.md rule 15).
+//!
+//! [`formulas`] (feature `retex`, not on wasm32) typesets a file's formulas on their own, for the
+//! formatted view.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
@@ -16,6 +19,8 @@ use std::sync::Arc;
 
 use texcraft_project::{Project, ProjectPath};
 
+#[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
+pub mod formulas;
 pub mod records;
 #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
 pub mod retex_backend;
