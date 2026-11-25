@@ -38,6 +38,14 @@ pub(crate) struct Editor {
     vim_message: Option<(String, bool, f64)>,
     /// Which files are shown formatted, and that view's state.
     pub formatted: crate::formatted::Formatted,
+    /// Suggest mode: edits become suggestions instead of changing the file.
+    pub suggest: bool,
+    /// In Suggest mode, the text shown: the file with its suggestions in it.
+    pub shown: Option<crate::suggest::Shown>,
+    /// Where the caret goes once the suggestions are shown again.
+    pub caret_hint: Option<crate::suggest::CaretHint>,
+    /// The caret before the editor's last frame, to tell a deletion forwards from one backwards.
+    pub caret_before: usize,
 }
 
 fn session_text(project: &texcraft_engine::project::Project, path: Option<&ProjectPath>) -> Option<String> {
@@ -52,6 +60,21 @@ impl Editor {
     /// shown file's own edits must have gone to the session first ([`send_edits`]).
     fn sync(&mut self, path: Option<&ProjectPath>, session: &texcraft_engine::Session) {
         let project = session.project();
+        // The text shown in Suggest mode is not the file's: it is made again from the session
+        // (`suggest::refresh`) while suggesting, and gives way to the file's otherwise.
+        if let Some(shown) = &self.shown {
+            let still = self.suggest && path == Some(&shown.path) && self.path.as_ref() == path && !self.formatted.shows(&shown.path);
+            if still {
+                self.revision = session.revision();
+                self.mine.clear();
+                return;
+            }
+            let fresh = session_text(project, Some(&shown.path)).unwrap_or_default();
+            crate::suggest::show_text(&mut self.source.doc, &fresh);
+            self.shown = None;
+            self.revision = session.revision();
+            self.mine.clear();
+        }
         if self.revision != session.revision() {
             if let Some(shown) = self.path.as_ref().filter(|p| project.get(p).is_some()) {
                 catch_up(&mut self.source.doc, shown, self.revision, &self.mine, session);
@@ -110,6 +133,9 @@ fn catch_up(doc: &mut Doc, path: &ProjectPath, since: u64, mine: &[u64], session
 
 /// Sends the shown file's new edits to the session (`file.edit`); true when there were some.
 fn send_edits(app: &mut App) -> bool {
+    if let Some(sent) = crate::suggest::send(app) {
+        return sent;
+    }
     let Some(path) = app.editor.path.clone() else { return false };
     let edits = app.editor.source.doc.buffer.take_edits();
     let mut sent = false;
@@ -126,6 +152,9 @@ fn send_edits(app: &mut App) -> bool {
 
 /// Whether an image can go into the shown file now ([`insert_image`]), or why not.
 pub(crate) fn can_insert(app: &App) -> Result<(), String> {
+    if app.editor.suggest {
+        return Err(tl!("Images go into the file itself: stop suggesting to insert one.").to_owned());
+    }
     match app.editor.path.as_ref().filter(|p| app.session.current() == Some(*p)) {
         Some(p) if app.session.project().text(p).is_ok() => Ok(()),
         _ => Err(tl!("Open a text file in the editor to insert the image into.").to_owned()),
@@ -217,12 +246,19 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             app.view.last_edit = Some(ui.ctx().input(|i| i.time));
         }
         app.editor.sync(current.as_ref(), &app.session);
+        if let Some(path) = &current {
+            crate::suggest::refresh(app, path);
+        }
         let is_text = current.as_ref().is_some_and(|p| matches!(app.session.project().get(p), Some(Contents::Text(_))));
         let as_image = current.as_ref().is_some_and(|p| crate::figure_view::is_svg(p) && !app.figure.as_text.contains(p));
         let formatted = current.as_ref().is_some_and(|p| app.editor.formatted.shows(p));
         if is_text && !as_image {
             toolbar(app, ui);
             widgets::hairline(ui, &t);
+            if app.editor.suggest && !formatted {
+                crate::suggest::banner(app, ui);
+                widgets::hairline(ui, &t);
+            }
             if !formatted {
                 crate::find_bar::show(app, ui);
             }
@@ -414,6 +450,31 @@ pub(crate) fn edit(app: &mut App, id: &str) -> bool {
             app.editor.focus = true;
             return true;
         }
+        "edit.suggest_mode" => {
+            crate::suggest::toggle(app);
+            return true;
+        }
+        "edit.accept_all" | "edit.reject_all" => {
+            let command = if id == "edit.accept_all" { "review.accept_all" } else { "review.reject_all" };
+            let Some(path) = app.session.current().cloned() else { return false };
+            if let Some(r) = app.run(command, json!({"path": path.as_str()})) {
+                let (n, outdated) = (r["accepted"].as_u64().or(r["rejected"].as_u64()).unwrap_or(0), r["outdated"].as_array().map_or(0, Vec::len));
+                let mut said = if id == "edit.accept_all" {
+                    crate::i18n::trn(n as usize, "{n} suggestion accepted", "{n} suggestions accepted")
+                } else {
+                    crate::i18n::trn(n as usize, "{n} suggestion rejected", "{n} suggestions rejected")
+                };
+                if outdated > 0 {
+                    said.push_str(&crate::i18n::trn(
+                        outdated,
+                        "; {n} overlapped another and is outdated",
+                        "; {n} overlapped others and are outdated",
+                    ));
+                }
+                app.view.status = Some((said, outdated > 0));
+            }
+            return true;
+        }
         "edit.next_comment" | "edit.previous_comment" => {
             crate::review::step(app, id == "edit.next_comment");
             return true;
@@ -573,6 +634,12 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
             app.editor.formatted.set(path, choice == 1);
             if choice == 0 {
                 app.editor.focus = true;
+            }
+        }
+        if !on {
+            ui.add_space(t.unit);
+            if crate::suggest::switch(app, ui) {
+                chosen = Some("edit.suggest_mode");
             }
         }
         if on {
@@ -872,6 +939,7 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     vim_line(app, ui);
     let name = format!("{} {}", path.file_name(), tl!("source"));
     app.editor.source.accept_drop = egui::DragAndDrop::has_payload_of_type::<crate::side::ImageDrag>(ui.ctx());
+    app.editor.caret_before = app.editor.source.caret();
     let out = crate::review::with_margin(app, ui, path, |app, ui| app.editor.source.show(ui, &t, id, &markers, &name, "  "));
     crate::review::follow_caret(app, path);
     if let Some(response) = &out.response {
@@ -882,6 +950,14 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     if send_edits(app) {
         app.view.last_edit = Some(ui.ctx().input(|i| i.time));
     }
+    crate::suggest::refresh(app, path);
+    // Completion, hover and definitions are of the file's lines and columns: not of the text
+    // shown with suggestions in it.
+    let out = if crate::suggest::view(app, path).is_some_and(|v| !v.is_plain()) {
+        crate::source::Output { complete_at: None, hover_at: None, definition_at: None, ..out }
+    } else {
+        out
+    };
     // After the text went to the session, so the language server sees what was typed.
     if let Some((line, column)) = out.complete_at {
         let items = app.session.complete(path, line, column);
@@ -942,7 +1018,10 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             // Vim's messages show on its line, at the bottom of the editor.
             Effect::Message(m) => app.editor.vim_message = Some((m, false, ui.ctx().input(|i| i.time))),
             Effect::Error(m) => app.editor.vim_message = Some((m, true, ui.ctx().input(|i| i.time))),
-            Effect::Comment { start, end, text } => crate::review::from_vim(app, path, start, end, &text),
+            Effect::Comment { start, end, text } => {
+                let (start, end) = (crate::suggest::to_source(app, path, start), crate::suggest::to_source(app, path, end));
+                crate::review::from_vim(app, path, start, end, &text)
+            }
             Effect::Copy(_) | Effect::Scroll(_) => {}
         }
     }

@@ -38,8 +38,12 @@ impl Suggesting {
     }
 
     fn edit(&mut self, start: usize, end: usize, text: &str) -> Result<(), Box<dyn std::error::Error>> {
+        self.edit_dir(start, end, text, false)
+    }
+
+    fn edit_dir(&mut self, start: usize, end: usize, text: &str, forward: bool) -> Result<(), Box<dyn std::error::Error>> {
         let view = self.view();
-        let plan = view.interpret(&self.source, start, end, text, &self.who).map_err(|a| format!("refused: in {}'s suggestion", a.name))?;
+        let plan = view.interpret(&self.source, start, end, text, &self.who, forward).map_err(|a| format!("refused: in {}'s suggestion", a.name))?;
         let mut made = None;
         for op in plan.ops {
             match op {
@@ -78,6 +82,10 @@ impl Suggesting {
 
     fn backspace(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.edit(self.caret - 1, self.caret, "")
+    }
+
+    fn delete_forward(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.edit_dir(self.caret, self.caret + 1, "", true)
     }
 
     /// Accepts every suggestion, as the engine does: one edit of the file.
@@ -128,6 +136,18 @@ fn deleting_and_then_typing_makes_one_replacement_and_backspacing_takes_it_back(
     s.type_text("two")?;
     assert!(s.review.threads().is_empty(), "a suggestion that changes nothing was kept");
     assert_eq!(s.view().text, source);
+    Ok(())
+}
+
+#[test]
+fn deleting_forwards_moves_past_the_marked_text() -> R {
+    let mut s = Suggesting::new("one two three", ada());
+    s.caret = 4;
+    for _ in 0..4 {
+        s.delete_forward()?;
+    }
+    assert_eq!(s.review.threads().len(), 1);
+    assert_eq!(s.accept_all(), "one three", "forward deletes kept deleting the same character");
     Ok(())
 }
 

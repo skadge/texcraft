@@ -25,5 +25,6 @@ mod rename;
 mod review;
 mod search;
 mod shortcuts;
+mod suggest;
 mod unsaved;
 mod vim;

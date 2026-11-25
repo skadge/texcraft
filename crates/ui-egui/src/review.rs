@@ -1,6 +1,7 @@
-//! Review in the editor (docs/collaboration-roadmap.md, R1): commented passages tinted in the
-//! text, the margin of threads beside it, the composer, and the Review panel that takes the
-//! margin's place when the pane is narrow.
+//! Review in the editor (docs/collaboration-roadmap.md, R1 and R2): commented passages tinted in
+//! the text, suggested changes marked in it (Suggest mode, [`crate::suggest`], shows them whole),
+//! the margin of threads and suggestions beside it, the composer, and the Review panel that takes
+//! the margin's place when the pane is narrow.
 //!
 //! - **The margin** is a column right of the text. Each thread's card is level with its passage,
 //!   pushed down when the one above it is long, with a thin line from the passage to it. Selecting
@@ -8,6 +9,9 @@
 //! - **Cards** show the author's badge (the colour craft-ui's presence badges give the author's
 //!   key), name, how long ago, the messages, Reply and Resolve, and Edit and Delete for one's own
 //!   messages. Resolved threads fold to one line. The filter shows all, open, resolved or one's own.
+//! - **Suggestion cards** say what would change ("Replace “colour” with “color”", the old text
+//!   struck through and the new underlined), with Accept and Reject; replies are as on a comment.
+//!   An outdated suggestion (its passage changed since) says so and can only be rejected.
 //! - Every change goes through the engine's `review.*` commands (AGENTS.md rule 14). Each card is
 //!   an accessibility group named by its author and quote; replies and resolutions that arrive,
 //!   and the thread the caret enters, are announced on the status line.
@@ -20,7 +24,7 @@ use serde_json::json;
 use texcraft_engine::project::ProjectPath;
 use texcraft_engine::review::{Author, Id, Message, Placement, State, Thread};
 
-use crate::source::Passage;
+use crate::source::{Mark, Passage};
 use crate::theme::{Tokens, blend, contrast};
 use crate::{App, icons, widgets};
 
@@ -125,7 +129,7 @@ fn shown(app: &App, thread: &Thread, me: Option<&Author>) -> bool {
         Show::All => true,
         Show::Open => thread.is_open(),
         Show::Resolved => !thread.is_open(),
-        Show::Mine => me.is_some_and(|m| thread.messages.iter().any(|msg| msg.author.is(m))),
+        Show::Mine => me.is_some_and(|m| thread.author().is_some_and(|a| a.is(m)) || thread.messages.iter().any(|msg| msg.author.is(m))),
     }
 }
 
@@ -144,16 +148,39 @@ fn threads(app: &App, path: Option<&ProjectPath>) -> Vec<Thread> {
     out
 }
 
-/// The commented passages of `path` for the editor to tint: open threads, and the selected one.
+/// The passages of `path` for the editor to mark, in the text it shows: open comments and the
+/// selected one tinted, open suggestions struck through and underlined.
 pub(crate) fn passages(app: &App, path: &ProjectPath) -> Vec<Passage> {
-    threads(app, Some(path))
+    let mut out: Vec<Passage> = threads(app, Some(path))
         .iter()
-        .filter(|t| t.anchor.placement != Placement::Unanchored && (t.is_open() || app.review.selected == Some(t.id)))
+        .filter(|t| !t.is_suggestion() && t.anchor.placement != Placement::Unanchored && (t.is_open() || app.review.selected == Some(t.id)))
         .filter_map(|t| {
             let author = t.author()?;
-            Some(Passage { start: t.anchor.start, end: t.anchor.end, color: colour(author), selected: app.review.selected == Some(t.id) })
+            let start = crate::suggest::to_view(app, path, t.anchor.start);
+            let end = if t.anchor.end == t.anchor.start { start } else { crate::suggest::to_view_end(app, path, t.anchor.end).max(start) };
+            Some(Passage { start, end, color: colour(author), selected: app.review.selected == Some(t.id), mark: Mark::Comment })
         })
-        .collect()
+        .collect();
+    out.extend(crate::suggest::passages(app, path, app.review.selected));
+    out.sort_by_key(|p| (p.start, p.end));
+    out
+}
+
+/// What a suggestion would do, in words: "Replace “a” with “b”", "Insert “b”", "Delete “a”".
+pub(crate) fn change_text(t: &Thread, max: usize) -> String {
+    let Some(s) = &t.suggestion else { return String::new() };
+    let (old, new) = (short(&t.anchor.quote.exact, max), short(&s.replacement, max));
+    match (old.is_empty(), new.is_empty()) {
+        (true, _) => tl!("Insert “{new}”").replace("{new}", &new),
+        (false, true) => tl!("Delete “{old}”").replace("{old}", &old),
+        (false, false) => tl!("Replace “{old}” with “{new}”").replace("{old}", &old).replace("{new}", &new),
+    }
+}
+
+/// The open suggestions of the file shown, for Accept All and Reject All.
+pub(crate) fn open_suggestions_in_current(app: &App) -> usize {
+    let Some(path) = app.session.current() else { return 0 };
+    app.session.review().threads().iter().filter(|t| t.is_open() && t.is_suggestion() && t.anchor.path == path.as_str()).count()
 }
 
 /// A short quote of a passage, for names and lists.
@@ -174,9 +201,22 @@ fn ago(time: DateTime<Utc>, now: DateTime<Utc>) -> String {
     }
 }
 
-/// The name of a thread for screen readers: who started it, on which words.
+/// The name of a thread for screen readers: who started it, on which words (a suggestion: what
+/// it would change).
 fn group_name(t: &Thread) -> String {
     let who = t.author().map(|a| a.name.clone()).unwrap_or_default();
+    if let Some(s) = &t.suggestion {
+        let state = match t.state {
+            State::Accepted { .. } => tl!(", accepted"),
+            State::Rejected { .. } => tl!(", rejected"),
+            _ if s.outdated => tl!(", outdated"),
+            _ => "",
+        };
+        return tl!("Suggestion by {name}: {change}{state}")
+            .replace("{name}", &who)
+            .replace("{change}", &change_text(t, 60))
+            .replace("{state}", state);
+    }
     let state = if t.is_open() { "" } else { tl!(", resolved") };
     tl!("Comment by {name} on “{quote}”{state}")
         .replace("{name}", &who)
@@ -195,7 +235,12 @@ pub(crate) fn start(app: &mut App) {
         let line = b.char_to_line(app.editor.source.caret());
         (start, end) = (b.line_to_char(line), b.line_end(line));
     }
-    let quote = b.slice(start, end);
+    // In Suggest mode the text shown is not the file's: the comment is on the file's passage.
+    let (start, end) = (crate::suggest::to_source(app, &path, start), crate::suggest::to_source(app, &path, end));
+    let quote = match app.session.project().text(&path) {
+        Ok(text) => text.chars().skip(start).take(end.saturating_sub(start)).collect(),
+        Err(_) => String::new(),
+    };
     open_composer(app, path, start, end, quote);
 }
 
@@ -210,7 +255,10 @@ fn open_composer(app: &mut App, path: ProjectPath, start: usize, end: usize, quo
 
 /// `:comment [text]` in Vim: on `start..end`, posted at once when there is a text.
 pub(crate) fn from_vim(app: &mut App, path: &ProjectPath, start: usize, end: usize, text: &str) {
-    let quote = app.editor.source.doc.buffer.slice(start, end);
+    let quote = match app.session.project().text(path) {
+        Ok(source) => source.chars().skip(start).take(end.saturating_sub(start)).collect(),
+        Err(_) => String::new(),
+    };
     if text.trim().is_empty() || app.prefs.identity.is_none() {
         open_composer(app, path.clone(), start, end, quote);
         if let Some(c) = app.review.composer.as_mut() {
@@ -232,7 +280,7 @@ pub(crate) fn step(app: &mut App, forward: bool) {
         app.view.status = Some((tl!("There are no comments to go to.").to_owned(), false));
         return;
     }
-    let caret = app.session.current().map(|p| (p.as_str().to_owned(), app.editor.source.caret()));
+    let caret = app.session.current().map(|p| (p.as_str().to_owned(), crate::suggest::to_source(app, p, app.editor.source.caret())));
     let at = app.review.selected.and_then(|id| list.iter().position(|t| t.id == id));
     let next = match (at, forward) {
         (Some(i), true) => (i + 1) % list.len(),
@@ -244,13 +292,11 @@ pub(crate) fn step(app: &mut App, forward: bool) {
     };
     let Some(t) = list.get(next) else { return };
     select(app, t);
-    let text = t.messages.first().map(|m| short(&m.text, 80)).unwrap_or_default();
+    let text = if t.is_suggestion() { change_text(t, 80) } else { t.messages.first().map(|m| short(&m.text, 80)).unwrap_or_default() };
     let who = t.author().map(|a| a.name.clone()).unwrap_or_default();
-    let said = tl!("Comment {n} of {total}, by {name}: {text}")
-        .replace("{n}", &(next + 1).to_string())
-        .replace("{total}", &list.len().to_string())
-        .replace("{name}", &who)
-        .replace("{text}", &text);
+    let said = if t.is_suggestion() { tl!("Suggestion {n} of {total}, by {name}: {text}") } else { tl!("Comment {n} of {total}, by {name}: {text}") };
+    let said =
+        said.replace("{n}", &(next + 1).to_string()).replace("{total}", &list.len().to_string()).replace("{name}", &who).replace("{text}", &text);
     app.view.status = Some((said, false));
 }
 
@@ -259,7 +305,10 @@ fn select(app: &mut App, t: &Thread) {
     app.review.selected = Some(t.id);
     let shown = app.session.current().is_some_and(|p| p.as_str() == t.anchor.path);
     if shown {
-        app.editor.source.select(t.anchor.start, t.anchor.end);
+        let Some(path) = app.session.current().cloned() else { return };
+        let start = crate::suggest::to_view(app, &path, t.anchor.start);
+        let end = if t.anchor.end == t.anchor.start { start } else { crate::suggest::to_view_end(app, &path, t.anchor.end).max(start) };
+        app.editor.source.select(start, end);
         app.review.caret = app.session.current().cloned().map(|p| (p, app.editor.source.caret()));
     } else {
         app.review.reveal = Some(t.id);
@@ -277,7 +326,7 @@ pub(crate) fn follow_caret(app: &mut App, path: &ProjectPath) {
         select(app, &t);
         return;
     }
-    let caret = app.editor.source.caret();
+    let caret = crate::suggest::to_source(app, path, app.editor.source.caret());
     let now = Some((path.clone(), caret));
     if app.review.caret == now {
         return;
@@ -296,8 +345,13 @@ pub(crate) fn follow_caret(app: &mut App, path: &ProjectPath) {
         Some(t) if app.review.selected != Some(t.id) => {
             app.review.selected = Some(t.id);
             let who = t.author().map(|a| a.name.clone()).unwrap_or_default();
-            let text = t.messages.first().map(|m| short(&m.text, 80)).unwrap_or_default();
-            app.view.status = Some((tl!("Commented by {name}: {text}").replace("{name}", &who).replace("{text}", &text), false));
+            let said = if t.is_suggestion() {
+                tl!("Suggested by {name}: {text}").replace("{text}", &change_text(&t, 80))
+            } else {
+                let text = t.messages.first().map(|m| short(&m.text, 80)).unwrap_or_default();
+                tl!("Commented by {name}: {text}").replace("{text}", &text)
+            };
+            app.view.status = Some((said.replace("{name}", &who), false));
         }
         Some(_) => {}
         None => app.review.selected = None,
@@ -324,10 +378,16 @@ pub(crate) fn announce_changes(app: &mut App) {
                 app.view.status =
                     Some((tl!("{name} replied: {text}").replace("{name}", &m.author.name).replace("{text}", &short(&m.text, 80)), false));
             }
-            if let (true, State::Resolved { by, .. }) = (*open, &t.state)
+            let closed = match &t.state {
+                State::Resolved { by, .. } => Some((by, tl!("{name} resolved a comment"))),
+                State::Accepted { by, .. } => Some((by, tl!("{name} accepted a suggestion"))),
+                State::Rejected { by, .. } => Some((by, tl!("{name} rejected a suggestion"))),
+                State::Open => None,
+            };
+            if let (true, Some((by, text))) = (*open, closed)
                 && by_other(by)
             {
-                app.view.status = Some((tl!("{name} resolved a comment").replace("{name}", &by.name), false));
+                app.view.status = Some((text.replace("{name}", &by.name), false));
             }
         }
     }
@@ -377,6 +437,21 @@ fn filter_bar(app: &mut App, ui: &mut egui::Ui, salt: &str) {
     }
 }
 
+/// Accept All and Reject All, for the suggestions of the file shown.
+fn all_buttons(app: &mut App, ui: &mut egui::Ui) {
+    let t = app.tokens;
+    let mut chosen = None;
+    if link_button(ui, &t, tl!("Accept All")).on_hover_text(tl!("Accept every open suggestion in this file (one undoable edit)")).clicked() {
+        chosen = Some("edit.accept_all");
+    }
+    if link_button(ui, &t, tl!("Reject All")).on_hover_text(tl!("Reject every open suggestion in this file")).clicked() {
+        chosen = Some("edit.reject_all");
+    }
+    if let Some(id) = chosen {
+        crate::ui_cmd::run(app, id);
+    }
+}
+
 /// The margin: a header with the counts and the filter, and the cards beside their passages.
 fn margin(app: &mut App, ui: &mut egui::Ui, rect: Rect, path: &ProjectPath) {
     let t = app.tokens;
@@ -388,6 +463,13 @@ fn margin(app: &mut App, ui: &mut egui::Ui, rect: Rect, path: &ProjectPath) {
         // The counts are in the status bar and the file tree: the narrow margin keeps the filter.
         filter_bar(app, ui, "review-margin-filter");
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if open_suggestions_in_current(app) > 0 {
+                let more = widgets::icon_button(ui, &t, "ellipsis", tl!("Suggestions in this file"), true);
+                egui::Popup::menu(&more).show(|ui| {
+                    ui.set_min_width(180.0);
+                    ui.vertical(|ui| all_buttons(app, ui));
+                });
+            }
             let hide = ui.add(egui::Button::image(icons::image("x", t.icon_size, t.text_muted)).frame_when_inactive(false));
             hide.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Hide the comments beside the text")));
             if hide.on_hover_text(tl!("Hide the comments beside the text (the Review panel still lists them)")).clicked() {
@@ -404,9 +486,12 @@ fn margin(app: &mut App, ui: &mut egui::Ui, rect: Rect, path: &ProjectPath) {
     let mut actions = Vec::new();
     let mut bottom = area.top() + 2.0 * t.unit;
     // The cards and the composer, in the order of their passages.
-    let composer_at = app.review.composer.as_ref().filter(|c| &c.path == path).map(|c| c.start);
-    let mut items: Vec<(usize, Option<&Thread>)> =
-        list.iter().filter(|th| th.anchor.placement != Placement::Unanchored).map(|th| (th.anchor.start, Some(th))).collect();
+    let composer_at = app.review.composer.as_ref().filter(|c| &c.path == path).map(|c| crate::suggest::to_view(app, path, c.start));
+    let mut items: Vec<(usize, Option<&Thread>)> = list
+        .iter()
+        .filter(|th| th.anchor.placement != Placement::Unanchored)
+        .map(|th| (crate::suggest::to_view(app, path, th.anchor.start), Some(th)))
+        .collect();
     if let Some(at) = composer_at {
         items.push((at, None));
     }
@@ -429,7 +514,7 @@ fn margin(app: &mut App, ui: &mut egui::Ui, rect: Rect, path: &ProjectPath) {
         // The line from the passage to its card.
         if let Some(p) = passage {
             // The line leaves the passage's line after its last character, never across its text.
-            let end = thread.map_or(at, |th| th.anchor.end);
+            let end = thread.map_or(at, |th| crate::suggest::to_view_end(app, path, th.anchor.end).max(at));
             let b = &app.editor.source.doc.buffer;
             let line_end = b.line_end(b.char_to_line(end.min(b.len_chars())));
             let after = app.editor.source.screen_rect(line_end);
@@ -467,6 +552,12 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(t.unit * 2.0);
         filter_bar(app, ui, "review-panel-filter");
     });
+    if open_suggestions_in_current(app) > 0 {
+        ui.horizontal(|ui| {
+            ui.add_space(t.unit * 2.0);
+            all_buttons(app, ui);
+        });
+    }
     ui.add_space(t.unit * 2.0);
     let mut actions = Vec::new();
     let list = threads(app, None);
@@ -482,8 +573,12 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
         if list.is_empty() && app.review.composer.is_none() {
             ui.add_space(t.unit * 4.0);
             ui.vertical_centered(|ui| {
-                ui.label(RichText::new(tl!("No comments")).font(t.strong()));
-                ui.label(RichText::new(tl!("Select text and choose Edit › Comment.")).font(t.small()).color(t.text_muted));
+                ui.label(RichText::new(tl!("No comments or suggestions")).font(t.strong()));
+                ui.label(
+                    RichText::new(tl!("Select text and choose Edit › Comment, or turn on Suggest to propose changes."))
+                        .font(t.small())
+                        .color(t.text_muted),
+                );
             });
         }
         let mut last_path = None;
@@ -621,19 +716,22 @@ fn card(app: &mut App, ui: &mut egui::Ui, th: &Thread, in_panel: bool, actions: 
                     let (rect, _) = ui.allocate_exact_size(vec2(t.icon_size, t.icon_size), Sense::hover());
                     icons::paint(ui, rect, "circle-check", t.icon_size, t.success);
                     let who = th.state.closed().map(|(by, _)| by.name.clone()).unwrap_or_default();
-                    let text = th.messages.first().map(|m| short(&m.text, 40)).unwrap_or_default();
+                    let (summary, text) = match th.state {
+                        State::Accepted { .. } => (tl!("Accepted by {name} · {text}"), change_text(th, 30)),
+                        State::Rejected { .. } => (tl!("Rejected by {name} · {text}"), change_text(th, 30)),
+                        _ => (tl!("Resolved by {name} · {text}"), th.messages.first().map(|m| short(&m.text, 40)).unwrap_or_default()),
+                    };
                     ui.add(
-                        egui::Label::new(
-                            RichText::new(tl!("Resolved by {name} · {text}").replace("{name}", &who).replace("{text}", &text))
-                                .font(t.small())
-                                .color(t.text_muted),
-                        )
-                        .truncate(),
+                        egui::Label::new(RichText::new(summary.replace("{name}", &who).replace("{text}", &text)).font(t.small()).color(t.text_muted))
+                            .truncate(),
                     );
                 });
                 return;
             }
-            if in_panel || th.anchor.placement != Placement::Anchored {
+            if th.is_suggestion() {
+                suggestion(app, ui, th, actions);
+            }
+            if (in_panel && !th.is_suggestion()) || th.anchor.placement != Placement::Anchored {
                 let quote = short(&th.anchor.quote.exact, 70);
                 let (note, colour) = match th.anchor.placement {
                     Placement::Removed => (tl!("The passage was deleted: “{quote}”").replace("{quote}", &quote), t.warning),
@@ -646,12 +744,14 @@ fn card(app: &mut App, ui: &mut egui::Ui, th: &Thread, in_panel: bool, actions: 
                     ui.add(egui::Label::new(RichText::new(note).font(egui::FontId::monospace(t.small_size)).color(colour)).wrap());
                 });
             }
+            // A suggestion's replies come after its change, as a comment's after its first message.
+            let first_reply = if th.is_suggestion() { 0 } else { 1 };
             for (i, m) in th.messages.iter().enumerate() {
-                if i == 1 {
+                if i == first_reply {
                     let (line, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
                     ui.painter().rect_filled(line, 0.0, blend(t.surface, t.separator));
                 }
-                message(app, ui, th, m, i == 0, actions);
+                message(app, ui, th, m, i == 0 && !th.is_suggestion(), actions);
             }
             if let State::Resolved { by, at } = &th.state {
                 let text = tl!("Resolved by {name}, {when}").replace("{name}", &by.name).replace("{when}", &ago(*at, Utc::now()));
@@ -675,6 +775,80 @@ fn card(app: &mut App, ui: &mut egui::Ui, th: &Thread, in_panel: bool, actions: 
     }
     widgets::focus_ring(ui, &t, &response, response.rect, t.corner_large());
     response.rect
+}
+
+/// A suggestion's part of its card: who suggested it, the change in words and as struck and
+/// underlined text, whether it is outdated or closed, and Accept and Reject while it is open.
+fn suggestion(app: &App, ui: &mut egui::Ui, th: &Thread, actions: &mut Vec<Action>) {
+    let t = app.tokens;
+    let Some(s) = &th.suggestion else { return };
+    let mine = me(app).is_some_and(|a| a.is(&s.author));
+    let id = th.id.to_string();
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0 * t.unit;
+        badge(ui, &t, &s.author, 24.0);
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.label(RichText::new(&s.author.name).font(t.strong()).color(t.text));
+            let when = tl!("suggested {when}").replace("{when}", &ago(s.edited.unwrap_or(s.time), Utc::now()));
+            ui.label(RichText::new(when).font(t.small()).color(t.text_muted));
+        });
+        if mine && th.is_open() {
+            ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                let more = widgets::icon_button(ui, &t, "ellipsis", tl!("More actions"), true);
+                egui::Popup::menu(&more).show(|ui| {
+                    ui.set_min_width(150.0);
+                    if ui.add(egui::Button::new(RichText::new(tl!("Withdraw Suggestion")).color(t.error)).frame_when_inactive(false)).clicked() {
+                        actions.push(Action::Run("review.delete", json!({"id": id})));
+                        ui.close();
+                    }
+                });
+            });
+        }
+    });
+    ui.add(egui::Label::new(RichText::new(change_text(th, 80)).font(t.body()).color(t.text)).wrap());
+    // The change itself: the old text struck through, the new underlined, on the author's tint.
+    let code = egui::FontId::monospace(t.small_size);
+    let tint = colour(&s.author).gamma_multiply(0.16);
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = t.unit;
+        if !th.anchor.quote.exact.is_empty() {
+            ui.label(RichText::new(short(&th.anchor.quote.exact, 80)).font(code.clone()).strikethrough().color(t.text).background_color(tint));
+        }
+        if !s.replacement.is_empty() {
+            ui.label(RichText::new(short(&s.replacement, 80)).font(code.clone()).underline().color(t.text).background_color(tint));
+        }
+    });
+    match &th.state {
+        State::Open if s.outdated => {
+            let note = tl!("Outdated: the passage changed since. Reject it, or suggest again.");
+            ui.add(egui::Label::new(RichText::new(note).font(t.small()).color(t.warning)).wrap());
+        }
+        State::Accepted { by, at } => {
+            let text = tl!("Accepted by {name}, {when}").replace("{name}", &by.name).replace("{when}", &ago(*at, Utc::now()));
+            ui.label(RichText::new(text).font(t.small()).color(t.success));
+        }
+        State::Rejected { by, at } => {
+            let text = tl!("Rejected by {name}, {when}").replace("{name}", &by.name).replace("{when}", &ago(*at, Utc::now()));
+            ui.label(RichText::new(text).font(t.small()).color(t.text_muted));
+        }
+        _ => {}
+    }
+    if th.is_open() {
+        ui.horizontal(|ui| {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let accept = primary(ui, &t, tl!("Accept"), th.can_accept());
+                if accept.on_hover_text(tl!("Make this change in the file (one undoable edit)")).clicked() {
+                    actions.push(Action::Run("review.accept", json!({"id": id})));
+                }
+                if link_button(ui, &t, tl!("Reject")).on_hover_text(tl!("Leave the text as it is")).clicked() {
+                    actions.push(Action::Run("review.reject", json!({"id": id})));
+                }
+            });
+        });
+    } else if matches!(th.state, State::Rejected { .. }) && widgets::icon_button(ui, &t, "rotate-ccw", tl!("Reopen"), true).clicked() {
+        actions.push(Action::Run("review.reopen", json!({"id": id})));
+    }
 }
 
 fn reply_field(app: &mut App, ui: &mut egui::Ui, th: &Thread, actions: &mut Vec<Action>) {
@@ -802,7 +976,9 @@ fn apply(app: &mut App, actions: Vec<Action>) {
             Action::Run(command, params) => {
                 let announce = match command {
                     "review.resolve" => Some(tl!("Comment resolved")),
-                    "review.reopen" => Some(tl!("Comment reopened")),
+                    "review.reopen" => Some(tl!("Reopened")),
+                    "review.accept" => Some(tl!("Suggestion accepted")),
+                    "review.reject" => Some(tl!("Suggestion rejected")),
                     "review.reply" => Some(tl!("Reply added")),
                     "review.delete" => Some(tl!("Deleted")),
                     _ => None,
@@ -865,11 +1041,20 @@ fn apply(app: &mut App, actions: Vec<Action>) {
 /// The status bar's count of open threads, when there are any; clicking it opens the Review panel.
 pub(crate) fn status(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
-    let open = app.session.review().threads().iter().filter(|th| th.is_open()).count();
-    if open == 0 {
+    let open = app.session.review().threads().iter().filter(|th| th.is_open() && !th.is_suggestion()).count();
+    let suggested = app.session.review().threads().iter().filter(|th| th.is_open() && th.is_suggestion()).count();
+    if open + suggested == 0 {
         return;
     }
-    let text = crate::i18n::trn(open, "{n} comment", "{n} comments");
+    let text = match (open, suggested) {
+        (_, 0) => crate::i18n::trn(open, "{n} comment", "{n} comments"),
+        (0, _) => crate::i18n::trn(suggested, "{n} suggestion", "{n} suggestions"),
+        _ => format!(
+            "{} · {}",
+            crate::i18n::trn(open, "{n} comment", "{n} comments"),
+            crate::i18n::trn(suggested, "{n} suggestion", "{n} suggestions")
+        ),
+    };
     let r = ui.add(
         egui::Button::image_and_text(
             icons::image("message-square-text", 13.0, t.text_muted),

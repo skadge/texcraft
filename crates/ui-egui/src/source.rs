@@ -118,14 +118,29 @@ pub(crate) struct ProblemPopup {
     selected: usize,
 }
 
-/// A commented passage (review): tinted under the text in its author's colour, more strongly
-/// when its thread is selected, and marked in the gutter.
+/// How a passage of the review is drawn. Struck and underlined text tell a suggestion apart
+/// without its colour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum Mark {
+    /// A commented passage: tinted.
+    #[default]
+    Comment,
+    /// Text a suggestion deletes or replaces: struck through.
+    Deleted,
+    /// Text a suggestion puts in, shown though not in the file: underlined.
+    Inserted,
+}
+
+/// A passage of the review: tinted under the text in its author's colour, more strongly when its
+/// thread is selected, and marked in the gutter; a suggestion's text is also struck through or
+/// underlined ([`Mark`]).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Passage {
     pub start: usize,
     pub end: usize,
     pub color: egui::Color32,
     pub selected: bool,
+    pub mark: Mark,
 }
 
 /// Completions offered at the caret.
@@ -1500,17 +1515,7 @@ impl SourceEditor {
             let line_end = line_start + line_len;
             for p in self.passages.iter().filter(|p| p.end >= line_start && p.start <= line_end && (p.end > line_start || p.start == p.end)) {
                 let (s, e) = (p.start.saturating_sub(line_start).min(line_len), (p.end.saturating_sub(line_start)).min(line_len));
-                let at = origin + vec2(0.0, *top);
-                if p.start == p.end {
-                    let c = galley.pos_from_cursor(CCursor::new(s)).translate(at.to_vec2());
-                    painter.rect_filled(Rect::from_min_size(c.min - vec2(1.0, 0.0), vec2(2.0, c.height())), 1.0, p.color);
-                } else {
-                    let tint = p.color.gamma_multiply(if p.selected { 0.42 } else { 0.2 });
-                    paint_span(painter, galley, at, (s, e), tint, p.end > line_end);
-                    if p.selected {
-                        underline(painter, galley, at, (s, e), p.color, false);
-                    }
-                }
+                paint_passage(painter, galley, origin + vec2(0.0, *top), p, (s, e), p.end > line_end);
                 let bar =
                     Rect::from_min_max(pos2(rect.left() + gutter - 1.5 * t.unit, y0), pos2(rect.left() + gutter - 0.75 * t.unit, origin.y + bottom));
                 painter.rect_filled(bar, 1.0, if p.selected { p.color } else { p.color.gamma_multiply(0.7) });
@@ -1714,6 +1719,44 @@ fn opening(c: char) -> Option<char> {
         ']' => Some('['),
         '}' => Some('{'),
         _ => None,
+    }
+}
+
+/// Passage `p` on chars `s..e` of one line's galley (`through_break`: and its line break).
+fn paint_passage(painter: &egui::Painter, galley: &Galley, at: Pos2, p: &Passage, (s, e): (usize, usize), through_break: bool) {
+    if p.start == p.end {
+        let c = galley.pos_from_cursor(CCursor::new(s)).translate(at.to_vec2());
+        painter.rect_filled(Rect::from_min_size(c.min - vec2(1.0, 0.0), vec2(2.0, c.height())), 1.0, p.color);
+        return;
+    }
+    let strength = match (p.mark, p.selected) {
+        (Mark::Comment, false) => 0.2,
+        (_, true) => 0.42,
+        (_, false) => 0.14,
+    };
+    paint_span(painter, galley, at, (s, e), p.color.gamma_multiply(strength), through_break);
+    match p.mark {
+        Mark::Comment if p.selected => underline(painter, galley, at, (s, e), p.color, false),
+        Mark::Comment => {}
+        Mark::Deleted => rule(painter, galley, at, (s, e), p.color, 0.5),
+        Mark::Inserted => rule(painter, galley, at, (s, e), p.color, 1.0),
+    }
+}
+
+/// A solid line across chars `s..e` of one line's galley, at `height` of each row from its top
+/// (0.5 strikes the text through, 1.0 underlines it).
+fn rule(painter: &egui::Painter, galley: &Galley, at: Pos2, (s, e): (usize, usize), color: egui::Color32, height: f32) {
+    let mut row_start = 0;
+    for row in &galley.rows {
+        let n = row.char_count_excluding_newline().0;
+        let (a, z) = (s.max(row_start), e.min(row_start + n));
+        if a < z {
+            let x0 = at.x + row.pos.x + row.x_offset(egui::text::CharIndex(a - row_start));
+            let x1 = at.x + row.pos.x + row.x_offset(egui::text::CharIndex(z - row_start));
+            let y = at.y + row.min_y() + (row.max_y() - row.min_y()) * height - if height >= 1.0 { 1.5 } else { 0.0 };
+            painter.line_segment([pos2(x0, y), pos2(x1, y)], egui::Stroke::new(1.5, color));
+        }
+        row_start += n;
     }
 }
 

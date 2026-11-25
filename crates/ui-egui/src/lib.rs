@@ -38,6 +38,7 @@ mod settings;
 mod side;
 mod start;
 mod status;
+mod suggest;
 mod top_bar;
 pub mod ui_cmd;
 pub mod widgets;

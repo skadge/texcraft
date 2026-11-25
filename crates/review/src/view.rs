@@ -176,14 +176,15 @@ impl View {
     /// What replacing `start..end` of the shown text with `text` does, typed by `me` in Suggest
     /// mode: the file does not change, one's suggestions do. Text typed next to or inside one's
     /// own suggestion extends it; deleting text already deleted only moves the caret. An edit
-    /// inside another person's suggestion is refused: returns that person.
-    pub fn interpret(&self, source: &str, start: usize, end: usize, text: &str, me: &Author) -> Result<Plan, Author> {
+    /// inside another person's suggestion is refused: returns that person. `forward`: a deletion
+    /// was made forwards (Delete, rather than Backspace), so the caret goes past what it marked.
+    pub fn interpret(&self, source: &str, start: usize, end: usize, text: &str, me: &Author, forward: bool) -> Result<Plan, Author> {
         let len = self.len();
         let (vs, ve) = (start.min(len), end.min(len).max(start.min(len)));
         if text.is_empty() && vs < ve {
             let only_deleted = self.spans.iter().filter(|s| s.start < ve && s.end > vs).all(|s| matches!(s.kind, Kind::Deleted { .. }));
             if only_deleted {
-                return Ok(Plan { ops: Vec::new(), caret: Caret::Source(self.to_source(vs)) });
+                return Ok(Plan { ops: Vec::new(), caret: Caret::Source(self.to_source(if forward { ve } else { vs })) });
             }
         }
         for s in self.shown.iter().filter(|s| !s.author.is(me)) {
@@ -243,7 +244,7 @@ impl View {
         }
         let deleted_source = text.is_empty() && matches!(self.span_at(vs).map(|s| s.kind), Some(Kind::Text { .. } | Kind::Deleted { .. }));
         let caret = if deleted_source {
-            Caret::Source(self.to_source(vs))
+            Caret::Source(self.to_source(if forward { ve } else { vs }))
         } else if kept {
             Caret::Inserted(k)
         } else {
