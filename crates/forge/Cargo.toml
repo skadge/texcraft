@@ -16,6 +16,8 @@ texcraft-history = { workspace = true }
 base64 = "0.22"
 serde = { workspace = true }
 serde_json = { workspace = true }
+# The line diff of the three-way merge (Apache-2.0), as the engine uses it.
+similar = { version = "3", default-features = false, features = ["std", "text"] }
 
 # The desktop's HTTP client (MIT OR Apache-2.0), the one retex-texlive already downloads with.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

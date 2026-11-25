@@ -17,6 +17,7 @@ mod address;
 pub mod fake;
 mod gitlab;
 mod http;
+pub mod merge;
 mod sync;
 pub mod task;
 

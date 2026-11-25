@@ -3,6 +3,7 @@
 mod address;
 mod commit;
 mod errors;
+mod merge;
 mod open;
 
 use texcraft_forge::fake::FakeGitLab;

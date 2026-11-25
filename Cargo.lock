@@ -5958,6 +5958,7 @@ dependencies = [
  "js-sys",
  "serde",
  "serde_json",
+ "similar",
  "texcraft-history",
  "ureq",
  "wasm-bindgen",
