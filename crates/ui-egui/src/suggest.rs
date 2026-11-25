@@ -224,8 +224,8 @@ pub(crate) fn switch(app: &mut App, ui: &mut egui::Ui) -> bool {
     r.on_hover_text(tip).clicked()
 }
 
-/// The line under the toolbar while suggesting: what the mode does, and that the PDF does not
-/// show the suggestions.
+/// The line under the toolbar while suggesting: what the mode does, whether the PDF shows the
+/// suggestions, and the switch for that.
 pub(crate) fn banner(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     let mut stop = false;
@@ -235,10 +235,15 @@ pub(crate) fn banner(app: &mut App, ui: &mut egui::Ui) {
         let (rect, _) = ui.allocate_exact_size(vec2(t.icon_size, t.icon_size), Sense::hover());
         icons::paint(ui, rect, "pencil", t.icon_size - 2.0, t.accent);
         ui.add_space(t.unit * 2.0);
-        let note = tl!("Suggesting: edits are proposed, not made. The PDF shows the text as it is; suggestions are not applied.");
+        let note = if app.session.settings.with_suggestions {
+            tl!("Suggesting: edits are proposed, not made. The PDF shows the text with the open suggestions applied.")
+        } else {
+            tl!("Suggesting: edits are proposed, not made. The PDF shows the text as it is; suggestions are not applied.")
+        };
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.add_space(t.unit * 2.0);
             stop = ui.add(egui::Button::new(RichText::new(tl!("Stop Suggesting")).font(t.small())).frame_when_inactive(false)).clicked();
+            pdf_switch(app, ui);
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 ui.add(egui::Label::new(RichText::new(note).font(t.small()).color(t.text)).truncate());
             });
@@ -246,5 +251,24 @@ pub(crate) fn banner(app: &mut App, ui: &mut egui::Ui) {
     });
     if stop {
         toggle(app);
+    }
+}
+
+/// "Show suggestions in the PDF": builds with the open suggestions applied (`build.suggestions`).
+pub(crate) fn pdf_switch(app: &mut App, ui: &mut egui::Ui) {
+    let t = app.tokens;
+    let mut on = app.session.settings.with_suggestions;
+    let text = RichText::new(tl!("Show suggestions in the PDF")).font(t.small()).color(t.text);
+    if ui.checkbox(&mut on, text).on_hover_text(tl!("Build with the open suggestions applied; the files do not change")).changed()
+        && app.run("build.suggestions", json!({"on": on})).is_some()
+    {
+        // As after an edit: the automatic build runs again.
+        app.view.last_edit = Some(ui.input(|i| i.time));
+        let said = if on {
+            tl!("The PDF will show the open suggestions applied.")
+        } else {
+            tl!("The PDF will show the text as it is, without suggestions.")
+        };
+        app.view.status = Some((said.to_owned(), false));
     }
 }

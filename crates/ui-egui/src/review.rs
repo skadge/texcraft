@@ -558,6 +558,12 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
             all_buttons(app, ui);
         });
     }
+    if app.session.review().threads().iter().any(|th| th.is_open() && th.is_suggestion()) {
+        ui.horizontal(|ui| {
+            ui.add_space(t.unit * 2.0);
+            crate::suggest::pdf_switch(app, ui);
+        });
+    }
     ui.add_space(t.unit * 2.0);
     let mut actions = Vec::new();
     let list = threads(app, None);

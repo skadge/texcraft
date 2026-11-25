@@ -113,6 +113,8 @@ pub enum Effect {
         end: usize,
         text: String,
     },
+    /// Turn the editor's Suggest mode on or off (`:set suggest`, `:set nosuggest`).
+    Suggest(bool),
 }
 
 /// What a key works on.
@@ -1612,6 +1614,8 @@ impl Vim {
                         "noscs" | "nosmartcase" => self.smartcase = false,
                         "hls" | "hlsearch" => self.highlight = true,
                         "nohls" | "nohlsearch" => self.highlight = false,
+                        "suggest" => out.effects.push(Effect::Suggest(true)),
+                        "nosuggest" => out.effects.push(Effect::Suggest(false)),
                         _ => out.effects.push(Effect::Error(format!("Unknown option: {word}"))),
                     }
                 }

@@ -1022,6 +1022,11 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
                 let (start, end) = (crate::suggest::to_source(app, path, start), crate::suggest::to_source(app, path, end));
                 crate::review::from_vim(app, path, start, end, &text)
             }
+            Effect::Suggest(on) => {
+                if app.editor.suggest != on {
+                    crate::suggest::toggle(app);
+                }
+            }
             Effect::Copy(_) | Effect::Scroll(_) => {}
         }
     }

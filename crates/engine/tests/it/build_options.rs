@@ -131,3 +131,39 @@ fn a_print_build_saves_its_pdfx_and_reports_its_problems() {
     assert!(s.execute("build.result", &json!({})).unwrap()["print"].is_null());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Records the main file's text of the jobs it is given.
+struct Sources(Arc<Mutex<Vec<String>>>);
+
+impl Backend for Sources {
+    fn name(&self) -> String {
+        "test".to_owned()
+    }
+    fn compile(&mut self, job: &Job) -> Outcome {
+        let main = job.files.iter().find(|(p, _)| *p == job.main).map(|(_, b)| String::from_utf8_lossy(b).into_owned());
+        if let (Ok(mut seen), Some(main)) = (self.0.lock(), main) {
+            seen.push(main);
+        }
+        Outcome::unavailable(job.id, "")
+    }
+}
+
+#[test]
+fn builds_ignore_suggestions_unless_asked_to_show_them_and_the_file_never_changes() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let mut s = Session::with_backend(Box::new(Sources(seen.clone())));
+    s.set_author(Some(texcraft_engine::review::Author::new("Ada", "k")));
+    s.execute("file.write", &json!({"path": "main.tex", "text": "The colour."})).unwrap();
+    s.execute("file.set_main", &json!({"path": "main.tex"})).unwrap();
+    s.execute("review.suggest", &json!({"path": "main.tex", "start": 4, "end": 10, "text": "color"})).unwrap();
+    s.execute("build.compile", &json!({"wait": true})).unwrap();
+    s.execute("build.suggestions", &json!({"on": true})).unwrap();
+    assert!(s.is_stale(), "showing suggestions did not ask for a new build");
+    s.execute("build.compile", &json!({"wait": true})).unwrap();
+    // A new suggestion asks for a new build while they are shown.
+    s.execute("review.suggest", &json!({"path": "main.tex", "start": 0, "end": 3, "text": "A"})).unwrap();
+    assert!(s.is_stale(), "a new suggestion did not ask for a new build");
+    let seen = seen.lock().unwrap().clone();
+    assert_eq!(seen, ["The colour.", "The color."]);
+    assert_eq!(s.execute("file.read", &json!({"path": "main.tex"})).unwrap()["text"], "The colour.");
+}
