@@ -1018,6 +1018,21 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, r: &egui::Response) {
     }
 }
 
+/// Vim's `:w` (and `:wq`, `:x`, `ZZ`): saves the project as File › Save does, then compiles, as
+/// Compile does, so what was written is typeset at once. A save that failed builds nothing: its
+/// error stays on the status line. Without a folder yet, Save As asks for one and the build runs.
+fn write_and_compile(app: &mut App) {
+    let saved = if app.session.dir().is_some() {
+        app.run("project.save", json!({})).is_some()
+    } else {
+        crate::ui_cmd::run(app, "project.save");
+        true
+    };
+    if saved {
+        app.run("build.compile", json!({}));
+    }
+}
+
 fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     let t = app.tokens;
     let markers = markers(app, path);
@@ -1134,7 +1149,7 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     }
     for effect in out.effects {
         match effect {
-            Effect::Save | Effect::SaveAll => crate::ui_cmd::run(app, "project.save"),
+            Effect::Save | Effect::SaveAll => write_and_compile(app),
             Effect::Close { .. } => {
                 let _ = app.run("file.close", json!({"path": path.as_str()}));
             }
