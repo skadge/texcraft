@@ -12,7 +12,7 @@ use crate::{App, Layout, icons, widgets};
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     let frame = egui::Frame::new().fill(t.frame).inner_margin(egui::Margin::symmetric(12, 0));
-    egui::Panel::top("top-bar").exact_size(t.top_bar_height).frame(frame).show(ui, |ui| {
+    let shown = egui::Panel::top("top-bar").exact_size(t.top_bar_height).frame(frame).show(ui, |ui| {
         let bar = ui.max_rect();
         // The bar's empty space moves the window; the controls drawn after it take the pointer.
         crate::window::bar_space(app, ui, ui.max_rect().expand2(vec2(12.0, 0.0)));
@@ -62,6 +62,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             }
         });
     });
+    app.region_area(crate::Region::TopBar, shown.response.rect);
 }
 
 /// The menu bar while the keyboard is in it: reached with F10 (`view.menu_bar`) or Alt alone; Left
@@ -428,6 +429,7 @@ fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
     icons::paint(ui, menu_rect, "chevron-down", t.icon_size - 2.0, t.text_muted);
     widgets::focus_ring(ui, &t, &menu, menu_rect, t.corner());
     let menu = menu.on_hover_text(tl!("Project menu"));
+    crate::widgets::keyboard_menu(ui, &menu);
     egui::Popup::menu(&menu).align(egui::RectAlign::BOTTOM).show(|ui| {
         ui.set_min_width(220.0);
         let mut chosen = None;

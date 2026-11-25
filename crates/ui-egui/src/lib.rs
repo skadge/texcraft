@@ -112,6 +112,21 @@ pub(crate) struct View {
     pub dialog: Option<dialogs::Dialog>,
     /// Each region's first focusable control this frame, in the order F6 visits them.
     pub regions: Vec<(Region, egui::Id)>,
+    /// Where each region is this frame, for F6 from a control inside one.
+    pub region_areas: Vec<(Region, egui::Rect)>,
+    /// A dialog was open at the end of the last frame.
+    pub modal_was_open: bool,
+    /// The control that had the keyboard before the open dialog opened; it gets it back.
+    pub focus_before_modal: Option<egui::Id>,
+    /// Frames since the open dialog opened, to give it the keyboard once it is drawn.
+    pub modal_frames: u8,
+    /// The control to give the keyboard back to, the frame after a dialog closed.
+    pub focus_restore: Option<egui::Id>,
+    /// Give the open dialog's first control the keyboard at the start of the next frame.
+    pub focus_into_modal: bool,
+    /// Where the keyboard goes back to when the control that had it is gone: the button of the
+    /// menu whose entry opened the dialog.
+    pub focus_fallback: Option<egui::Id>,
     /// The Settings dialog's open tab.
     pub settings_tab: usize,
     /// Which messages the build log lists.
@@ -244,6 +259,13 @@ impl App {
                 log_search: preview::LogSearch::default(),
                 settings_tab: 0,
                 regions: Vec::new(),
+                region_areas: Vec::new(),
+                modal_was_open: false,
+                focus_before_modal: None,
+                modal_frames: 0,
+                focus_restore: None,
+                focus_into_modal: false,
+                focus_fallback: None,
                 collapsed: std::collections::HashSet::new(),
                 status: None,
                 last_edit: Some(0.0),
@@ -536,6 +558,24 @@ impl App {
         }
     }
 
+    /// Records where `region` is this frame.
+    pub(crate) fn region_area(&mut self, region: Region, rect: egui::Rect) {
+        if self.ctx.viewport_id() == egui::ViewportId::ROOT {
+            self.view.region_areas.push((region, rect));
+        }
+    }
+
+    /// The region the control `id` is in: the smallest that holds it.
+    fn region_of(&self, id: egui::Id) -> Option<Region> {
+        let rect = self.ctx.read_response(id)?.rect;
+        self.view
+            .region_areas
+            .iter()
+            .filter(|(_, area)| area.contains(rect.center()))
+            .min_by(|a, b| a.1.area().total_cmp(&b.1.area()))
+            .map(|(r, _)| *r)
+    }
+
     /// Moves the keyboard focus to the next region (or the previous one), and says which.
     pub(crate) fn cycle_region(&mut self, forward: bool) {
         let mut regions = self.view.regions.clone();
@@ -545,13 +585,17 @@ impl App {
             return;
         }
         let focused = self.ctx.memory(|m| m.focused());
-        let at = focused.and_then(|f| regions.iter().position(|(_, id)| *id == f));
         let len = regions.len();
-        let next = match (at, forward) {
-            (Some(i), true) => (i + 1) % len,
-            (Some(i), false) => (i + len - 1) % len,
-            (None, true) => 0,
-            (None, false) => len - 1,
+        let at = focused.and_then(|f| regions.iter().position(|(_, id)| *id == f));
+        // A control inside a region, not its first: F6 goes on from that region, Shift+F6 back
+        // to its start.
+        let inside = focused.filter(|_| at.is_none()).and_then(|f| self.region_of(f)).and_then(|r| regions.iter().position(|(x, _)| *x == r));
+        let next = match (at, inside, forward) {
+            (Some(i), _, true) | (None, Some(i), true) => (i + 1) % len,
+            (Some(i), _, false) => (i + len - 1) % len,
+            (None, Some(i), false) => i,
+            (None, None, true) => 0,
+            (None, None, false) => len - 1,
         };
         if let Some((region, id)) = regions.get(next).copied() {
             self.ctx.memory_mut(|m| m.request_focus(id));
@@ -615,6 +659,13 @@ impl App {
     fn draw(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
         self.ctx = ctx.clone();
+        // A dialog to give the keyboard to, or a menu opened from the keyboard last frame: Tab's
+        // move, before anything is drawn, gives it to the dialog's first control, or from the
+        // menu's button to its first entry, drawn right after it.
+        let menu_entered = ctx.data_mut(|d| d.remove_temp::<bool>(egui::Id::unique(widgets::MENU_ENTER))).unwrap_or(false);
+        if std::mem::take(&mut self.view.focus_into_modal) || menu_entered {
+            ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::Next));
+        }
         if !self.fonts_ready {
             fonts::install(ctx);
             icons::install(ctx);
@@ -674,6 +725,7 @@ impl App {
         if self.pdf.presenting().is_some() {
             preview::present(self, ui);
             dialogs::show(self, ctx);
+            self.modal_focus(ctx);
             return;
         }
         if thumbnail {
@@ -685,16 +737,19 @@ impl App {
         }
         self.dropped_files(ctx);
         self.view.regions.clear();
+        self.view.region_areas.clear();
         // In focus mode the menu bar shows only while the keyboard is in it (F10, Alt).
         let focus_mode = self.view.focus_mode && !self.start;
         if !focus_mode || self.view.menu_nav.is_some() {
             top_bar::show(self, ui);
         }
-        status::show(self, ui);
+        let status = status::reserve(self, ui);
         if self.start {
             start::show(self, ui);
+            status::show(self, ui, status);
             gallery::show(self, ctx);
             dialogs::show(self, ctx);
+            self.modal_focus(ctx);
             window::edges(self, ctx);
             return;
         }
@@ -705,16 +760,58 @@ impl App {
             }
         }
         self.panes(ui);
+        status::show(self, ui, status);
         if self.view.pdf_window {
             preview::window(self, ctx);
         }
         gallery::show(self, ctx);
         dialogs::show(self, ctx);
+        self.modal_focus(ctx);
         window::edges(self, ctx);
         if self.session.is_building() {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
         self.view.focused_last = ctx.memory(egui::Memory::focused);
+    }
+
+    /// A dialog takes the keyboard once it is drawn, if it did not take it itself, and gives it
+    /// back to the control that had it when it closes (standards/accessibility.md, rule 1).
+    fn modal_focus(&mut self, ctx: &egui::Context) {
+        let open = self.view.dialog.is_some() || self.gallery.open;
+        match (self.view.modal_was_open, open) {
+            (false, true) => {
+                self.view.focus_fallback = ctx.data(|d| d.get_temp::<egui::Id>(egui::Id::unique(widgets::MENU_OWNER)));
+                self.view.focus_before_modal = self.view.focused_last.or(self.view.focus_fallback);
+                self.view.modal_frames = 0;
+            }
+            // The frame after: egui still keeps the keyboard in the dialog's layer this frame.
+            (true, false) => {
+                self.view.focus_restore = self.view.focus_before_modal.take();
+                ctx.request_repaint();
+            }
+            (false, false) => {
+                // A menu's entry that opened the dialog is gone: the menu's button, then.
+                if let Some(id) = self.view.focus_restore.take() {
+                    let id = if ctx.read_response(id).is_some() { Some(id) } else { self.view.focus_fallback.take() };
+                    if let Some(id) = id {
+                        ctx.memory_mut(|m| m.request_focus(id));
+                    }
+                }
+            }
+            _ => {}
+        }
+        self.view.modal_was_open = open;
+        if !open || self.view.modal_frames > 2 {
+            return;
+        }
+        self.view.modal_frames += 1;
+        // The dialog has been drawn once: if nothing in it has the keyboard, its first control
+        // takes it next frame (as Tab gives it to the first control of the top layer).
+        let focused = ctx.memory(egui::Memory::focused);
+        if self.view.modal_frames == 2 && (focused.is_none() || focused == self.view.focus_before_modal) {
+            self.view.focus_into_modal = true;
+        }
+        ctx.request_repaint();
     }
 
     /// Focus mode: Escape leaves it when nothing had the keyboard (in the standard bindings, the
@@ -742,14 +839,28 @@ impl App {
         let frame = egui::Frame::new().fill(t.frame);
         let layout = if self.view.pdf_window { Layout::EditorOnly } else { self.view.layout };
         match layout {
+            // The editor's pane first, so the keyboard reaches it before the PDF's, as it reads.
             Layout::Split => {
-                let width = ui.available_width() * 0.5;
-                egui::Panel::right("preview").resizable(true).default_size(width).min_size(280.0).frame(frame).show(ui, |ui| preview::show(self, ui));
-                editor::show(self, ui);
+                let width = ui.available_width();
+                let editor = egui::Panel::left("editor-pane")
+                    .resizable(true)
+                    .default_size(width * 0.5)
+                    .min_size(280.0)
+                    .max_size((width - 280.0).max(280.0))
+                    .frame(egui::Frame::new())
+                    .show(ui, |ui| editor::show(self, ui));
+                widgets::name_splitter(ui, "editor-pane", tl!("Resize the editor and the PDF"));
+                self.region_area(Region::Editor, editor.response.rect);
+                let preview = egui::CentralPanel::default().frame(frame).show(ui, |ui| preview::show(self, ui));
+                self.region_area(Region::Preview, preview.response.rect);
             }
-            Layout::EditorOnly => editor::show(self, ui),
+            Layout::EditorOnly => {
+                let editor = egui::CentralPanel::default().frame(egui::Frame::new()).show(ui, |ui| editor::show(self, ui));
+                self.region_area(Region::Editor, editor.response.rect);
+            }
             Layout::PreviewOnly => {
-                egui::CentralPanel::default().frame(frame).show(ui, |ui| preview::show(self, ui));
+                let preview = egui::CentralPanel::default().frame(frame).show(ui, |ui| preview::show(self, ui));
+                self.region_area(Region::Preview, preview.response.rect);
             }
         }
     }

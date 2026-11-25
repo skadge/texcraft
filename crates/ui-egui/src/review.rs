@@ -465,6 +465,7 @@ fn margin(app: &mut App, ui: &mut egui::Ui, rect: Rect, path: &ProjectPath) {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if open_suggestions_in_current(app) > 0 {
                 let more = widgets::icon_button(ui, &t, "ellipsis", tl!("Suggestions in this file"), true);
+                crate::widgets::keyboard_menu(ui, &more);
                 egui::Popup::menu(&more).show(|ui| {
                     ui.set_min_width(180.0);
                     ui.vertical(|ui| all_buttons(app, ui));
@@ -660,6 +661,7 @@ fn message(app: &App, ui: &mut egui::Ui, th: &Thread, m: &Message, first: bool, 
             }
             if mine && !m.deleted {
                 let more = widgets::icon_button(ui, &t, "ellipsis", tl!("More actions"), true);
+                crate::widgets::keyboard_menu(ui, &more);
                 egui::Popup::menu(&more).show(|ui| {
                     ui.set_min_width(150.0);
                     if ui.add(egui::Button::new(tl!("Edit")).frame_when_inactive(false)).clicked() {
@@ -802,6 +804,7 @@ fn suggestion(app: &App, ui: &mut egui::Ui, th: &Thread, actions: &mut Vec<Actio
         if mine && th.is_open() {
             ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
                 let more = widgets::icon_button(ui, &t, "ellipsis", tl!("More actions"), true);
+                crate::widgets::keyboard_menu(ui, &more);
                 egui::Popup::menu(&more).show(|ui| {
                     ui.set_min_width(150.0);
                     if ui.add(egui::Button::new(RichText::new(tl!("Withdraw Suggestion")).color(t.error)).frame_when_inactive(false)).clicked() {

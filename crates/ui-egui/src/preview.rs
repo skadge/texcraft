@@ -166,6 +166,7 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         }
         let tip = app.keys.shortcut_text("build.compile").map_or_else(|| label.to_owned(), |k| format!("{label} ({k})"));
         let _ = main.on_hover_text(tip);
+        crate::widgets::keyboard_menu(ui, &menu);
         egui::Popup::menu(&menu).show(|ui| compile_menu(app, ui));
         ui.add_space(t.unit * 2.0);
         let (errors, warnings) = app.session.last_outcome().map_or((0, 0), |o| (o.errors(), o.warnings()));
@@ -189,6 +190,7 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         if let Err(reason) = &ready {
             let _ = save.on_disabled_hover_text(reason.as_str());
         } else {
+            crate::widgets::keyboard_menu(ui, &save);
             egui::Popup::menu(&save).show(|ui| export_menu(app, ui));
         }
         // What the build does now, dim, in the room the buttons leave: beside the PDF it builds.
@@ -208,25 +210,31 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
             show_progress(ui);
             return;
         }
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.add_space(t.unit * 2.0);
-            if widgets::icon_button(ui, &t, "zoom-in", tl!("Zoom In"), true).clicked() {
-                ui_cmd::run(app, "view.zoom_in");
-            }
-            zoom_menu(app, ui);
-            if widgets::icon_button(ui, &t, "zoom-out", tl!("Zoom Out"), true).clicked() {
-                ui_cmd::run(app, "view.zoom_out");
-            }
-            ui.add_space(t.unit * 2.0);
+        // The pages and the zoom at the bar's end, made in the order they read.
+        let room = widgets::room_before_right(ui, "pdf-tools");
+        ui.allocate_ui_with_layout(vec2(room, ui.available_height()), Layout::left_to_right(Align::Center), |ui| {
+            ui.set_width(room);
+            show_progress(ui);
+        });
+        widgets::right_aligned(ui, "pdf-tools", |ui| {
             let (page, count) = (app.pdf.page, app.pdf.page_count());
-            if widgets::icon_button(ui, &t, "chevron-right", tl!("Next page"), page + 1 < count).clicked() {
-                app.pdf.go_to_page(page + 1);
-            }
-            ui.label(RichText::new(format!("{} / {count}", page + 1)).font(t.small()).color(t.text_muted));
             if widgets::icon_button(ui, &t, "chevron-left", tl!("Previous page"), page > 0).clicked() {
                 app.pdf.go_to_page(page.saturating_sub(1));
             }
-            ui.with_layout(Layout::left_to_right(Align::Center), show_progress);
+            ui.label(RichText::new(format!("{} / {count}", page + 1)).font(t.small()).color(t.text_muted));
+            if widgets::icon_button(ui, &t, "chevron-right", tl!("Next page"), page + 1 < count).clicked() {
+                app.pdf.go_to_page(page + 1);
+            }
+            ui.add_space(t.unit * 2.0);
+            if widgets::icon_button(ui, &t, "zoom-out", tl!("Zoom Out"), true).clicked() {
+                ui_cmd::run(app, "view.zoom_out");
+            }
+            zoom_menu(app, ui);
+            if widgets::icon_button(ui, &t, "zoom-in", tl!("Zoom In"), true).clicked() {
+                ui_cmd::run(app, "view.zoom_in");
+            }
+            // The margin at the bar's end, counted in the controls' width.
+            ui.allocate_space(vec2(t.unit * 2.0 - ui.spacing().item_spacing.x, 1.0));
         });
     });
 }
@@ -324,6 +332,7 @@ fn zoom_menu(app: &mut App, ui: &mut egui::Ui) {
     };
     let r = widgets::text_button(ui, &t, &label, true);
     let _ = r.clone().on_hover_text(tl!("Zoom"));
+    crate::widgets::keyboard_menu(ui, &r);
     egui::Popup::menu(&r).show(|ui| {
         ui.set_min_width(140.0);
         let mut choose = |ui: &mut egui::Ui, text: &str, fit: Fit, id: &str, params: serde_json::Value| {
@@ -789,22 +798,16 @@ fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Opti
                                 Some(l) => format!("{file}:{l}"),
                                 None => file.clone(),
                             };
-                            let link = ui.add(egui::Label::new(RichText::new(text).font(t.small()).color(t.accent)).sense(Sense::click()));
+                            let link = ui.add(egui::Link::new(RichText::new(text).font(t.small()).color(t.accent)));
                             let link = link.on_hover_text(tl!("Open in the editor"));
-                            if link.hovered() {
-                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                            }
                             if link.clicked() {
                                 action = CardAction::Open((file.clone(), *line));
                             }
                         }
                         if let Some(rect) = page {
                             let text = tl!("Page {n}").replace("{n}", &(rect.page + 1).to_string());
-                            let link = ui.add(egui::Label::new(RichText::new(text).font(t.small()).color(t.accent)).sense(Sense::click()));
+                            let link = ui.add(egui::Link::new(RichText::new(text).font(t.small()).color(t.accent)));
                             let link = link.on_hover_text(tl!("Show it on the page"));
-                            if link.hovered() {
-                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                            }
                             if link.clicked() {
                                 action = CardAction::ShowOnPage(rect);
                             }
