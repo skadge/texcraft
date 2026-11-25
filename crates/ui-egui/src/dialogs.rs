@@ -54,6 +54,7 @@ pub(crate) enum Dialog {
     ForgeCommit(crate::forge::CommitForm),
     ForgeResolve(crate::forge::ResolveForm),
     ForgeMergeRequest(crate::forge::MergeRequestNote),
+    Figure(Box<crate::figure_dialog::FigureForm>),
 }
 
 impl Dialog {
@@ -71,6 +72,7 @@ impl Dialog {
             Dialog::ForgeCommit(_) => "forge_commit",
             Dialog::ForgeResolve(_) => "forge_resolve",
             Dialog::ForgeMergeRequest(_) => "forge_merge_request",
+            Dialog::Figure(_) => "figure",
         }
     }
 }
@@ -112,6 +114,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             | Dialog::ForgeCommit(_)
             | Dialog::ForgeResolve(_)
             | Dialog::ForgeMergeRequest(_) => {}
+            Dialog::Figure(f) => outcome = crate::figure_dialog::form(ui, &t, f),
             Dialog::About => outcome = about(ui, &t, &engine),
         }
     });
@@ -171,6 +174,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                 _ => {}
             },
             Some(Dialog::Unsaved(next)) => app.save_then(next),
+            Some(Dialog::Figure(f)) => crate::figure_dialog::apply(app, &f),
             _ => {}
         },
         Outcome::Discard => {

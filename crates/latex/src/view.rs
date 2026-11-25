@@ -7,6 +7,7 @@
 
 use std::ops::Range;
 
+use crate::table::{self, Table, Unsupported};
 use crate::tree::{self, Arg, Kind, Node};
 
 /// How a run of text is set.
@@ -113,8 +114,30 @@ pub enum BlockKind {
         caption: Vec<Inline>,
         label: Option<Inline>,
     },
+    /// A `tabular` shown as a grid, alone or in a `table` float with its caption and label.
+    Table(Box<TableBlock>),
+    /// A `tabular` (or a `table` float holding one) the grid cannot show faithfully: shown as its
+    /// source, with why.
+    UnsupportedTable(Unsupported),
     /// Shown as the source of its range, in the code font.
     Source,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableBlock {
+    pub table: Table,
+    /// The inlines of each row's cells.
+    pub cells: Vec<Vec<Vec<Inline>>>,
+    /// In a `table` float: its caption (empty when it has none), whether the caption comes before
+    /// the table, and its label.
+    pub float: Option<Float>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Float {
+    pub caption: Vec<Inline>,
+    pub caption_above: bool,
+    pub label: Option<Inline>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -447,10 +470,53 @@ impl<'a> View<'a> {
             }
             Kind::Math { display: true, env, body, closed } => BlockKind::Formula { source: body.clone(), env: env.clone(), closed: *closed },
             Kind::Verbatim { .. } if self.src(&range).starts_with("\\begin") => BlockKind::Source,
+            Kind::Environment { name, .. } if table::GRID_ENVIRONMENTS.contains(&name.as_str()) => self.grid(n, None),
             Kind::Environment { name, body, end, .. } => self.environment(name, body, end.is_some()),
             _ => return None,
         };
         Some(Block { kind, range })
+    }
+
+    /// A `tabular` node as a grid, or why it stays as source.
+    fn grid(&self, n: &Node, float: Option<Float>) -> BlockKind {
+        let Kind::Environment { body, .. } = &n.kind else { return BlockKind::Source };
+        match table::parse(self.text, n) {
+            Ok(table) => {
+                let cells = table
+                    .rows
+                    .iter()
+                    .map(|row| row.cells.iter().map(|c| self.inlines(&clipped(body, &c.content), Style::default())).collect())
+                    .collect();
+                BlockKind::Table(Box::new(TableBlock { table, cells, float }))
+            }
+            Err(why) => BlockKind::UnsupportedTable(why),
+        }
+    }
+
+    /// A `table` float holding one `tabular`, with its caption and label and `\centering`; `None`
+    /// when it holds more than that.
+    fn table_float(&self, body: &[Node]) -> Option<BlockKind> {
+        let (mut grid, mut caption, mut label, mut caption_above) = (None, None, None, false);
+        for n in body {
+            if invisible(self.text, n) {
+                continue;
+            }
+            match &n.kind {
+                Kind::Environment { name, .. } if table::GRID_ENVIRONMENTS.contains(&name.as_str()) && grid.is_none() => grid = Some(n),
+                Kind::Command { name, args, .. } => match (name.as_str(), required(args)) {
+                    ("centering", _) => {}
+                    ("caption", Some(arg)) if caption.is_none() => {
+                        caption_above = grid.is_none();
+                        caption = Some(self.inlines(&arg.body, Style::default()));
+                    }
+                    ("label", Some(_)) if label.is_none() => label = self.chip(n, name, args),
+                    _ => return None,
+                },
+                _ => return None,
+            }
+        }
+        let float = Float { caption: caption.unwrap_or_default(), caption_above, label };
+        Some(self.grid(grid?, Some(float)))
     }
 
     fn title(&self) -> BlockKind {
@@ -464,6 +530,7 @@ impl<'a> View<'a> {
             "enumerate" => self.list(ListKind::Numbers, body),
             "description" => self.list(ListKind::Descriptions, body),
             "figure" | "figure*" if closed => self.figure(body),
+            "table" | "table*" if closed => self.table_float(body),
             _ if CONTAINERS.contains(&name) => Some(BlockKind::Container { name: name.to_owned(), blocks: self.flow(body) }),
             _ => None,
         };
@@ -647,6 +714,25 @@ impl<'a> View<'a> {
         out.push(Inline { kind: InlineKind::Source, range: n.range.start..end });
         next
     }
+}
+
+/// The nodes of `nodes` that show in `r` (a cell's text): text clipped to it, and the body of a
+/// group that holds it (a `\multicolumn`'s argument).
+fn clipped(nodes: &[Node], r: &Range<usize>) -> Vec<Node> {
+    let mut out = Vec::new();
+    for n in nodes {
+        if n.range.end <= r.start || n.range.start >= r.end {
+            continue;
+        }
+        let inside = r.start <= n.range.start && n.range.end <= r.end;
+        match &n.kind {
+            _ if inside => out.push(n.clone()),
+            Kind::Text => out.push(Node { kind: Kind::Text, range: n.range.start.max(r.start)..n.range.end.min(r.end) }),
+            Kind::Group { body, .. } if n.range.start < r.start && r.end <= n.range.end => return clipped(body, r),
+            _ => {}
+        }
+    }
+    out
 }
 
 fn text_inline(text: &str, style: Style, range: Range<usize>) -> Inline {

@@ -13,6 +13,7 @@ use crate::{Result, Session};
 
 mod build;
 mod file;
+mod floats;
 pub(crate) mod forge;
 mod history;
 mod image;
@@ -59,7 +60,7 @@ impl CommandSpec {
     }
 }
 
-pub use image::is_image;
+pub use image::{is_image, relative as image_path};
 
 pub fn always(_: &Session) -> Result<()> {
     Ok(())
@@ -77,6 +78,7 @@ pub fn all() -> &'static [CommandSpec] {
         v.extend(file::specs());
         v.extend(search::specs());
         v.extend(image::specs());
+        v.extend(floats::specs());
         v.extend(build::specs());
         v.extend(template::specs());
         v.extend(language::specs());

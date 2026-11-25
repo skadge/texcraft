@@ -34,5 +34,6 @@ mod search;
 mod shortcuts;
 mod suggest;
 mod system_menu;
+mod tables;
 mod unsaved;
 mod vim;

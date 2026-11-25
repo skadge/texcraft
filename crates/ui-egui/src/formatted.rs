@@ -25,6 +25,10 @@ use texcraft_preview::figure;
 use crate::App;
 use crate::theme::{Tokens, blend};
 
+#[path = "formatted_table.rs"]
+mod table;
+pub(crate) use table::CellAt;
+
 /// The view model of the shown file, for the session revision it was made from.
 struct Cache {
     path: ProjectPath,
@@ -215,6 +219,16 @@ struct Cx<'a> {
     caret: Option<usize>,
     /// Bring the line of this source offset into view.
     reveal: Option<usize>,
+    /// The caret's source offset, focused or not: the table holding it shows its toolbar.
+    edit_caret: Option<usize>,
+    /// Give the keyboard to the toolbar of the table holding the caret.
+    focus_toolbar: bool,
+    /// Out: a table's toolbar holds the keyboard.
+    toolbar_focused: bool,
+    /// Out: a table toolbar's `table.edit` (its `at` a byte of the text).
+    table_action: Option<serde_json::Value>,
+    /// Out: a figure's Edit button was pressed (its first byte).
+    edit_figure: Option<usize>,
 }
 
 /// A line of text as drawn: what its characters stand for, its layout and where it is, the slot
@@ -227,6 +241,8 @@ pub(crate) struct DrawnLine {
     pub response: egui::Response,
     /// An empty paragraph only the caret shows (just made with Enter).
     pub phantom: bool,
+    /// The table cell it is.
+    pub cell: Option<CellAt>,
 }
 
 /// The line of the pieces of a paragraph, or an empty one at `empty_at`.
@@ -308,6 +324,11 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         lines: Vec::new(),
         caret: focused.then_some(caret),
         reveal,
+        edit_caret: Some(caret),
+        focus_toolbar: std::mem::take(&mut app.editor.formatted.editing.focus_toolbar),
+        toolbar_focused: false,
+        table_action: None,
+        edit_figure: None,
     };
     let page = 6.0 * t.unit;
     app.view.cursor = None;
@@ -341,14 +362,43 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         .inner;
     cx.ink.end();
     let (jump, toggle, first, lines) = (cx.jump.take(), cx.toggle_preamble, cx.first, std::mem::take(&mut cx.lines));
+    let (table_action, edit_figure, toolbar_focused) = (cx.table_action.take(), cx.edit_figure, cx.toolbar_focused);
     app.region(crate::Region::Editor, if lines.is_empty() { first.unwrap_or(doc_id) } else { doc_id });
+    // Escape on a table's toolbar gives the keyboard back to the cell.
+    let e = &mut app.editor.formatted.editing;
+    if std::mem::replace(&mut e.toolbar_focused, toolbar_focused) && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        e.focus = true;
+    }
     crate::formatted_edit::finish(app, ui, (path, &text), &lines, (&painter, &doc_r), edits);
+    if let Some(action) = table_action {
+        run_table_action(app, path, &text, action);
+    }
+    if let Some(at) = edit_figure {
+        crate::figure_dialog::open(app, path, &text, at);
+    }
     if toggle && !app.editor.formatted.preamble_open.remove(path) {
         app.editor.formatted.preamble_open.insert(path.clone());
     }
     if let Some(Jump(byte)) = jump {
         to_source(app, ui, path, &text, byte);
     }
+}
+
+/// Runs a table toolbar's `table.edit`, its position made characters, after the view's own edits
+/// went to the session; says what the result notes (a package the document does not load).
+fn run_table_action(app: &mut App, path: &ProjectPath, text: &str, mut action: serde_json::Value) {
+    let byte = action["at"].as_u64().unwrap_or(0) as usize;
+    action["at"] = serde_json::json!(text.get(..byte + 1).map_or(0, |s| s.chars().count()));
+    action["path"] = serde_json::json!(path.as_str());
+    crate::editor::send_edits(app);
+    if let Some(done) = app.run("table.edit", action)
+        && done.get("loaded").and_then(serde_json::Value::as_bool) == Some(false)
+    {
+        let main = app.session.project().main().map_or_else(|| path.file_name().to_owned(), |m| m.as_str().to_owned());
+        let said = tl!("Booktabs rules need the booktabs package: add \\usepackage{booktabs} to the preamble of {main}.").replace("{main}", &main);
+        app.view.status = Some((said, true));
+    }
+    app.editor.formatted.editing.focus = true;
 }
 
 /// The id of the formatted view's editable text for `path`.
@@ -430,7 +480,12 @@ fn gap_before(t: &Tokens, kind: &BlockKind) -> f32 {
     match kind {
         BlockKind::Heading { level, .. } if *level <= 3 => em * 1.75,
         BlockKind::Heading { .. } => em * 1.25,
-        BlockKind::Figure { .. } | BlockKind::Formula { .. } | BlockKind::Source | BlockKind::Container { .. } => em,
+        BlockKind::Figure { .. }
+        | BlockKind::Formula { .. }
+        | BlockKind::Source
+        | BlockKind::Container { .. }
+        | BlockKind::Table(_)
+        | BlockKind::UnsupportedTable(_) => em,
         _ => em * 0.75,
     }
 }
@@ -443,12 +498,20 @@ fn draw_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, block: &Block, depth: usize) {
         BlockKind::Heading { level, content, label, .. } => heading(ui, cx, range, *level, content, label.as_ref()),
         BlockKind::Paragraph(inlines) => {
             let size = cx.t.reading_size;
-            let _ = paragraph(ui, cx, inlines, range, &Para { size, bold: false, color: cx.t.text, role: egui::Role::Paragraph, empty_at: None });
+            let _ = paragraph(
+                ui,
+                cx,
+                inlines,
+                range,
+                &Para { size, bold: false, color: cx.t.text, role: egui::Role::Paragraph, empty_at: None, cell: None },
+            );
         }
         BlockKind::List { kind, items } => list(ui, cx, *kind, items, depth),
         BlockKind::Container { name, blocks } => container(ui, cx, name, blocks, depth),
         BlockKind::Formula { source, env, closed } => formula(ui, cx, range, source, env.as_deref(), *closed),
         BlockKind::Figure { image, caption, label } => figure_card(ui, cx, range, image.as_ref(), caption, label.as_ref()),
+        BlockKind::Table(tb) => table::table_block(ui, cx, range, tb),
+        BlockKind::UnsupportedTable(why) => table::unsupported(ui, cx, range, why),
         BlockKind::Source => source_block(ui, cx, range),
     }
 }
@@ -461,6 +524,8 @@ struct Para {
     role: egui::Role,
     /// Where the caret stands in it when it shows nothing (an empty item).
     empty_at: Option<usize>,
+    /// The table cell it is.
+    cell: Option<CellAt>,
 }
 
 /// A run of a laid-out paragraph: the characters it takes in the galley and what it stands for.
@@ -797,7 +862,7 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
         ui.scroll_to_rect(caret.expand(para.size), None);
         cx.reveal = None;
     }
-    cx.lines.push(DrawnLine { line, galley, origin, slot, response: r.clone(), phantom: false });
+    cx.lines.push(DrawnLine { line, galley, origin, slot, response: r.clone(), phantom: false, cell: para.cell });
     r
 }
 
@@ -828,7 +893,7 @@ fn phantom(ui: &mut egui::Ui, cx: &mut Cx<'_>, (prev, next): (usize, usize), las
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::CLICK | Sense::DRAG);
     let slot = ui.painter().add(egui::Shape::Noop);
     let origin = pos2(rect.left(), rect.center().y - galley.size().y / 2.0);
-    cx.lines.push(DrawnLine { line: Line::empty(c), galley, origin, slot, response, phantom: true });
+    cx.lines.push(DrawnLine { line: Line::empty(c), galley, origin, slot, response, phantom: true, cell: None });
     if !last {
         ui.add_space(gap_before(&t, &BlockKind::Paragraph(Vec::new())));
     }
@@ -1033,7 +1098,12 @@ fn code(ui: &mut egui::Ui, cx: &mut Cx<'_>, src: &str, offset: usize, corner: Op
     } else {
         None
     };
-    let label = tl!("Source: {text}").replace("{text}", src);
+    let source = tl!("Source: {text}").replace("{text}", src);
+    // Its header is visible, so the name starts with it.
+    let label = match header {
+        Some(h) => format!("{h}. {source}"),
+        None => source,
+    };
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Code, true, &label));
     activate(ui, cx, &r, rect, offset, target);
     r
@@ -1050,12 +1120,17 @@ fn title_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, [title,
             cx,
             &tip,
             range,
-            &Para { size: t.reading_size, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at: None },
+            &Para { size: t.reading_size, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at: None, cell: None },
         );
     }
     if !title.is_empty() {
-        let r =
-            paragraph(ui, cx, title, range, &Para { size: t.heading_sizes[0], bold: true, color: t.text, role: egui::Role::Heading, empty_at: None });
+        let r = paragraph(
+            ui,
+            cx,
+            title,
+            range,
+            &Para { size: t.heading_sizes[0], bold: true, color: t.text, role: egui::Role::Heading, empty_at: None, cell: None },
+        );
         ui.ctx().accesskit_node_builder(r.id, |node| node.set_level(1));
     }
     if !author.is_empty() {
@@ -1065,7 +1140,7 @@ fn title_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, [title,
             cx,
             author,
             range,
-            &Para { size: t.reading_size * 1.1, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at: None },
+            &Para { size: t.reading_size * 1.1, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at: None, cell: None },
         );
     }
     if !date.is_empty() {
@@ -1075,7 +1150,7 @@ fn title_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, [title,
             cx,
             date,
             range,
-            &Para { size: t.reading_size, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at: None },
+            &Para { size: t.reading_size, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at: None, cell: None },
         );
     }
     ui.add_space(t.reading_size * 0.75);
@@ -1093,7 +1168,7 @@ fn heading(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, level: u8, 
         });
         inlines.push(label.clone());
     }
-    let r = paragraph(ui, cx, &inlines, range, &Para { size, bold: true, color: t.text, role: egui::Role::Heading, empty_at: None });
+    let r = paragraph(ui, cx, &inlines, range, &Para { size, bold: true, color: t.text, role: egui::Role::Heading, empty_at: None, cell: None });
     // Part and chapter are the first level, section the second, and so on.
     let aria = usize::from(level.max(1));
     ui.ctx().accesskit_node_builder(r.id, |node| node.set_level(aria));
@@ -1441,10 +1516,20 @@ fn figure_card(
                 cx,
                 &inlines,
                 range,
-                &Para { size: t.reading_size * 0.9, bold: false, color: t.text, role: egui::Role::FigureCaption, empty_at: None },
+                &Para { size: t.reading_size * 0.9, bold: false, color: t.text, role: egui::Role::FigureCaption, empty_at: None, cell: None },
             );
         });
     });
+    // The figure dialog: image, width, placement, caption and label.
+    let edit = ui
+        .with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+            ui.add_space(pad);
+            crate::widgets::text_button(ui, &t, tl!("Edit Figure…"), true)
+        })
+        .inner;
+    if edit.clicked() {
+        cx.edit_figure = Some(range.start + 1);
+    }
     ui.add_space(pad);
     let card = Rect::from_min_max(pos2(left, top), pos2(left + width, ui.cursor().top()));
     ui.painter().set(
@@ -1457,7 +1542,12 @@ fn source_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>) {
     let src = cx.text.get(range.clone()).unwrap_or_default().trim_end();
     let is_table = src.starts_with("\\begin{table") || src.starts_with("\\begin{tabular");
     let (tag, tip) = if is_table {
-        (tl!("Table, shown as source"), tl!("Tables are shown as their source until the table editor comes."))
+        (
+            tl!("Table, shown as source"),
+            tl!(
+                "The table editor shows a table float holding one tabular with its caption and label; this one holds more, so it is shown as its source."
+            ),
+        )
     } else {
         (tl!("Shown as source"), tl!("The formatted view cannot show this faithfully yet, so it shows its source."))
     };
