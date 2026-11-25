@@ -158,6 +158,56 @@ fn an_explanation_is_refused_until_the_user_agrees_and_nothing_is_sent_before() 
     Ok(())
 }
 
+/// Issue #15: an agreement is to a kind of request, kept with the settings (never any text) so a
+/// new session restored from them does not ask again; withdrawing it asks again.
+#[test]
+fn an_agreement_outlives_the_session_until_it_is_withdrawn() -> R {
+    let seen = Seen::default();
+    // The keychain outlives the session.
+    let keychain: Arc<dyn Secrets> = Arc::new(texcraft_engine::ai::SessionSecrets::default());
+    let mut s = session(20, "It is a brace.", &seen)?;
+    s.set_ai_secrets(keychain.clone());
+    connect_remote(&mut s)?;
+    s.execute("ai.consent", &json!({"request": "explain"}))?;
+    s.execute("ai.explain", &json!({"index": 0}))?;
+    let kept = serde_json::to_string(s.ai_saved().0)?;
+    assert!(!kept.contains("Missing } inserted") && !kept.contains("bold word"), "the settings hold what was sent: {kept}");
+    let mut again = session(20, "It is a brace.", &seen)?;
+    again.set_ai_secrets(keychain);
+    again.restore_ai(serde_json::from_str(&kept)?);
+    assert_eq!(again.execute("ai.status", &json!({}))?["agreed"], json!(["explain"]));
+    // Another message, another session: the same kind is not asked about again.
+    again.execute("ai.explain", &json!({"index": 0}))?;
+    assert_eq!(seen.prompts().len(), 2);
+    assert_eq!(
+        again.execute("ai.disclose", &json!({"request": "make", "kind": "table", "description": "x", "path": "main.tex", "at": 0}))?["needs_consent"],
+        true,
+        "agreeing to one kind covered another"
+    );
+    again.execute("ai.revoke", &json!({"request": "explain"}))?;
+    assert!(again.execute("ai.explain", &json!({"index": 0})).is_err(), "a withdrawn agreement still holds");
+    assert_eq!(again.execute("ai.status", &json!({}))?["agreed"], json!([]));
+    Ok(())
+}
+
+/// What a request sent can be shown again afterwards, from this session's memory: the request log
+/// and the settings hold only its size.
+#[test]
+fn what_a_request_sent_can_be_shown_afterwards_but_is_not_logged() -> R {
+    let seen = Seen::default();
+    let mut s = session(20, "It is a brace.", &seen)?;
+    connect_remote(&mut s)?;
+    s.execute("ai.consent", &json!({"request": "explain"}))?;
+    s.execute("ai.explain", &json!({"index": 0}))?;
+    let status = s.execute("ai.status", &json!({}))?;
+    let run = status["requests"][0]["run"].as_str().ok_or("no run in the log")?.to_owned();
+    assert!(!status["requests"].to_string().contains("Missing } inserted"), "the log holds the text sent");
+    let shown = s.execute("ai.sent", &json!({"run": run}))?;
+    assert_eq!(shown["text"].as_str(), seen.prompts().first().map(String::as_str), "not what was sent");
+    assert!(s.execute("ai.sent", &json!({"run": "texcraft-0-0"})).is_err());
+    Ok(())
+}
+
 #[test]
 fn what_an_explanation_sends_is_what_was_disclosed_and_no_more() -> R {
     let seen = Seen::default();

@@ -146,6 +146,63 @@ fn explain_asks_once_shows_what_is_sent_and_puts_the_answer_in_the_card() -> Res
     Ok(())
 }
 
+/// Issue #15: agreed to in the dialog once, a kind of request is not asked about again, after a
+/// restart either (the preferences keep the agreement); Settings › AI lists it, shows what a
+/// request sent, and withdraws it.
+#[test]
+fn an_agreement_is_asked_once_kept_over_a_restart_and_withdrawn_in_settings() -> Result<(), String> {
+    let prompts = Arc::new(Mutex::new(Vec::new()));
+    // The keychain outlives the app.
+    let keychain: Arc<dyn texcraft_engine::ai::Secrets> = Arc::new(texcraft_engine::ai::SessionSecrets::default());
+    let compiled = |prompts: &Arc<Mutex<Vec<String>>>| -> Result<Session, String> {
+        let mut s = session(prompts)?;
+        s.set_ai_secrets(keychain.clone());
+        s.execute("build.compile", &json!({}))?;
+        s.wait();
+        Ok(s)
+    };
+    let mut s = compiled(&prompts)?;
+    s.execute("ai.connect", &json!({"endpoint": "https://api.example.com/v1", "token": TOKEN, "model": "small"}))?;
+    let mut h = harness(s);
+    h.state_mut().control("engine.execute", &json!({"command": "view.logs"}));
+    h.run();
+    h.get_by_label("Explain").click();
+    h.run();
+    h.get_by_label("Agree and Explain").click();
+    h.run();
+    assert!(settle(&mut h), "the explanation did not arrive");
+    let prefs = h.state_mut().take_changed_prefs().ok_or("the agreement was not kept in the preferences")?;
+    let kept = serde_json::to_string(&prefs).map_err(|e| e.to_string())?;
+    assert!(!kept.contains("Missing } inserted"), "the preferences hold what was sent");
+    // The next run of the app, from the stored preferences.
+    let prefs: Prefs = serde_json::from_str(&kept).map_err(|e| e.to_string())?;
+    let app = App::with_prefs(compiled(&prompts)?, Prefs { auto_compile: false, ..prefs });
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).with_max_steps(60).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    h.state_mut().control("engine.execute", &json!({"command": "view.logs"}));
+    h.run();
+    h.get_by_label("Explain").click();
+    h.run();
+    assert!(h.query_by_label("Agree and Explain").is_none(), "asked again after a restart");
+    assert!(settle(&mut h), "the explanation did not arrive");
+    assert_eq!(sent(&prompts), 2, "the second explanation was not sent");
+    ui_cmd::run(h.state_mut(), "app.settings");
+    h.run();
+    h.get_by_label("AI").click();
+    h.run();
+    assert!(h.query_by_label("Explaining build messages").is_some(), "Settings › AI does not list the agreement");
+    h.get_by_label_contains("1 request sent").click();
+    h.run();
+    let shown = |h: &Harness<'_, App>| h.query_all_by_label_contains("Missing } inserted").count();
+    let before = shown(&h);
+    h.get_by_label("Show What Was Sent").click();
+    h.run();
+    assert!(shown(&h) > before, "what was sent is not shown");
+    h.get_by_label("Withdraw: Explaining build messages").click();
+    h.run();
+    assert!(h.query_by_label("Explaining build messages").is_none(), "the agreement was not withdrawn");
+    Ok(())
+}
+
 /// A model that answers every prompt with the same text.
 struct Says(&'static str, Arc<Mutex<Vec<String>>>);
 

@@ -31,6 +31,8 @@ pub(crate) struct AiView {
     announced: Option<String>,
     /// The Ask panel's question and scope.
     pub(crate) ask: crate::ai_ask::AskForm,
+    /// The request whose text the request log shows, and that text (or why it cannot).
+    shown: Option<(String, String)>,
 }
 
 /// A kind of request, as the consent dialog asks about it.
@@ -46,6 +48,22 @@ pub(crate) enum Kind {
 }
 
 impl Kind {
+    /// Every kind, in the order Settings › AI lists them.
+    const ALL: [Kind; 7] = [Kind::Explain, Kind::Rewrite, Kind::Complete, Kind::Make, Kind::Reference, Kind::Ask, Kind::Review];
+
+    /// What the user agrees to send, in Settings › AI's list.
+    fn label(self) -> &'static str {
+        match self {
+            Kind::Explain => tl!("Explaining build messages"),
+            Kind::Rewrite => tl!("Rewriting a selection"),
+            Kind::Complete => tl!("Suggesting the next words"),
+            Kind::Make => tl!("Making LaTeX"),
+            Kind::Reference => tl!("Drafting references"),
+            Kind::Ask => tl!("Asking about the project"),
+            Kind::Review => tl!("Reviewing a section"),
+        }
+    }
+
     fn request(self) -> &'static str {
         match self {
             Kind::Explain => "explain",
@@ -419,9 +437,9 @@ pub(crate) fn consent_dialog(app: &mut App, ctx: &egui::Context) {
         };
         ui.label(what.replace("{destination}", &destination));
         let below = if kind == Kind::Complete {
-            tl!("This is asked once for this connection; each request is logged in Settings › AI. Below is an example of what is sent.")
+            tl!("You are asked once for this kind of request and this connection, then not again: Settings › AI lists what you agreed to, where you can withdraw it, and logs each request with what it sent. Below is an example of what is sent.")
         } else {
-            tl!("This is asked once for this connection; each request is logged in Settings › AI. Below is exactly what is sent.")
+            tl!("You are asked once for this kind of request and this connection, then not again: Settings › AI lists what you agreed to, where you can withdraw it, and logs each request with what it sent. Below is exactly what is sent.")
         };
         ui.label(RichText::new(below).font(t.small()).color(t.text_muted));
         ui.add_space(t.unit * 2.0);
@@ -592,7 +610,8 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         model(app, ui, t, &status, busy);
         project(app, ui, t, &status);
         typing_setting(app, ui, t);
-        requests(ui, t, &status);
+        agreements(app, ui, t, &status);
+        requests(app, ui, t, &status);
     }
 }
 
@@ -685,8 +704,46 @@ fn project(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
     );
 }
 
-/// The request log: when, where, how much, how it ended; never what.
-fn requests(ui: &mut egui::Ui, t: &Tokens, status: &Value) {
+/// What the user agreed to send to this connection, each with Withdraw.
+fn agreements(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
+    let agreed: Vec<&str> = status["agreed"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    ui.label(RichText::new(tl!("Agreed to send")).font(t.strong()));
+    if status["local"] == true {
+        ui.label(RichText::new(tl!("Nothing leaves this computer: requests to it are not asked about.")).font(t.small()).color(t.text_muted));
+        return;
+    }
+    if agreed.is_empty() {
+        let said = tl!("Nothing yet: the first request of each kind shows what it sends and asks.");
+        ui.label(RichText::new(said).font(t.small()).color(t.text_muted));
+        return;
+    }
+    let to = status["destination"].as_str().unwrap_or_default();
+    let said = tl!("You are not asked again before these are sent to {destination}. Withdraw one to be asked before it is next sent.");
+    ui.label(RichText::new(said.replace("{destination}", to)).font(t.small()).color(t.text_muted));
+    let mut withdraw = None;
+    for kind in Kind::ALL.into_iter().filter(|k| agreed.contains(&k.request())) {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(kind.label()).color(t.text));
+            let name = tl!("Withdraw: {kind}").replace("{kind}", kind.label());
+            let r = widgets::text_button(ui, t, tl!("Withdraw"), true);
+            let r = r.on_hover_text(tl!("Ask again before the next request of this kind is sent"));
+            r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+            if r.clicked() {
+                withdraw = Some(kind);
+            }
+        });
+    }
+    if let Some(kind) = withdraw
+        && app.run("ai.revoke", json!({"request": kind.request()})).is_some()
+    {
+        let said = tl!("Withdrawn: the next request of this kind asks first.");
+        app.view.status = Some((said.to_owned(), false));
+    }
+}
+
+/// The request log: when, where, how much, how it ended; what was sent on demand, for the last
+/// requests of this session (the log itself never holds it).
+fn requests(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
     let records = status["requests"].as_array().cloned().unwrap_or_default();
     let starts: Vec<&Value> = records.iter().filter(|r| r["phase"] == "start").collect();
     let title = crate::i18n::trn(starts.len(), "{n} request sent", "{n} requests sent").replace("{n}", &starts.len().to_string());
@@ -710,7 +767,35 @@ fn requests(ui: &mut egui::Ui, t: &Tokens, status: &Value) {
                 .replace("{destination}", s["destination"].as_str().unwrap_or_default())
                 .replace("{model}", s["model"].as_str().unwrap_or_default())
                 .replace("{outcome}", outcome);
-            ui.label(RichText::new(line).font(t.small()).color(t.text));
+            let run = s["run"].as_str().unwrap_or_default().to_owned();
+            let open = app.ai.shown.as_ref().is_some_and(|(r, _)| *r == run);
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new(line).font(t.small()).color(t.text));
+                let label = if open { tl!("Hide What Was Sent") } else { tl!("Show What Was Sent") };
+                if widgets::text_button(ui, t, label, true).clicked() {
+                    app.ai.shown = if open {
+                        None
+                    } else {
+                        let text = match app.session.execute("ai.sent", &json!({"run": run})) {
+                            Ok(v) => v["text"].as_str().unwrap_or_default().to_owned(),
+                            Err(e) => e,
+                        };
+                        Some((run.clone(), text))
+                    };
+                }
+            });
+            if let Some((_, text)) = app.ai.shown.as_ref().filter(|(r, _)| *r == run) {
+                egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner()).inner_margin(egui::Margin::same(8)).show(
+                    ui,
+                    |ui| {
+                        egui::ScrollArea::vertical().id_salt(("ai-sent", &run)).max_height(220.0).show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            let label = ui.add(egui::Label::new(RichText::new(text).font(t.code_font()).color(t.text)).wrap().selectable(true));
+                            let _ = label.accessible_name(tl!("What was sent"));
+                        });
+                    },
+                );
+            }
         }
     });
 }

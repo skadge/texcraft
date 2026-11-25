@@ -19,6 +19,8 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         spec("ai.project", "AI in This Project", project_schema, always, project, true),
         spec("ai.disclose", "What an AI Request Sends", disclose_schema, connected, disclose, false),
         spec("ai.consent", "Agree to Send", consent_schema, connected, consent, true),
+        spec("ai.revoke", "Withdraw an Agreement to Send", revoke_schema, connected, revoke, true),
+        spec("ai.sent", "What an AI Request Sent", sent_schema, connected, sent, false),
         spec("ai.explain", "Explain", explain_schema, connected, explain, true),
         spec("ai.rewrite", "Rewrite with AI", rewrite_schema, connected, rewrite, true),
         spec("ai.complete", "Suggest the Next Words", complete_schema, connected, complete, true),
@@ -183,6 +185,27 @@ fn consent_schema() -> Value {
     json!({"type": "object", "properties": {
         "request": {"type": "string", "enum": crate::ai::REQUESTS, "description": "The kind of request agreed to, for the connection's endpoint: what ai.disclose shows it sends."}
     }, "required": ["request"], "additionalProperties": false})
+}
+
+fn revoke_schema() -> Value {
+    json!({"type": "object", "description": "Withdraws the user's agreement to send a kind of request to the connection's endpoint (all of them without `request`): the next one asks again. ai.status's `agreed` lists what is agreed.", "properties": {
+        "request": {"type": "string", "enum": crate::ai::REQUESTS}
+    }, "additionalProperties": false})
+}
+
+fn sent_schema() -> Value {
+    json!({"type": "object", "description": "The whole text a request of this session sent, by its run (ai.status's `requests`). The last 20 are kept, in memory only.", "properties": {
+        "run": {"type": "string"}
+    }, "required": ["run"], "additionalProperties": false})
+}
+
+fn revoke(s: &mut Session, p: &Value) -> Result<Value> {
+    let request = p.get("request").and_then(Value::as_str).map(str::to_owned);
+    s.ai_revoke(request.as_deref())
+}
+
+fn sent(s: &mut Session, p: &Value) -> Result<Value> {
+    s.ai_sent(string(p, "run")?)
 }
 
 fn flag(p: &Value, name: &str) -> bool {

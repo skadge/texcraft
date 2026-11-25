@@ -14,7 +14,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use craft_dialogs::{Answer, Dialogs, FileDialog};
-use craft_settings::{Location, SettingsStore};
+use craft_settings::{Location, SaveStatus, SettingsStore};
 use texcraft_ui_egui::prefs::Prefs;
 use texcraft_ui_egui::{Pick, PickKind, PickRequest};
 
@@ -34,6 +34,8 @@ struct Shell {
     /// Native pickers, shown without blocking the event loop.
     dialogs: Dialogs<Pick>,
     control: Option<control::Control>,
+    /// The last save of the preferences failed (and was said).
+    save_failed: bool,
 }
 
 fn file_dialog(req: PickRequest) -> FileDialog {
@@ -68,6 +70,29 @@ impl Shell {
                 Answer::Unavailable(reason) => self.app.pick_failed(reason),
                 _ => {}
             }
+        }
+    }
+}
+
+impl Shell {
+    /// Saves changed preferences once they settle, and comes back when they are due even if the
+    /// window is idle (what the user agreed to send to an AI service is in them, and a run ended
+    /// from a terminal never reaches `on_exit`). A save that fails is said once on the status line.
+    fn save_prefs(&mut self, ctx: &egui::Context) {
+        let now = Instant::now();
+        let tick = self.settings.tick(now);
+        if let Some(due) = tick.next_deadline {
+            ctx.request_repaint_after(due.saturating_duration_since(now));
+        }
+        match tick.status {
+            SaveStatus::Failed(e) if !self.save_failed => {
+                self.save_failed = true;
+                log::warn!("saving the preferences: {e}");
+                let what = texcraft_ui_egui::i18n::t("The preferences could not be saved, so changes are kept for this session only: {error}");
+                self.app.report(what.replace("{error}", &e.to_string()), true);
+            }
+            SaveStatus::Saved => self.save_failed = false,
+            _ => {}
         }
     }
 }
@@ -113,7 +138,7 @@ impl eframe::App for Shell {
         if let Some(prefs) = self.app.take_changed_prefs() {
             self.settings.set(Stored(prefs));
         }
-        self.settings.tick(Instant::now());
+        self.save_prefs(ui.ctx());
     }
 
     fn on_exit(&mut self) {
@@ -269,6 +294,10 @@ fn run() -> eframe::Result {
         session.set_template_store(data.join("TeXCraft").join("templates"));
     }
     let mut app = texcraft_ui_egui::App::with_prefs(session, prefs);
+    if let Some(why) = &report.read_only {
+        let what = texcraft_ui_egui::i18n::t("The preferences cannot be saved, so changes are kept for this session only: {error}");
+        app.report(what.replace("{error}", &why.to_string()), true);
+    }
     app.set_native_pickers(true);
     app.set_file_manager(true);
     for project in &settings.get().0.recent {
@@ -313,7 +342,7 @@ fn run() -> eframe::Result {
                 }),
                 None => None,
             };
-            Ok(Box::new(Shell { app, settings, dialogs, control }))
+            Ok(Box::new(Shell { app, settings, dialogs, control, save_failed: false }))
         }),
     )
 }
