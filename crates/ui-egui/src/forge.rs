@@ -151,7 +151,7 @@ pub(crate) fn ask_commit(app: &mut App) {
         .collect();
     let token = (!app.session.has_forge_token()).then(String::new);
     let cannot_push = app.session.forge_problem() == Some(&ForgeProblem::CannotPush);
-    let new_branch = format!("{}-{}", link.branch, chrono::Local::now().format("%Y%m%d-%H%M"));
+    let new_branch = format!("{}-{}", link.branch, chrono::Utc::now().format("%Y%m%d-%H%M"));
     app.view.dialog = Some(Dialog::ForgeCommit(CommitForm {
         project: link.address.path.clone(),
         branch: link.branch.clone(),
