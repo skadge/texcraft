@@ -5,11 +5,13 @@ use std::sync::Arc;
 use texcraft_compile::scratch::{Scratch, typeset};
 use texcraft_project::ProjectPath;
 
-fn scratch(body: &str, files: Vec<(ProjectPath, Arc<[u8]>)>) -> Scratch {
+type Files = Vec<(ProjectPath, Arc<[u8]>)>;
+
+fn scratch(body: &str, files: Files) -> Scratch {
     Scratch { files, main_dir: None, preamble: "\\documentclass{article}\n\\usepackage{mymacros}\n".to_owned(), body: body.to_owned() }
 }
 
-fn macros() -> Result<Vec<(ProjectPath, Arc<[u8]>)>, String> {
+fn macros() -> Result<Files, String> {
     let path = ProjectPath::new("mymacros.sty").map_err(|e| e.to_string())?;
     Ok(vec![(path, Arc::from(b"\\newcommand{\\R}{\\mathrm{R}}\n".as_slice()))])
 }
