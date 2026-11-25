@@ -82,6 +82,46 @@ fn the_help_menu_opens_the_retex_manual_in_the_browser() {
     assert!(opened, "the manual's address was not opened");
 }
 
+fn opened(harness: &Harness<'_, App>, url: &str) -> bool {
+    harness.output().platform_output.commands.iter().any(|c| matches!(c, egui::OutputCommand::OpenUrl(open) if open.url == url))
+}
+
+#[test]
+fn help_user_guide_and_f1_open_the_guide_and_a_page_parameter_cannot_leave_it() {
+    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app());
+    harness.run();
+    harness.get_by_label("Help").click();
+    harness.run();
+    harness.get_by_label_contains("User Guide").click();
+    harness.step();
+    assert!(opened(&harness, texcraft_ui_egui::ui_cmd::USER_GUIDE), "Help › User Guide did not open the guide");
+
+    // From the text: F1 is a window shortcut, not a key the editor keeps.
+    let mut session = Session::with_backend(Box::new(Unavailable("No engine in this test.".into())));
+    session.execute("file.write", &serde_json::json!({"path": "main.tex", "text": "Hello.\n"})).unwrap();
+    let prefs = texcraft_ui_egui::prefs::Prefs { auto_compile: false, layout: "split".to_owned(), ..Default::default() };
+    let mut harness =
+        Harness::builder().with_size(egui::vec2(1400.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), App::with_prefs(session, prefs));
+    harness.run();
+    harness.get_by_label("main.tex source").focus();
+    harness.run();
+    // One event per step: the press opens it (the release's step would replace its output).
+    harness.key_down(egui::Key::F1);
+    harness.step();
+    let by_key = opened(&harness, texcraft_ui_egui::ui_cmd::USER_GUIDE);
+    harness.key_up(egui::Key::F1);
+    harness.step();
+    assert!(by_key, "F1 did not open the guide");
+
+    // A page of the guide opens there; anything else falls back to the guide's start.
+    let guide = texcraft_ui_egui::ui_cmd::guide_page;
+    assert!(guide("forges.html#servers").starts_with(texcraft_ui_egui::ui_cmd::USER_GUIDE));
+    assert!(guide("forges.html#servers").ends_with("forges.html#servers"));
+    for hostile in ["https://example.org/", "//example.org/x.html", "../x.html", "a.html?x=1", "javascript:alert(1)"] {
+        assert_eq!(guide(hostile), texcraft_ui_egui::ui_cmd::USER_GUIDE, "{hostile} left the guide");
+    }
+}
+
 #[test]
 fn the_compile_pill_says_when_it_compiles_automatically_and_a_click_still_compiles_now() {
     let prefs = |auto| texcraft_ui_egui::prefs::Prefs { auto_compile: auto, ..texcraft_ui_egui::prefs::Prefs::default() };

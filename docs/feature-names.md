@@ -9,3 +9,4 @@ User-visible names are checked under standards/naming.md before they ship. Other
 | Build Log | The list of messages of a build | Plain descriptive words |
 | Outline | The section list | Plain descriptive words |
 | Source, Formatted (planned) | The two ways the editor shows a file: as source, or with sections, emphasis, lists, formulas, figures and tables shown formatted | Plain descriptive words; other editors' names for this mode are not used |
+| User Guide | The help pages (Help › User Guide, `docs/guide/`) | Plain descriptive words |
