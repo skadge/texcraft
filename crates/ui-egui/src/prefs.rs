@@ -51,6 +51,9 @@ pub struct Prefs {
     pub identity: Option<Identity>,
     /// The AI connection (its token is in the keychain, never here), model and agreements.
     pub ai: texcraft_engine::ai::Saved,
+    /// The GitLab and GitHub Enterprise servers added for signing in: address, service and
+    /// application id (sign-ins are in the keychain, never here).
+    pub forge_servers: Vec<texcraft_engine::forge::servers::Server>,
     /// Spell checking: on, the language, comments.
     pub spelling: texcraft_engine::SpellingOptions,
     /// The user's words (Add to Dictionary), for every project.
@@ -110,6 +113,7 @@ impl Default for Prefs {
             build: texcraft_engine::BuildOptions::default(),
             identity: None,
             ai: texcraft_engine::ai::Saved::default(),
+            forge_servers: Vec::new(),
             spelling: texcraft_engine::SpellingOptions::default(),
             words: Vec::new(),
             recent_symbols: Vec::new(),

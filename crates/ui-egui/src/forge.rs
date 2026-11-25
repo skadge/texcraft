@@ -8,7 +8,7 @@
 //! Signing in (docs/forges.md, step 4) comes first in the dialogs, the token second ("Use a
 //! personal access token instead"): `forge.sign_in` opens GitLab's page in the system's browser
 //! (the desktop) or goes to it (the browser), or shows GitHub's code to enter; `forge.sign_out` and
-//! the accounts are in Settings.
+//! the accounts are in Settings, with the self-managed servers added there (`forge_server`).
 
 use egui::RichText;
 use serde_json::{Value, json};
@@ -36,6 +36,8 @@ pub(crate) struct OpenForm {
 /// message, where the commit goes and, when the session has no token for the instance, the token.
 pub(crate) struct CommitForm {
     pub service: Service,
+    /// The instance the project is on.
+    pub instance: String,
     pub project: String,
     pub branch: String,
     pub changes: Vec<(String, String)>,
@@ -99,11 +101,15 @@ pub(crate) struct Check {
     opening: Service,
     /// The GitHub code whose page was opened, so it is opened once.
     opened_code: Option<String>,
+    /// The revision of the session's servers last put in the preferences.
+    servers_kept: u64,
 }
 
 /// What the sign-in part of a dialog or of Settings shows for a service.
 pub(crate) struct SignInView {
     pub service: Service,
+    /// The instance: gitlab.com, github.com or a server added.
+    pub instance: String,
     /// Who is signed in, and whether they can commit.
     pub user: Option<(String, String, bool)>,
     /// Why signing in is not offered, in words.
@@ -113,10 +119,22 @@ pub(crate) struct SignInView {
 
 /// What the sign-in part asks for.
 pub(crate) enum SignInAction {
-    SignIn { service: Service, write: bool },
+    SignIn {
+        service: Service,
+        instance: String,
+        write: bool,
+    },
     Cancel,
-    SignOut(Service),
+    SignOut {
+        service: Service,
+        instance: String,
+    },
     Open(String),
+    /// Add the server at this address, to sign in to it (from the Open dialog).
+    AddServer {
+        service: Service,
+        address: String,
+    },
 }
 
 /// Why signing in to `service` is not offered, in words.
@@ -126,25 +144,28 @@ fn unavailable_words(service: Service, why: SignInUnavailable) -> &'static str {
             say(service, tl!("This build has no GitLab application yet"), tl!("This build has no GitHub application yet"))
         }
         SignInUnavailable::Browser => tl!("In the browser, GitHub needs a personal access token: GitHub's sign-in does not answer web pages."),
+        SignInUnavailable::UnknownServer => tl!("TeXCraft has no application on this server yet: add it to sign in, or use a personal access token."),
     }
 }
 
-/// The sign-in state of `service`, for drawing.
-pub(crate) fn sign_in_view(app: &App, service: Service) -> SignInView {
-    let user = app.session.forge_signed_in(service).map(|g| {
+/// The sign-in state of `service` on `instance`, for drawing.
+pub(crate) fn sign_in_view(app: &App, service: Service, instance: &str) -> SignInView {
+    let user = app.session.forge_signed_in_at(instance).filter(|g| g.service == service).map(|g| {
         let (name, username) = g.user.as_ref().map_or_else(|| (String::new(), String::new()), |u| (u.name.clone(), u.username.clone()));
         (name, username, g.can_commit())
     });
-    let progress = app.session.forge_signing_in().filter(|(s, _)| *s == service).map(|(_, p)| p);
-    let unavailable = app.session.forge_sign_in_unavailable(service).map(|why| unavailable_words(service, why));
-    SignInView { service, user, unavailable, progress }
+    let progress =
+        app.session.forge_signing_in().filter(|(s, _)| *s == service && app.session.forge_signing_in_instance() == Some(instance)).map(|(_, p)| p);
+    let unavailable = app.session.forge_sign_in_unavailable_at(service, instance).map(|why| unavailable_words(service, why));
+    SignInView { service, instance: instance.to_owned(), user, unavailable, progress }
 }
 
-/// Whether a project at `address` (as typed) is on the instance signing in reaches.
-fn on_signed_in_instance(address: &str) -> bool {
-    match texcraft_engine::forge::Address::parse(address) {
-        Ok(a) => matches!(a.instance.as_str(), texcraft_engine::forge::GITLAB_COM | texcraft_engine::forge::GITHUB_COM),
-        Err(_) => true,
+/// The instance a project at `address` (as typed) for `service` is on; `service`'s public one
+/// while the address cannot be read yet.
+fn instance_of(address: &str, service: Service) -> String {
+    match texcraft_engine::forge::Address::parse_as(address, Some(service)) {
+        Ok(a) => a.instance,
+        Err(_) => texcraft_engine::forge::oauth::instance(service).to_owned(),
     }
 }
 
@@ -195,7 +216,7 @@ pub(crate) fn sign_in_part(ui: &mut egui::Ui, t: &Tokens, view: &SignInView, set
             let can = if *can_commit { tl!("TeXCraft can open and commit.") } else { tl!("TeXCraft can open; committing asks again.") };
             ui.label(format!("{who} {can}"));
             if settings && ui.button(tl!("Sign Out")).on_hover_text(say(service, tl!("Sign out of GitLab"), tl!("Sign out of GitHub"))).clicked() {
-                action = Some(SignInAction::SignOut(service));
+                action = Some(SignInAction::SignOut { service, instance: view.instance.clone() });
             }
         }
         (None, None) => {
@@ -207,7 +228,7 @@ pub(crate) fn sign_in_part(ui: &mut egui::Ui, t: &Tokens, view: &SignInView, set
                 ui.label(RichText::new(why).font(t.small()).color(t.text_muted));
             }
             if r.clicked() {
-                action = Some(SignInAction::SignIn { service, write: false });
+                action = Some(SignInAction::SignIn { service, instance: view.instance.clone(), write: false });
             }
         }
     }
@@ -217,23 +238,33 @@ pub(crate) fn sign_in_part(ui: &mut egui::Ui, t: &Tokens, view: &SignInView, set
 /// Does what the sign-in part asked for.
 pub(crate) fn act(app: &mut App, action: SignInAction) {
     match action {
-        SignInAction::SignIn { service, write } => sign_in(app, service, write),
+        SignInAction::SignIn { service, instance, write } => sign_in(app, service, &instance, write),
         SignInAction::Cancel => {
             app.run("forge.cancel_sign_in", json!({}));
         }
-        SignInAction::SignOut(service) => {
-            if let Some(done) = app.run("forge.sign_out", json!({"service": service.id()})) {
+        SignInAction::SignOut { service, instance } => {
+            if let Some(done) = app.run("forge.sign_out", json!({"service": service.id(), "instance": instance})) {
                 signed_out(app, &done);
             }
         }
         SignInAction::Open(url) => app.ctx.open_url(egui::OpenUrl::new_tab(url)),
+        SignInAction::AddServer { service, address } => {
+            let back = match app.view.dialog.take() {
+                Some(Dialog::ForgeOpen(form)) => crate::forge_server::Back::Open(Box::new(form)),
+                other => {
+                    app.view.dialog = other;
+                    crate::forge_server::Back::Close
+                }
+            };
+            crate::forge_server::ask_add(app, service, &address, back);
+        }
     }
 }
 
-/// Signs in to `service` (`write`: allowing commits): GitLab's page opened in the browser, or the
-/// page left for it (the browser build); GitHub's code shown once it comes.
-pub(crate) fn sign_in(app: &mut App, service: Service, write: bool) {
-    let Some(done) = app.run("forge.sign_in", json!({"service": service.id(), "write": write})) else { return };
+/// Signs in to `service` on `instance` (`write`: allowing commits): GitLab's page opened in the
+/// browser, or the page left for it (the browser build); GitHub's code shown once it comes.
+pub(crate) fn sign_in(app: &mut App, service: Service, instance: &str, write: bool) {
+    let Some(done) = app.run("forge.sign_in", json!({"service": service.id(), "instance": instance, "write": write})) else { return };
     if let Some(url) = done["navigate"].as_str() {
         app.view.status = Some((tl!("Going to GitLab to sign in…").to_owned(), false));
         app.ctx.open_url(egui::OpenUrl::same_tab(url));
@@ -341,9 +372,19 @@ fn resolve(rows: &[ConflictRow]) -> Value {
 /// Opens the Open from GitLab or GitHub dialog, on the service last opened from.
 pub(crate) fn ask_open(app: &mut App) {
     let service = app.forge_check.opening;
-    let use_token = app.session.forge_sign_in_unavailable(service).is_some();
-    app.view.dialog =
-        Some(Dialog::ForgeOpen(OpenForm { service, address: String::new(), branch: String::new(), token: String::new(), use_token, focus: true }));
+    ask_open_at(app, service, "");
+}
+
+/// Opens the Open from GitLab or GitHub dialog on `address` (a link's project), for `service`.
+pub(crate) fn ask_open_at(app: &mut App, service: Service, address: &str) {
+    let mut form = OpenForm { service, address: address.to_owned(), branch: String::new(), token: String::new(), use_token: false, focus: true };
+    refresh_use_token(app, &mut form);
+    app.view.dialog = Some(Dialog::ForgeOpen(form));
+}
+
+/// Offers the token first only where signing in is not offered (the form's instance).
+pub(crate) fn refresh_use_token(app: &App, form: &mut OpenForm) {
+    form.use_token = app.session.forge_sign_in_unavailable_at(form.service, &instance_of(&form.address, form.service)).is_some();
 }
 
 /// Opens the Commit dialog, with the files changed since the base.
@@ -378,13 +419,13 @@ pub(crate) fn ask_commit(app: &mut App) {
         .collect();
     let token = (!app.session.has_forge_token()).then(String::new);
     let service = link.address.service;
-    let use_token =
-        app.session.forge_sign_in_unavailable(service).is_some() || link.address.instance != texcraft_engine::forge::oauth::instance(service);
+    let use_token = app.session.forge_sign_in_unavailable_at(service, &link.address.instance).is_some();
     let needs_write = app.session.forge_needs_write();
     let cannot_push = app.session.forge_problem() == Some(&ForgeProblem::CannotPush);
     let new_branch = format!("{}-{}", link.branch, chrono::Utc::now().format("%Y%m%d-%H%M"));
     app.view.dialog = Some(Dialog::ForgeCommit(CommitForm {
         service: link.address.service,
+        instance: link.address.instance.clone(),
         project: link.address.path.clone(),
         branch: link.branch.clone(),
         changes,
@@ -425,17 +466,18 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
     let t = app.tokens;
     let browser = app.session.library().is_some();
     let mut outcome = Outcome::Open;
-    let service = match &app.view.dialog {
-        Some(Dialog::ForgeOpen(form)) => form.service,
-        Some(Dialog::ForgeCommit(form)) => form.service,
-        _ => Service::GitLab,
+    let (service, instance) = match &app.view.dialog {
+        Some(Dialog::ForgeOpen(form)) => (form.service, instance_of(&form.address, form.service)),
+        Some(Dialog::ForgeCommit(form)) => (form.service, form.instance.clone()),
+        _ => (Service::GitLab, texcraft_engine::forge::GITLAB_COM.to_owned()),
     };
-    let view = sign_in_view(app, service);
+    let view = sign_in_view(app, service, &instance);
+    let unknown = app.session.forge_sign_in_unavailable_at(service, &instance) == Some(SignInUnavailable::UnknownServer);
     let mut action = None;
     let modal = egui::Modal::new(egui::Id::unique("texcraft-forge-dialog")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
         ui.set_width(460.0);
         match app.view.dialog.as_mut() {
-            Some(Dialog::ForgeOpen(form)) => outcome = open_form(ui, &t, form, browser, &view, &mut action),
+            Some(Dialog::ForgeOpen(form)) => outcome = open_form(ui, &t, form, browser, &view, unknown, &mut action),
             Some(Dialog::ForgeCommit(form)) => outcome = commit_form(ui, &t, form, browser, &view, &mut action),
             Some(Dialog::ForgeResolve(form)) => outcome = resolve_form(ui, &t, form),
             Some(Dialog::ForgeMergeRequest(note)) => outcome = merge_request_note(ui, &t, note),
@@ -565,7 +607,15 @@ fn sign_in_or_token(
     signed_in && !*use_token
 }
 
-fn open_form(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm, browser: bool, view: &SignInView, action: &mut Option<SignInAction>) -> Outcome {
+fn open_form(
+    ui: &mut egui::Ui,
+    t: &Tokens,
+    form: &mut OpenForm,
+    browser: bool,
+    view: &SignInView,
+    unknown: bool,
+    action: &mut Option<SignInAction>,
+) -> Outcome {
     title(ui, t, tl!("Open from GitLab or GitHub"));
     ui.add_space(t.unit * 2.0);
     // The service, as two radio buttons named by the group's label (AGENTS.md rule 21).
@@ -597,7 +647,22 @@ fn open_form(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm, browser: bool, 
     }
     let branch = field(ui, t, tl!("Branch (the default branch if left empty)"), &mut form.branch, "main", false);
     let mut responses = vec![address, branch];
-    let signed_in = sign_in_or_token(ui, t, view, &mut form.use_token, on_signed_in_instance(&form.address), action);
+    let host = texcraft_engine::forge::servers::host_of(&view.instance).to_owned();
+    // A server TeXCraft has no application on can be added from here (not GitHub in the browser,
+    // where it would need a token still).
+    if unknown && !(form.service == Service::GitHub && browser) && !form.address.trim().is_empty() {
+        ui.add_space(t.unit * 2.0);
+        let text = tl!(
+            "TeXCraft cannot sign in to {host} yet: add the server once, and sign in to it as to gitlab.com. Until then, use a personal access token."
+        )
+        .replace("{host}", &host);
+        ui.label(RichText::new(text).font(t.small()).color(t.text_muted));
+        let label = tl!("Add {host} for Signing In…").replace("{host}", &host);
+        if ui.button(label).clicked() {
+            *action = Some(SignInAction::AddServer { service: form.service, address: view.instance.clone() });
+        }
+    }
+    let signed_in = sign_in_or_token(ui, t, view, &mut form.use_token, !unknown, action);
     if form.use_token {
         responses.push(field(ui, t, tl!("Personal access token"), &mut form.token, token_hint(form.service), true));
         ui.add_space(t.unit);
@@ -679,7 +744,7 @@ fn commit_form(ui: &mut egui::Ui, t: &Tokens, form: &mut CommitForm, browser: bo
                 *action = Some(a);
             }
         } else if ui.button(RichText::new(tl!("Allow Commits on GitLab")).font(t.strong())).clicked() {
-            *action = Some(SignInAction::SignIn { service: form.service, write: true });
+            *action = Some(SignInAction::SignIn { service: form.service, instance: form.instance.clone(), write: true });
         }
         if ui.checkbox(&mut form.use_token, tl!("Use a personal access token instead")).changed() && form.use_token {
             form.token = Some(String::new());
@@ -787,6 +852,7 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
             app.forge_check.said = None;
             app.forge_check.last = Some(ctx.input(|i| i.time));
             match done["operation"].as_str() {
+                Some("check_server") => crate::forge_server::checked(app, Ok(done)),
                 Some("sign_in") => signed_in(app, &done),
                 Some("sign_out") => signed_out(app, &done),
                 Some("open") => opened(app, &done),
@@ -795,8 +861,16 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
             }
             app.forge_check.quiet = false;
         }
+        Some(Err(e)) if crate::forge_server::checking(app) => crate::forge_server::checked(app, Err(e)),
         Some(Err(e)) => failed(app, was, e),
         None => {}
+    }
+    // The servers added or removed go to the preferences (no secret in them).
+    let (servers, revision) = app.session.forge_servers_saved();
+    if revision != app.forge_check.servers_kept {
+        app.prefs.forge_servers = servers.to_vec();
+        app.forge_check.servers_kept = revision;
+        app.prefs_changed = true;
     }
     if app.session.forge_busy().is_some() || app.session.forge_auth_busy() {
         ctx.request_repaint_after(std::time::Duration::from_millis(200));
@@ -999,32 +1073,90 @@ pub(crate) fn badge(app: &mut App, ui: &mut egui::Ui) {
     }
 }
 
-/// Settings' Accounts: for GitLab (gitlab.com) and GitHub (github.com), who is signed in, Sign In
-/// or Sign Out, and where the sign-in is kept.
+/// Settings' Accounts: for GitLab (gitlab.com), GitHub (github.com) and each server added, who is
+/// signed in, Sign In or Sign Out, and where the sign-in is kept; servers are added and removed
+/// here (`forge_server`).
 pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     let mut action = None;
-    for service in [Service::GitLab, Service::GitHub] {
-        let view = sign_in_view(app, service);
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = t.unit * 2.0;
-            ui.label(RichText::new(say(service, tl!("GitLab (gitlab.com)"), tl!("GitHub (github.com)"))).font(t.strong()));
-            if let Some(a) = sign_in_part(ui, t, &view, true) {
-                action = Some(a);
+    let mut remove = None;
+    let mut add = None;
+    let servers = app.session.forge_servers();
+    let browser = app.session.library().is_some();
+    egui::ScrollArea::vertical().id_salt("forge-accounts").max_height(440.0).auto_shrink([false, true]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = t.unit * 3.0;
+        for service in [Service::GitLab, Service::GitHub] {
+            let view = sign_in_view(app, service, texcraft_engine::forge::oauth::instance(service));
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = t.unit * 2.0;
+                ui.label(RichText::new(say(service, tl!("GitLab (gitlab.com)"), tl!("GitHub (github.com)"))).font(t.strong()));
+                if let Some(a) = sign_in_part(ui, t, &view, true) {
+                    action = Some(a);
+                }
+            });
+        }
+        for server in &servers {
+            let view = sign_in_view(app, server.service, &server.instance);
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = t.unit * 2.0;
+                let kind = say(server.service, tl!("{host} (GitLab)"), tl!("{host} (GitHub Enterprise Server)")).replace("{host}", server.host());
+                ui.label(RichText::new(kind).font(t.strong()));
+                if server.provided {
+                    ui.label(RichText::new(tl!("Provided by your organisation.")).font(t.small()).color(t.text_muted));
+                }
+                if let Some(a) = sign_in_part(ui, t, &view, true) {
+                    action = Some(a);
+                }
+                if !server.provided {
+                    let r = ui.button(tl!("Remove Server"));
+                    let name = format!("{}: {}", tl!("Remove Server"), server.host());
+                    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+                    if r.clicked() {
+                        remove = Some(server.instance.clone());
+                    }
+                }
+            });
+        }
+        for problem in app.session.forge_server_problems() {
+            let text = tl!("Your organisation's list of servers has an entry TeXCraft left out: {problem}").replace("{problem}", problem);
+            ui.label(RichText::new(text).font(t.small()).color(t.error));
+        }
+        ui.horizontal_wrapped(|ui| {
+            if ui.button(tl!("Add a GitLab Server…")).clicked() {
+                add = Some(Service::GitLab);
+            }
+            let ghes = ui.add_enabled(!browser, egui::Button::new(tl!("Add a GitHub Enterprise Server…")));
+            if ghes.on_disabled_hover_text(tl!("In the browser, GitHub needs a personal access token: GitHub's sign-in does not answer web pages.")).clicked() {
+                add = Some(Service::GitHub);
             }
         });
-    }
-    let kept = match app.session.forge_sign_in_kept() {
-        "keychain" => tl!("A sign-in is kept in the system's keychain, so TeXCraft stays signed in after a restart; never in the preferences."),
-        "tab" => tl!("A sign-in is kept in this tab's session storage: a reload keeps it, closing the tab forgets it. Signing out revokes it."),
-        _ => tl!("A sign-in is kept while TeXCraft runs only."),
-    };
-    ui.label(RichText::new(kept).font(t.small()).color(t.text_muted));
-    ui.label(
-        RichText::new(tl!("Another GitLab instance, or a GitHub Enterprise Server, needs a personal access token, given when opening a project."))
+        let kept = match app.session.forge_sign_in_kept() {
+            "keychain" => tl!("A sign-in is kept in the system's keychain, so TeXCraft stays signed in after a restart; never in the preferences."),
+            "tab" => tl!("A sign-in is kept in this tab's session storage: a reload keeps it, closing the tab forgets it. Signing out revokes it."),
+            _ => tl!("A sign-in is kept while TeXCraft runs only."),
+        };
+        ui.label(RichText::new(kept).font(t.small()).color(t.text_muted));
+        ui.label(
+            RichText::new(tl!(
+                "Your own GitLab, or a GitHub Enterprise Server: add it, register TeXCraft there as the dialog says, and sign in to it as to gitlab.com. Without that, a personal access token works too."
+            ))
             .font(t.small())
             .color(t.text_muted),
-    );
+        );
+    });
     if let Some(action) = action {
         act(app, action);
+    }
+    if let Some(instance) = remove
+        && let Some(done) = app.run("forge.remove_server", json!({"address": instance}))
+    {
+        let host = texcraft_engine::forge::servers::host_of(&instance).to_owned();
+        let said = tl!("Removed {host}.").replace("{host}", &host);
+        app.view.status = Some(match done["signed_out"]["warning"].as_str() {
+            Some(w) => (format!("{said} {w}"), true),
+            None => (said, false),
+        });
+    }
+    if let Some(service) = add {
+        crate::forge_server::ask_add(app, service, "", crate::forge_server::Back::Settings);
     }
 }

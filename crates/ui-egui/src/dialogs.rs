@@ -54,6 +54,8 @@ pub(crate) enum Dialog {
     ForgeCommit(crate::forge::CommitForm),
     ForgeResolve(crate::forge::ResolveForm),
     ForgeMergeRequest(crate::forge::MergeRequestNote),
+    ForgeServer(crate::forge_server::ServerForm),
+    ForgeProposal(crate::forge_server::ProposalForm),
     Figure(Box<crate::figure_dialog::FigureForm>),
     /// What explaining a message sends, before the first one goes.
     AiConsent(Box<crate::ai::Consent>),
@@ -78,6 +80,8 @@ impl Dialog {
             Dialog::ForgeCommit(_) => "forge_commit",
             Dialog::ForgeResolve(_) => "forge_resolve",
             Dialog::ForgeMergeRequest(_) => "forge_merge_request",
+            Dialog::ForgeServer(_) => "forge_server",
+            Dialog::ForgeProposal(_) => "forge_proposal",
             Dialog::Figure(_) => "figure",
             Dialog::AiConsent(_) => "ai_consent",
             Dialog::AiMake(_) => "ai_make",
@@ -112,6 +116,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         crate::goto_file::show(app, ctx);
         return;
     }
+    if matches!(app.view.dialog, Some(Dialog::ForgeServer(_) | Dialog::ForgeProposal(_))) {
+        crate::forge_server::dialog(app, ctx);
+        return;
+    }
     if matches!(app.view.dialog, Some(Dialog::ForgeOpen(_) | Dialog::ForgeCommit(_) | Dialog::ForgeResolve(_) | Dialog::ForgeMergeRequest(_))) {
         crate::forge::dialog(app, ctx);
         return;
@@ -135,6 +143,8 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             | Dialog::ForgeCommit(_)
             | Dialog::ForgeResolve(_)
             | Dialog::ForgeMergeRequest(_)
+            | Dialog::ForgeServer(_)
+            | Dialog::ForgeProposal(_)
             | Dialog::AiConsent(_)
             | Dialog::AiMake(_)
             | Dialog::AiReference(_) => {}

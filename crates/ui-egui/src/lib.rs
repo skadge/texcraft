@@ -23,6 +23,7 @@ mod figure_view;
 mod find_bar;
 pub mod fonts;
 mod forge;
+mod forge_server;
 mod formatted;
 mod formatted_edit;
 mod gallery;
@@ -243,6 +244,7 @@ impl App {
         session.settings.build = prefs.build;
         session.set_author(prefs.identity.as_ref().map(prefs::Identity::author));
         session.restore_ai(prefs.ai.clone());
+        session.restore_forge_servers(prefs.forge_servers.clone());
         session.settings.spelling = prefs.spelling.clone();
         session.set_user_words(&prefs.words);
         let (layout, side) = (prefs.layout(), prefs.side());
@@ -622,6 +624,12 @@ impl App {
     /// `state`, or `error`): it is finished in the background (`forge.sign_in_return`).
     pub fn forge_sign_in_returned(&mut self, params: Value) {
         forge::returned(self, params);
+    }
+
+    /// A link's query (`gitlab=…&client_id=…`, the browser's address or the desktop's argument):
+    /// when it proposes a server, a dialog asks before adding it. Whether it proposed one.
+    pub fn forge_propose_server(&mut self, query: &str) -> bool {
+        forge_server::propose(self, query)
     }
 
     /// Runs an engine command and puts its error, if any, on the status line.
