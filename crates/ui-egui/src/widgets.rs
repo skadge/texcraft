@@ -361,14 +361,14 @@ pub fn room_before_right(ui: &Ui, key: &str) -> f32 {
 /// them in reverse). Its width is last pass's: a new one has egui lay the frame out again before
 /// showing it.
 pub fn right_aligned<R>(ui: &mut Ui, key: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
-    let room = room_before_right(ui, key);
-    if room > 0.0 {
-        ui.add_space(room);
-    }
     let id = ui.scope_id().with(key);
-    let inner = ui.horizontal(add);
-    let width = inner.response.rect.width();
     let last: Option<f32> = ui.data(|d| d.get_temp(id));
+    // Against the row's end, as a right-to-left layout would put them (over what is before them
+    // when the row is too narrow).
+    let row = ui.available_rect_before_wrap();
+    let rect = Rect::from_min_max(egui::pos2(row.right() - last.unwrap_or(0.0), row.top()), row.max);
+    let inner = ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)), add);
+    let width = inner.response.rect.width();
     if last.is_none_or(|w| (width - w).abs() > 0.5) {
         ui.data_mut(|d| d.insert_temp(id, width));
         ui.ctx().request_discard("controls at a row's end were measured");
