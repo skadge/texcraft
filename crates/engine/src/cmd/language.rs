@@ -26,7 +26,128 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             run: fix,
             changes: true,
         },
+        spec("language.spelling", "Check Spelling", spelling_schema, spelling),
+        CommandSpec {
+            id: "language.spelling_options",
+            label: "Spelling Options",
+            menu: &[],
+            shortcut: None,
+            params: options_schema,
+            enabled: always,
+            run: spelling_options,
+            changes: true,
+        },
+        CommandSpec {
+            id: "language.add_word",
+            label: "Add to Dictionary",
+            menu: &[],
+            shortcut: None,
+            params: add_word_schema,
+            enabled: always,
+            run: add_word,
+            changes: true,
+        },
+        CommandSpec {
+            id: "language.ignore_word",
+            label: "Ignore Word",
+            menu: &[],
+            shortcut: None,
+            params: word_schema,
+            enabled: always,
+            run: ignore_word,
+            changes: true,
+        },
     ]
+}
+
+fn spelling_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "path": {"type": "string"},
+        "line": {"type": "integer", "minimum": 1, "description": "The first line to check, from 1; the whole file without."},
+        "end_line": {"type": "integer", "minimum": 1, "description": "The last line to check, from 1."},
+        "suggestions": {"type": "integer", "minimum": 0, "maximum": 20, "description": "Spellings offered per word (5 without)."}
+    }, "required": ["path"], "additionalProperties": false})
+}
+
+fn options_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "on": {"type": "boolean"},
+        "language": {"type": "string", "description": "A BCP 47 tag (en-GB, fr), or `auto`: the document's babel or polyglossia language, else the interface's."},
+        "comments": {"type": "boolean", "description": "Check the text of comments too."}
+    }, "additionalProperties": false})
+}
+
+fn add_word_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "word": {"type": "string"},
+        "to": {"type": "string", "enum": ["user", "project"], "description": "The user's words (every project; the default), or the project's .texcraft/words.txt."}
+    }, "required": ["word"], "additionalProperties": false})
+}
+
+fn word_schema() -> Value {
+    json!({"type": "object", "properties": {"word": {"type": "string"}}, "required": ["word"], "additionalProperties": false})
+}
+
+/// The file's misspelled words with their places and suggestions; an error when spelling is off or
+/// the language has no dictionary.
+fn spelling(s: &mut Session, p: &Value) -> Result<Value> {
+    let path = path_param(p, "path")?;
+    let line = |name: &str| p.get(name).and_then(Value::as_u64).filter(|n| *n >= 1).map(|n| n as usize);
+    let lines = match (line("line"), line("end_line")) {
+        (None, None) => None,
+        (from, to) => Some(from.unwrap_or(1) - 1..to.unwrap_or(usize::MAX)),
+    };
+    let max = p.get("suggestions").and_then(Value::as_u64).map_or(5, |n| n.min(20) as usize);
+    let found = s.misspellings(&path, lines)?;
+    let (language, from) = s.spelling_language();
+    let words: Vec<Value> = found
+        .into_iter()
+        .map(|m| {
+            let suggestions = if max > 0 { s.spelling_suggestions(&m.word, max) } else { Vec::new() };
+            json!({"line": m.line + 1, "column": m.column + 1, "end_line": m.line + 1, "end_column": m.end_column + 1, "word": m.word, "suggestions": suggestions})
+        })
+        .collect();
+    Ok(json!({"language": language, "language_from": from, "misspellings": words}))
+}
+
+fn spelling_options(s: &mut Session, p: &Value) -> Result<Value> {
+    let mut o = s.settings.spelling.clone();
+    if let Some(on) = p.get("on").and_then(Value::as_bool) {
+        o.on = on;
+    }
+    if let Some(language) = p.get("language").and_then(Value::as_str) {
+        let language = language.trim();
+        if language != "auto" && craft_proof::lang::normalize_tag(language).is_none() {
+            return Err(format!("“{language}” is not a language tag: give one such as en-GB or fr, or `auto`."));
+        }
+        o.language = language.to_owned();
+    }
+    if let Some(comments) = p.get("comments").and_then(Value::as_bool) {
+        o.comments = comments;
+    }
+    s.settings.spelling = o.clone();
+    let (language, from) = s.spelling_language();
+    let ready = s.spelling_ready();
+    Ok(
+        json!({"on": o.on, "language": o.language, "comments": o.comments, "checking": language, "language_from": from, "available": ready.is_ok(), "problem": ready.err()}),
+    )
+}
+
+fn add_word(s: &mut Session, p: &Value) -> Result<Value> {
+    let word = super::string(p, "word")?;
+    let to_project = match p.get("to").and_then(Value::as_str) {
+        None | Some("user") => false,
+        Some("project") => true,
+        Some(other) => return Err(format!("`to` is `user` or `project`, not `{other}`.")),
+    };
+    let kept = s.add_word(word, to_project)?;
+    Ok(json!({"word": word.trim(), "kept": kept}))
+}
+
+fn ignore_word(s: &mut Session, p: &Value) -> Result<Value> {
+    let word = super::string(p, "word")?;
+    s.ignore_word(word)?;
+    Ok(json!({"word": word.trim()}))
 }
 
 fn at_schema() -> Value {

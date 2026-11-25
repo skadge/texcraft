@@ -24,6 +24,8 @@ craft-settings = { git = "https://github.com/storytold/craft-libs", rev = "f8c3c
 craft-zip = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 craft-mcp-server = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 craft-menu = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
+# Spelling and suggestions per language (docs/ROADMAP.md, E11).
+craft-proof = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 # The suite's AI layer: connections, consent and the request log (craft-ai-core, all targets), the
 # OpenAI-compatible provider (craft-ai, desktop), and the suite's keychain for the token.
 craft-ai-core = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }

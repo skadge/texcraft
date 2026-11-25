@@ -103,3 +103,12 @@ Dependencies come from crates.io, including retex (CC0-1.0) at the version in `C
 |---|---|---|---|
 | jpeg-encoder | (MIT OR Apache-2.0) AND IJG | retex's PDF writer (retex-pdf) | This software is based in part on the work of the Independent JPEG Group. |
 | webpki-roots | CDLA-Permissive-2.0 | retex-texlive's downloads (ureq) | Mozilla's list of trusted certificate authorities, under the Community Data License Agreement – Permissive 2.0. |
+
+Spell checking (docs/ROADMAP.md, E11) uses craft-proof from storytold/craft-libs, which brings its own word lists. No dictionary is copied into this repository:
+
+| Data | Licence | Embedded by | Notes |
+|---|---|---|---|
+| English word list (`crates/proof/data/en-words.dic`), the Moby Hyphenator II list by Grady Ward (Project Gutenberg eBook #3204) | Public domain | craft-proof, in every build | English spelling and suggestions when no other English dictionary is there |
+| English supplement (`crates/proof/data/en-extra.txt`), WordCraft contributors | MIT OR Apache-2.0 | craft-proof, in every build | Modern words the Moby list lacks |
+| SCOWL `rel-2026.02.25` Hunspell dictionaries (en-US, en-GB, en-CA, en-AU) from craft-i18n's `language-data/` | SCOWL's licence (MIT-like), the Ispell BSD licence of the affix files | craft-proof, only when the build sets `CRAFT_I18N_DIR` | Their notice is in the build: `craft_proof::scowl::notice()` |
+| Hunspell dictionaries for other languages | Each dictionary's own | Not embedded: read from the user's system or dictionaries folder at run time (desktop only) | TeXCraft ships none |

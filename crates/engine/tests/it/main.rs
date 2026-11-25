@@ -20,5 +20,6 @@ mod library;
 mod rename;
 mod review;
 mod search;
+mod spelling;
 mod sync;
 mod templates;

@@ -12,6 +12,8 @@ pub mod file_access;
 pub mod find;
 mod formulas;
 mod language;
+pub mod spelling;
+pub use spelling::{Misspelling, SpellingOptions};
 mod sync;
 pub use edits::FileEdit;
 pub use formulas::{Formula, FormulaBox, FormulaState, Formulas};
@@ -54,11 +56,20 @@ pub struct Settings {
     /// Build the sources with their open suggestions applied, without writing them
     /// (`build.suggestions`); the normal build ignores suggestions.
     pub with_suggestions: bool,
+    /// Spell checking: on, the language, comments (`language.spelling_options`).
+    #[serde(default)]
+    pub spelling: SpellingOptions,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { auto_compile: true, auto_compile_delay_ms: 800, build: texcraft_compile::Options::default(), with_suggestions: false }
+        Self {
+            auto_compile: true,
+            auto_compile_delay_ms: 800,
+            build: texcraft_compile::Options::default(),
+            with_suggestions: false,
+            spelling: SpellingOptions::default(),
+        }
     }
 }
 
@@ -157,6 +168,8 @@ pub struct Session {
     forge_problem: Option<cmd::forge::Problem>,
     /// AI assistance: the connection, its requests and their answers (docs/ROADMAP.md, AI1, AI2).
     ai: ai::State,
+    /// Spell checking: the dictionary, the word lists and each file's words.
+    spelling: spelling::State,
 }
 
 impl Session {
@@ -215,6 +228,7 @@ impl Session {
             forge_changes: None,
             forge_problem: None,
             ai: ai::State::default(),
+            spelling: spelling::State::default(),
         }
     }
 

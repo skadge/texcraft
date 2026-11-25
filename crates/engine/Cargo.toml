@@ -40,6 +40,8 @@ similar = { version = "3", default-features = false, features = ["std", "text"] 
 # AI assistance (docs/ROADMAP.md, AI1, AI2): the suite's connection, consent and request-log model.
 craft-ai-core = { workspace = true }
 craft-ai = { workspace = true }
+# Spelling (docs/ROADMAP.md, E11): the suite's proofing library.
+craft-proof = { workspace = true }
 
 # Files a save removes from the project's folder and its history does not hold go to the
 # system's trash (issue #2).
