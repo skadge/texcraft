@@ -723,11 +723,7 @@ enum OutputAction {
 
 /// A file size, for people: bytes, kB or MB.
 fn size_text(bytes: usize) -> String {
-    match bytes {
-        b if b < 1024 => format!("{b} B"),
-        b if b < 1024 * 1024 => format!("{:.0} kB", b as f64 / 1024.0),
-        b => format!("{:.1} MB", b as f64 / (1024.0 * 1024.0)),
-    }
+    crate::i18n::file_size(bytes as u64)
 }
 
 /// The last build's files, each with Save As… (Download in the browser) and, on the desktop once

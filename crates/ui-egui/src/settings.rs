@@ -11,13 +11,13 @@ use crate::theme::Tokens;
 use crate::{App, widgets};
 
 const TABS: &[(&str, &str)] = &[
-    ("Appearance", "settings"),
-    ("Editor", "file-code"),
-    ("Building", "play"),
-    ("Keyboard", "text-cursor-input"),
-    ("Review", "message-square-text"),
-    ("AI", crate::ai::ICON),
-    ("Accounts", "link"),
+    (tn!("Appearance"), "settings"),
+    (tn!("Editor"), "file-code"),
+    (tn!("Building"), "play"),
+    (tn!("Keyboard"), "text-cursor-input"),
+    (tn!("Review"), "message-square-text"),
+    (tn!("AI"), crate::ai::ICON),
+    (tn!("Accounts"), "link"),
 ];
 
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
@@ -56,18 +56,23 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                 }
             });
             ui.add_space(t.unit * 4.0);
-            ui.vertical(|ui| {
-                ui.set_min_height(320.0);
-                ui.spacing_mut().item_spacing.y = t.unit * 3.0;
-                match app.view.settings_tab {
-                    0 => appearance(app, ui, &t),
-                    1 => editor(app, ui, &t),
-                    2 => building(app, ui, &t),
-                    3 => keyboard(app, ui, &t),
-                    4 => review(app, ui, &t),
-                    5 => crate::ai::settings(app, ui, &t),
-                    _ => crate::forge::settings(app, ui, &t),
-                }
+            // A tab taller than the window (a long language, a small window) scrolls, so the
+            // dialog's title and Close stay on the screen.
+            let room = (ui.ctx().content_rect().height() - 120.0).max(200.0);
+            egui::ScrollArea::vertical().id_salt("settings-tab").max_height(room).auto_shrink([false, true]).show(ui, |ui| {
+                ui.vertical(|ui| {
+                    ui.set_min_height(320.0_f32.min(room));
+                    ui.spacing_mut().item_spacing.y = t.unit * 3.0;
+                    match app.view.settings_tab {
+                        0 => appearance(app, ui, &t),
+                        1 => editor(app, ui, &t),
+                        2 => building(app, ui, &t),
+                        3 => keyboard(app, ui, &t),
+                        4 => review(app, ui, &t),
+                        5 => crate::ai::settings(app, ui, &t),
+                        _ => crate::forge::settings(app, ui, &t),
+                    }
+                });
             });
         });
     });
@@ -130,25 +135,26 @@ fn appearance(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     };
     setting(ui, t, tl!("Interface language"), help, |ui| {
         let current = if app.prefs.language == "auto" {
-            tl!("As the system").to_owned()
+            tl!("System").to_owned()
         } else {
             languages.iter().find(|(c, _)| *c == app.prefs.language).map_or_else(|| app.prefs.language.clone(), |(_, n)| n.clone())
         };
         ui.add_enabled_ui(languages.len() > 1, |ui| {
-            let combo = craft_ui::ComboBox::from_id_salt("settings-language").width(180.0).selected_text(current).show_ui(ui, |ui| {
-                let mut choose = |ui: &mut egui::Ui, code: &str, name: &str| {
-                    if ui.selectable_label(app.prefs.language == code, name).clicked() {
-                        app.prefs.language = code.to_owned();
-                        app.prefs_changed = true;
-                        crate::i18n::set_language(code);
-                        app.session.set_interface_language(crate::i18n::current_code());
+            let combo =
+                craft_ui::ComboBox::from_id_salt("settings-language").width(180.0).height(f32::INFINITY).selected_text(current).show_ui(ui, |ui| {
+                    let mut choose = |ui: &mut egui::Ui, code: &str, name: &str| {
+                        if ui.selectable_label(app.prefs.language == code, name).clicked() {
+                            app.prefs.language = code.to_owned();
+                            app.prefs_changed = true;
+                            crate::i18n::set_language(code);
+                            app.session.set_interface_language(crate::i18n::current_code());
+                        }
+                    };
+                    choose(ui, "auto", tl!("System"));
+                    for (code, name) in &languages {
+                        choose(ui, code, name);
                     }
-                };
-                choose(ui, "auto", tl!("As the system"));
-                for (code, name) in &languages {
-                    choose(ui, code, name);
-                }
-            });
+                });
             let _ = combo.response.accessible_name(tl!("Interface language"));
         });
         None
@@ -158,7 +164,7 @@ fn appearance(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
 fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     setting(ui, t, tl!("Font size"), tl!("The size of the source text, in points."), |ui| {
         let mut size = app.prefs.editor_font_size;
-        ui.label(format!("{size:.1} pt"));
+        ui.label(crate::i18n::measure(f64::from(size), 1, "{n} pt"));
         let r = ui.add(egui::Slider::new(&mut size, 10.0..=22.0).step_by(0.5).show_value(false));
         if r.changed() {
             app.prefs.editor_font_size = size;
@@ -188,27 +194,27 @@ fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
 
 /// The spelling languages offered, by tag; others can be set by agents (`language.spelling_options`).
 const SPELLING_LANGUAGES: &[(&str, &str)] = &[
-    ("en-US", "English (United States)"),
-    ("en-GB", "English (United Kingdom)"),
-    ("en-CA", "English (Canada)"),
-    ("en-AU", "English (Australia)"),
-    ("fr", "French"),
-    ("de", "German"),
-    ("es", "Spanish"),
-    ("it", "Italian"),
-    ("pt", "Portuguese"),
-    ("pt-BR", "Portuguese (Brazil)"),
-    ("nl", "Dutch"),
-    ("pl", "Polish"),
-    ("cs", "Czech"),
-    ("ru", "Russian"),
-    ("tr", "Turkish"),
-    ("hr", "Croatian"),
-    ("id", "Indonesian"),
-    ("sv", "Swedish"),
-    ("da", "Danish"),
-    ("nb", "Norwegian"),
-    ("fi", "Finnish"),
+    ("en-US", tn!("English (United States)")),
+    ("en-GB", tn!("English (United Kingdom)")),
+    ("en-CA", tn!("English (Canada)")),
+    ("en-AU", tn!("English (Australia)")),
+    ("fr", tn!("French")),
+    ("de", tn!("German")),
+    ("es", tn!("Spanish")),
+    ("it", tn!("Italian")),
+    ("pt", tn!("Portuguese")),
+    ("pt-BR", tn!("Portuguese (Brazil)")),
+    ("nl", tn!("Dutch")),
+    ("pl", tn!("Polish")),
+    ("cs", tn!("Czech")),
+    ("ru", tn!("Russian")),
+    ("tr", tn!("Turkish")),
+    ("hr", tn!("Croatian")),
+    ("id", tn!("Indonesian")),
+    ("sv", tn!("Swedish")),
+    ("da", tn!("Danish")),
+    ("nb", tn!("Norwegian")),
+    ("fi", tn!("Finnish")),
 ];
 
 /// Spell checking: on, the language (with what is checked now, or why nothing is), comments.
@@ -277,7 +283,7 @@ fn building(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     });
     setting(ui, t, tl!("Pause before building"), tl!("How long typing must stop before an automatic build."), |ui| {
         let mut ms = delay as f64;
-        ui.label(format!("{ms:.0} ms"));
+        ui.label(crate::i18n::measure(ms, 0, "{n} ms"));
         let r = ui.add_enabled(auto, egui::Slider::new(&mut ms, 300.0..=3000.0).step_by(100.0).show_value(false));
         if r.changed() {
             app.run("build.auto", json!({"on": auto, "delay_ms": ms as u64}));

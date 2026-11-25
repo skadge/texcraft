@@ -21,10 +21,10 @@ use crate::{App, widgets};
 
 /// The kinds offered, with their names and an example description.
 const KINDS: [(MakeKind, &str, &str); 4] = [
-    (MakeKind::Table, "Table", "a table of the three methods' accuracy and speed"),
-    (MakeKind::Equation, "Equation", "the equation for the normal distribution's density"),
-    (MakeKind::Tikz, "TikZ Diagram", "a diagram of three boxes joined by arrows, left to right"),
-    (MakeKind::Figure, "Figure", "a figure environment for the image plot.png, half the line wide"),
+    (MakeKind::Table, tn!("Table"), tn!("a table of the three methods' accuracy and speed")),
+    (MakeKind::Equation, tn!("Equation"), tn!("the equation for the normal distribution's density")),
+    (MakeKind::Tikz, tn!("TikZ Diagram"), tn!("a diagram of three boxes joined by arrows, left to right")),
+    (MakeKind::Figure, tn!("Figure"), tn!("a figure environment for the image plot.png, half the line wide")),
 ];
 
 /// The most a preview is drawn, in points.
@@ -153,7 +153,7 @@ pub(crate) fn make_dialog(app: &mut App, ctx: &egui::Context) {
             }
             Some(Made::Done { latex, packages, model, preview, .. }) => done(ui, &t, form, latex, packages, model, preview),
             Some(Made::Failed(e)) => {
-                let said = tl!("Nothing was made: {error}").replace("{error}", e);
+                let said = tl!("Nothing was made: {error}").replace("{error}", &crate::i18n::msg(e));
                 let label = ui.add(egui::Label::new(RichText::new(&said).color(t.error)).wrap());
                 crate::status::announce(ui, &label, &said);
             }
@@ -289,7 +289,10 @@ fn done(ui: &mut egui::Ui, t: &Tokens, form: &mut MakeForm, latex: &str, package
                         });
                 }
                 Some(Err(e)) => {
-                    ui.label(RichText::new(tl!("It typeset, but the preview could not be drawn: {error}").replace("{error}", e)).color(t.text_muted));
+                    ui.label(
+                        RichText::new(tl!("It typeset, but the preview could not be drawn: {error}").replace("{error}", &crate::i18n::msg(e)))
+                            .color(t.text_muted),
+                    );
                 }
                 None => {}
             }
@@ -359,7 +362,7 @@ pub(crate) fn reference_dialog(app: &mut App, ctx: &egui::Context) {
         title(ui, &t, tl!("Add a Reference with AI"));
         egui::Frame::new().fill(t.accent_soft).corner_radius(t.corner()).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.add(egui::Label::new(RichText::new(tl!(UNVERIFIED)).color(t.text)).wrap());
+            ui.add(egui::Label::new(RichText::new(crate::i18n::msg(UNVERIFIED)).color(t.text)).wrap());
         });
         ui.add_space(t.unit * 2.0);
         let running = matches!(drafted, Some(Referenced::Running));
@@ -423,7 +426,7 @@ pub(crate) fn reference_dialog(app: &mut App, ctx: &egui::Context) {
                 );
             }
             Some(Referenced::Failed(e)) => {
-                let said = tl!("No reference was drafted: {error}").replace("{error}", e);
+                let said = tl!("No reference was drafted: {error}").replace("{error}", &crate::i18n::msg(e));
                 let label = ui.add(egui::Label::new(RichText::new(&said).color(t.error)).wrap());
                 crate::status::announce(ui, &label, &said);
             }

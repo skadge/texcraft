@@ -298,7 +298,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             }
             let count = bar.count_text();
             let color = if bar.error.is_some() { t.error } else { t.text_muted };
-            let shown = bar.error.clone().unwrap_or(count);
+            let shown = bar.error.as_deref().map_or(count, crate::i18n::msg);
             let label = ui.add(egui::Label::new(RichText::new(&shown).font(t.small()).color(color)).truncate());
             crate::status::announce(ui, &label, &shown);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

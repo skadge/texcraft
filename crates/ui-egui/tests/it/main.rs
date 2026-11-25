@@ -3,6 +3,7 @@
 mod ai;
 mod ai_make_ask;
 mod carets;
+mod catalogs;
 mod closing;
 mod completion;
 mod contrast;
@@ -28,6 +29,7 @@ mod history;
 mod image_drop;
 mod insert;
 mod keyboard_paths;
+mod languages;
 mod log_copy;
 mod menu_bar;
 mod narrow;

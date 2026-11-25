@@ -14,7 +14,7 @@ use crate::theme::Tokens;
 
 /// The placements offered, with their letters.
 const PLACES: [(char, &str); 4] =
-    [('h', "Here, if it fits"), ('t', "At the top of a page"), ('b', "At the bottom of a page"), ('p', "On a page of floats")];
+    [('h', tn!("Here, if it fits")), ('t', tn!("At the top of a page")), ('b', tn!("At the bottom of a page")), ('p', tn!("On a page of floats"))];
 
 pub(crate) struct FigureForm {
     path: ProjectPath,
@@ -102,7 +102,7 @@ pub(crate) fn form(ui: &mut egui::Ui, t: &Tokens, f: &mut FigureForm) -> Outcome
     ui.add_space(t.unit * 3.0);
     ui.label(RichText::new(tl!("Where LaTeX may place it")).color(t.text_muted));
     for ((_, name), on) in PLACES.iter().zip(f.places.iter_mut()) {
-        ui.checkbox(on, tl!(*name));
+        ui.checkbox(on, crate::i18n::t(name));
     }
     ui.add_space(t.unit * 3.0);
     let label = ui.label(RichText::new(tl!("Caption (LaTeX)")).color(t.text_muted));

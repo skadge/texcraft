@@ -17,15 +17,15 @@ use crate::theme::{Tokens, blend};
 use crate::{App, icons, widgets};
 
 const CATEGORIES: &[(&str, &str, &str)] = &[
-    ("", "All", "list"),
-    ("journal", "Journals", "book-open"),
-    ("conference", "Conferences", "file-text"),
-    ("cv", "CVs", "file-code"),
-    ("poster", "Posters", "image"),
-    ("report", "Reports", "file-text"),
-    ("thesis", "Theses", "book-open"),
-    ("slides", "Slides", "columns-2"),
-    ("letter", "Letters", "pencil"),
+    ("", tn!("All"), "list"),
+    ("journal", tn!("Journals"), "book-open"),
+    ("conference", tn!("Conferences"), "file-text"),
+    ("cv", tn!("CVs"), "file-code"),
+    ("poster", tn!("Posters"), "image"),
+    ("report", tn!("Reports"), "file-text"),
+    ("thesis", tn!("Theses"), "book-open"),
+    ("slides", tn!("Slides"), "columns-2"),
+    ("letter", tn!("Letters"), "pencil"),
 ];
 
 /// A download running on its own thread: one template, or every one.
@@ -287,7 +287,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                     .iter()
                     .filter(|t| category.is_empty() || t.category == category)
                     .filter(|t| {
-                        needle.is_empty() || [&t.title, &t.publisher, &t.source_text(), &t.id].iter().any(|s| s.to_lowercase().contains(&needle))
+                        needle.is_empty()
+                            || [&t.title, &crate::i18n::msg(&t.title), &t.publisher, &t.source_text(), &t.id]
+                                .iter()
+                                .any(|s| s.to_lowercase().contains(&needle))
                     })
                     .collect();
                 egui::ScrollArea::vertical().max_height(420.0).auto_shrink([false, true]).show(ui, |ui| {
@@ -338,7 +341,7 @@ fn details(app: &mut App, ui: &mut egui::Ui, t: &Tokens, templates: &[Template],
             }
             Some(template) => {
                 ui.vertical(|ui| {
-                    ui.label(RichText::new(&template.title).font(t.strong()));
+                    ui.label(RichText::new(crate::i18n::msg(&template.title)).font(t.strong()));
                     let where_ = tl!("{publisher} · from the {source} · licence {licence}")
                         .replace("{publisher}", &template.publisher)
                         .replace("{source}", &template.source_text())
@@ -364,7 +367,7 @@ fn details(app: &mut App, ui: &mut egui::Ui, t: &Tokens, templates: &[Template],
         });
     });
     if let Some(error) = &app.gallery.error {
-        ui.colored_label(t.error, error.as_str());
+        ui.colored_label(t.error, crate::i18n::msg(error));
     }
 }
 
@@ -383,7 +386,9 @@ fn state(kept: bool, in_browser: bool) -> &'static str {
 
 pub(crate) fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected: bool, kept: bool, in_browser: bool) -> bool {
     let (rect, r) = ui.allocate_exact_size(CARD, Sense::click());
-    r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, selected, &template.title));
+    // The catalogue's titles are English, shown through the catalogs' `@msg` rows.
+    let title = crate::i18n::msg(&template.title);
+    r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, selected, &title));
     let base = if selected { blend(t.surface, t.accent_soft) } else { t.surface };
     let fill = if r.hovered() { blend(base, t.hover) } else { base };
     ui.painter().rect_filled(rect, t.corner_large(), fill);
@@ -396,7 +401,7 @@ pub(crate) fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected:
         icons::paint(ui, badge, "circle-check", 16.0, t.success);
     }
     let mut y = top.top() + 32.0;
-    for (text, font, color, rows) in [(&template.publisher, t.strong(), t.text, 2), (&template.title, t.small(), t.text_muted, 3)] {
+    for (text, font, color, rows) in [(&template.publisher, t.strong(), t.text, 2), (&title, t.small(), t.text_muted, 3)] {
         let mut job = egui::text::LayoutJob::simple(text.clone(), font, color, CARD.x - 24.0);
         job.wrap.max_rows = rows;
         let galley = ui.painter().layout_job(job);
@@ -409,7 +414,7 @@ pub(crate) fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected:
     let state = state(kept, in_browser);
     let tip = tl!("{source} · licence {licence}").replace("{source}", &template.source_text()).replace("{licence}", &template.licence);
     let clicked = r.clicked();
-    let _ = r.on_hover_text(format!("{}\n{tip}\n{state}", template.title));
+    let _ = r.on_hover_text(format!("{title}\n{tip}\n{state}"));
     clicked
 }
 

@@ -85,13 +85,14 @@ fn state(app: &App) -> (Option<&'static str>, egui::Color32, String) {
     }
     // A message from the last command (an error, or where the focus went) until the next build.
     if let Some((message, error)) = &app.view.status {
-        return if *error { (Some("circle-exclamation-point"), t.error, message.clone()) } else { (Some("info"), t.text_muted, message.clone()) };
+        let message = crate::i18n::msg(message);
+        return if *error { (Some("circle-exclamation-point"), t.error, message) } else { (Some("info"), t.text_muted, message) };
     }
     let Some(o) = app.session.last_outcome() else {
         return (Some("circle-check"), t.text_muted, tl!("Not compiled yet").to_owned());
     };
     match &o.status {
-        Status::Unavailable(reason) => (Some("circle-exclamation-point"), t.error, reason.clone()),
+        Status::Unavailable(reason) => (Some("circle-exclamation-point"), t.error, crate::i18n::msg(reason)),
         Status::Cancelled => (Some("info"), t.text_muted, tl!("Compiling stopped").to_owned()),
         Status::Failed => (Some("circle-exclamation-point"), t.error, trn(o.errors(), "Failed with {n} error", "Failed with {n} errors")),
         Status::Built if o.errors() > 0 => {
@@ -146,7 +147,7 @@ pub(crate) fn progress_detail(p: &texcraft_engine::Progress, seconds: f64) -> St
         });
     }
     if seconds >= 1.0 {
-        parts.push(format!("{seconds:.0} s"));
+        parts.push(crate::i18n::measure(seconds, 0, "{n} s"));
     }
     parts.join(" · ")
 }
@@ -165,7 +166,8 @@ pub(crate) fn progress_line(p: &texcraft_engine::Progress) -> String {
 pub(crate) fn progress_text(p: &texcraft_engine::Progress, seconds: f64) -> String {
     let mut text = progress_line(p);
     if seconds >= 1.0 {
-        text.push_str(&format!(" · {seconds:.0} s"));
+        text.push_str(" · ");
+        text.push_str(&crate::i18n::measure(seconds, 0, "{n} s"));
     }
     text
 }
@@ -176,7 +178,7 @@ pub(crate) fn progress_ratio(p: &texcraft_engine::Progress) -> Option<f32> {
 }
 
 fn seconds(s: f64) -> String {
-    format!(" · {s:.1} s")
+    format!(" · {}", crate::i18n::measure(s, 1, "{n} s"))
 }
 
 /// Announces `text` through a live region when it changes (AGENTS.md rule 21).

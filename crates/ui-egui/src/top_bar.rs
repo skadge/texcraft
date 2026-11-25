@@ -303,7 +303,7 @@ pub(crate) fn item_response(
     }
     let response = ui.add_enabled(enabled.is_ok(), button.frame_when_inactive(false));
     match enabled {
-        Err(reason) => response.on_disabled_hover_text(reason),
+        Err(reason) => response.on_disabled_hover_text(crate::i18n::msg(&reason)),
         Ok(()) => response,
     }
 }
@@ -368,7 +368,7 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
     ui.set_min_width(220.0);
     let mut chosen = None;
     for spec in cmd::all().iter().filter(|c| c.menu.first() == Some(&menu)) {
-        let mut label = crate::forge::label(app, spec.id).unwrap_or_else(|| crate::i18n::t(spec.label)).to_owned();
+        let mut label = crate::forge::label(app, spec.id).unwrap_or_else(|| crate::i18n::tid(spec.id, spec.label)).to_owned();
         if spec.id == "build.auto" && app.session.settings.auto_compile {
             label = format!("{label} ✓");
         }
@@ -396,7 +396,7 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
         }
         last_group = c.group;
         let enabled = crate::fields::menu_enabled(app, ui.ctx(), c.id);
-        if item(ui, &t, icon_for(c.id), crate::i18n::t(c.label), app.keys.shortcut_text(c.id), enabled) {
+        if item(ui, &t, icon_for(c.id), crate::i18n::tid(c.id, c.label), app.keys.shortcut_text(c.id), enabled) {
             chosen = Some(c.id);
         }
     }
@@ -489,12 +489,12 @@ fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
         let mut chosen = None;
         recent_menu(app, ui);
         ui.separator();
-        if item(ui, &t, icon_for("project.rename"), crate::i18n::t("Rename Project"), None, Ok(())) {
+        if item(ui, &t, icon_for("project.rename"), tl!("Rename Project"), None, Ok(())) {
             chosen = Some("project.rename");
         }
         for id in ["project.save", "project.save_as", "build.save_pdf", "project.open", "project.new"] {
             if let Some(spec) = cmd::find(id)
-                && item(ui, &t, icon_for(id), crate::i18n::t(spec.label), app.keys.shortcut_text(id), (spec.enabled)(&app.session))
+                && item(ui, &t, icon_for(id), crate::i18n::tid(spec.id, spec.label), app.keys.shortcut_text(id), (spec.enabled)(&app.session))
             {
                 chosen = Some(id);
             }

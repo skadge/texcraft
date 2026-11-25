@@ -123,7 +123,7 @@ pub(crate) fn saved(app: &mut App, done: &Value) {
     let said = say(service, tl!("Saved the project to {project} on GitLab."), tl!("Saved the project to {project} on GitHub."))
         .replace("{project}", &project);
     app.view.status = Some(match &push_error {
-        Some(e) => (format!("{said} {}", tl!("The push did not work: {why}").replace("{why}", e)), true),
+        Some(e) => (format!("{said} {}", tl!("The push did not work: {why}").replace("{why}", &crate::i18n::msg(e))), true),
         None => (said, false),
     });
     app.remember_project();
@@ -303,7 +303,7 @@ fn save_form(
     if let Some(why) = &bad_name
         && !form.name.trim().is_empty()
     {
-        ui.label(RichText::new(why).font(t.small()).color(t.error));
+        ui.label(RichText::new(crate::i18n::msg(why)).font(t.small()).color(t.error));
     }
     ui.add_space(t.unit * 2.0);
     let group = tl!("Who can see it");
@@ -345,7 +345,7 @@ fn save_form(
     }
     // Why the last try did not work, or what is going on: a live region says it as it changes.
     let (text, color) = match (&form.error, form.running) {
-        (Some(e), _) => (e.clone(), t.error),
+        (Some(e), _) => (crate::i18n::msg(e), t.error),
         (None, true) => (
             if browser { tl!("Making the repository and committing the files…") } else { tl!("Making the repository and pushing the history…") }
                 .to_owned(),
@@ -375,7 +375,7 @@ fn owner_choice(ui: &mut egui::Ui, t: &Tokens, form: &mut SaveForm) {
         ui.label(RichText::new(say(form.service, tl!("Owner (you, or a group)"), tl!("Owner (you, or an organisation)"))).color(t.text_muted));
     let Some(account) = form.owners.first().cloned() else {
         let text = match &form.owners_error {
-            Some(e) => e.clone(),
+            Some(e) => crate::i18n::msg(e),
             None => tl!("You: sign in, or give a token, to choose another owner.").to_owned(),
         };
         let color = if form.owners_error.is_some() { t.error } else { t.text_muted };
@@ -406,7 +406,7 @@ fn done_form(ui: &mut egui::Ui, t: &Tokens, form: &mut SaveForm, open_page: &mut
         Some(e) => {
             tl!("{project} was made and set as the folder's remote (origin), but the push did not work: {why} Push again from the History panel.")
                 .replace("{project}", &saved.project)
-                .replace("{why}", e)
+                .replace("{why}", &crate::i18n::msg(e))
         }
     };
     let color = if saved.push_error.is_some() { t.error } else { t.text };

@@ -3,8 +3,11 @@
 //! - `layers`: each workspace crate may depend only on crates of a lower layer, and only the
 //!   `ui-egui` layer and the apps may use a UI toolkit.
 //! - `wasm`: the web app and the crates it uses build for wasm32-unknown-unknown.
-//! - `ci`: fmt, clippy, tests, layers, wasm, guide-check, in that order.
+//! - `ci`: fmt, clippy, tests, layers, the i18n lint, wasm, guide-check, in that order.
 //! - `guide-check`: the user guide's pages, links and anchors (`docs/guide/`; see `guide.rs`).
+//! - `i18n-report [OUT]`: the English interface strings and what each catalog in `i18n/` lacks
+//!   (`i18n.rs`); with `OUT`, the strings are written there for translators.
+//! - `i18n-lint`: no English literal reaches a widget without `tl!` (part of `ci`).
 //! - `icons`: every app icon file, from the SVG master in `assets/app-icon/`.
 //! - `retex-wasm`: retex's engine for the browser, from the release `Cargo.lock` pins (needs
 //!   nightly and wasi-sdk; see `retex_wasm.rs`).
@@ -17,6 +20,7 @@
 //!   post-build hook, on its staging folder; see `web_version.rs`).
 
 mod guide;
+mod i18n;
 mod icons;
 mod retex_wasm;
 mod tree_site;
@@ -60,6 +64,8 @@ fn main() -> ExitCode {
         "ci" => ci(),
         "guide-check" => guide::check(),
         "icons" => icons::run(),
+        "i18n-report" => i18n::report(&root(), std::env::args().nth(2).as_deref().map(std::path::Path::new)),
+        "i18n-lint" => i18n::lint(&root()),
         "retex-wasm" => std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .ok_or_else(|| "xtask is not in a workspace".to_owned())
@@ -78,7 +84,7 @@ fn main() -> ExitCode {
             None => Err("usage: cargo xtask version-worker DIR (a Trunk build's folder; Trunk's hooks set TRUNK_STAGING_DIR)".to_owned()),
         },
         _ => Err(
-            "usage: cargo xtask layers | wasm | ci | guide-check | icons | retex-wasm | templates [ID] | templates-site OUT | tree-site OUT | version-worker [DIR]"
+            "usage: cargo xtask layers | wasm | ci | guide-check | icons | i18n-report [OUT] | i18n-lint | retex-wasm | templates [ID] | templates-site OUT | tree-site OUT | version-worker [DIR]"
                 .to_owned(),
         ),
     };
@@ -89,6 +95,11 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// The workspace's root.
+fn root() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
 fn run(program: &str, args: &[&str]) -> Result<(), String> {
@@ -146,6 +157,7 @@ fn ci() -> Result<(), String> {
     run(cargo, &["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"])?;
     run(cargo, &["test", "--workspace"])?;
     layers()?;
+    i18n::lint(&root())?;
     wasm()?;
     guide::check()
 }

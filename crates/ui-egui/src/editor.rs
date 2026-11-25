@@ -224,7 +224,7 @@ fn vim_line(app: &mut App, ui: &mut egui::Ui) {
     }
     let (left, color) = match (vim.command_line(), &app.editor.vim_message) {
         (Some(line), _) => (format!("{line}\u{258F}"), t.text),
-        (None, Some((m, error, _))) => (m.clone(), if *error { t.error } else { t.text }),
+        (None, Some((m, error, _))) => (crate::i18n::msg(m), if *error { t.error } else { t.text }),
         (None, None) => (String::new(), t.text),
     };
     let font = t.code_font();
@@ -568,27 +568,35 @@ const GROUPS: [(f32, &[(&str, &str)]); 3] = [
     (
         100.0,
         &[
-            ("Section", "edit.section"),
-            ("Subsection", "edit.subsection"),
-            ("Subsubsection", "edit.subsubsection"),
-            ("Paragraph", "edit.paragraph"),
-            ("Bold", "edit.bold"),
-            ("Italic", "edit.italic"),
+            (tn!("Section"), "edit.section"),
+            (tn!("Subsection"), "edit.subsection"),
+            (tn!("Subsubsection"), "edit.subsubsection"),
+            (tn!("Paragraph"), "edit.paragraph"),
+            (tn!("Bold"), "edit.bold"),
+            (tn!("Italic"), "edit.italic"),
         ],
     ),
     (
         160.0,
         &[
-            ("Inline formula", "edit.math_inline"),
-            ("Displayed formula", "edit.math_display"),
-            ("Numbered equation", "edit.equation"),
-            ("Symbols", "edit.symbols"),
-            ("Cross-reference", "edit.ref"),
-            ("Citation", "edit.cite"),
-            ("Link", "edit.link"),
+            (tn!("Inline formula"), "edit.math_inline"),
+            (tn!("Displayed formula"), "edit.math_display"),
+            (tn!("Numbered equation"), "edit.equation"),
+            (tn!("Symbols"), "edit.symbols"),
+            (tn!("Cross-reference"), "edit.ref"),
+            (tn!("Citation"), "edit.cite"),
+            (tn!("Link"), "edit.link"),
         ],
     ),
-    (130.0, &[("Figure", "edit.figure"), ("Table", "edit.table"), ("Bulleted list", "edit.itemize"), ("Numbered list", "edit.enumerate")]),
+    (
+        130.0,
+        &[
+            (tn!("Figure"), "edit.figure"),
+            (tn!("Table"), "edit.table"),
+            (tn!("Bulleted list"), "edit.itemize"),
+            (tn!("Numbered list"), "edit.enumerate"),
+        ],
+    ),
 ];
 
 /// A toolbar button that runs `id`.

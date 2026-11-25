@@ -1504,7 +1504,7 @@ fn picture(ui: &egui::Ui, cx: &mut Cx<'_>, name: &str) -> Picture {
             let texture = ui.ctx().load_texture(format!("formatted:{}", path.as_str()), pixels, egui::TextureOptions::LINEAR);
             (texture, vec2(f.size[0].max(1.0), f.size[1].max(1.0)))
         })
-        .map_err(|e| tl!("{name} cannot be shown: {e}").replace("{name}", name).replace("{e}", &e.to_string()));
+        .map_err(|e| tl!("{name} cannot be shown: {e}").replace("{name}", name).replace("{e}", &crate::i18n::msg(&e.to_string())));
     cx.images.insert(key, decoded.clone());
     decoded
 }

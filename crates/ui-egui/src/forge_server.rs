@@ -101,7 +101,7 @@ pub(crate) fn propose(app: &mut App, query: &str) -> bool {
     let proposal = match proposal {
         Ok(p) => p,
         Err(e) => {
-            let why = tl!("This link proposes a server TeXCraft cannot add: {error}").replace("{error}", &e.to_string());
+            let why = tl!("This link proposes a server TeXCraft cannot add: {error}").replace("{error}", &crate::i18n::msg(&e.to_string()));
             app.view.status = Some((why, true));
             return true;
         }
@@ -245,7 +245,7 @@ fn server_form(ui: &mut egui::Ui, t: &Tokens, form: &mut ServerForm, open_page: 
     let error = |ui: &mut egui::Ui, error: &Option<String>| {
         if let Some(e) = error {
             ui.add_space(t.unit * 2.0);
-            ui.label(RichText::new(e).color(t.error));
+            ui.label(RichText::new(crate::i18n::msg(e)).color(t.error));
         }
     };
     match &form.step {

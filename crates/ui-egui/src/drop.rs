@@ -182,7 +182,7 @@ impl App {
             (_, failed) => {
                 let (mut said, error) = tally.said();
                 if let Some((why, _)) = failed {
-                    said = format!("{said} {why}");
+                    said = format!("{said} {}", crate::i18n::msg(&why));
                 }
                 self.view.status = Some((said, error));
             }

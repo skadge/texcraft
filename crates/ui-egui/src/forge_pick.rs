@@ -412,7 +412,7 @@ fn visibility_word(v: &str) -> &'static str {
 fn details(s: &Suggestion, now: chrono::DateTime<chrono::Utc>) -> String {
     let mut parts = vec![visibility_word(&s.visibility).to_owned()];
     if let Some(t) = s.activity {
-        parts.push(tl!("active {when}").replace("{when}", &crate::history::relative(t, now)));
+        parts.push(tl!("active {when}").replace("{when}", &crate::i18n::ago(t, now)));
     }
     if let Some(b) = &s.default_branch {
         parts.push(tl!("default branch {branch}").replace("{branch}", b));
@@ -691,7 +691,11 @@ fn branch_part(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm) -> Option<egu
         field = Some(ui.add_sized(egui::vec2(ui.available_width(), control_height), edit).labelled_by(label.id));
         let note = match &form.picker.branches {
             Branches::Failed(e) => {
-                format!("{} {e}", tl!("The branches could not be listed: type the branch, or leave it empty for the default one."))
+                format!(
+                    "{} {}",
+                    tl!("The branches could not be listed: type the branch, or leave it empty for the default one."),
+                    crate::i18n::msg(e)
+                )
             }
             Branches::Loading => tl!("Listing the branches…").to_owned(),
             _ => String::new(),

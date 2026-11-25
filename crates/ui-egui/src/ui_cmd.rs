@@ -157,7 +157,7 @@ pub const RETEX_MANUAL: &str = "https://severin-lemaignan.gitlab.io/retex/retex-
 /// The menus of the menu bar, in order.
 /// The menus of the menu bar, in order. Compiling and its options are on the Compile button, the
 /// view's switches on their buttons: the bar keeps what has no button of its own, or is text work.
-pub const MENUS: &[&str] = &["File", "Edit", "Insert", "Help"];
+pub const MENUS: &[&str] = &[tn!("File"), tn!("Edit"), tn!("Insert"), tn!("Help")];
 
 /// Whether view command `id` can run now, or why not (its menu entry is disabled with the reason).
 pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {

@@ -168,7 +168,12 @@ fn answer(ui: &mut egui::Ui, t: &Tokens, a: &Answered, goto: &mut Option<(String
             });
         }
         Answered::Failed { error, .. } => {
-            ui.add(egui::Label::new(RichText::new(tl!("No answer: {error}").replace("{error}", error)).font(t.small()).color(t.error)).wrap());
+            ui.add(
+                egui::Label::new(
+                    RichText::new(tl!("No answer: {error}").replace("{error}", &crate::i18n::msg(error))).font(t.small()).color(t.error),
+                )
+                .wrap(),
+            );
         }
         Answered::Cancelled { .. } => {
             ui.label(RichText::new(tl!("Cancelled.")).font(t.small()).color(t.text_muted));
