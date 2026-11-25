@@ -1,0 +1,18 @@
+[package]
+name = "texcraft-history"
+description = "A project's history as a git repository: made on the first save, a commit per save, the versions of its files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+
+# Git on disk (desktop): no network, no work-tree status; trees, commits, refs, the index and .gitignore rules only.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+gix = { version = "0.91", default-features = false, features = ["sha1", "index", "excludes"] }

@@ -9,6 +9,7 @@ mod file_access;
 mod files;
 mod find;
 mod folders;
+mod history;
 mod image;
 mod language;
 mod library;

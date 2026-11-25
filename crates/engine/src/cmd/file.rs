@@ -370,13 +370,18 @@ fn open(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn close(s: &mut Session, p: &Value) -> Result<Value> {
     let path = path_param(p, "path")?;
-    let at = s.open.iter().position(|o| *o == path);
-    s.open.retain(|o| *o != path);
-    if s.current.as_ref() == Some(&path) {
+    close_tab(s, &path);
+    Ok(json!({}))
+}
+
+/// Closes `path`'s tab, if open; the next one is shown when it was.
+pub(super) fn close_tab(s: &mut Session, path: &ProjectPath) {
+    let at = s.open.iter().position(|o| o == path);
+    s.open.retain(|o| o != path);
+    if s.current.as_ref() == Some(path) {
         let next = at.map(|i| i.min(s.open.len().saturating_sub(1)));
         s.current = next.and_then(|i| s.open.get(i).cloned());
     }
-    Ok(json!({}))
 }
 
 fn read(s: &mut Session, p: &Value) -> Result<Value> {

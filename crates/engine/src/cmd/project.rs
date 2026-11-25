@@ -123,7 +123,8 @@ fn open(s: &mut Session, params: &Value) -> Result<Value> {
     };
     let files = project.len();
     s.replace_project(project, Some(dir));
-    Ok(json!({"files": files, "main": s.project.main().map(|p| p.to_string())}))
+    super::history::find(s);
+    Ok(json!({"files": files, "main": s.project.main().map(|p| p.to_string()), "history": super::history::status_of(s)}))
 }
 
 fn save(s: &mut Session, _: &Value) -> Result<Value> {
@@ -150,6 +151,7 @@ fn save_as(s: &mut Session, params: &Value) -> Result<Value> {
 /// project's folder.
 fn save_to(s: &mut Session, dir: &Path) -> Result<Value> {
     let now = s.now().timestamp_millis();
+    let moved = s.dir.as_deref() != Some(dir);
     match &mut s.library {
         Some(library) => {
             let review = s.review.files(&s.project).map_err(|e| format!("The review could not be saved: {e}"))?;
@@ -159,7 +161,12 @@ fn save_to(s: &mut Session, dir: &Path) -> Result<Value> {
     }
     s.dir = Some(dir.to_path_buf());
     s.dirty = false;
-    Ok(json!({"path": dir.display().to_string()}))
+    let mut result = json!({"path": dir.display().to_string()});
+    if s.library.is_none() {
+        // The project is saved either way; the history says what became of the commit.
+        result["history"] = super::history::after_save(s, moved);
+    }
+    Ok(result)
 }
 
 /// Renames the open project: its entry in the library, or its folder on disk (in the same
@@ -187,6 +194,10 @@ fn rename(s: &mut Session, params: &Value) -> Result<Value> {
         }
     };
     s.dir = Some(new.clone());
+    if s.library.is_none() {
+        // The repository moved with the folder (or was above it).
+        super::history::find(s);
+    }
     Ok(json!({"path": new.display().to_string(), "previous": old.display().to_string()}))
 }
 
