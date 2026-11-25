@@ -30,6 +30,8 @@ pub(crate) struct OpenForm {
     /// The token field instead of signing in.
     pub use_token: bool,
     pub focus: bool,
+    /// The project's suggestions and the branch list.
+    pub picker: crate::forge_pick::Picker,
 }
 
 /// The Commit dialog: the changes it lists, the files in conflict with the branch, the
@@ -377,7 +379,15 @@ pub(crate) fn ask_open(app: &mut App) {
 
 /// Opens the Open from GitLab or GitHub dialog on `address` (a link's project), for `service`.
 pub(crate) fn ask_open_at(app: &mut App, service: Service, address: &str) {
-    let mut form = OpenForm { service, address: address.to_owned(), branch: String::new(), token: String::new(), use_token: false, focus: true };
+    let mut form = OpenForm {
+        service,
+        address: address.to_owned(),
+        branch: String::new(),
+        token: String::new(),
+        use_token: false,
+        focus: true,
+        picker: crate::forge_pick::Picker::new(),
+    };
     refresh_use_token(app, &mut form);
     app.view.dialog = Some(Dialog::ForgeOpen(form));
 }
@@ -473,6 +483,7 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
     };
     let view = sign_in_view(app, service, &instance);
     let unknown = app.session.forge_sign_in_unavailable_at(service, &instance) == Some(SignInUnavailable::UnknownServer);
+    crate::forge_pick::tick(app, ctx);
     let mut action = None;
     let modal = egui::Modal::new(egui::Id::unique("texcraft-forge-dialog")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
         ui.set_width(460.0);
@@ -616,6 +627,7 @@ fn open_form(
     unknown: bool,
     action: &mut Option<SignInAction>,
 ) -> Outcome {
+    let now = ui.input(|i| i.time);
     title(ui, t, tl!("Open from GitLab or GitHub"));
     ui.add_space(t.unit * 2.0);
     // The service, as two radio buttons named by the group's label (AGENTS.md rule 21).
@@ -627,26 +639,36 @@ fn open_form(
             let r = ui.radio(on, service.name());
             let name = format!("{}: {group}", service.name());
             r.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, true, on, &name));
-            if r.clicked() {
+            if r.clicked() && form.service != service {
                 form.service = service;
+                crate::forge_pick::service_changed(form, now);
             }
         }
     });
-    let example = say(form.service, "https://gitlab.com/group/project", "https://github.com/owner/repository");
-    let address = field(ui, t, tl!("Project address"), &mut form.address, example, false);
+    let address = crate::forge_pick::project_field(ui, t, form);
     if std::mem::take(&mut form.focus) {
         address.request_focus();
     }
     if address.changed() {
-        // An address on gitlab.com or github.com says its service.
-        if let Ok(known) = texcraft_engine::forge::Address::parse(&form.address)
+        // An address on gitlab.com or github.com says its service; a bare path (typed to find
+        // a project) does not, though it would read as one on gitlab.com.
+        let names_host = {
+            let text = form.address.trim();
+            text.contains("://") || text.starts_with("git@") || text.split('/').next().is_some_and(|first| first.contains('.'))
+        };
+        if names_host
+            && let Ok(known) = texcraft_engine::forge::Address::parse(&form.address)
             && matches!(known.instance.as_str(), texcraft_engine::forge::GITHUB_COM | texcraft_engine::forge::GITLAB_COM)
+            && known.service != form.service
         {
             form.service = known.service;
+            let open = form.picker.open;
+            crate::forge_pick::service_changed(form, now);
+            form.picker.open = open;
         }
     }
-    let branch = field(ui, t, tl!("Branch (the default branch if left empty)"), &mut form.branch, "main", false);
-    let mut responses = vec![address, branch];
+    let mut responses = vec![address];
+    responses.extend(crate::forge_pick::branch_field(ui, t, form));
     let host = texcraft_engine::forge::servers::host_of(&view.instance).to_owned();
     // A server TeXCraft has no application on can be added from here (not GitHub in the browser,
     // where it would need a token still).
@@ -662,11 +684,19 @@ fn open_form(
             *action = Some(SignInAction::AddServer { service: form.service, address: view.instance.clone() });
         }
     }
+    let was_token = form.use_token;
     let signed_in = sign_in_or_token(ui, t, view, &mut form.use_token, !unknown, action);
+    let mut key_changed = was_token != form.use_token;
     if form.use_token {
-        responses.push(field(ui, t, tl!("Personal access token"), &mut form.token, token_hint(form.service), true));
+        let token = field(ui, t, tl!("Personal access token"), &mut form.token, token_hint(form.service), true);
+        key_changed |= token.changed();
+        responses.push(token);
         ui.add_space(t.unit);
         token_note(ui, t, browser, form.service);
+    }
+    if key_changed {
+        // Another key: the suggestions and the branches looked up again with it.
+        crate::forge_pick::key_changed(form, now);
     }
     let enter = responses.iter().any(|r| r.lost_focus()) && ui.input(|i| i.key_pressed(egui::Key::Enter));
     let ready = !form.address.trim().is_empty() && (signed_in || (form.use_token && !form.token.trim().is_empty()));
@@ -872,7 +902,8 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
         app.forge_check.servers_kept = revision;
         app.prefs_changed = true;
     }
-    if app.session.forge_busy().is_some() || app.session.forge_auth_busy() {
+    crate::forge_pick::poll(app);
+    if app.session.forge_busy().is_some() || app.session.forge_auth_busy() || app.session.forge_lookup_busy() {
         ctx.request_repaint_after(std::time::Duration::from_millis(200));
     }
     // GitHub's code came: its page is opened once, where the user enters it.

@@ -4,6 +4,7 @@ mod address;
 mod commit;
 mod errors;
 mod github;
+mod listing;
 mod merge;
 mod oauth;
 mod open;

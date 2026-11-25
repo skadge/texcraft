@@ -6490,6 +6490,7 @@ name = "texcraft-forge"
 version = "0.11.0"
 dependencies = [
  "base64 0.22.1",
+ "chrono",
  "getrandom 0.4.3",
  "js-sys",
  "log",

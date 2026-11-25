@@ -340,6 +340,61 @@ Limits: a GitLab served under a path (`https://example.org/gitlab`) is not suppo
 is the scheme and host); in the browser, a server that does not allow the page's origin (CORS)
 cannot be used, and GitHub Enterprise Server keeps the token there as github.com does.
 
+### Choosing a project and a branch (done)
+
+Once signed in (or with a token typed), the Open dialog finds the project and its branch instead
+of asking for them typed out.
+
+- **Project suggestions.** The project field is an editable combo box. As the user types, once
+  typing pauses for a quarter of a second, the projects the account reaches whose path holds the
+  text are looked up in the background and listed in a popup under the field (so nothing in the
+  dialog moves as they come): each with its path, whether it is Private, Internal or Public (in
+  words, not by colour), when it was last active ("active 3 days ago") and its default branch.
+  Down opens the list and moves through it, Up moves back, Enter chooses, Escape closes the list
+  and keeps the text (a second Escape closes the dialog); the keyboard stays in the field, whose
+  active descendant is the option chosen; the number of suggestions and the option chosen
+  ("owner/paper, 2 of 5") are announced through a live region. A click chooses too. Choosing puts
+  the project's address in the field and its default branch in the branch. A full address pasted
+  works as before, and a host typed first (`git.example.org/lab/pa`) looks up on that server;
+  otherwise the server is the public one, or a Server drop-down offers the servers added for the
+  service. With neither a sign-in nor a token, the list says "Sign in to see your projects, or use
+  a personal access token." and nothing is asked (rule 15).
+  - GitHub: `GET /user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member`,
+    page after page up to 500 repositories, read once and kept five minutes in the session, then
+    filtered here as the user types (names that start with the text first). When nothing listed
+    matches and the text has a `/` or three characters, `GET /search/repositories?q=<text> in:name`
+    (or `<name> in:name user:<owner>` for `owner/name`) finds the others.
+  - GitLab: `GET /api/v4/projects?membership=true&order_by=last_activity_at&per_page=50&search=<text>`
+    (with `search_namespaces=true` for `group/name`). The full answer, not `simple=true`, which
+    leaves out the visibility.
+  - Only the last lookup typed is answered: one asked while another runs waits for it and replaces
+    any other waiting, so typing fast sends two requests, not one per key.
+- **Branch list.** Once a project is chosen, or the field is left with an address that reads as
+  one, its branches are listed (GitHub `GET /repos/{owner}/{repo}/branches?per_page=100`, GitLab
+  `GET /api/v4/projects/:id/repository/branches?per_page=100`, page after page up to 500; the
+  default branch from the project) in a drop-down named Branch, the default one chosen and marked
+  "(default)", protected ones "(protected)", with "Another branch…" to type one. While they load,
+  and when they cannot be listed (with why: not found or no access, the rate limit and when to try
+  again, the network), the branch is typed by hand, empty for the default one. The line under the
+  branch is always there, so the dialog does not move under the pointer when it changes.
+  The Commit dialog asks only for the name of a new branch, which no list offers.
+- **For agents**: `forge.projects {service?, instance?, query?, token?}` lists `projects` (path,
+  `web_url`, `visibility`, `private`, `default_branch`, `activity` in RFC 3339, `description`),
+  with `truncated` and `searched`; `forge.branches {service?, instance?, project, token?}` lists
+  `branches` (name, `protected`, `default`) with `default`. `project` is a path on the instance or
+  an address. Both work signed in or with a token (kept for the session once it worked, as
+  `forge.open` keeps it) and never return the token; with `background` they return at once and
+  `Session::poll_forge_lookup` gives the outcome.
+
+How it is built: `texcraft_forge::listing` (`Lister`: the user's repositories, the search, the
+branches; `matching`, `find`), the engine's `cmd/forge_pick.rs` (the two commands, the listing
+kept, the lookups' slots), the interface's `forge_pick.rs` (the field, its popup, the branch
+drop-down).
+
+Limits: GitHub lists at most 500 repositories and a search 50; GitLab's search answers 50 projects;
+branches stop at 500 (said, with "Another branch…" to type one). A fine-grained GitHub token lists
+only the repositories it was given.
+
 ## Step 5: folders and more
 
 - Push and pull for project folders (real git, on the desktop).

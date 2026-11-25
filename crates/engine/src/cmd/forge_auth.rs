@@ -268,7 +268,7 @@ fn remove_server_schema() -> Value {
     }, "required": ["address"], "additionalProperties": false})
 }
 
-fn service(p: &Value) -> Result<Service> {
+pub(super) fn service(p: &Value) -> Result<Service> {
     match p.get("service").and_then(Value::as_str) {
         Some(s) => Service::parse(s).ok_or_else(|| format!("service: say \"gitlab\" or \"github\", not {s:?}.")),
         None => Ok(Service::GitLab),
@@ -283,7 +283,7 @@ fn signing_in(s: &Session) -> Result<()> {
 }
 
 /// The instance `p` names (`instance`), or `service`'s public one.
-fn instance_of(p: &Value, service: Service) -> Result<String> {
+pub(super) fn instance_of(p: &Value, service: Service) -> Result<String> {
     match p.get("instance").and_then(Value::as_str).map(str::trim).filter(|i| !i.is_empty()) {
         Some(i) => match servers::parse_instance(i) {
             Ok(instance) => Ok(instance),

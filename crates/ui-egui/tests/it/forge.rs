@@ -29,11 +29,28 @@ pub(crate) fn harness(fake: &FakeGitLab) -> Harness<'static, App> {
     h
 }
 
-/// Types `text` into the field labelled `label`, focused first.
+/// Types `text` into the field labelled `label`, focused first, and waits for the dialog's
+/// lookups (the project's suggestions and branches) it starts.
 fn type_into(h: &mut Harness<'_, App>, label: &str, text: &str) {
     h.get_by_label(label).click();
     h.run();
     h.get_by_label(label).type_text(text);
+    quiet(h);
+}
+
+/// Runs frames until typing has paused long enough for the lookups to start and they have
+/// ended: what the dialog shows has stopped moving.
+pub(crate) fn quiet(h: &mut Harness<'_, App>) {
+    for _ in 0..60 {
+        h.step();
+    }
+    for _ in 0..500 {
+        h.step();
+        if !h.state().session().forge_lookup_busy() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     h.run();
 }
 
