@@ -271,6 +271,8 @@ pub(crate) struct SourceEditor {
     /// The next words a model suggests (AI3), drawn in grey after the caret at this position:
     /// Tab takes them, Escape dismisses them. The editor pane sets them every frame.
     pub ghost: Option<(usize, String)>,
+    /// The selection last put in the primary selection (X11, Wayland), so it goes once it settles.
+    primary_sent: Option<(usize, usize)>,
 }
 
 impl Default for SourceEditor {
@@ -311,6 +313,7 @@ impl Default for SourceEditor {
             hidden: Vec::new(),
             announce: None,
             ghost: None,
+            primary_sent: None,
         }
     }
 }
@@ -815,6 +818,7 @@ impl SourceEditor {
                 self.apply(edit, now, indent, &ctx, &mut out);
             }
         }
+        self.middle_click_paste(&ctx, id);
         out.changed = self.doc.buffer.version() != version;
         // Folds follow the edits; a jump or a motion into one unfolds it.
         self.resolve_folds();
@@ -883,6 +887,9 @@ impl SourceEditor {
         if self.caret_screen.is_none() {
             self.completion = None;
         }
+        if focused {
+            self.offer_primary(&ctx);
+        }
         self.paint_completion(&ctx, t, id);
         self.paint_popup(&ctx, t, id);
         if let Some((_, text)) = self.hover.as_ref().filter(|(_, text)| !text.is_empty() && self.popup.is_none())
@@ -948,6 +955,50 @@ impl SourceEditor {
     }
 
     // ----- Input -----
+
+    /// A middle click on the text pastes the primary selection there (X11, Wayland: the window
+    /// sends it with the click's place). Before this frame's text is drawn, so the place is read
+    /// on last frame's, which the pointer saw; a click on a window over the text is not ours.
+    fn middle_click_paste(&mut self, ctx: &egui::Context, id: egui::Id) {
+        let Some((origin, clip)) = self.shown else { return };
+        let Some(response) = ctx.read_response(id) else { return };
+        let pasted = ctx.input(|i| {
+            i.events.iter().find_map(|e| match e {
+                egui::Event::MiddleClickPaste { pos, text } => Some((*pos, text.clone())),
+                _ => None,
+            })
+        });
+        let Some((p, text)) = pasted else { return };
+        if text.is_empty() || !response.rect.contains(p) || !clip.contains(p) || ctx.layer_id_at(p) != Some(response.layer_id) {
+            return;
+        }
+        let at = self.pos_at(p - origin);
+        // Its own undo step, as a paste is.
+        self.doc.buffer.seal();
+        self.replace_range(at, at, &text, EditKind::Other);
+        self.doc.buffer.seal();
+        self.completion = None;
+        self.vim_sync();
+        ctx.memory_mut(|m| m.request_focus(id));
+    }
+
+    /// Once the selection settles (no button held), its text becomes the primary selection, to
+    /// paste with a middle click here or in another program (X11, Wayland; elsewhere the window
+    /// ignores it).
+    fn offer_primary(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| i.pointer.any_down()) {
+            return;
+        }
+        let r = self.doc.selection.primary();
+        let selected = (!r.is_empty()).then(|| (r.start(), r.end()));
+        if selected == self.primary_sent {
+            return;
+        }
+        self.primary_sent = selected;
+        if let Some((start, end)) = selected {
+            ctx.send_cmd(egui::OutputCommand::TextSelectionSettled(self.doc.buffer.slice(start, end)));
+        }
+    }
 
     fn apply(&mut self, edit: Edit, now: f64, indent: &str, ctx: &egui::Context, out: &mut Output) {
         match edit {

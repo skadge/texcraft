@@ -14,7 +14,9 @@ workspace = true
 texcraft-engine = { workspace = true, features = ["retex", "templates-download"] }
 texcraft-compile = { workspace = true, features = ["retex"] }
 texcraft-ui-egui = { workspace = true }
-eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11", "links"] }
+# `clipboard`: the system clipboard, and on X11 and Wayland the primary selection (selecting copies,
+# middle click pastes); without it, copy and paste stay inside the window.
+eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11", "links", "clipboard"] }
 log = { workspace = true }
 craft-settings = { workspace = true }
 craft-dialogs = { workspace = true }

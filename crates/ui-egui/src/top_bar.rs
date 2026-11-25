@@ -394,7 +394,8 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
             ui.separator();
         }
         last_group = c.group;
-        if item(ui, &t, icon_for(c.id), crate::i18n::t(c.label), app.keys.shortcut_text(c.id), ui_cmd::enabled(app, c.id)) {
+        let enabled = crate::fields::menu_enabled(app, ui.ctx(), c.id);
+        if item(ui, &t, icon_for(c.id), crate::i18n::t(c.label), app.keys.shortcut_text(c.id), enabled) {
             chosen = Some(c.id);
         }
     }
@@ -404,7 +405,9 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
     }
     if let Some(id) = chosen {
         ui.close();
-        ui_cmd::run(app, id);
+        if !crate::fields::menu_command(app, id) {
+            ui_cmd::run(app, id);
+        }
     }
 }
 

@@ -54,6 +54,8 @@ pub(crate) struct Editing {
     /// The view asked for the keyboard itself (its caret is where it wants it).
     ours: bool,
     was_focused: bool,
+    /// The selection last put in the primary selection (X11, Wayland).
+    primary_sent: Option<(Pos, Pos)>,
 }
 
 /// The caret's source byte.
@@ -179,6 +181,9 @@ pub(crate) fn finish(
         return;
     };
     app.editor.formatted.editing.in_cell = focused && lines.get(h.line).is_some_and(|d| d.cell.is_some());
+    if focused {
+        offer_primary(app, &ctx, &f, (a, h));
+    }
     paint(app, &ctx, &f, painter, (a, h), focused);
     accessibility(ui, response, path, &f, (a, h));
 }
@@ -638,13 +643,8 @@ fn row_bounds(galley: &egui::Galley, at: usize) -> (usize, usize) {
 }
 
 /// Copies the selection as the text shown (Cut also deletes it).
-fn copy(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, cut: bool) {
-    let Some((a, h)) = selection(app, f) else { return };
-    let (lo, hi) = (a.min(h), a.max(h));
-    if lo == hi {
-        say(app, tl!("Select some text first."));
-        return;
-    }
+/// The text shown from `lo` to `hi`, its lines as paragraphs.
+fn shown_text(f: &Frame<'_>, lo: Pos, hi: Pos) -> String {
     let mut out = Vec::new();
     for i in lo.line..=hi.line {
         let chars = f.chars(i);
@@ -653,7 +653,34 @@ fn copy(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, cut: bool) {
         let piece: String = chars.get(from..to.max(from)).unwrap_or_default().iter().collect();
         out.push(piece.split_whitespace().collect::<Vec<_>>().join(" "));
     }
-    ctx.copy_text(out.join("\n\n"));
+    out.join("\n\n")
+}
+
+/// Once the selection settles (no button held), the text it shows becomes the primary selection,
+/// to paste with a middle click (X11, Wayland; elsewhere the window ignores it).
+fn offer_primary(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, (a, h): (Pos, Pos)) {
+    if ctx.input(|i| i.pointer.any_down()) {
+        return;
+    }
+    let selected = (a != h).then(|| (a.min(h), a.max(h)));
+    let e = &mut app.editor.formatted.editing;
+    if selected == e.primary_sent {
+        return;
+    }
+    e.primary_sent = selected;
+    if let Some((lo, hi)) = selected {
+        ctx.send_cmd(egui::OutputCommand::TextSelectionSettled(shown_text(f, lo, hi)));
+    }
+}
+
+fn copy(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, cut: bool) {
+    let Some((a, h)) = selection(app, f) else { return };
+    let (lo, hi) = (a.min(h), a.max(h));
+    if lo == hi {
+        say(app, tl!("Select some text first."));
+        return;
+    }
+    ctx.copy_text(shown_text(f, lo, hi));
     if cut {
         replace(app, f, "", EditKind::Other);
     }
