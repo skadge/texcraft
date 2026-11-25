@@ -191,6 +191,10 @@ flatpak:
   extends: .package-rules
   variables:
     FLATPAK_ID: io.gitlab.severin_lemaignan.TeXCraft
+    # Only the Mesa GL extension: the runner's host has an NVIDIA GPU, and with its driver's
+    # extension installed too, flatpak (1.16.6) fails to set up the runtime ("Extension
+    # org.freedesktop.Platform.GL.default has invalid merge-dirs") in two runs out of three.
+    FLATPAK_GL_DRIVERS: default
     MANIFEST: packaging/flatpak/io.gitlab.severin_lemaignan.TeXCraft.yml
   before_script:
     - apt-get update -qq
