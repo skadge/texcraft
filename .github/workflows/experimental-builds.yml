@@ -1,0 +1,122 @@
+# Experimental Windows and macOS builds of TeXCraft, on the GitHub mirror (skadge/texcraft).
+#
+# TeXCraft's CI is on gitlab.com (.gitlab-ci.yml) and builds the Linux packages there, on a
+# runner of its own. GitHub's hosted Windows and macOS runners are free for a public repository,
+# so the builds for those systems run here, on the release tags that GitLab's `mirror` job pushes,
+# and attach their files to the tag's GitHub release (made by GitLab's `github-release` job, or
+# here first if that job has not run yet: it then fills in the notes). Run by hand
+# (workflow_dispatch), the files stay workflow artifacts.
+#
+# A departure from the Craft rule that workflows call storytold/craft-common-actions: TeXCraft's
+# CI lives on GitLab, and these jobs only package what GitLab's CI does not build.
+#
+# Unsigned: Windows SmartScreen and macOS Gatekeeper warn on first start (see the release notes).
+
+name: experimental-builds
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # The interface faces, as GitLab's package jobs embed them (keep equal to .gitlab-ci.yml).
+  CRAFT_FONTS_REV: 26a79230872f9b2acd3dd68500677e294350ab94
+  CRAFT_FONTS_REQUIRED: "1"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: x86_64-windows
+          - os: macos-latest
+            name: aarch64-macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fonts
+        shell: bash
+        run: |
+          git init -q craft-fonts
+          git -C craft-fonts fetch -q --depth 1 https://github.com/storytold/craft-fonts "$CRAFT_FONTS_REV"
+          git -C craft-fonts checkout -q FETCH_HEAD
+          echo "CRAFT_FONTS_DIR=$GITHUB_WORKSPACE/craft-fonts" >> "$GITHUB_ENV"
+      - name: Rust (rust-toolchain.toml)
+        shell: bash
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        shell: bash
+        run: cargo build --locked --release -p texcraft -p texcraft-cli
+      - name: Package
+        shell: bash
+        run: |
+          set -eu
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ "$GITHUB_REF_TYPE" = tag ] || VERSION="$(git rev-parse --short HEAD)"
+          mkdir -p out
+          case "${{ matrix.os }}" in
+            windows-*)
+              DIR="TeXCraft-$VERSION-${{ matrix.name }}"
+              mkdir -p "$DIR"
+              cp target/release/texcraft.exe target/release/texcraft-cli.exe README.md CHANGELOG.md "$DIR"/
+              7z a -tzip "out/$DIR.zip" "$DIR" > /dev/null
+              ;;
+            macos-*)
+              APP="TeXCraft.app"
+              mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+              cp target/release/texcraft target/release/texcraft-cli "$APP/Contents/MacOS/"
+              ICONSET=texcraft.iconset
+              mkdir -p "$ICONSET"
+              for s in 16 32 128 256 512; do
+                sips -z $s $s assets/app-icon/texcraft-macos-512.png --out "$ICONSET/icon_${s}x${s}.png" > /dev/null
+                sips -z $((s*2)) $((s*2)) assets/app-icon/texcraft-1024.png --out "$ICONSET/icon_${s}x${s}@2x.png" > /dev/null
+              done
+              iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/texcraft.icns"
+              cat > "$APP/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleName</key><string>TeXCraft</string>
+            <key>CFBundleDisplayName</key><string>TeXCraft</string>
+            <key>CFBundleIdentifier</key><string>io.gitlab.severin_lemaignan.TeXCraft</string>
+            <key>CFBundleVersion</key><string>$VERSION</string>
+            <key>CFBundleShortVersionString</key><string>$VERSION</string>
+            <key>CFBundleExecutable</key><string>texcraft</string>
+            <key>CFBundleIconFile</key><string>texcraft</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          PLIST
+              # An ad-hoc signature: Apple Silicon runs no unsigned code at all.
+              codesign --force --deep --sign - "$APP"
+              ditto -c -k --keepParent "$APP" "out/TeXCraft-$VERSION-${{ matrix.name }}.zip"
+              ;;
+          esac
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TeXCraft-${{ matrix.name }}
+          path: out/*
+      - name: Attach to the release
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          TAG="$GITHUB_REF_NAME"
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            # GitLab's github-release job replaces these notes when it runs.
+            gh release create "$TAG" --verify-tag --title "TeXCraft ${TAG#v}" \
+              --notes "Release notes on GitLab: https://gitlab.com/severin-lemaignan/texcraft/-/releases/$TAG" || true
+          fi
+          gh release upload "$TAG" --clobber out/*
