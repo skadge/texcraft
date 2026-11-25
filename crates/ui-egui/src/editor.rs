@@ -389,6 +389,29 @@ pub(crate) fn edit(app: &mut App, id: &str) -> bool {
         }
         "edit.comment" => {
             crate::review::start(app);
+            // As after a Vim operator: the selection was used, Visual mode ends.
+            app.editor.source.end_visual();
+            return true;
+        }
+        "edit.cut" | "edit.copy" => {
+            let ctx = app.ctx.clone();
+            if !source.copy(&ctx, id == "edit.cut") {
+                app.view.status = Some((tl!("Select some text first.").to_owned(), false));
+            }
+            app.editor.focus = true;
+            return true;
+        }
+        "edit.paste" => {
+            if let Err(reason) = crate::ui_cmd::enabled(app, id) {
+                app.view.status = Some((reason, false));
+                return true;
+            }
+            // The window reads the clipboard and sends its text to the editor, which has the
+            // keyboard again by then.
+            let now = app.ctx.input(|i| i.time);
+            app.editor.source.ask_paste(now);
+            app.ctx.send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+            app.editor.focus = true;
             return true;
         }
         "edit.next_comment" | "edit.previous_comment" => {
@@ -747,6 +770,83 @@ fn markers(app: &mut App, path: &ProjectPath) -> Markers {
     out
 }
 
+/// The text's context menu, opened by a right-click or from the keyboard (Shift+F10, the Menu
+/// key, which give the menu's first entry the keyboard): the clipboard, Select All, and the
+/// commands on the selection or the caret's place. Each entry runs its Edit menu command and
+/// shows that command's shortcut.
+fn context_menu(app: &mut App, ui: &mut egui::Ui, r: &egui::Response) {
+    let t = app.tokens;
+    // Opened from the keyboard: whether its first entry is still to get the keyboard.
+    let by_key = r.id.with("menu-by-key");
+    let mut menu = egui::Popup::context_menu(r);
+    if r.has_focus()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10) || i.consume_key(egui::Modifiers::NONE, egui::Key::Menu))
+    {
+        ui.data_mut(|d| d.insert_temp(by_key, true));
+        menu = menu.open_memory(egui::SetOpenCommand::Bool(true));
+    }
+    let keyed = ui.data(|d| d.get_temp::<bool>(by_key));
+    if keyed.is_some() {
+        let source = &app.editor.source;
+        let at = source.screen_rect(source.caret()).map_or(r.rect.left_top(), |c| c.left_bottom());
+        menu = menu.at_position(at);
+    }
+    let mut entries = vec![
+        Some(("edit.cut", tl!("Cut"))),
+        Some(("edit.copy", tl!("Copy"))),
+        Some(("edit.paste", tl!("Paste"))),
+        Some(("edit.select_all", tl!("Select All"))),
+        None,
+    ];
+    if app.editor.source.selected().is_some() {
+        entries.push(Some(("edit.comment", tl!("Add a Comment"))));
+    }
+    if app.editor.source.on_problem() {
+        entries.push(Some(("edit.quick_fix", tl!("Quick Fix"))));
+    }
+    entries.push(Some(("view.show_in_pdf", tl!("Show in PDF"))));
+    let mut chosen = None;
+    let shown = menu.show(|ui| {
+        ui.set_min_width(220.0);
+        let mut focus = keyed == Some(true);
+        for entry in &entries {
+            let Some((id, label)) = *entry else {
+                ui.separator();
+                continue;
+            };
+            let enabled = crate::ui_cmd::enabled(app, id);
+            let can = enabled.is_ok();
+            let item = crate::top_bar::item_response(ui, &t, crate::top_bar::icon_for(id), label, app.keys.shortcut_text(id), enabled);
+            if focus && can {
+                item.request_focus();
+                focus = false;
+            }
+            if item.clicked() {
+                chosen = Some(id);
+            }
+        }
+        if chosen.is_some() {
+            ui.close();
+        }
+    });
+    if keyed == Some(true) {
+        ui.data_mut(|d| d.insert_temp(by_key, false));
+    }
+    if shown.is_none() || chosen.is_some() {
+        ui.data_mut(|d| d.remove::<bool>(by_key));
+        // Closed from the keyboard without a choice: the keyboard goes back to the text.
+        if keyed.is_some() && shown.is_none() {
+            app.editor.focus = true;
+        }
+    }
+    if let Some(id) = chosen {
+        if id != "edit.comment" {
+            app.editor.focus = true;
+        }
+        crate::ui_cmd::run(app, id);
+    }
+}
+
 fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     let t = app.tokens;
     let markers = markers(app, path);
@@ -774,6 +874,9 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     app.editor.source.accept_drop = egui::DragAndDrop::has_payload_of_type::<crate::side::ImageDrag>(ui.ctx());
     let out = crate::review::with_margin(app, ui, path, |app, ui| app.editor.source.show(ui, &t, id, &markers, &name, "  "));
     crate::review::follow_caret(app, path);
+    if let Some(response) = &out.response {
+        context_menu(app, ui, response);
+    }
     app.view.cursor = Some((out.caret.0 as u32 + 1, out.caret.1 as u32 + 1));
     // Typing, and edits made outside the widget (the toolbar, the Insert menu).
     if send_edits(app) {

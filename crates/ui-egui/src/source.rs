@@ -89,6 +89,8 @@ pub(crate) struct Output {
     pub apply_fix: Option<texcraft_engine::Fix>,
     /// What was being dragged was let go over the text, at this position.
     pub dropped_at: Option<usize>,
+    /// The text's response, for its context menu.
+    pub response: Option<egui::Response>,
 }
 
 /// A problem in the text: a build's message or the language server's hint, on chars `start..end`.
@@ -134,6 +136,9 @@ pub(crate) struct CompletionList {
 
 /// How long a line gone to stays highlighted, in seconds.
 const FLASH_SECONDS: f64 = 1.5;
+
+/// How long the window may take to answer Edit › Paste with the clipboard's text, in seconds.
+const PASTE_SECONDS: f64 = 2.0;
 
 /// Rows of the completion list shown at once.
 const COMPLETION_ROWS: usize = 8;
@@ -189,6 +194,9 @@ pub(crate) struct SourceEditor {
     /// Something the editor takes is being dragged: show where it would go, and say where it was
     /// let go ([`Output::dropped_at`]).
     pub accept_drop: bool,
+    /// When the window was asked for the clipboard's text (Edit › Paste): the paste that comes
+    /// back inserts it, even in Vim's Normal mode, where Ctrl+V's paste is Vim's own key.
+    paste_asked: Option<f64>,
 }
 
 impl Default for SourceEditor {
@@ -222,6 +230,7 @@ impl Default for SourceEditor {
             passages: Vec::new(),
             shown: None,
             accept_drop: false,
+            paste_asked: None,
         }
     }
 }
@@ -343,6 +352,56 @@ impl SourceEditor {
         self.doc.buffer.seal();
         self.reveal = true;
         self.vim_sync();
+    }
+
+    /// The selected text, if any.
+    pub fn selected(&self) -> Option<String> {
+        let r = self.doc.selection.primary();
+        (!r.is_empty()).then(|| self.doc.buffer.slice(r.start(), r.end()))
+    }
+
+    /// Whether the caret is on a problem's text (Quick Fix opens its popup).
+    pub fn on_problem(&self) -> bool {
+        let caret = self.caret();
+        self.problems.iter().any(|p| p.start <= caret && caret <= p.end)
+    }
+
+    /// A command outside Vim acted on the selection: Vim leaves Visual mode, as after an operator.
+    pub fn end_visual(&mut self) {
+        let Some(vim) = &mut self.vim else { return };
+        let (top, rows) = self.view;
+        let mut vctx = Ctx {
+            buffer: &mut self.doc.buffer,
+            selection: &mut self.doc.selection,
+            now: 0.0,
+            view_top: top,
+            view_rows: rows,
+            clipboard: None,
+            indent: "  ",
+        };
+        vim.end_visual(&mut vctx);
+    }
+
+    /// Puts the selection on the clipboard (Edit › Copy), and removes it from the text when
+    /// `cut`; false when nothing is selected. In Vim mode it acts on Visual mode's selection and
+    /// leaves Visual mode.
+    pub fn copy(&mut self, ctx: &egui::Context, cut: bool) -> bool {
+        let Some(text) = self.selected() else { return false };
+        ctx.copy_text(text);
+        if cut {
+            self.replace_selection("", EditKind::Other);
+            self.doc.buffer.seal();
+            self.vim_sync();
+        } else {
+            self.end_visual();
+        }
+        true
+    }
+
+    /// The window was asked for the clipboard's text at `now`: the paste it sends next goes into
+    /// the text at the selection ([`Edit::Paste`]).
+    pub fn ask_paste(&mut self, now: f64) {
+        self.paste_asked = Some(now);
     }
 
     fn lay_out(&mut self, ui: &egui::Ui, t: &Tokens, width: f32) {
@@ -497,7 +556,7 @@ impl SourceEditor {
             ui.ctx().data_mut(|d| d.insert_temp(id.with("view"), (viewport.height(), viewport.min.y)));
             let origin = rect.min + vec2(gutter + margin.x, margin.y);
             let response = ui.interact(rect, id, Sense::click_and_drag());
-            if response.clicked() || response.drag_started() {
+            if response.clicked() || response.drag_started() || response.secondary_clicked() {
                 response.request_focus();
             }
             self.mouse(&response, origin, &ctx);
@@ -527,6 +586,7 @@ impl SourceEditor {
             }
             self.caret_screen = (focused && ui.clip_rect().intersects(caret)).then_some(caret);
             self.accessibility(ui, &response, id, name, origin);
+            out.response = Some(response);
         });
         if self.caret_screen.is_none() {
             self.completion = None;
@@ -616,6 +676,13 @@ impl SourceEditor {
             }
             Edit::LineBreak { modifiers } => self.key(egui::Key::Enter, modifiers, now, indent, ctx, out),
             Edit::Key { key, modifiers, .. } => self.key(key, modifiers, now, indent, ctx, out),
+            // The paste asked for by Edit › Paste: in Vim mode it replaces Visual mode's selection
+            // or goes in before the caret, as `"+P` would.
+            Edit::Paste(text) if self.paste_asked.take().is_some_and(|at| now - at < PASTE_SECONDS) && self.vim.is_some() => {
+                self.replace_selection(&text, EditKind::Other);
+                self.doc.buffer.seal();
+                self.vim_sync();
+            }
             Edit::Paste(text) => match &self.vim {
                 Some(v) if v.mode().is_inserting() => {
                     for c in text.chars() {
@@ -1330,6 +1397,17 @@ impl SourceEditor {
         }
         self.rest(response, origin, ctx);
         let before = self.doc.selection.clone();
+        // A right-click outside the selection places the caret there, for the context menu.
+        if response.secondary_clicked()
+            && let Some(p) = response.interact_pointer_pos()
+        {
+            let pos = self.pos_at(p - origin);
+            let r = self.doc.selection.primary();
+            if r.is_empty() || pos < r.start() || pos > r.end() {
+                self.doc.selection = Selection::point(pos);
+                self.doc.buffer.seal();
+            }
+        }
         self.mouse_select(response, origin, ctx);
         if self.doc.selection != before {
             self.completion = None;
@@ -1344,7 +1422,7 @@ impl SourceEditor {
         };
         let pos = self.pos_at(p - origin);
         let shift = ctx.input(|i| i.modifiers.shift);
-        if response.drag_started() || response.clicked() {
+        if response.drag_started_by(egui::PointerButton::Primary) || response.clicked() {
             let now = ctx.input(|i| i.time);
             let (last_time, last_pos, count) = self.clicks;
             let count = if now - last_time < 0.4 && last_pos == pos { count % 3 + 1 } else { 1 };
@@ -1376,7 +1454,7 @@ impl SourceEditor {
             }
             self.drag = Some(self.doc.selection.primary().anchor);
             self.want_x = None;
-        } else if response.dragged()
+        } else if response.dragged_by(egui::PointerButton::Primary)
             && let Some(anchor) = self.drag
         {
             self.doc.selection = Selection::single(anchor, pos);

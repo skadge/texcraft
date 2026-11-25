@@ -27,6 +27,10 @@ const fn ui(id: &'static str, label: &'static str, menu: &'static str, group: &'
 pub const UI_COMMANDS: &[UiCommand] = &[
     ui("edit.undo", "Undo", "Edit", "history", Some("Cmd+Z")),
     ui("edit.redo", "Redo", "Edit", "history", Some("Cmd+Shift+Z")),
+    // The clipboard chords run in the text itself; these are their menu entries.
+    ui("edit.cut", "Cut", "Edit", "select", Some("Cmd+X")),
+    ui("edit.copy", "Copy", "Edit", "select", Some("Cmd+C")),
+    ui("edit.paste", "Paste", "Edit", "select", Some("Cmd+V")),
     ui("edit.select_all", "Select All", "Edit", "select", Some("Cmd+A")),
     ui("edit.find", "Find", "Edit", "find", Some("Cmd+F")),
     ui("edit.replace", "Replace", "Edit", "find", Some("Cmd+Alt+F")),
@@ -85,6 +89,18 @@ pub const RETEX_MANUAL: &str = "https://severin-lemaignan.gitlab.io/retex/retex-
 /// The menus of the menu bar, in order. Compiling and its options are on the Compile button, the
 /// view's switches on their buttons: the bar keeps what has no button of its own, or is text work.
 pub const MENUS: &[&str] = &["File", "Edit", "Insert", "Help"];
+
+/// Whether view command `id` can run now, or why not (its menu entry is disabled with the reason).
+pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
+    match id {
+        "edit.cut" | "edit.copy" if app.editor.source.selected().is_none() => Err(tl!("Select some text first.").to_owned()),
+        // The browser gives a page the clipboard's text only with the paste keys.
+        "edit.paste" if cfg!(target_arch = "wasm32") => {
+            Err(tl!("In the browser, paste with Ctrl+V (Cmd+V on a Mac): a menu cannot read the clipboard there.").to_owned())
+        }
+        _ => Ok(()),
+    }
+}
 
 /// Runs `id`: a view command, an engine command that first asks for input, or a plain engine
 /// command.
