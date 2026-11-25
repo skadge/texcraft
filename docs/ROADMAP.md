@@ -37,7 +37,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | E6 | ✅ 0.4.0 | Images by drag and drop | An image dragged from the files onto the source is inserted with `\includegraphics`. |
 | E7 | ✅ 0.5.0 | Context menu in the text | Right-click, Shift+F10 or the Menu key: Cut, Copy, Paste, Select All, Add a Comment on a selection, Quick Fix, Show in PDF. |
 | E8 | ✅ 0.5.0 | Selections in Vim mode | The mouse and Visual mode's selection usable by commands such as commenting. |
-| E9 | ⬜ | Folding and several carets | Folding environments and sections; multiple carets. |
+| E9 | ✅ 0.7.0 | Folding and several carets | Folding environments, sections and the preamble from the gutter, Edit › Fold and Vim's `z` keys; several carets with Alt+click and Cmd+D. |
 | E10 | ✅ 0.5.0 | Project-wide search | Search and replace across files, results grouped by file. |
 | E11 | ⬜ | Writing aids | A symbol palette, and spell checking that skips commands, math and verbatim. |
 
