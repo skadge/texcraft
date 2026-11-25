@@ -1,6 +1,7 @@
-//! AI assistance in the window (docs/ROADMAP.md, AI1, AI2): Settings › AI, the dialog that shows
-//! what an explanation sends before the first one goes, and the explanations on build messages.
-//! Everything goes through the engine's `ai.*` commands.
+//! AI assistance in the window (docs/ROADMAP.md, AI1 to AI3): Settings › AI, the dialog that shows
+//! what a kind of request sends before the first one goes, the explanations on build messages,
+//! Rewrite with AI on a selection (Edit menu and the text's context menu), and the next words
+//! suggested after the caret as one types. Everything goes through the engine's `ai.*` commands.
 
 use egui::{Align, Layout, RichText};
 use serde_json::{Value, json};
@@ -20,15 +21,66 @@ pub(crate) struct AiView {
     filled: bool,
     /// The engine's AI settings revision last copied into the preferences.
     kept: u64,
+    /// The last edit typed in the source editor: when, and where the caret was after it.
+    typed: Option<(f64, usize)>,
+    /// The edit (its time) after which the next words were last asked for.
+    asked: Option<f64>,
+    /// The suggested next words last announced.
+    announced: Option<String>,
 }
 
-/// The dialog asking to send an explanation's text, the first time.
+/// A kind of request, as the consent dialog asks about it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Kind {
+    Explain,
+    Rewrite,
+    Complete,
+}
+
+impl Kind {
+    fn request(self) -> &'static str {
+        match self {
+            Kind::Explain => "explain",
+            Kind::Rewrite => "rewrite",
+            Kind::Complete => "complete",
+        }
+    }
+}
+
+/// The dialog asking to send a kind of request's text, the first time.
 pub(crate) struct Consent {
-    /// Which message (`index`, or `path` and `line`).
+    kind: Kind,
+    /// The request's parameters (the message, the selection); none for continuations, which the
+    /// dialog turns on.
     target: Value,
     /// `ai.disclose`'s answer.
     disclosure: Value,
 }
+
+/// How a selection can be rewritten: `ai.rewrite`'s `how`, and the menu's label.
+pub(crate) const REWRITES: [(&str, &str); 4] =
+    [("clearer", "Clearer"), ("shorter", "Shorter"), ("formal", "More Formal"), ("grammar", "Fix Grammar and Spelling")];
+
+/// The languages Translate to… offers, in English (the name the model is given).
+pub(crate) const LANGUAGES: [&str; 14] = [
+    "English",
+    "French",
+    "German",
+    "Spanish",
+    "Italian",
+    "Portuguese",
+    "Dutch",
+    "Polish",
+    "Swedish",
+    "Russian",
+    "Arabic",
+    "Chinese",
+    "Japanese",
+    "Korean",
+];
+
+/// The pause in typing after which the next words are asked for, in seconds.
+const PAUSE: f64 = 1.0;
 
 /// Whether the window offers AI actions: the build can, a model is connected.
 pub(crate) fn offered(app: &App) -> bool {
@@ -56,7 +108,18 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
         Some(texcraft_engine::ai::Event::Explained(Err(e))) => {
             app.view.status = Some((tl!("No explanation: {error}").replace("{error}", &e), true));
         }
-        None => {}
+        Some(texcraft_engine::ai::Event::Rewritten(Ok(_))) => {
+            let said = tl!("The rewrite is a suggested change: accept or reject it beside the text or in the Review panel.");
+            app.view.status = Some((said.to_owned(), false));
+        }
+        Some(texcraft_engine::ai::Event::Rewritten(Err(e))) => {
+            app.view.status = Some((tl!("No rewrite: {error}").replace("{error}", &e), true));
+        }
+        Some(texcraft_engine::ai::Event::Completed(Err(e))) => {
+            app.view.status = Some((tl!("No words were suggested: {error}").replace("{error}", &e), true));
+        }
+        // The editor shows (and announces) the words when the caret is still where they go.
+        Some(texcraft_engine::ai::Event::Completed(Ok(_))) | None => {}
     }
     if app.session.ai_busy() {
         ctx.request_repaint_after(std::time::Duration::from_millis(150));
@@ -73,18 +136,178 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
 pub(crate) fn explain(app: &mut App, target: Value) {
     let Some(disclosure) = app.run("ai.disclose", target.clone()) else { return };
     if disclosure["needs_consent"].as_bool().unwrap_or(true) {
-        app.view.dialog = Some(Dialog::AiConsent(Box::new(Consent { target, disclosure })));
+        app.view.dialog = Some(Dialog::AiConsent(Box::new(Consent { kind: Kind::Explain, target, disclosure })));
         return;
     }
-    start(app, target);
+    start(app, Kind::Explain, target);
 }
 
-fn start(app: &mut App, mut target: Value) {
+/// Why the selection cannot be rewritten now, if it cannot.
+pub(crate) fn can_rewrite(app: &App) -> Result<(), String> {
+    if !offered(app) {
+        return Err(tl!("Connect a model first (Settings › AI).").to_owned());
+    }
+    if app.editor.source.selected().is_none() {
+        return Err(tl!("Select the text to rewrite first.").to_owned());
+    }
+    Ok(())
+}
+
+/// `edit.rewrite {how, language?}`: rewrites the source's selection, at once when the user
+/// agreed before, else after the dialog. The rewrite arrives as a suggested change.
+pub(crate) fn rewrite(app: &mut App, params: &Value) {
+    if let Err(why) = can_rewrite(app) {
+        app.view.status = Some((why, true));
+        return;
+    }
+    let Some(path) = app.session.current().cloned() else { return };
+    let r = app.editor.source.doc.selection.primary();
+    let (from, to) = (crate::suggest::to_source(app, &path, r.start()), crate::suggest::to_source(app, &path, r.end()));
+    let mut target = json!({"path": path.as_str(), "start": from, "end": to, "how": params["how"]});
+    if let Some(l) = params.get("language").filter(|l| l.is_string()) {
+        target["language"] = l.clone();
+    }
+    // As after a Vim operator: the selection was used.
+    app.editor.source.end_visual();
+    let mut ask = target.clone();
+    ask["request"] = json!("rewrite");
+    let Some(disclosure) = app.run("ai.disclose", ask) else { return };
+    if disclosure["needs_consent"].as_bool().unwrap_or(true) {
+        app.view.dialog = Some(Dialog::AiConsent(Box::new(Consent { kind: Kind::Rewrite, target, disclosure })));
+        return;
+    }
+    start(app, Kind::Rewrite, target);
+}
+
+fn start(app: &mut App, kind: Kind, mut target: Value) {
+    if kind == Kind::Complete {
+        app.prefs.ai_complete = true;
+        app.prefs_changed = true;
+        app.view.status = Some((tl!("The next words are suggested as you type: Tab takes them.").to_owned(), false));
+        return;
+    }
     if let Some(map) = target.as_object_mut() {
         map.insert("background".to_owned(), json!(true));
     }
-    if app.run("ai.explain", target).is_some() {
-        app.view.logs = true;
+    let command = if kind == Kind::Rewrite { "ai.rewrite" } else { "ai.explain" };
+    if app.run(command, target).is_some() {
+        if kind == Kind::Rewrite {
+            app.view.status = Some((tl!("The model is rewriting the selection…").to_owned(), false));
+        } else {
+            app.view.logs = true;
+        }
+    }
+}
+
+/// The entries of Rewrite with AI (in the Edit menu and the text's context menu): what was
+/// chosen, as `edit.rewrite`'s parameters.
+pub(crate) fn rewrite_menu(app: &App, ui: &mut egui::Ui) -> Option<Value> {
+    let t = app.tokens;
+    let enabled = can_rewrite(app);
+    let mut chosen = None;
+    for (how, label) in REWRITES {
+        if crate::top_bar::item(ui, &t, None, crate::i18n::t(label), None, enabled.clone()) {
+            chosen = Some(json!({"how": how}));
+        }
+    }
+    let translate = ui.add_enabled_ui(enabled.is_ok(), |ui| {
+        ui.menu_button(tl!("Translate to…"), |ui| {
+            ui.set_min_width(180.0);
+            for language in LANGUAGES {
+                if ui.add(egui::Button::new(crate::i18n::t(language)).frame_when_inactive(false)).clicked() {
+                    chosen = Some(json!({"how": "translate", "language": language}));
+                }
+            }
+        })
+    });
+    if let Err(why) = enabled {
+        let _ = translate.inner.response.on_disabled_hover_text(why);
+    }
+    if app.session.ai_busy() {
+        ui.separator();
+        if crate::top_bar::item(ui, &t, None, tl!("Cancel the AI Request"), None, Ok(())) {
+            chosen = Some(json!({"cancel": true}));
+        }
+    }
+    chosen
+}
+
+/// Runs what [`rewrite_menu`] chose.
+pub(crate) fn run_rewrite_choice(app: &mut App, choice: &Value) {
+    if choice["cancel"] == true {
+        app.run("ai.cancel", json!({}));
+    } else {
+        crate::ui_cmd::run_with(app, "edit.rewrite", choice);
+    }
+}
+
+/// Settings › AI › Suggest the next words as I type: turned on after the dialog, the first time.
+fn set_typing(app: &mut App, on: bool) {
+    if !on {
+        app.prefs.ai_complete = false;
+        app.prefs_changed = true;
+        let _ = app.session.execute("ai.cancel", &json!({"only": "completion"}));
+        return;
+    }
+    let Some(disclosure) = app.run("ai.disclose", json!({"request": "complete"})) else { return };
+    if disclosure["needs_consent"].as_bool().unwrap_or(true) {
+        app.view.dialog = Some(Dialog::AiConsent(Box::new(Consent { kind: Kind::Complete, target: json!({}), disclosure })));
+        return;
+    }
+    start(app, Kind::Complete, json!({}));
+}
+
+/// Each frame of the source editor, when the next words are suggested as one types: drops them
+/// when the text `changed` or Escape `dismissed` them, shows them when the caret is where they
+/// go, and asks for them after a pause in typing at the end of a line.
+pub(crate) fn typing(
+    app: &mut App,
+    ctx: &egui::Context,
+    path: &texcraft_engine::project::ProjectPath,
+    changed: bool,
+    dismissed: bool,
+    focused: bool,
+) {
+    if !app.prefs.ai_complete || !offered(app) {
+        app.editor.source.ghost = None;
+        return;
+    }
+    if changed || dismissed {
+        let _ = app.session.execute("ai.cancel", &json!({"only": "completion"}));
+    }
+    let src = &app.editor.source;
+    let caret = src.caret();
+    let now = ctx.input(|i| i.time);
+    if changed && focused {
+        app.ai.typed = Some((now, caret));
+    }
+    let plain = crate::suggest::view(app, path).is_none_or(|v| v.is_plain());
+    let ready = focused && plain && src.inserting() && src.selected().is_none() && src.completion.is_none() && src.at_line_end();
+    let ghost = if ready { app.session.ai_ghost(path).filter(|(at, _)| *at == caret).map(|(at, text)| (at, text.to_owned())) } else { None };
+    let text = ghost.as_ref().map(|(_, text)| text.clone());
+    if text != app.ai.announced {
+        ctx.request_repaint();
+    }
+    if text.is_some() && text != app.ai.announced {
+        let said = tl!("Suggested next words: {text}. Tab takes them; Escape dismisses them.").replace("{text}", text.as_deref().unwrap_or_default());
+        app.view.status = Some((said, false));
+    }
+    app.ai.announced = text;
+    app.editor.source.ghost = ghost;
+    // Only after typing, with the caret still where the typing left it.
+    let Some((edited, typed_at)) = app.ai.typed else { return };
+    if !ready || typed_at != caret || app.ai.asked == Some(edited) || app.session.ai_busy() || app.editor.source.ghost.is_some() {
+        return;
+    }
+    let wait = PAUSE - (now - edited);
+    if wait > 0.0 {
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
+        return;
+    }
+    app.ai.asked = Some(edited);
+    // Refused (no consent yet, the rate limit, the caret in the preamble): nothing is suggested.
+    if let Err(e) = app.session.execute("ai.complete", &json!({"path": path.as_str(), "at": caret, "background": true})) {
+        log::debug!("no next words asked for: {e}");
     }
 }
 
@@ -96,23 +319,30 @@ pub(crate) fn consent_dialog(app: &mut App, ctx: &egui::Context) {
     let destination = d["destination"].as_str().unwrap_or_default().to_owned();
     let prompt = d["sends"]["prompt"].as_str().unwrap_or_default().to_owned();
     let preamble = d["sends"]["preamble"].is_string();
+    let kind = consent.kind;
     let mut agree = false;
     let mut close = false;
     let modal = egui::Modal::new(egui::Id::unique("texcraft-ai-consent")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
         ui.set_width(560.0);
         ui.label(RichText::new(tl!("Send this to the model?")).font(t.title()));
         ui.add_space(t.unit * 2.0);
-        let what = if preamble {
-            tl!("Explaining a message sends it, its help, the source lines around it and the main document's preamble to {destination}.")
-        } else {
-            tl!("Explaining a message sends it, its help and the source lines around it to {destination}.")
+        let what = match kind {
+            Kind::Explain if preamble => {
+                tl!("Explaining a message sends it, its help, the source lines around it and the main document's preamble to {destination}.")
+            }
+            Kind::Explain => tl!("Explaining a message sends it, its help and the source lines around it to {destination}."),
+            Kind::Rewrite => tl!("Rewriting sends the selected text and a few lines around it to {destination}. The rewrite comes back as a suggested change."),
+            Kind::Complete => tl!(
+                "Suggesting the next words sends the paragraph you are typing, up to the caret, to {destination} after each pause in typing, at most every two seconds."
+            ),
         };
         ui.label(what.replace("{destination}", &destination));
-        ui.label(
-            RichText::new(tl!("This is asked once for this connection; each request is logged in Settings › AI. Below is exactly what is sent."))
-                .font(t.small())
-                .color(t.text_muted),
-        );
+        let below = if kind == Kind::Complete {
+            tl!("This is asked once for this connection; each request is logged in Settings › AI. Below is an example of what is sent.")
+        } else {
+            tl!("This is asked once for this connection; each request is logged in Settings › AI. Below is exactly what is sent.")
+        };
+        ui.label(RichText::new(below).font(t.small()).color(t.text_muted));
         ui.add_space(t.unit * 2.0);
         egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner()).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
             egui::ScrollArea::vertical().max_height(280.0).show(ui, |ui| {
@@ -123,7 +353,12 @@ pub(crate) fn consent_dialog(app: &mut App, ctx: &egui::Context) {
         });
         ui.add_space(t.unit * 3.0);
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if ui.add(egui::Button::new(tl!("Agree and Explain")).min_size(egui::vec2(120.0, 30.0))).clicked() {
+            let label = match kind {
+                Kind::Explain => tl!("Agree and Explain"),
+                Kind::Rewrite => tl!("Agree and Rewrite"),
+                Kind::Complete => tl!("Agree and Turn On"),
+            };
+            if ui.add(egui::Button::new(label).min_size(egui::vec2(120.0, 30.0))).clicked() {
                 agree = true;
             }
             let decline = ui.add(egui::Button::new(tl!("Don't Send")).min_size(egui::vec2(100.0, 30.0)));
@@ -141,11 +376,14 @@ pub(crate) fn consent_dialog(app: &mut App, ctx: &egui::Context) {
     }
     if agree {
         let Some(Dialog::AiConsent(consent)) = app.view.dialog.take() else { return };
-        if app.run("ai.consent", json!({"request": "explain"})).is_some() {
-            start(app, consent.target);
+        if kind == Kind::Complete {
+            app.view.dialog = Some(Dialog::Settings);
+        }
+        if app.run("ai.consent", json!({"request": kind.request()})).is_some() {
+            start(app, kind, consent.target);
         }
     } else if close {
-        app.view.dialog = None;
+        app.view.dialog = if kind == Kind::Complete { Some(Dialog::Settings) } else { None };
         app.view.status = Some((tl!("Nothing was sent.").to_owned(), false));
     }
 }
@@ -268,8 +506,23 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     if connected {
         model(app, ui, t, &status, busy);
         project(app, ui, t, &status);
+        typing_setting(app, ui, t);
         requests(ui, t, &status);
     }
+}
+
+fn typing_setting(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    let mut on = app.prefs.ai_complete;
+    if ui.checkbox(&mut on, tl!("Suggest the next words as I type")).changed() {
+        set_typing(app, on);
+    }
+    ui.label(
+        RichText::new(tl!(
+            "After a pause in typing at the end of a line, the paragraph up to the caret is sent and the model's next words are shown in grey after it: Tab takes them, typing on or Escape dismisses them."
+        ))
+        .font(t.small())
+        .color(t.text_muted),
+    );
 }
 
 fn field(ui: &mut egui::Ui, t: &Tokens, label: &str, value: &mut String, hint: &str, password: bool) -> egui::Response {

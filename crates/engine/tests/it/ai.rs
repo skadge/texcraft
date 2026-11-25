@@ -372,3 +372,132 @@ fn an_agent_session_cannot_agree_to_send_text_for_the_user() -> R {
     let _ = std::fs::remove_dir_all(&dir);
     Ok(())
 }
+
+// ----- AI3: rewriting and continuing -----
+
+/// A document whose selection ([`SELECTED`]) is far from its first paragraph and its preamble.
+fn paper_text() -> String {
+    let filler = "A line of filler text that keeps the intro far away.\n".repeat(8);
+    format!(
+        "\\documentclass{{article}}\n\\usepackage{{secret-preamble}}\n\\begin{{document}}\nFAR-AWAY-INTRO is not near the selection.\n\n{filler}\nLine one.\nLine two.\n{SELECTED}\nLine four.\n\n\\end{{document}}\n"
+    )
+}
+const SELECTED: &str = "As Section~\\ref{sec:a} shows, the value $x^2$ is very very large indeed.";
+
+fn paper(seen: &Seen, reply: &str) -> Result<(Session, usize, usize), String> {
+    let mut s = session(20, reply, seen)?;
+    let paper = paper_text();
+    s.execute("file.write", &json!({"path": "main.tex", "text": paper}))?;
+    let at = paper.find(SELECTED).ok_or("no selection")?;
+    let start = paper[..at].chars().count();
+    Ok((s, start, start + SELECTED.chars().count()))
+}
+
+fn suggestions(s: &mut Session) -> Result<Value, String> {
+    s.execute("review.list", &json!({"kind": "suggestion"}))
+}
+
+#[test]
+fn a_rewrite_sends_what_was_disclosed_and_becomes_a_suggestion_on_the_selection_not_an_edit() -> R {
+    let seen = Seen::default();
+    let (mut s, start, end) = paper(&seen, "<<<TEXT\nSection~\\ref{sec:a} shows that $x^2$ is large.\nTEXT>>>")?;
+    connect_remote(&mut s)?;
+    let p = json!({"path": "main.tex", "start": start, "end": end, "how": "shorter"});
+    let e = s.execute("ai.rewrite", &p).err().ok_or("rewrote without consent")?;
+    assert!(e.contains("Agree") && e.contains("https://api.example.com"), "{e}");
+    assert!(seen.prompts().is_empty(), "something was sent before the user agreed");
+    // Agreeing to explanations does not cover rewrites.
+    s.execute("ai.consent", &json!({"request": "explain"}))?;
+    assert!(s.execute("ai.rewrite", &p).is_err(), "consent to explain covered rewriting");
+    let mut d = p.clone();
+    d["request"] = json!("rewrite");
+    let disclosed = s.execute("ai.disclose", &d)?;
+    assert_eq!(disclosed["needs_consent"], true);
+    s.execute("ai.consent", &json!({"request": "rewrite"}))?;
+    let r = s.execute("ai.rewrite", &p)?;
+    let sent = seen.prompts();
+    assert_eq!(sent.first().map(String::as_str), disclosed["sends"]["prompt"].as_str(), "the request differs from its disclosure");
+    let prompt = sent.first().cloned().unwrap_or_default();
+    assert!(prompt.contains(SELECTED) && prompt.contains("Line two.") && prompt.contains("Line four."), "the selection or its context is missing");
+    for far in ["FAR-AWAY-INTRO", "secret-preamble", "OTHER-FILE-TEXT"] {
+        assert!(!prompt.contains(far), "{far} was sent with a rewrite");
+    }
+    assert_eq!(text(&s), paper_text(), "the rewrite was applied directly");
+    let list = s.execute("review.list", &json!({"kind": "suggestion", "author": "AI (small)"}))?;
+    assert_eq!(list["openSuggestions"], 1, "{list}");
+    s.execute("review.accept", &json!({"id": r["suggestion"]}))?;
+    assert_eq!(
+        text(&s),
+        paper_text().replace(SELECTED, "Section~\\ref{sec:a} shows that $x^2$ is large."),
+        "accepting changed more or less than the selection"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_rewrite_that_drops_a_reference_is_refused_saying_so() -> R {
+    let seen = Seen::default();
+    let (mut s, start, end) = paper(&seen, "<<<TEXT\nThe value $x^2$ is large.\nTEXT>>>")?;
+    s.execute("ai.connect", &json!({"endpoint": "http://127.0.0.1:11434/v1", "model": "small"}))?;
+    let e = s
+        .execute("ai.rewrite", &json!({"path": "main.tex", "start": start, "end": end, "how": "shorter"}))
+        .err()
+        .ok_or("a rewrite without its \\ref was offered")?;
+    assert!(e.contains("\\ref{sec:a}"), "the refusal does not say what was dropped: {e}");
+    assert_eq!(suggestions(&mut s)?["openSuggestions"], 0);
+    assert_eq!(text(&s), paper_text());
+    Ok(())
+}
+
+#[test]
+fn a_continuation_needs_consent_and_typing_on_drops_it() -> R {
+    let seen = Seen::default();
+    let (mut s, _, end) = paper(&seen, " It grows fast.")?;
+    connect_remote(&mut s)?;
+    let p = json!({"path": "main.tex", "at": end});
+    let e = s.execute("ai.complete", &p).err().ok_or("continued without consent")?;
+    assert!(e.contains("Agree"), "{e}");
+    assert!(seen.prompts().is_empty(), "the paragraph was sent before the user agreed");
+    s.execute("ai.consent", &json!({"request": "complete"}))?;
+    let r = s.execute("ai.complete", &p)?;
+    assert_eq!(r["text"], " It grows fast.");
+    let prompt = seen.prompts().first().cloned().unwrap_or_default();
+    assert!(prompt.contains(SELECTED) && prompt.contains("Line one."), "the paragraph is missing");
+    assert!(
+        !prompt.contains("Line four.") && !prompt.contains("filler") && !prompt.contains("FAR-AWAY-INTRO") && !prompt.contains("secret-preamble"),
+        "more than the paragraph up to the caret was sent"
+    );
+    let main = texcraft_engine::project::ProjectPath::new("main.tex")?;
+    assert_eq!(s.ai_ghost(&main), Some((end, " It grows fast.")));
+    // Asked again at once: refused, for the rate limit.
+    assert!(s.execute("ai.complete", &p).is_err(), "continuations are not rate-limited");
+
+    // Typing on while the model answers: the answer is not shown.
+    std::thread::sleep(std::time::Duration::from_millis(texcraft_engine::ai::COMPLETE_EVERY_MS + 50));
+    s.execute("ai.complete", &json!({"path": "main.tex", "at": end, "background": true}))?;
+    s.execute("file.edit", &json!({"path": "main.tex", "edits": [{"start": end, "end": end, "text": " Yes"}]}))?;
+    let mut event = None;
+    for _ in 0..500 {
+        event = s.poll_ai();
+        if event.is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    assert_eq!(event, Some(texcraft_engine::ai::Event::Completed(Ok(false))), "a continuation of text typed over was shown");
+    assert_eq!(s.ai_ghost(&main), None);
+    Ok(())
+}
+
+#[test]
+fn cancelling_a_continuation_leaves_an_explanation_in_flight_alone() -> R {
+    let seen = Seen::default();
+    let (mut s, _, end) = paper(&seen, "fine")?;
+    s.execute("build.compile", &json!({"wait": true}))?;
+    s.execute("ai.connect", &json!({"endpoint": "http://127.0.0.1:11434/v1", "model": "small"}))?;
+    s.execute("ai.explain", &json!({"index": 0, "background": true}))?;
+    assert!(s.execute("ai.complete", &json!({"path": "main.tex", "at": end})).is_err(), "a continuation was asked for over an explanation");
+    assert_eq!(s.execute("ai.cancel", &json!({"only": "completion"}))?["cancelled"], false);
+    assert!(s.ai_busy(), "cancelling continuations cancelled the explanation");
+    Ok(())
+}

@@ -57,6 +57,8 @@ pub struct Prefs {
     pub words: Vec<String>,
     /// The symbols inserted last, by command, the latest first.
     pub recent_symbols: Vec<String>,
+    /// After a pause in typing, the model's next words are shown after the caret (AI3).
+    pub ai_complete: bool,
 }
 
 /// The name and key a person's comments carry (docs/collaboration-roadmap.md, R1). No accounts:
@@ -111,6 +113,7 @@ impl Default for Prefs {
             spelling: texcraft_engine::SpellingOptions::default(),
             words: Vec::new(),
             recent_symbols: Vec::new(),
+            ai_complete: false,
         }
     }
 }

@@ -49,6 +49,10 @@ impl App {
                 if !last_group.is_empty() && c.group != last_group {
                     children.push(Node::Separator);
                 }
+                if *title == "Edit" && c.group == "settings" && last_group != "settings" && crate::ai::offered(self) {
+                    children.push(self.rewrite_submenu());
+                    children.push(Node::Separator);
+                }
                 last_group = c.group;
                 children.push(Item::new(c.id, t(c.label)).enabled(ui_cmd::enabled(self, c.id).is_ok()).into());
             }
@@ -85,6 +89,22 @@ impl App {
         children.push(Node::Separator);
         children.push(Item::new("project.clear_recent", t("Clear Recent Projects")).into());
         Node::submenu(t("Open Recent"), children)
+    }
+
+    /// Rewrite with AI: each way of rewriting the selection, then Translate to… its languages,
+    /// each entry `edit.rewrite` with its parameters.
+    fn rewrite_submenu(&self) -> Node {
+        let enabled = crate::ai::can_rewrite(self).is_ok();
+        let mut children: Vec<Node> = crate::ai::REWRITES
+            .iter()
+            .map(|(how, label)| Item::new(CommandRef::with_params("edit.rewrite", json!({"how": how})), t(label)).enabled(enabled).into())
+            .collect();
+        let languages = crate::ai::LANGUAGES
+            .iter()
+            .map(|l| Item::new(CommandRef::with_params("edit.rewrite", json!({"how": "translate", "language": l})), t(l)).enabled(enabled).into())
+            .collect();
+        children.push(Node::submenu(t("Translate to…"), languages));
+        Node::submenu(t("Rewrite with AI"), children)
     }
 
     /// [`App::menu_tree`] laid out for the macOS menu bar: the app menu (About, Settings, Quit),

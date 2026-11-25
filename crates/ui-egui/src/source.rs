@@ -121,6 +121,8 @@ pub(crate) struct Output {
     pub explain: Option<usize>,
     /// Cancel the AI request in flight.
     pub cancel_ai: bool,
+    /// The next words shown after the caret were taken with Tab (true) or dismissed with Escape.
+    pub ghost: Option<bool>,
     /// What was being dragged was let go over the text, at this position.
     pub dropped_at: Option<usize>,
     /// Something to tell the user (and announce): a fold or an unfold.
@@ -266,6 +268,9 @@ pub(crate) struct SourceEditor {
     hidden: Vec<bool>,
     /// A fold or unfold to announce, for [`Output::announce`].
     announce: Option<String>,
+    /// The next words a model suggests (AI3), drawn in grey after the caret at this position:
+    /// Tab takes them, Escape dismisses them. The editor pane sets them every frame.
+    pub ghost: Option<(usize, String)>,
 }
 
 impl Default for SourceEditor {
@@ -305,6 +310,7 @@ impl Default for SourceEditor {
             folded: Vec::new(),
             hidden: Vec::new(),
             announce: None,
+            ghost: None,
         }
     }
 }
@@ -450,6 +456,18 @@ impl SourceEditor {
     pub fn misspelling_at_caret(&self) -> Option<&Problem> {
         let caret = self.caret();
         self.problems.iter().find(|p| p.spelling && p.start <= caret && caret <= p.end)
+    }
+
+    /// Whether typing inserts text: always, or in Vim's Insert mode.
+    pub fn inserting(&self) -> bool {
+        self.vim.as_ref().is_none_or(|v| v.mode().is_inserting())
+    }
+
+    /// Whether the one caret is at the end of its line's text (only spaces after it).
+    pub fn at_line_end(&self) -> bool {
+        let b = &self.doc.buffer;
+        let caret = self.caret();
+        !self.multi() && b.slice(caret, b.line_end(b.char_to_line(caret))).trim().is_empty()
     }
 
     /// Whether the caret is on a problem's text (Quick Fix opens its popup).
@@ -778,7 +796,7 @@ impl SourceEditor {
                     horizontal_arrows: true,
                     vertical_arrows: true,
                     // Escape returns several carets to one before it leaves the editor.
-                    escape: vim_mode.is_some() || self.completion.is_some() || self.multi(),
+                    escape: vim_mode.is_some() || self.completion.is_some() || self.multi() || self.ghost.is_some(),
                 },
             );
         });
@@ -1010,6 +1028,23 @@ impl SourceEditor {
             return;
         }
         let inserting = self.vim.as_ref().is_none_or(|v| v.mode().is_inserting());
+        // The next words shown after the caret: Tab takes them, Escape dismisses them (in Vim,
+        // Escape also leaves Insert mode).
+        if let Some((at, text)) = self.ghost.take() {
+            if key == egui::Key::Tab && modifiers.is_none() && inserting && at == self.caret() {
+                self.replace_selection(&text, EditKind::Other);
+                self.doc.buffer.seal();
+                self.vim_sync();
+                out.ghost = Some(true);
+                return;
+            }
+            if key == egui::Key::Escape {
+                out.ghost = Some(false);
+                if self.vim.is_none() {
+                    return;
+                }
+            }
+        }
         if key == egui::Key::F12 {
             self.wants_definition = Some(self.caret());
             return;
@@ -2139,6 +2174,7 @@ impl SourceEditor {
                     let _ = painter.rect_filled(Rect::from_min_size(c.min, vec2(2.0, c.height())), 0.0, t.text);
                 }
             }
+            self.paint_ghost(ui, t, c, caret);
             if let Some(pre) = self.composer.preedit() {
                 let g = ui.fonts_mut(|f| f.layout_no_wrap(pre.text.to_owned(), t.code_font(), t.text));
                 let r = Rect::from_min_size(c.min, g.size());
@@ -2162,6 +2198,16 @@ impl SourceEditor {
                 _ => underline(painter, galley, at, span, t.note, false),
             }
         }
+    }
+
+    /// The next words a model suggests, in grey after the caret (`c`, on screen, at `caret`).
+    fn paint_ghost(&self, ui: &egui::Ui, t: &Tokens, c: Rect, caret: usize) {
+        let Some((at, text)) = &self.ghost else { return };
+        if *at != caret || self.composer.preedit().is_some() {
+            return;
+        }
+        let g = ui.fonts_mut(|f| f.layout_no_wrap(text.clone(), t.code_font(), t.text_muted));
+        ui.painter().galley(c.min + vec2(2.0, 0.0), g, t.text_muted);
     }
 
     /// The fold markers in the gutter, on the shown lines that start a region, and the "…" chip

@@ -345,14 +345,27 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
         recent_menu(app, ui);
     }
     let mut last_group = "";
+    let mut rewrite = None;
     for c in UI_COMMANDS.iter().filter(|c| c.menu == menu) {
         if !last_group.is_empty() && c.group != last_group {
+            ui.separator();
+        }
+        // Rewrite with AI, before Settings, when a model is connected.
+        if menu == "Edit" && c.group == "settings" && last_group != "settings" && crate::ai::offered(app) {
+            ui.menu_button(tl!("Rewrite with AI"), |ui| {
+                ui.set_min_width(220.0);
+                rewrite = crate::ai::rewrite_menu(app, ui);
+            });
             ui.separator();
         }
         last_group = c.group;
         if item(ui, &t, icon_for(c.id), crate::i18n::t(c.label), app.keys.shortcut_text(c.id), ui_cmd::enabled(app, c.id)) {
             chosen = Some(c.id);
         }
+    }
+    if let Some(choice) = rewrite {
+        ui.close();
+        crate::ai::run_rewrite_choice(app, &choice);
     }
     if let Some(id) = chosen {
         ui.close();

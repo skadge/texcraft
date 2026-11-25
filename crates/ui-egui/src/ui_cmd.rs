@@ -51,6 +51,9 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("edit.accept_all", "Accept All Suggestions", "Edit", "review", None),
     ui("edit.reject_all", "Reject All Suggestions", "Edit", "review", None),
     ui("app.settings", "Settings…", "Edit", "settings", Some("Cmd+,")),
+    // `{"how": "shorter"}`, or `{"how": "translate", "language": "French"}`: the Edit menu's and
+    // the text's context menu's Rewrite with AI submenu, whose entries carry these parameters.
+    ui("edit.rewrite", "Rewrite with AI", "Rewrite with AI", "ai", None),
     // Insert holds what the editor's toolbar does, for the keyboard and when the toolbar is narrow.
     ui("edit.section", "Section", "Insert", "headings", None),
     ui("edit.subsection", "Subsection", "Insert", "headings", None),
@@ -129,6 +132,7 @@ pub const MENUS: &[&str] = &["File", "Edit", "Insert", "Help"];
 pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
     match id {
         "edit.cut" | "edit.copy" if app.editor.source.selected().is_none() => Err(tl!("Select some text first.").to_owned()),
+        "edit.rewrite" => crate::ai::can_rewrite(app),
         "edit.accept_all" | "edit.reject_all" if crate::review::open_suggestions_in_current(app) == 0 => {
             Err(tl!("There are no open suggestions in this file.").to_owned())
         }
@@ -226,6 +230,7 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
                 log::warn!("unknown window command {id}");
             }
         }
+        "edit.rewrite" => crate::ai::rewrite(app, params),
         id if id.starts_with("edit.") => {
             if !crate::editor::edit(app, id) {
                 app.view.status = Some((tl!("Open a text file to edit it.").to_owned(), true));

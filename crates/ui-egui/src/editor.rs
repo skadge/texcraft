@@ -919,6 +919,8 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, r: &egui::Response) {
     let spelling = misspelled.map(|w| crate::spell::suggestions(app, &w));
     let mut chosen = None;
     let mut spell_choice: Option<(&'static str, serde_json::Value)> = None;
+    let rewrite_offered = app.editor.source.selected().is_some() && crate::ai::offered(app);
+    let mut rewrite = None;
     let shown = menu.show(|ui| {
         ui.set_min_width(220.0);
         let mut focus = keyed == Some(true);
@@ -959,12 +961,25 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, r: &egui::Response) {
                 chosen = Some(id);
             }
         }
-        if chosen.is_some() || spell_choice.is_some() {
+        if rewrite_offered {
+            ui.separator();
+            ui.menu_button(tl!("Rewrite with AI"), |ui| {
+                ui.set_min_width(220.0);
+                rewrite = crate::ai::rewrite_menu(app, ui);
+            });
+        }
+        if chosen.is_some() || spell_choice.is_some() || rewrite.is_some() {
             ui.close();
         }
     });
     if keyed == Some(true) {
         ui.data_mut(|d| d.insert_temp(by_key, false));
+    }
+    if let Some(choice) = rewrite {
+        ui.data_mut(|d| d.remove::<bool>(by_key));
+        app.editor.focus = true;
+        crate::ai::run_rewrite_choice(app, &choice);
+        return;
     }
     if shown.is_none() || chosen.is_some() || spell_choice.is_some() {
         ui.data_mut(|d| d.remove::<bool>(by_key));
@@ -1019,10 +1034,13 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     }
     app.view.cursor = Some((out.caret.0 as u32 + 1, out.caret.1 as u32 + 1));
     // Typing, and edits made outside the widget (the toolbar, the Insert menu).
-    if send_edits(app) {
+    let edited = send_edits(app);
+    if edited {
         app.view.last_edit = Some(ui.ctx().input(|i| i.time));
     }
     crate::suggest::refresh(app, path);
+    let focused = ui.memory(|m| m.has_focus(id));
+    crate::ai::typing(app, ui.ctx(), path, edited, out.ghost == Some(false), focused);
     // Completion, hover and definitions are of the file's lines and columns: not of the text
     // shown with suggestions in it.
     let out = if crate::suggest::view(app, path).is_some_and(|v| !v.is_plain()) {
