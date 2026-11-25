@@ -358,3 +358,17 @@ fn a_cancelled_explanation_drops_its_answer() -> R {
     assert_eq!(s.ai_explanation(&d), Some(&Explanation::Cancelled));
     Ok(())
 }
+
+#[test]
+fn an_agent_session_cannot_agree_to_send_text_for_the_user() -> R {
+    let seen = Seen::default();
+    let mut s = session(3, "", &seen)?;
+    connect_remote(&mut s)?;
+    let dir = std::env::temp_dir().join(format!("texcraft-ai-roots-{}", std::process::id()));
+    std::fs::create_dir_all(&dir)?;
+    let roots = texcraft_engine::file_access::AutomationRoots::new(std::slice::from_ref(&dir), std::slice::from_ref(&dir))?;
+    s.confine(roots);
+    assert!(s.execute("ai.consent", &json!({"request": "explain"})).is_err(), "an agent agreed for the user");
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}

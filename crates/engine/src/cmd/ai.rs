@@ -127,6 +127,11 @@ fn disclose(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn consent(s: &mut Session, p: &Value) -> Result<Value> {
+    // Agreeing to send the project's text elsewhere is the person's to give, at the window: an
+    // agent session (confined to its roots) cannot give it for them.
+    if s.roots.is_some() {
+        return Err("Agreeing to send text to an AI service is for the person at the window, not an agent session.".to_owned());
+    }
     let request = string(p, "request")?.to_owned();
     s.ai_consent(&request)
 }
