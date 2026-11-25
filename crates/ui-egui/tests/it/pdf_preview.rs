@@ -26,7 +26,7 @@ impl Backend for Sample {
 }
 
 /// The app in a window, the sample PDF shown beside the editor.
-fn built() -> Harness<'static, App> {
+pub(crate) fn built() -> Harness<'static, App> {
     let s = Session::with_backend(Box::new(Sample));
     let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
     let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);

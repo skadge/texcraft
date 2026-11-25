@@ -59,7 +59,7 @@ impl Backend for Failing {
     }
 }
 
-fn session(sent: &Arc<Mutex<Vec<String>>>) -> Result<Session, String> {
+pub(crate) fn session(sent: &Arc<Mutex<Vec<String>>>) -> Result<Session, String> {
     let mut s = Session::with_backend(Box::new(Failing));
     let sent = sent.clone();
     s.set_ai_connect(Arc::new(move |_: &Target| Ok(Box::new(Fake(sent.clone())) as Box<dyn Provider>)));
@@ -67,7 +67,7 @@ fn session(sent: &Arc<Mutex<Vec<String>>>) -> Result<Session, String> {
     Ok(s)
 }
 
-fn harness(s: Session) -> Harness<'static, App> {
+pub(crate) fn harness(s: Session) -> Harness<'static, App> {
     let prefs = Prefs { auto_compile: false, ai: s.ai_saved().0.clone(), ..Prefs::default() };
     let app = App::with_prefs(s, prefs);
     Harness::builder().with_size(egui::vec2(1400.0, 900.0)).with_max_steps(60).build_ui_state(|ui, app: &mut App| app.frame(ui), app)

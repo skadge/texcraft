@@ -13,14 +13,14 @@ use texcraft_ui_egui::prefs::Prefs;
 
 const TABLE: &str = "Before.\n\n\\begin{tabular}{lr}\n  alpha & beta \\\\\n  gamma & delta \\\\\n\\end{tabular}\n\nAfter.\n";
 
-const FIGURE: &str = "Before.\n\n\\begin{figure}[h]\n  \\centering\n  \\includegraphics{plot}\n  \\caption{Old.}\n\\end{figure}\n";
+pub(crate) const FIGURE: &str = "Before.\n\n\\begin{figure}[h]\n  \\centering\n  \\includegraphics{plot}\n  \\caption{Old.}\n\\end{figure}\n";
 
 fn text(harness: &mut Harness<'_, App>) -> String {
     let path = ProjectPath::new("main.tex").ok();
     path.and_then(|p| harness.state_mut().session().project().text(&p).ok().map(str::to_owned)).unwrap_or_default()
 }
 
-fn formatted(text: &str) -> Harness<'static, App> {
+pub(crate) fn formatted(text: &str) -> Harness<'static, App> {
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
     assert!(s.execute("file.write", &json!({"path": "main.tex", "text": text})).is_ok());
     let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });

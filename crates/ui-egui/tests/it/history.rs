@@ -9,7 +9,7 @@ use texcraft_engine::project::ProjectPath;
 use texcraft_ui_egui::prefs::Prefs;
 use texcraft_ui_egui::{App, ui_cmd};
 
-fn temp(name: &str) -> std::io::Result<PathBuf> {
+pub(crate) fn temp(name: &str) -> std::io::Result<PathBuf> {
     let dir = std::env::temp_dir().join(format!("texcraft-ui-{}-history-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir)?;
@@ -17,7 +17,7 @@ fn temp(name: &str) -> std::io::Result<PathBuf> {
 }
 
 /// A project saved twice in `dir`: main.tex "first line" then "second line".
-fn saved_twice(dir: &std::path::Path) -> Result<Session, String> {
+pub(crate) fn saved_twice(dir: &std::path::Path) -> Result<Session, String> {
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
     s.execute("file.write", &json!({"path": "main.tex", "text": "first line\n"}))?;
     s.execute("project.save_as", &json!({"path": dir.display().to_string()}))?;

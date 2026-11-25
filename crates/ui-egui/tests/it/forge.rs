@@ -13,7 +13,7 @@ use texcraft_ui_egui::{App, ui_cmd};
 
 const TOKEN: &str = "glpat-ui-test";
 
-fn harness(fake: &FakeGitLab) -> Harness<'static, App> {
+pub(crate) fn harness(fake: &FakeGitLab) -> Harness<'static, App> {
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
     let fake = fake.clone();
     s.set_forge_transport(move || fake.transport());
@@ -39,7 +39,7 @@ fn type_into(h: &mut Harness<'_, App>, label: &str, text: &str) {
 
 /// Runs frames until the forge operation has ended; false if it does not. One frame at a time:
 /// the window repaints while the operation runs.
-fn settle(h: &mut Harness<'_, App>) -> bool {
+pub(crate) fn settle(h: &mut Harness<'_, App>) -> bool {
     for _ in 0..500 {
         h.step();
         if h.state().session().forge_busy().is_none() {
@@ -101,7 +101,7 @@ fn a_refused_token_is_said_on_the_status_line() {
 const PAPER: &[u8] = b"\\documentclass{article}\n\\begin{document}\nOne.\n\nTwo.\n\nThree.\n\\end{document}\n";
 
 /// A window with the fake's project opened from GitLab.
-fn opened(fake: &FakeGitLab) -> Harness<'static, App> {
+pub(crate) fn opened(fake: &FakeGitLab) -> Harness<'static, App> {
     let mut h = harness(fake);
     let open = json!({"command": "forge.open", "params": {"url": "https://gitlab.example/group/paper", "token": TOKEN}});
     assert_eq!(h.state_mut().control("engine.execute", &open)["ok"], true);
@@ -109,13 +109,13 @@ fn opened(fake: &FakeGitLab) -> Harness<'static, App> {
     h
 }
 
-fn write(h: &mut Harness<'_, App>, path: &str, text: &str) {
+pub(crate) fn write(h: &mut Harness<'_, App>, path: &str, text: &str) {
     let edit = json!({"command": "file.write", "params": {"path": path, "text": text}});
     assert_eq!(h.state_mut().control("engine.execute", &edit)["ok"], true);
     h.run();
 }
 
-fn paper() -> FakeGitLab {
+pub(crate) fn paper() -> FakeGitLab {
     FakeGitLab::new("https://gitlab.example", "group/paper", TOKEN, &[("main.tex", PAPER), ("intro.tex", b"Intro\n")])
 }
 
