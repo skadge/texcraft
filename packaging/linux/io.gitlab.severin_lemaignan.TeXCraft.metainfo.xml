@@ -41,6 +41,17 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.8.0" date="2026-11-25" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.8.0</url>
+      <description>
+        <p>Projects from GitLab, editing in the formatted view, and more of the window.</p>
+        <ul>
+          <li>Open a GitLab project, commit to it, and keep up with its branch</li>
+          <li>Edit text directly in the formatted view</li>
+          <li>Keyboard access to the menus, a focus mode, and the PDF in its own window</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.7.0" date="2026-11-25" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.7.0</url>
       <description>

@@ -5,6 +5,39 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.8.0 (2026-11-25)
+
+Projects from GitLab, editing in the formatted view, and more of the window.
+
+### GitLab
+
+- File › Open from GitLab… opens a project of gitlab.com or another GitLab instance with a
+  personal access token (kept for the session only, never written anywhere). Edit and build it,
+  then File › Commit to GitLab… commits the changes to its branch.
+- TeXCraft keeps up with the branch: File › Update from GitLab, and a quiet check every two
+  minutes, take in what others committed, merging line by line; for files changed on both sides
+  in the same place, you choose to keep yours or take theirs. A protected branch, or one you
+  cannot push to, gets a new branch and a merge request instead. Comments are committed with the
+  project.
+
+### Writing
+
+- The formatted view can be edited: type, delete, split paragraphs, add list items, and make
+  text bold, italic or a heading from the toolbar, each change a small edit of the source, undone
+  as in the source view. Formulas and other parts shown as source still open their source.
+
+### The window
+
+- F10, or Alt alone, reaches the menus from the keyboard.
+- Focus mode (Ctrl+Shift+Enter) hides the menus, the rail and the side panel.
+- The PDF can go to its own window (desktop).
+
+Known limits:
+
+- GitLab only, with a personal access token; signing in with GitLab, GitHub, and folders kept in
+  step with a repository come later.
+- In the formatted view, typing in another script's input method shows only the committed text.
+
 ## 0.7.0 (2026-11-25)
 
 Suggested changes, history in the browser, and folding.
