@@ -1,0 +1,1 @@
+- Progress beside the PDF (B7): while a build runs, the PDF pane's toolbar also says what it does, dimmed, in the room its buttons leave ("Compiling page 3 of 7 · pass 2"), over the PDF or the build log; before the first PDF the pane's middle already says it. The status bar alone announces it, so screen readers hear it once.

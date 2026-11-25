@@ -38,7 +38,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | E7 | ✅ 0.5.0 | Context menu in the text | Right-click, Shift+F10 or the Menu key: Cut, Copy, Paste, Select All, Add a Comment on a selection, Quick Fix, Show in PDF. |
 | E8 | ✅ 0.5.0 | Selections in Vim mode | The mouse and Visual mode's selection usable by commands such as commenting. |
 | E9 | ⬜ | Folding and several carets | Folding environments and sections; multiple carets. |
-| E10 | ⬜ | Project-wide search | Search and replace across files, results grouped by file. |
+| E10 | ✅ 0.5.0 | Project-wide search | Search and replace across files, results grouped by file. |
 | E11 | ⬜ | Writing aids | A symbol palette, and spell checking that skips commands, math and verbatim. |
 
 ## Formatted view
@@ -60,7 +60,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | B4 | ✅ 0.4.0 | Copying build messages | Messages can be selected and copied, one by one or all at once. |
 | B5 | ✅ 0.2.2 | Build options | Engine (from the document, LuaLaTeX, pdfLaTeX), stop at the first error, draft images, delete build files. |
 | B6 | ✅ 0.2.2 | Source and PDF navigation | Double-click in the PDF opens the source line; Show in PDF marks the caret's line. |
-| B7 | ⬜ | Progress beside the PDF | The page being built also in the PDF pane's header. |
+| B7 | ✅ 0.5.0 | Progress beside the PDF | The page being built also in the PDF pane's header. |
 | B8 | ⬜ | A better preview | Pages drawn in the background, zoom presets, links, text selection, presentation mode. |
 | B9 | ⬜ | The raw log and outputs | Search in the raw log, and the list of output files. |
 
