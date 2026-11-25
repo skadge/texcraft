@@ -23,6 +23,7 @@ craft-control = { git = "https://github.com/storytold/craft-libs", rev = "f8c3ce
 craft-settings = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 craft-zip = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 craft-mcp-server = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
+craft-menu = { git = "https://github.com/storytold/craft-libs", rev = "f8c3cef36fbf8f735b373b66c4f81911993aba1f" }
 
 # The typesetting engine and language server (CC0-1.0), from crates.io. What later releases add for
 # TeXCraft is in retex's docs/design/embedding.md (and docs/retex-changes.md here).

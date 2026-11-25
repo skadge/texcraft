@@ -126,6 +126,9 @@ pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
         "view.pdf_window" if cfg!(target_arch = "wasm32") => {
             Err(tl!("In the browser the PDF stays in the page: a web page cannot open a second window of the app.").to_owned())
         }
+        "view.menu_bar" if app.has_system_menu() => {
+            Err(tl!("The menus are in the menu bar at the top of the screen; Control+F2 reaches it from the keyboard.").to_owned())
+        }
         // The browser gives a page the clipboard's text only with the paste keys.
         "edit.paste" if cfg!(target_arch = "wasm32") => {
             Err(tl!("In the browser, paste with Ctrl+V (Cmd+V on a Mac): a menu cannot read the clipboard there.").to_owned())
@@ -242,7 +245,11 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         }
         "view.next_region" => app.cycle_region(true),
         "view.previous_region" => app.cycle_region(false),
-        "project.open" => app.guard(Next::PickProject),
+        // With a path (the system menu's Open Recent), that project; without, a folder to choose.
+        "project.open" => match params.get("path").and_then(serde_json::Value::as_str) {
+            Some(path) => app.guard(Next::OpenProject(path.to_owned())),
+            None => app.guard(Next::PickProject),
+        },
         // Opening from GitLab replaces the project: unsaved changes are asked about first.
         "forge.open" => app.guard(Next::OpenFromForge),
         "forge.commit" => crate::forge::ask_commit(app),

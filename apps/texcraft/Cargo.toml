@@ -29,3 +29,7 @@ env_logger = { workspace = true }
 png = "0.18"
 serde = { workspace = true }
 egui = { workspace = true }
+
+# The system menu bar (craft-menu's AppKit backend, through muda).
+[target.'cfg(target_os = "macos")'.dependencies]
+craft-menu = { workspace = true }

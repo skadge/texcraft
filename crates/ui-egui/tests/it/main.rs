@@ -32,5 +32,6 @@ mod review;
 mod search;
 mod shortcuts;
 mod suggest;
+mod system_menu;
 mod unsaved;
 mod vim;
