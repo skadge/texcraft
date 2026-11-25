@@ -12,6 +12,7 @@ mod folders;
 mod folding;
 mod forge;
 mod formatted;
+mod formatted_editing;
 mod frame;
 mod gallery;
 mod goto_file;

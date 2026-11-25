@@ -1,8 +1,10 @@
 //! The formatted view of a `.tex` file (docs/ROADMAP.md): the file's view model
 //! ([`texcraft_latex::view`]) drawn as a document, at a reading measure in the reading face.
 //!
-//! It is read-only for now. Double-clicking a part (or pressing Enter on it) shows the source with
-//! the caret where that part starts. Formulas are drawn as retex typesets them after the main
+//! Its text is edited in place ([`crate::formatted_edit`], F3): the caret moves through paragraphs,
+//! headings and list items, and each key makes a minimal edit of the source. Double-clicking a part
+//! (or pressing Enter on a formula, a figure or a part shown as source) shows the source with the
+//! caret where that part starts. Formulas are drawn as retex typesets them after the main
 //! document's preamble (F2: [`Session::formulas`](texcraft_engine::Session::formulas)), as ink in
 //! the colour of the text, at the window's pixels per point; until then, and where the build has no
 //! engine for them (the browser), they are shown as their source. What the view cannot show
@@ -16,6 +18,7 @@ use egui::text::{LayoutJob, TextFormat};
 use egui::{Align, Align2, Color32, FontFamily, FontId, Galley, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2, pos2, vec2};
 use texcraft_engine::project::{Contents, Project, ProjectPath};
 use texcraft_engine::{FormulaBox, FormulaState};
+use texcraft_latex::edit::{self, Line, Part};
 use texcraft_latex::view::{Block, BlockKind, ChipKind, Inline, InlineKind, Item, ListKind, Style};
 use texcraft_preview::figure;
 
@@ -46,6 +49,8 @@ pub(crate) struct Formatted {
     images: HashMap<(String, usize), Picture>,
     /// Typeset formulas drawn as textures.
     ink: Ink,
+    /// The caret's keys and pointer.
+    pub editing: crate::formatted_edit::Editing,
 }
 
 /// Typeset formulas as textures, by their batch's PDF, page and pixels per point; those not drawn
@@ -203,26 +208,66 @@ struct Cx<'a> {
     typeset: &'a HashMap<usize, FormulaState>,
     body_pt: f32,
     ink: &'a mut Ink,
+    /// Out: the lines of text drawn, in order, for the caret.
+    lines: Vec<DrawnLine>,
+    /// The caret's source offset while the view has the keyboard, for the empty paragraph it may
+    /// stand in.
+    caret: Option<usize>,
+    /// Bring the line of this source offset into view.
+    reveal: Option<usize>,
+}
+
+/// A line of text as drawn: what its characters stand for, its layout and where it is, the slot
+/// its selection is painted in (under its text), and its pointer response.
+pub(crate) struct DrawnLine {
+    pub line: Line,
+    pub galley: Arc<Galley>,
+    pub origin: Pos2,
+    pub slot: egui::layers::ShapeIdx,
+    pub response: egui::Response,
+    /// An empty paragraph only the caret shows (just made with Enter).
+    pub phantom: bool,
+}
+
+/// The line of the pieces of a paragraph, or an empty one at `empty_at`.
+fn line_of(pieces: &[Piece], empty_at: usize) -> Line {
+    if pieces.is_empty() {
+        return Line::empty(empty_at);
+    }
+    let parts = pieces
+        .iter()
+        .map(|p| {
+            let chars = p.chars.len();
+            match (&p.kind, &p.offsets) {
+                (PieceKind::Text, Some(o)) => Part::Text(o.clone()),
+                (PieceKind::Text, None) if p.range.is_empty() => Part::Decoration(chars),
+                _ => Part::Atom { chars, range: p.range.clone() },
+            }
+        })
+        .collect();
+    Line::new(parts)
 }
 
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
-    let revision = app.session.revision();
-    let fresh = app.editor.formatted.cache.as_ref().is_some_and(|c| &c.path == path && c.revision == revision);
+    // The view is made from the editor's buffer, which it edits: its text is the file's.
+    let version = app.editor.source.doc.buffer.version();
+    let fresh = app.editor.formatted.cache.as_ref().is_some_and(|c| &c.path == path && c.revision == version);
     if !fresh {
-        let text: Arc<str> = match app.session.project().get(path) {
-            Some(Contents::Text(t)) => Arc::from(t.as_str()),
-            _ => Arc::from(""),
-        };
+        let text: Arc<str> = Arc::from(app.editor.source.doc.buffer.text());
         // The whole file again: files are small, incremental parsing is still to come.
         let blocks = Arc::new(texcraft_latex::view::view(&text));
         let summary = match blocks.first() {
             Some(Block { kind: BlockKind::Preamble, range }) => summary(text.get(range.clone()).unwrap_or_default()),
             _ => String::new(),
         };
-        app.editor.formatted.cache = Some(Cache { path: path.clone(), revision, text, blocks, summary });
+        app.editor.formatted.cache = Some(Cache { path: path.clone(), revision: version, text, blocks, summary });
     }
     let Some(cache) = app.editor.formatted.cache.as_ref() else { return };
     let (text, blocks, summary) = (Arc::clone(&cache.text), Arc::clone(&cache.blocks), cache.summary.clone());
+    let ctx = ui.ctx().clone();
+    let doc_id = text_id(path);
+    let focused = ctx.memory(|m| m.has_focus(doc_id));
+    let edits = crate::formatted_edit::begin(app, &ctx, doc_id, focused);
     // A jump from the outline, the PDF or the build log scrolls to its line.
     let scroll_to = match app.view.goto.take() {
         Some((p, line)) if &p == path => Some(text.split_inclusive('\n').take(line.saturating_sub(1) as usize).map(str::len).sum()),
@@ -237,6 +282,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     }
     let typeset: HashMap<usize, FormulaState> = found.formulas.into_iter().map(|f| (f.range.start, f.state)).collect();
     let t = app.tokens;
+    let caret = crate::formatted_edit::caret_byte(app);
+    let reveal = std::mem::take(&mut app.editor.formatted.editing.reveal).then_some(caret);
+    let vim = app.editor.source.vim.is_some();
     let ink = &mut app.editor.formatted.ink;
     ink.begin();
     let mut cx = Cx {
@@ -257,30 +305,44 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         typeset: &typeset,
         body_pt: found.body_pt.max(1.0),
         ink,
+        lines: Vec::new(),
+        caret: focused.then_some(caret),
+        reveal,
     };
     let page = 6.0 * t.unit;
     app.view.cursor = None;
-    egui::ScrollArea::vertical().id_salt(("formatted", path.as_str())).auto_shrink([false, false]).show(ui, |ui| {
-        let avail = ui.available_width();
-        let measure = measure(ui, &t).min(avail - 2.0 * page).max(120.0);
-        ui.add_space(page * 1.5);
-        let left = ((avail - measure) / 2.0).max(0.0);
-        ui.horizontal(|ui| {
-            ui.add_space(left);
-            ui.vertical(|ui| {
-                ui.set_width(measure);
-                ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-                draw_blocks(ui, &mut cx, &blocks, 0);
+    let (painter, doc_r) = egui::ScrollArea::vertical()
+        .id_salt(("formatted", path.as_str()))
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            let avail = ui.available_width();
+            let measure = measure(ui, &t).min(avail - 2.0 * page).max(120.0);
+            ui.add_space(page * 1.5);
+            let left = ((avail - measure) / 2.0).max(0.0);
+            ui.horizontal(|ui| {
+                ui.add_space(left);
+                ui.vertical(|ui| {
+                    ui.set_width(measure);
+                    ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+                    if vim {
+                        let note = tl!("Vim's keys work in the source; here the standard keys edit the text.");
+                        ui.label(egui::RichText::new(note).font(t.small()).color(t.text_muted));
+                        ui.add_space(t.reading_size);
+                    }
+                    draw_blocks(ui, &mut cx, &blocks, 0);
+                });
             });
-        });
-        ui.add_space(page * 4.0);
-        keyboard_scroll(ui, cx.focused);
-    });
+            ui.add_space(page * 4.0);
+            keyboard_scroll(ui, cx.focused, focused);
+            // The editable text: it takes the keyboard, the lines take the pointer.
+            let r = ui.interact(ui.min_rect(), doc_id, Sense::focusable_noninteractive());
+            (ui.painter().clone(), r)
+        })
+        .inner;
     cx.ink.end();
-    let (jump, toggle, first) = (cx.jump.take(), cx.toggle_preamble, cx.first);
-    if let Some(id) = first {
-        app.region(crate::Region::Editor, id);
-    }
+    let (jump, toggle, first, lines) = (cx.jump.take(), cx.toggle_preamble, cx.first, std::mem::take(&mut cx.lines));
+    app.region(crate::Region::Editor, if lines.is_empty() { first.unwrap_or(doc_id) } else { doc_id });
+    crate::formatted_edit::finish(app, ui, (path, &text), &lines, (&painter, &doc_r), edits);
     if toggle && !app.editor.formatted.preamble_open.remove(path) {
         app.editor.formatted.preamble_open.insert(path.clone());
     }
@@ -289,9 +351,15 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     }
 }
 
-/// Page Up, Page Down, Home and End scroll the view while one of its parts has the focus.
-fn keyboard_scroll(ui: &mut egui::Ui, focused: bool) {
-    if !focused {
+/// The id of the formatted view's editable text for `path`.
+pub(crate) fn text_id(path: &ProjectPath) -> egui::Id {
+    egui::Id::unique(("formatted-text", path.as_str()))
+}
+
+/// Page Up, Page Down, Home and End scroll the view while one of its parts has the focus; Page Up
+/// and Page Down while its text does (Home and End move the caret there).
+fn keyboard_scroll(ui: &mut egui::Ui, part: bool, text: bool) {
+    if !part && !text {
         return;
     }
     let page = ui.clip_rect().height() * 0.85;
@@ -300,9 +368,9 @@ fn keyboard_scroll(ui: &mut egui::Ui, focused: bool) {
             -page
         } else if i.key_pressed(egui::Key::PageUp) {
             page
-        } else if i.key_pressed(egui::Key::End) {
+        } else if part && i.key_pressed(egui::Key::End) {
             -1.0e7
-        } else if i.key_pressed(egui::Key::Home) {
+        } else if part && i.key_pressed(egui::Key::Home) {
             1.0e7
         } else {
             0.0
@@ -338,6 +406,9 @@ fn draw_blocks(ui: &mut egui::Ui, cx: &mut Cx<'_>, blocks: &[Block], depth: usiz
         if i > 0 {
             ui.add_space(gap_before(&cx.t, &block.kind));
         }
+        if let Some(prev) = i.checked_sub(1).and_then(|p| blocks.get(p)) {
+            phantom(ui, cx, (block_end(prev), block.range.start), false);
+        }
         let top = ui.cursor().top();
         draw_block(ui, cx, block, depth);
         if let Some(target) = cx.scroll_to
@@ -347,6 +418,9 @@ fn draw_blocks(ui: &mut egui::Ui, cx: &mut Cx<'_>, blocks: &[Block], depth: usiz
             ui.scroll_to_rect(rect, Some(Align::TOP));
             cx.scroll_to = None;
         }
+    }
+    if let Some(last) = blocks.last() {
+        phantom(ui, cx, (block_end(last), cx.text.len()), true);
     }
 }
 
@@ -369,7 +443,7 @@ fn draw_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, block: &Block, depth: usize) {
         BlockKind::Heading { level, content, label, .. } => heading(ui, cx, range, *level, content, label.as_ref()),
         BlockKind::Paragraph(inlines) => {
             let size = cx.t.reading_size;
-            let _ = paragraph(ui, cx, inlines, range, &Para { size, bold: false, color: cx.t.text, role: egui::Role::Paragraph });
+            let _ = paragraph(ui, cx, inlines, range, &Para { size, bold: false, color: cx.t.text, role: egui::Role::Paragraph, empty_at: None });
         }
         BlockKind::List { kind, items } => list(ui, cx, *kind, items, depth),
         BlockKind::Container { name, blocks } => container(ui, cx, name, blocks, depth),
@@ -385,6 +459,8 @@ struct Para {
     bold: bool,
     color: Color32,
     role: egui::Role,
+    /// Where the caret stands in it when it shows nothing (an empty item).
+    empty_at: Option<usize>,
 }
 
 /// A run of a laid-out paragraph: the characters it takes in the galley and what it stands for.
@@ -392,10 +468,14 @@ struct Piece {
     chars: Range<usize>,
     range: Range<usize>,
     kind: PieceKind,
+    /// For text: the source each of its characters stands for ([`edit::offsets`]).
+    offsets: Option<Vec<usize>>,
 }
 
 enum PieceKind {
     Text,
+    /// A line break (`\\`).
+    Break,
     Chip(ChipKind, String),
     /// A formula shown as its source: being typeset (true), or this build cannot typeset it.
     Formula(bool),
@@ -467,7 +547,7 @@ impl Builder<'_> {
         let start = self.chars;
         self.chars += s.chars().count();
         self.job.append(s, 0.0, format);
-        self.pieces.push(Piece { chars: start..self.chars, range, kind });
+        self.pieces.push(Piece { chars: start..self.chars, range, kind, offsets: None });
     }
 
     /// A no-break space as wide as typeset formula `b`, in a line tall enough for its height above
@@ -500,12 +580,16 @@ impl Builder<'_> {
                 let shown = if style.small_caps { text.to_uppercase() } else { text.clone() };
                 self.plain.push_str(text);
                 let format = self.format(style, self.color);
+                let offsets = edit::offsets(self.text, range.clone(), text).filter(|o| o.len() == shown.chars().count() + 1);
                 self.append(&shown, format, range, PieceKind::Text);
+                if let Some(p) = self.pieces.last_mut() {
+                    p.offsets = offsets;
+                }
             }
             InlineKind::LineBreak => {
                 self.plain.push(' ');
                 let format = self.format(outer, self.color);
-                self.append("\n", format, range, PieceKind::Text);
+                self.append("\n", format, range, PieceKind::Break);
             }
             InlineKind::Formula { source, .. } => {
                 let math = collapse(self.text.get(source.clone()).unwrap_or_default());
@@ -548,7 +632,7 @@ impl Builder<'_> {
                 }
                 self.color = color;
                 self.pieces.retain(|p| p.chars.start < start);
-                self.pieces.push(Piece { chars: start..self.chars, range, kind: PieceKind::Link(url.clone()) });
+                self.pieces.push(Piece { chars: start..self.chars, range, kind: PieceKind::Link(url.clone()), offsets: None });
             }
             InlineKind::Source => {
                 let src = collapse(self.text.get(range.clone()).unwrap_or_default());
@@ -591,7 +675,7 @@ fn plain(text: &str, inlines: &[Inline]) -> String {
 }
 
 /// The rectangles chars `s..e` of `galley` take, one per row.
-fn span_rects(galley: &Galley, (s, e): (usize, usize)) -> Vec<Rect> {
+pub(crate) fn span_rects(galley: &Galley, (s, e): (usize, usize)) -> Vec<Rect> {
     let mut out = Vec::new();
     let mut row_start = 0;
     for row in &galley.rows {
@@ -631,7 +715,7 @@ fn piece_tip(kind: &PieceKind, text: &str, range: &Range<usize>) -> Option<Strin
         src.split_once('{').map_or(src, |(_, k)| k.trim_end_matches('}')).to_owned()
     };
     Some(match kind {
-        PieceKind::Text => return None,
+        PieceKind::Text | PieceKind::Break => return None,
         PieceKind::Chip(ChipKind::Label, _) => tl!("Label {key}").replace("{key}", &key()),
         PieceKind::Chip(ChipKind::Reference, command) => {
             tl!("Reference (\\{command}) to {key}").replace("{command}", command).replace("{key}", &key())
@@ -679,12 +763,14 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
     job.halign = cx.align;
     let galley = ui.painter().layout_job(job);
     let line = (para.size * t.reading_leading).round();
-    let (rect, r) = ui.allocate_exact_size(vec2(width, galley.size().y.max(line)), Sense::click());
+    let (rect, r) = ui.allocate_exact_size(vec2(width, galley.size().y.max(line)), Sense::CLICK | Sense::DRAG);
     let origin = match cx.align {
         Align::Min => rect.min - galley.rect.min.to_vec2(),
         Align::Center => pos2(rect.center().x - galley.rect.center().x, rect.top() - galley.rect.top()),
         Align::Max => pos2(rect.right() - galley.rect.right(), rect.top() - galley.rect.top()),
     };
+    // The selection goes under the text.
+    let slot = ui.painter().add(egui::Shape::Noop);
     if ui.is_rect_visible(rect) {
         paint_pieces(ui, &t, &galley, &pieces, origin, para.size);
         ui.painter().galley(origin, Arc::clone(&galley), t.text);
@@ -697,11 +783,55 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
         None => r,
     };
     // A double-click on a run goes to where that run's source starts.
-    let target = r.double_clicked().then(|| hovered.map_or(range.start, |p| p.range.start));
+    if r.double_clicked() {
+        cx.jump = Some(Jump(hovered.map_or(range.start, |p| p.range.start)));
+    }
     let role = para.role;
     r.widget_info(|| egui::WidgetInfo::labeled(role, true, &plain_text));
-    activate(ui, cx, &r, rect, range.start, target);
+    let line = line_of(&pieces, para.empty_at.unwrap_or(range.start));
+    if let Some(byte) = cx.reveal
+        && line.span().is_some_and(|s| s.start <= byte && byte <= s.end)
+    {
+        let at = line.view_at(byte).unwrap_or(0);
+        let caret = galley.pos_from_cursor(egui::text::CCursor::new(at)).translate(origin.to_vec2());
+        ui.scroll_to_rect(caret.expand(para.size), None);
+        cx.reveal = None;
+    }
+    cx.lines.push(DrawnLine { line, galley, origin, slot, response: r.clone(), phantom: false });
     r
+}
+
+/// Where a block ends in the view: a heading after the label shown with it.
+fn block_end(block: &Block) -> usize {
+    match &block.kind {
+        BlockKind::Heading { label: Some(label), .. } => block.range.end.max(label.range.end),
+        _ => block.range.end,
+    }
+}
+
+/// An empty paragraph between source offsets `prev` and `next` (another block or the end of the
+/// text), when the caret stands alone between blank lines there: Enter just made it.
+fn phantom(ui: &mut egui::Ui, cx: &mut Cx<'_>, (prev, next): (usize, usize), last: bool) {
+    let Some(c) = cx.caret.filter(|c| prev < *c && *c <= next) else { return };
+    let (Some(before), Some(after)) = (cx.text.get(prev..c), cx.text.get(c..next)) else { return };
+    let alone = before.trim().is_empty() && before.matches('\n').count() >= 2 && (after.trim().is_empty() || c == next);
+    if !alone || cx.lines.iter().any(|d| d.phantom) {
+        return;
+    }
+    let t = cx.t;
+    let size = t.reading_size;
+    if last {
+        ui.add_space(gap_before(&t, &BlockKind::Paragraph(Vec::new())));
+    }
+    let galley = ui.painter().layout_no_wrap(String::new(), t.reading(size, false, false), t.text);
+    let height = (size * t.reading_leading).round();
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::CLICK | Sense::DRAG);
+    let slot = ui.painter().add(egui::Shape::Noop);
+    let origin = pos2(rect.left(), rect.center().y - galley.size().y / 2.0);
+    cx.lines.push(DrawnLine { line: Line::empty(c), galley, origin, slot, response, phantom: true });
+    if !last {
+        ui.add_space(gap_before(&t, &BlockKind::Paragraph(Vec::new())));
+    }
 }
 
 /// The focus ring, Enter and double-click of a part of the view.
@@ -780,7 +910,7 @@ fn paint_pieces(ui: &egui::Ui, t: &Tokens, galley: &Galley, pieces: &[Piece], or
         let fill = match p.kind {
             PieceKind::Chip(..) => blend(t.surface, t.accent_soft),
             PieceKind::Formula(_) | PieceKind::FormulaError(_) | PieceKind::Source => blend(t.surface, t.pressed),
-            PieceKind::Text | PieceKind::Link(_) | PieceKind::Footnote(_) | PieceKind::Typeset(_) => continue,
+            PieceKind::Text | PieceKind::Break | PieceKind::Link(_) | PieceKind::Footnote(_) | PieceKind::Typeset(_) => continue,
         };
         // Chips and formulas are outlined too, so they read as one unit on dark surfaces.
         let stroke = match p.kind {
@@ -915,19 +1045,38 @@ fn title_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, [title,
     ui.add_space(t.reading_size);
     if title.is_empty() && author.is_empty() {
         let tip = [Inline { kind: InlineKind::Source, range: range.clone() }];
-        let _ = paragraph(ui, cx, &tip, range, &Para { size: t.reading_size, bold: false, color: t.text_muted, role: egui::Role::Paragraph });
+        let _ = paragraph(
+            ui,
+            cx,
+            &tip,
+            range,
+            &Para { size: t.reading_size, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at: None },
+        );
     }
     if !title.is_empty() {
-        let r = paragraph(ui, cx, title, range, &Para { size: t.heading_sizes[0], bold: true, color: t.text, role: egui::Role::Heading });
+        let r =
+            paragraph(ui, cx, title, range, &Para { size: t.heading_sizes[0], bold: true, color: t.text, role: egui::Role::Heading, empty_at: None });
         ui.ctx().accesskit_node_builder(r.id, |node| node.set_level(1));
     }
     if !author.is_empty() {
         ui.add_space(t.reading_size * 0.75);
-        let _ = paragraph(ui, cx, author, range, &Para { size: t.reading_size * 1.1, bold: false, color: t.text_muted, role: egui::Role::Paragraph });
+        let _ = paragraph(
+            ui,
+            cx,
+            author,
+            range,
+            &Para { size: t.reading_size * 1.1, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at: None },
+        );
     }
     if !date.is_empty() {
         ui.add_space(t.reading_size * 0.25);
-        let _ = paragraph(ui, cx, date, range, &Para { size: t.reading_size, bold: false, color: t.text_muted, role: egui::Role::Paragraph });
+        let _ = paragraph(
+            ui,
+            cx,
+            date,
+            range,
+            &Para { size: t.reading_size, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at: None },
+        );
     }
     ui.add_space(t.reading_size * 0.75);
     cx.align = align;
@@ -944,7 +1093,7 @@ fn heading(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, level: u8, 
         });
         inlines.push(label.clone());
     }
-    let r = paragraph(ui, cx, &inlines, range, &Para { size, bold: true, color: t.text, role: egui::Role::Heading });
+    let r = paragraph(ui, cx, &inlines, range, &Para { size, bold: true, color: t.text, role: egui::Role::Heading, empty_at: None });
     // Part and chapter are the first level, section the second, and so on.
     let aria = usize::from(level.max(1));
     ui.ctx().accesskit_node_builder(r.id, |node| node.set_level(aria));
@@ -1045,7 +1194,10 @@ fn list(ui: &mut egui::Ui, cx: &mut Cx<'_>, kind: ListKind, items: &[Item], dept
             }
         }
         if blocks.is_empty() {
-            blocks.push(Block { kind: BlockKind::Paragraph(Vec::new()), range: item.range.clone() });
+            // Its caret stands after `\item `.
+            let start = item.range.start + "\\item".len();
+            let at = if cx.text.get(start..start + 1) == Some(" ") { start + 1 } else { start };
+            blocks.push(Block { kind: BlockKind::Paragraph(Vec::new()), range: at..at.max(item.range.end) });
         }
         ui.horizontal_top(|ui| {
             ui.add_space(indent);
@@ -1284,8 +1436,13 @@ fn figure_card(
         ui.add_space(pad);
         ui.vertical(|ui| {
             ui.set_width(inner);
-            let _ =
-                paragraph(ui, cx, &inlines, range, &Para { size: t.reading_size * 0.9, bold: false, color: t.text, role: egui::Role::FigureCaption });
+            let _ = paragraph(
+                ui,
+                cx,
+                &inlines,
+                range,
+                &Para { size: t.reading_size * 0.9, bold: false, color: t.text, role: egui::Role::FigureCaption, empty_at: None },
+            );
         });
     });
     ui.add_space(pad);
