@@ -578,7 +578,7 @@ impl Session {
     }
 
     /// Keeps what the interface offers for `e` and puts it in words.
-    fn forge_failed(&mut self, e: texcraft_forge::Error) -> String {
+    pub(crate) fn forge_failed(&mut self, e: texcraft_forge::Error) -> String {
         match &e {
             texcraft_forge::Error::Conflict { files, .. } => self.forge_problem = Some(Problem::Conflicts(files.clone())),
             texcraft_forge::Error::CannotPush { .. } => self.forge_problem = Some(Problem::CannotPush),
@@ -606,7 +606,7 @@ impl Session {
     }
 
     /// Puts a file from the forge into the project, or into the review when it is a thread's.
-    fn put_forge_file(&mut self, path: &str, bytes: Vec<u8>) -> Result<()> {
+    pub(crate) fn put_forge_file(&mut self, path: &str, bytes: Vec<u8>) -> Result<()> {
         if texcraft_forge::is_review(path) {
             let text = String::from_utf8(bytes).map_err(|_| "a review thread that is not UTF-8 text".to_owned())?;
             let id = self.review.put(&text, &self.project)?;
@@ -619,7 +619,7 @@ impl Session {
     }
 
     /// Removes a file the forge's branch deleted from the project, or from the review.
-    fn remove_forge_file(&mut self, path: &str) -> Result<()> {
+    pub(crate) fn remove_forge_file(&mut self, path: &str) -> Result<()> {
         if texcraft_forge::is_review(path) {
             let name = path.rsplit('/').next().unwrap_or_default();
             return match self.review.drop_file(name) {
@@ -698,6 +698,9 @@ impl Session {
     /// why it failed.
     pub fn poll_forge(&mut self) -> Option<Result<Value>> {
         if let Some(done) = self.poll_forge_auth() {
+            return Some(done);
+        }
+        if let Some(done) = self.poll_git() {
             return Some(done);
         }
         let outcome = match self.forge_task.as_mut()? {

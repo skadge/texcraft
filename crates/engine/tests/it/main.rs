@@ -16,6 +16,7 @@ mod forge;
 mod forge_pick;
 mod forge_servers;
 mod forge_sign_in;
+mod git;
 mod history;
 mod image;
 mod import;

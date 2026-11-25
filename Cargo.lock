@@ -6480,6 +6480,7 @@ dependencies = [
  "texcraft-buffer",
  "texcraft-compile",
  "texcraft-forge",
+ "texcraft-gitwire",
  "texcraft-history",
  "texcraft-latex",
  "texcraft-project",

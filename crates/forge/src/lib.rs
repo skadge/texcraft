@@ -67,6 +67,12 @@ impl Token {
     pub(crate) fn header(&self) -> String {
         format!("Bearer {}", self.0)
     }
+
+    /// The token itself, for credentials that are not a bearer header: git over HTTPS takes it
+    /// as the password of basic authentication. It goes into that request and nowhere else.
+    pub fn secret(&self) -> &str {
+        &self.0
+    }
 }
 
 impl std::fmt::Debug for Token {

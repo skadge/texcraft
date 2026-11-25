@@ -18,6 +18,7 @@ mod floats;
 pub(crate) mod forge;
 pub(crate) mod forge_auth;
 pub(crate) mod forge_pick;
+pub(crate) mod git;
 mod history;
 mod image;
 mod language;
@@ -91,6 +92,7 @@ pub fn all() -> &'static [CommandSpec] {
         v.extend(forge::specs());
         v.extend(forge_auth::specs());
         v.extend(forge_pick::specs());
+        v.extend(git::specs());
         v.extend(ai::specs());
         v
     })

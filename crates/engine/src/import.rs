@@ -62,6 +62,19 @@ const BUILD_OUTPUTS: &[&str] = &[
     ".ilg",
 ];
 
+/// A `.gitignore` that keeps the build's files out of a repository: TeXCraft's build folder and
+/// the files [`BUILD_OUTPUTS`] names.
+pub fn gitignore() -> String {
+    let mut text = String::from("# Written by TeXCraft: the build's files.\n");
+    text.push_str(texcraft_history::GITIGNORE);
+    for end in BUILD_OUTPUTS {
+        text.push('*');
+        text.push_str(end);
+        text.push('\n');
+    }
+    text
+}
+
 /// Why a file was left out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
