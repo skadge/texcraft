@@ -211,7 +211,8 @@ What it does:
     and the PKCE verifier GitLab's documentation lists); GitLab rotates the refresh token, so the
     renewed sign-in is kept whatever the operation's outcome. A refused renewal says to sign in again.
   - **Who**: `/api/v4/user` (name, username), shown in the dialogs and in Settings › Accounts.
-  - Other GitLab instances keep the personal access token: each needs an application of its own.
+  - Another GitLab signs in the same way once it is added, with its own application (below,
+    "Self-managed servers").
 - **Sign In with GitHub** (desktop only; `forge.sign_in {service: "github"}`): the device flow
   (RFC 8628). `POST https://github.com/login/device/code` (`scope=repo`); the dialog shows the
   code to enter, with Copy Code and Open GitHub's Page, and the page is opened once by itself.
@@ -261,10 +262,83 @@ sign-ins in the background (`Session::poll_forge` gives their outcome), keeps th
 (a token, or a sign-in renewed on the operation's thread). The web shell's `TabStorage` and its
 return from GitLab are in `apps/texcraft-web/src/main.rs`.
 
-Not yet: GitHub in the browser (it needs a token exchange on a server); a sign-in for another
-GitLab instance (its own application: an instance address and a client id); the branch checked
+Not yet: GitHub in the browser (it needs a token exchange on a server); the branch checked
 when a stored browser project opens again; in the browser, the dialog the user was in when the page
 left for GitLab is not opened again on return.
+
+### Self-managed servers (done)
+
+A company's or a university's GitLab, or a GitHub Enterprise Server, has no TeXCraft application
+until someone registers one there: the user for themselves, or the administrator for everyone.
+TeXCraft says exactly what to register, then signs in there as on gitlab.com.
+
+- **Adding a server** (Settings › Accounts › Add a GitLab Server… or Add a GitHub Enterprise
+  Server…; or, in the Open dialog, "Add git.example.org for Signing In…" when the project's host
+  has no application yet):
+  1. The user types the server's address (any page on it will do: its scheme and host are kept;
+     HTTPS only, but on `localhost`). gitlab.com and github.com are known already.
+  2. TeXCraft checks it (`forge.check_server {address, service}`): GitLab's `GET /api/v4/version`
+     (its version, or a 401 with GitLab's JSON, which most servers answer without a token: either
+     proves GitLab), or a GitHub Enterprise Server's `GET /api/v3/meta` (its `installed_version`,
+     or a 401 with GitHub's JSON in private mode). Another answer is "does not answer as a GitLab
+     server", in words. In the browser a request that gets no answer is most often a server that
+     does not answer web pages (no CORS for this page's origin): it is said so, with "ask its
+     administrator, or use the desktop app".
+  3. The dialog shows what to register, each value with a Copy button: where (GitLab: Edit profile
+     › Applications for oneself, Admin › Applications for everyone, each with a button opening the
+     page; GitHub: Settings › Developer settings › OAuth Apps), the name `TeXCraft`, the redirect
+     URIs (the desktop's `http://127.0.0.1:47321/callback`; in the browser also the page's own
+     origin and `/`), Confidential left unticked, the scopes `api read_api read_user`; on GitHub the
+     homepage and callback URL, and Enable Device Flow.
+  4. The user pastes the Application ID (GitHub: the Client ID), and the server is added
+     (`forge.add_server {address, service, client_id}`). Adding it again replaces the id.
+  Sign In then works for it exactly as for gitlab.com (`forge.sign_in {service, instance}`): the
+  desktop's loopback redirect or the browser's round trip (the pending sign-in remembers its
+  instance), renewal with the refresh token, revocation on sign out. A GitHub Enterprise Server
+  signs in with the device flow on its own host (`/login/device/code`,
+  `/login/oauth/access_token`; who is signed in from `/api/v3/user`), on the desktop only.
+- **What is kept**: the server (`{instance, service, client_id}`) in the preferences, which never
+  hold a token (the client id of a non-confidential application is no secret); its sign-in in the
+  keychain under `texcraft.forge.<host>`, as gitlab.com's. A sign-in remembers the application it
+  was got by, so it is renewed and revoked with the same one. Settings › Accounts lists each server
+  with its own Sign In or Sign Out, and Remove Server, which also signs out of it.
+- **A shared link** proposes a server: `https://texcraft-893d51.gitlab.io/?gitlab=https://git.example.org/group/project&client_id=<id>`
+  (or `?github=…`) in the browser; on the desktop the same link as the program's argument
+  (`texcraft 'https://…?gitlab=…&client_id=…'`). A dialog asks first ("Add a Server from a Link?",
+  saying which application, and what it replaces): a link cannot add one silently. Once added, the
+  link's project opens in the Open dialog. The query is taken out of the address bar.
+- **Servers provided by an organisation** (desktop): `texcraft-forges.toml`, read at start from
+  the system-wide folder (`/etc/texcraft/` on Linux and other Unixes,
+  `/Library/Application Support/TeXCraft/` on macOS, `%ProgramData%\TeXCraft\` on Windows), then
+  from the preferences' folder; the first file to list a server wins:
+
+  ```toml
+  [[server]]
+  address = "https://git.example.org"
+  service = "gitlab"     # or "github" for a GitHub Enterprise Server; gitlab when left out
+  client_id = "…"        # the application registered for everyone (Admin › Applications)
+  ```
+
+  Those servers show as "Provided by your organisation." and cannot be removed or given another id
+  in the interface (nor by `forge.add_server`). An entry that cannot be a server is left out and
+  said in Settings › Accounts.
+- **Private certificate authorities** (desktop): the forges' HTTPS trusts the system's certificate
+  store (rustls-native-certs) beside the bundled Mozilla roots (webpki-root-certs), so a server
+  whose certificate comes from the organisation's own authority, installed on its computers, is
+  reached. The browser uses its own store.
+- `forge.accounts` lists the servers (`provided`, `signed_in`) and the organisation file's
+  problems; `forge.remove_server {address}` removes one.
+
+How it is built: `texcraft_forge::servers` (the address, the probe, the registration, the link's
+proposal, the organisation's file); the engine's `cmd/forge_auth.rs` keeps the servers
+(`Session::restore_forge_servers`, `forge_servers_saved`, `set_forge_provided_servers`) and finds
+an instance's client id (`Session::forge_client_id`); the interface's `forge_server.rs` has the
+dialogs; the desktop shell reads the organisation's file and the link argument, the web shell the
+link's query.
+
+Limits: a GitLab served under a path (`https://example.org/gitlab`) is not supported (the address
+is the scheme and host); in the browser, a server that does not allow the page's origin (CORS)
+cannot be used, and GitHub Enterprise Server keeps the token there as github.com does.
 
 ## Step 5: folders and more
 
