@@ -72,8 +72,41 @@ impl Selection {
         Self { ranges, primary }
     }
 
+    /// Several ranges with `primary` (an index into them, clamped) the one the view follows.
+    pub fn with_primary(ranges: Vec<Range>, primary: usize) -> Self {
+        let mut s = Self::many(ranges);
+        s.primary = primary.min(s.ranges.len() - 1);
+        s
+    }
+
+    /// The ranges in order of position, those that overlap (or are the same caret) made one; the
+    /// primary is the one that holds the old primary's caret.
+    pub fn merged(&self) -> Self {
+        let head = self.primary().head;
+        let mut ranges = self.ranges.clone();
+        ranges.sort_by_key(|r| (r.start(), r.end()));
+        let mut out: Vec<Range> = Vec::with_capacity(ranges.len());
+        for r in ranges {
+            match out.last_mut() {
+                Some(last) if r.start() < last.end() || (r.start() == last.end() && (r.is_empty() || last.is_empty())) => {
+                    let (start, end) = (last.start(), last.end().max(r.end()));
+                    // The merged range keeps the direction of the first.
+                    *last = if last.anchor <= last.head { Range::new(start, end) } else { Range::new(end, start) };
+                }
+                _ => out.push(r),
+            }
+        }
+        let primary = out.iter().position(|r| r.start() <= head && head <= r.end()).unwrap_or(out.len().saturating_sub(1));
+        Self::with_primary(out, primary)
+    }
+
     pub fn ranges(&self) -> &[Range] {
         &self.ranges
+    }
+
+    /// Which of [`Self::ranges`] is the primary.
+    pub fn primary_index(&self) -> usize {
+        self.primary
     }
 
     pub fn primary(&self) -> Range {
