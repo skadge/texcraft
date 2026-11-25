@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 
 use crate::{Result, Session};
 
+mod ai;
 mod build;
 mod file;
 mod floats;
@@ -86,6 +87,7 @@ pub fn all() -> &'static [CommandSpec] {
         v.extend(review::specs());
         v.extend(history::specs());
         v.extend(forge::specs());
+        v.extend(ai::specs());
         v
     })
 }
