@@ -28,6 +28,7 @@ pub mod prefs;
 mod source;
 pub use picks::{Pick, PickKind, PickRequest};
 pub use start::{THUMBNAIL_WIDTH, Thumbnail};
+mod history;
 mod picks;
 mod preview;
 mod rail;
@@ -81,6 +82,8 @@ pub enum Side {
     Review,
     /// Finding and replacing across the project's files.
     Search,
+    /// The project's saved versions (its git history).
+    History,
 }
 
 /// How the editor and the preview share the window.
@@ -130,6 +133,7 @@ pub struct App {
     editor: editor::Editor,
     review: review::ReviewView,
     search: search::Search,
+    history: history::HistoryView,
     figure: figure_view::FigureView,
     pdf: pdf_view::PdfView,
     applied: Option<Scheme>,
@@ -206,6 +210,7 @@ impl App {
             editor: editor::Editor::default(),
             review: review::ReviewView::default(),
             search: search::Search::default(),
+            history: history::HistoryView::default(),
             figure: figure_view::FigureView::default(),
             pdf: pdf_view::PdfView::default(),
             applied: None,

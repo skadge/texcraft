@@ -49,6 +49,9 @@ pub struct Tokens {
     pub current_line: Color32,
     /// Behind search matches in the source.
     pub search_match: Color32,
+    /// Behind a line a version added, and one it removed, in a comparison of two versions.
+    pub diff_added: Color32,
+    pub diff_removed: Color32,
     /// Vim's block caret; the character under it is drawn in `caret_text`.
     pub caret_block: Color32,
     pub caret_text: Color32,
@@ -126,6 +129,8 @@ impl Tokens {
             error_line: alpha(rgb(0xC42B1C), 22),
             current_line: alpha(rgb(0x1B1E23), 8),
             search_match: alpha(rgb(0xE8A317), 77),
+            diff_added: alpha(rgb(0x17683B), 31),
+            diff_removed: alpha(rgb(0xC42B1C), 26),
             caret_block: text,
             caret_text: rgb(0xFFFFFF),
             shadow: Color32::from_black_alpha(36),
@@ -165,6 +170,8 @@ impl Tokens {
             error_line: alpha(rgb(0xFF6B6B), 36),
             current_line: alpha(rgb(0xFFFFFF), 10),
             search_match: alpha(rgb(0xF2C45A), 64),
+            diff_added: alpha(rgb(0x6FD39A), 38),
+            diff_removed: alpha(rgb(0xFF6B6B), 38),
             caret_block: text,
             caret_text: rgb(0x16181C),
             shadow: Color32::from_black_alpha(102),

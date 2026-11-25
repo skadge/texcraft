@@ -78,6 +78,7 @@ impl App {
             Some(Side::Outline) => "outline",
             Some(Side::Review) => "review",
             Some(Side::Search) => "search",
+            Some(Side::History) => "history",
             None => "hidden",
         };
         let dialog = self.view.dialog.as_ref().map(crate::dialogs::Dialog::name);

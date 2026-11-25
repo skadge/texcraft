@@ -117,6 +117,7 @@ impl Prefs {
             "outline" => Some(Side::Outline),
             "review" => Some(Side::Review),
             "search" => Some(Side::Search),
+            "history" => Some(Side::History),
             "" => None,
             _ => Some(Side::Files),
         }
@@ -134,6 +135,7 @@ impl Prefs {
             Some(Side::Outline) => "outline",
             Some(Side::Review) => "review",
             Some(Side::Search) => "search",
+            Some(Side::History) => "history",
             None => "",
         }
         .to_owned();
