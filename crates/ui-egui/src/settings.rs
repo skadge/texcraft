@@ -16,6 +16,7 @@ const TABS: &[(&str, &str)] = &[
     ("Building", "play"),
     ("Keyboard", "text-cursor-input"),
     ("Review", "message-square-text"),
+    ("AI", "circle-question-mark"),
 ];
 
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
@@ -59,7 +60,8 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                     1 => editor(app, ui, &t),
                     2 => building(app, ui, &t),
                     3 => keyboard(app, ui, &t),
-                    _ => review(app, ui, &t),
+                    4 => review(app, ui, &t),
+                    _ => crate::ai::settings(app, ui, &t),
                 }
             });
         });

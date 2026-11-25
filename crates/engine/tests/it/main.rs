@@ -1,5 +1,6 @@
 //! Integration tests for texcraft-engine.
 
+mod ai;
 mod build_options;
 mod command_sweep;
 mod deleted;

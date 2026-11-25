@@ -203,6 +203,8 @@ fn run() -> eframe::Result {
     let prefs = settings.get().0.clone();
     let system_title_bar = prefs.system_title_bar;
     let mut session = texcraft_engine::Session::new();
+    // The AI token goes to the system's keychain (docs/ROADMAP.md, AI1).
+    session.set_ai_secrets(Arc::new(texcraft_engine::ai::Keychain));
     if let Some(data) = dirs::data_dir() {
         session.set_template_store(data.join("TeXCraft").join("templates"));
     }

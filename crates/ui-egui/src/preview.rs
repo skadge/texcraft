@@ -427,7 +427,7 @@ fn print_summary(ui: &mut egui::Ui, t: &Tokens, outcome: &Outcome) -> CardAction
         };
         ("triangle-exclamation-point", t.warning, title, message)
     };
-    card(ui, t, Card { icon, color, title: &title, message: &message, help: "" }, None, None)
+    card(ui, t, Card { icon, color, title: &title, message: &message, help: "", ai: None }, None, None)
 }
 
 fn logs(app: &mut App, ui: &mut egui::Ui) {
@@ -450,6 +450,11 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
     let mut on_page = None;
     // Text to put on the clipboard, and what the status line says then.
     let mut copied: Option<(String, &str)> = None;
+    // A message to explain (its index in the build's messages), or the explanation to cancel.
+    let mut explain = None;
+    let mut cancel_ai = false;
+    let ai_offered = crate::ai::offered(app);
+    let ai_busy = app.session.ai_busy();
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         egui::Frame::new().inner_margin(egui::Margin::same(12)).show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(t.unit * 2.0, t.unit * 2.0);
@@ -471,14 +476,20 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                 copied = Some((print_summary_text(&outcome), tl!("The message is copied.")));
             }
             if let Status::Unavailable(reason) = &outcome.status {
-                let c = Card { icon: "circle-exclamation-point", color: t.error, title: tl!("Not compiled"), message: reason, help: "" };
+                let c = Card { icon: "circle-exclamation-point", color: t.error, title: tl!("Not compiled"), message: reason, help: "", ai: None };
                 if let CardAction::Copy = card(ui, &t, c, None, None) {
                     copied = Some((reason.clone(), tl!("The message is copied.")));
                 }
             }
             if shown.is_empty() && !matches!(outcome.status, Status::Unavailable(_)) {
                 let message = tl!("The last build reported no messages of this kind.");
-                card(ui, &t, Card { icon: "circle-check", color: t.success, title: tl!("Nothing to report"), message, help: "" }, None, None);
+                card(
+                    ui,
+                    &t,
+                    Card { icon: "circle-check", color: t.success, title: tl!("Nothing to report"), message, help: "", ai: None },
+                    None,
+                    None,
+                );
             }
             for d in shown.iter().copied() {
                 let (icon, color, word) = match d.severity {
@@ -494,7 +505,11 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                     None => word.to_owned(),
                 };
                 let page = outcome.place_on_page(d).map(|c| PageRect { page: c.page, x: c.x, y: c.y, width: c.width, height: c.height });
-                match card(ui, &t, Card { icon, color, title: &title, message: &d.message, help: &help }, place.as_ref(), page) {
+                // Errors and warnings can be explained, when a model is connected.
+                let ai = (ai_offered && d.severity >= Severity::Warning).then(|| (app.session.ai_explanation(d), ai_busy));
+                match card(ui, &t, Card { icon, color, title: &title, message: &d.message, help: &help, ai }, place.as_ref(), page) {
+                    CardAction::Explain => explain = outcome.diagnostics.iter().position(|x| std::ptr::eq(x, d)),
+                    CardAction::CancelAi => cancel_ai = true,
                     CardAction::Open(target) => goto = Some(target),
                     CardAction::ShowOnPage(rect) => on_page = Some(rect),
                     CardAction::Copy => copied = Some((diagnostic_text(d), tl!("The message is copied."))),
@@ -522,6 +537,12 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
     if let Some(rect) = on_page {
         show_on_page(app, rect);
     }
+    if let Some(index) = explain {
+        crate::ai::explain(app, json!({"index": index}));
+    }
+    if cancel_ai {
+        app.run("ai.cancel", json!({}));
+    }
     if let Some((file, line)) = goto
         && let Ok(path) = ProjectPath::new(&file)
     {
@@ -540,6 +561,9 @@ struct Card<'a> {
     message: &'a str,
     /// How to fix it, muted under the message; may be empty.
     help: &'a str,
+    /// For a message AI can explain: its explanation, if asked for, and whether a request is in
+    /// flight.
+    ai: Option<(Option<&'a texcraft_engine::ai::Explanation>, bool)>,
 }
 
 /// What was done with a log card.
@@ -551,12 +575,16 @@ enum CardAction {
     Copy,
     /// Its page was clicked: show its area there.
     ShowOnPage(PageRect),
+    /// Its Explain button was clicked.
+    Explain,
+    /// Its explanation's Cancel was clicked.
+    CancelAi,
 }
 
 /// One message as a card: its text can be selected, and its button copies it.
 /// `page`: the area on the PDF's page it is about, for a print check.
 fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Option<u32>)>, page: Option<PageRect>) -> CardAction {
-    let Card { icon, color, title, message, help } = c;
+    let Card { icon, color, title, message, help, ai } = c;
     let mut action = CardAction::None;
     egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner_large()).inner_margin(egui::Margin::same(12)).show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -600,6 +628,13 @@ fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Opti
                 ui.add(egui::Label::new(RichText::new(message).color(t.text)).selectable(true));
                 if !help.is_empty() {
                     ui.add(egui::Label::new(RichText::new(help).font(t.small()).color(t.text_muted)).selectable(true));
+                }
+                if let Some((explanation, busy)) = ai {
+                    match crate::ai::explanation(ui, t, explanation, busy) {
+                        crate::ai::Act::Explain => action = CardAction::Explain,
+                        crate::ai::Act::Cancel => action = CardAction::CancelAi,
+                        crate::ai::Act::None => {}
+                    }
                 }
             });
         });

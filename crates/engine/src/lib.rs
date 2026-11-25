@@ -5,6 +5,7 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod ai;
 pub mod cmd;
 mod edits;
 pub mod file_access;
@@ -154,6 +155,8 @@ pub struct Session {
     forge_changes: Option<((u64, u64), Vec<texcraft_forge::FileChange>)>,
     /// Why the last pull or commit was refused, when the interface offers a way out.
     forge_problem: Option<cmd::forge::Problem>,
+    /// AI assistance: the connection, its requests and their answers (docs/ROADMAP.md, AI1, AI2).
+    ai: ai::State,
 }
 
 impl Session {
@@ -211,6 +214,7 @@ impl Session {
             forge_transport: std::sync::Arc::new(texcraft_forge::transport),
             forge_changes: None,
             forge_problem: None,
+            ai: ai::State::default(),
         }
     }
 

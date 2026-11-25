@@ -37,11 +37,16 @@ retex-synctex = { workspace = true }
 log = { workspace = true }
 # Line diffs of a file's versions (history.diff).
 similar = { version = "3", default-features = false, features = ["std", "text"] }
+# AI assistance (docs/ROADMAP.md, AI1, AI2): the suite's connection, consent and request-log model.
+craft-ai-core = { workspace = true }
+craft-ai = { workspace = true }
 
 # Files a save removes from the project's folder and its history does not hold go to the
 # system's trash (issue #2).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 trash = "5"
+# The AI token in the system's keychain (the suite's one keychain namespace).
+craft-suite-account = { workspace = true }
 
 # The clock and the random source of new review ids, in the browser.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -51,6 +56,8 @@ getrandom = { workspace = true, features = ["wasm_js"] }
 craft-zip = { workspace = true }
 
 [dev-dependencies]
+# A fake model behind the suite's provider trait: tests never reach a network.
+craft-ai = { workspace = true }
 texcraft-templates = { workspace = true }
 texcraft-compile = { workspace = true, default-features = false }
 serde_json = { workspace = true }
