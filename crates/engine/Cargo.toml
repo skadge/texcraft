@@ -35,6 +35,11 @@ retex-lsp = { workspace = true }
 retex-synctex = { workspace = true }
 log = { workspace = true }
 
+# Files a save removes from the project's folder and its history does not hold go to the
+# system's trash (issue #2).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+trash = "5"
+
 # The clock and the random source of new review ids, in the browser.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 chrono = { workspace = true, features = ["wasmbind"] }

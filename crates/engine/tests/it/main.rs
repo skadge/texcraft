@@ -2,6 +2,7 @@
 
 mod build_options;
 mod command_sweep;
+mod deleted;
 mod draft;
 mod edits;
 mod export;
