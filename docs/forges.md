@@ -61,25 +61,74 @@ How it is built:
 - The engine's commands stay synchronous: `forge.open` and `forge.commit` take `background` and
   return at once; `Session::poll_forge` gives the outcome, which the window puts on the status
   line. Without `background` they wait (the command line, agents).
-- Review threads (`.texcraft/review/`) are hidden files: they are neither loaded from nor
-  committed to the branch yet.
+- Review threads (`.texcraft/review/`) were hidden files in step 1, neither loaded nor committed;
+  step 2 carries them.
 
-## Step 2: signing in, keeping up with the branch
+## Step 2: keeping up with the branch, conflicts, merge requests (done)
 
-- OAuth with PKCE (a non-confidential application registered on gitlab.com), the token renewed
-  with its refresh token and kept in the system's secret store (desktop) or the browser's storage;
-  `read_api` first, `api` asked for at the first commit.
-- The branch checked when a project opens again and while it is open; new commits taken in at
-  once when they touch no file changed here.
-- A three-way merge of text files (base, theirs, ours) line by line; overlapping changes, a file
-  deleted on one side or a binary file are conflicts, listed with keep mine or take theirs for
-  each.
+What it does:
 
-## Step 3: merge requests
+- **Update from GitLab** (File menu; `forge.pull {token?, resolve?, background?}`) takes in the
+  branch's new commits. Their tree is compared with the base's blob ids (no compare API, whose
+  diffs can be cut short):
+  - a file changed only on the branch is taken (or removed);
+  - a file changed on both sides the same way is left alone;
+  - a text file changed on both sides is merged line by line (`texcraft_forge::merge`: a Myers
+    diff of the base against each side, from the `similar` crate, put together as diff3 does).
+    Changes to different lines merge; the same change on both sides is no conflict; lines are
+    compared without their line ending, and the merged file keeps the local one (`\r\n` stays).
+  - changes to the same lines or to neighbouring lines (as git), a file deleted on one side and
+    changed on the other, a file added on both sides differently, and a binary file changed on
+    both sides are **conflicts**. Then nothing is taken in, the base stays, and `forge.status`
+    lists the files (`conflicts`, with why) until a pull or commit gets through.
+- **Conflicts** are settled per file with `resolve: {path: "mine" | "theirs"}` on a pull or a
+  commit: keep mine commits the project's version over the branch's, take theirs drops the change
+  made here. The commit dialog lists the files in conflict with Keep mine and Take theirs for each;
+  a pull that finds conflicts opens the same choices. No conflict markers in the editor.
+- **A new branch with a merge request** (`forge.commit {message, new_branch}`; the commit dialog's
+  "Commit to a new branch and open a merge request"): the changes since the base are committed to a
+  new branch started from the base (`POST …/repository/commits` with `start_sha`, so no merge is
+  needed), then `POST …/merge_requests` opens a merge request into the branch, where GitLab shows
+  any conflict; its link is shown. The project then follows the new branch, so later commits go
+  to the merge request. A merge request that cannot be opened is said, and the commit stays on the
+  new branch. A name git would refuse, or an existing branch, is refused before or by GitLab.
+- **A protected branch, or a role that cannot push** (the branch's `can_push`, or a commit's 403)
+  refuses the commit with nothing sent (`forge.status`'s `cannot_push`), and the commit dialog
+  opens again offering only a new branch with a merge request. Forking a project one cannot push
+  to at all is out of scope.
+- **A commit** catches up first as a pull does: merged files are committed on top of the branch's
+  head; conflicts refuse the commit unless `resolve` settles them.
+- **The periodic check**: while a project linked to a branch is open and a token was given in the
+  session (GitLab's limits without one are low), the window runs `forge.pull` every two minutes
+  and when it gets the focus back (a browser tab too), not while a dialog is open or another
+  operation runs. It is quiet: new commits taken in are said on the status line; conflicts are
+  shown in the top bar (`2 files in conflict`) and said once, and the next commit offers the
+  choices.
+- **Edits made while an operation ran**: updates are computed from the files as they were when it
+  started; a file edited since gets the update merged into the edits, or keeps the edits (said as
+  kept) when they do not merge.
+- **Review threads** (`.texcraft/review/*`, exactly that folder; other hidden files stay on the
+  branch) are loaded from the branch into the review, committed with the project (their quotes
+  renewed from the text, as a save does), counted among the changes, and pulled and merged like
+  any file; a thread changed on the branch replaces its copy in the review.
 
-When the branch cannot take the commit (protected, a role that cannot push, or a conflict the user
-does not resolve), a commit to a new branch from the base (`start_sha`) and a merge request
-(`POST …/merge_requests`), where GitLab shows the conflict.
+How it is built: `texcraft_forge::pull`, `commit` (with `Choices`), `commit_to_new_branch` and
+`merge::merge3`; `GitLab::create_commit` takes a `start_sha`, `GitLab::create_merge_request`; the
+fake GitLab has protected branches, `start_sha` and merge requests. The engine keeps the last
+refusal with a way out (`Session::forge_problem`), reads and writes the review's thread files
+through the forge's paths, and the window's `forge::check` runs the periodic pull.
+
+Limits: merges are by line; a change on the branch made between the check and the commit is
+written over by the commit's actions for the files it sends (GitLab's commit API has no
+compare-and-swap that was checked against gitlab.com; the commit's parent says it happened); the
+choice is per file, not per change.
+
+## Step 3: signing in
+
+OAuth with PKCE (a non-confidential application registered on gitlab.com), the token renewed with
+its refresh token and kept in the system's secret store (desktop) or the browser's storage;
+`read_api` first, `api` asked for at the first commit. The branch checked when a stored project
+opens again.
 
 ## Step 4: more forges and folders
 
@@ -88,4 +137,4 @@ does not resolve), a commit to a new branch from the base (`start_sha`) and a me
   token exchange.
 - Push and pull for project folders (real git, on the desktop).
 - Files over the limits fetched when the engine reads them; a diff of the changes before
-  committing; review threads committed with the project.
+  committing; conflict markers or a side-by-side view to merge a file by hand.
