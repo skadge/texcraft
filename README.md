@@ -42,6 +42,7 @@
   <a href="#what-retex-brings">What retex brings</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#status">Status</a> ·
+  <a href="#user-guide">User guide</a> ·
   <a href="#downloads">Downloads</a> ·
   <a href="#license-and-credits">License</a>
 </p>
@@ -142,6 +143,10 @@ TeXCraft is in early development. [`docs/ROADMAP.md`](docs/ROADMAP.md) has what 
 **Workspace:** `crates/{project, latex, compile, preview, engine, ui-egui, mcp}` and `apps/{texcraft, texcraft-cli, texcraft-web}`. The egui frontend is its own crate, so the interface can change without touching the engine. The interface's look is described in [`docs/design.md`](docs/design.md).
 
 Agent and contributor rules are in [`AGENTS.md`](AGENTS.md), which also lists the checks for the crates you change.
+
+## User guide
+
+The [user guide](https://texcraft-893d51.gitlab.io/guide/) explains every part of TeXCraft, on the desktop and in the browser; in the app it is Help › User Guide (F1). Its pages are in [`docs/guide/`](docs/guide/index.html).
 
 ## Downloads
 
