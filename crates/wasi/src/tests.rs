@@ -5,6 +5,7 @@ use std::collections::HashMap;
 struct Fake {
     sources: HashMap<String, Vec<u8>>,
     loads: Vec<String>,
+    opened: Vec<String>,
     out: Vec<u8>,
 }
 
@@ -26,6 +27,9 @@ impl Platform for Fake {
         self.out.extend_from_slice(bytes);
     }
     fn stderr(&mut self, _bytes: &[u8]) {}
+    fn opened(&mut self, source: &str) {
+        self.opened.push(source.to_owned());
+    }
 }
 
 /// A host over `fs` with a memory of 64 KiB; strings and buffers go above
@@ -111,6 +115,24 @@ fn a_tree_file_is_loaded_when_read_and_stops_the_run_when_it_cannot_be() {
     let fd = r.open("/texlive/article.cls", 0, 0).unwrap();
     r.read(fd, 10).unwrap();
     assert_eq!(r.wasi.platform.loads.len(), 1, "loaded once");
+}
+
+#[test]
+fn every_run_that_opens_a_tree_file_tells_the_host_even_once_it_is_loaded() {
+    let fs = FileSystem::new();
+    fs.add_lazy("/texlive/tikz.sty", 3, "tree/tikz.sty".into());
+    fs.add("/project/doc.tex", b"doc".to_vec(), 1);
+    let mut fake = Fake::default();
+    fake.sources.insert("tree/tikz.sty".into(), b"sty".to_vec());
+    let mut r = Run::new(fs.clone(), fake);
+    let fd = r.open("/texlive/tikz.sty", 0, 0).unwrap();
+    r.read(fd, 3).unwrap();
+    // A later run (another project's build) finds it loaded, and still lists it.
+    let mut r = Run::new(fs.clone(), Fake::default());
+    r.open("/texlive/tikz.sty", 0, 0).unwrap();
+    r.open("/project/doc.tex", 0, 0).unwrap();
+    assert!(r.wasi.platform.loads.is_empty());
+    assert_eq!(r.wasi.platform.opened, ["tree/tikz.sty"], "the tree file, not the project's");
 }
 
 #[test]

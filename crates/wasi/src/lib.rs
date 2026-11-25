@@ -118,6 +118,10 @@ pub trait Platform {
     fn stdout(&mut self, bytes: &[u8]);
     /// The module wrote to its standard error.
     fn stderr(&mut self, bytes: &[u8]);
+    /// The module opened the file of `source` (one added with
+    /// [`FileSystem::add_lazy`], loaded or not), so the host can list what a
+    /// run reads.
+    fn opened(&mut self, _source: &str) {}
 }
 
 /// A path argument: a string in memory, relative to directory `fd`.
@@ -588,7 +592,7 @@ impl<P: Platform> Wasi<P> {
                 let parts = split(&path);
                 let Some((name, parents)) = parts.split_last() else { return Ok(errno::EXIST) };
                 let Some(Node::Dir(parent)) = self.fs.lookup_parts(parents) else { return Ok(errno::NOENT) };
-                let file = Rc::new(RefCell::new(File { data: Data::Bytes(Vec::new()), mtime: now }));
+                let file = Rc::new(RefCell::new(File { data: Data::Bytes(Vec::new()), mtime: now, source: None }));
                 parent.borrow_mut().children.insert((*name).to_owned(), Node::File(file.clone()));
                 Node::File(file)
             }
@@ -602,6 +606,12 @@ impl<P: Platform> Wasi<P> {
             let mut f = f.borrow_mut();
             f.data = Data::Bytes(Vec::new());
             f.mtime = now;
+            f.source = None;
+        }
+        if let Node::File(f) = &node
+            && let Some(source) = f.borrow().source.clone()
+        {
+            self.platform.opened(&source);
         }
         let fd = self.next_fd;
         self.next_fd += 1;
