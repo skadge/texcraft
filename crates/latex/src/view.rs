@@ -143,7 +143,7 @@ pub struct Item {
 }
 
 /// Text environments shown formatted, under their name.
-const CONTAINERS: &[&str] = &["abstract", "quote", "quotation", "verse", "center", "flushleft", "flushright"];
+pub(crate) const CONTAINERS: &[&str] = &["abstract", "quote", "quotation", "verse", "center", "flushleft", "flushright"];
 
 /// The view of `text`.
 pub fn view(text: &str) -> Vec<Block> {
@@ -183,7 +183,7 @@ fn required(args: &[Arg]) -> Option<&Arg> {
 }
 
 /// The level of a sectioning command.
-fn heading_level(name: &str) -> Option<u8> {
+pub(crate) fn heading_level(name: &str) -> Option<u8> {
     let level = match name {
         "part" => 0,
         "chapter" => 1,
@@ -209,7 +209,7 @@ fn chip_kind(name: &str) -> Option<ChipKind> {
 }
 
 /// The style of a `\textbf{…}`-like command's argument, from the style around it.
-fn styled(name: &str, s: Style) -> Option<Style> {
+pub(crate) fn styled(name: &str, s: Style) -> Option<Style> {
     let style = match name {
         "textbf" => Style { bold: true, ..s },
         "textit" | "textsl" => Style { italic: true, ..s },
@@ -247,13 +247,15 @@ fn declared(name: &str, s: Style) -> Option<Style> {
 }
 
 /// Commands that stand for a fixed text.
-fn logo(name: &str) -> Option<&'static str> {
+pub(crate) fn logo(name: &str) -> Option<&'static str> {
     Some(match name {
         "LaTeX" => "LaTeX",
         "TeX" => "TeX",
         "LaTeXe" => "LaTeX2ε",
         "ldots" | "dots" | "textellipsis" => "…",
         "textbackslash" => "\\",
+        "textasciitilde" => "~",
+        "textasciicircum" => "^",
         "textendash" => "–",
         "textemdash" => "—",
         _ => return None,
@@ -261,7 +263,7 @@ fn logo(name: &str) -> Option<&'static str> {
 }
 
 /// What a control symbol shows; `None` for those shown as their source.
-fn control_symbol(symbol: &str) -> Option<&'static str> {
+pub(crate) fn control_symbol(symbol: &str) -> Option<&'static str> {
     Some(match symbol {
         "\\%" => "%",
         "\\&" => "&",

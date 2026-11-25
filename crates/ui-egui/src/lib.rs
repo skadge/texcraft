@@ -20,6 +20,7 @@ mod find_bar;
 pub mod fonts;
 mod forge;
 mod formatted;
+mod formatted_edit;
 mod gallery;
 mod goto_file;
 pub mod icons;

@@ -12,6 +12,7 @@
 
 use std::ops::Range;
 
+pub mod edit;
 pub mod fold;
 pub mod tree;
 pub mod view;

@@ -395,7 +395,10 @@ pub(crate) fn edit(app: &mut App, id: &str) -> bool {
     if !shown_text {
         return false;
     }
-    // The formatted view is read-only for now: an edit shows the source it changes.
+    // The formatted view makes its own edits; the others show the source they change.
+    if let Some(done) = crate::formatted_edit::command(app, id) {
+        return done;
+    }
     if let Some(path) = app.session.current().cloned() {
         app.editor.formatted.set(&path, false);
     }
