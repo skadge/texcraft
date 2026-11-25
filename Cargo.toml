@@ -37,6 +37,9 @@ retex-synctex = "2.4"
 # Figures for the editor pane: retex's own decoders (already built for retex), JPEG included.
 retex-image = { version = "2.4", features = ["jxl"] }
 png = "0.18"
+# Geometry types of craft-pdf's page interpreter (MIT OR Apache-2.0), at the version it uses: the
+# preview reads a page's glyphs through it.
+kurbo = "0.13"
 # SVG figures: rendered with their images (from the project) and the system's fonts.
 resvg = { version = "0.48", default-features = false, features = ["raster-images", "text", "system-fonts", "memmap-fonts"] }
 

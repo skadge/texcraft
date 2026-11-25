@@ -31,7 +31,8 @@ fn bindable(id: &'static str, label: &'static str, menu: &[&str], shortcut: Opti
 /// Every command a shortcut can run.
 fn catalog() -> Vec<Bindable> {
     let engine = cmd::all().iter().filter(|c| !c.menu.is_empty() || c.shortcut.is_some()).map(|c| bindable(c.id, c.label, c.menu, c.shortcut));
-    let ui = UI_COMMANDS.iter().map(|c| bindable(c.id, c.label, &[c.menu], c.shortcut));
+    // `view.zoom` needs its percentage, which a key cannot give.
+    let ui = UI_COMMANDS.iter().filter(|c| c.id != "view.zoom").map(|c| bindable(c.id, c.label, &[c.menu], c.shortcut));
     engine.chain(ui).collect()
 }
 

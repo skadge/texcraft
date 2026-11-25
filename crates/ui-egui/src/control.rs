@@ -55,7 +55,7 @@ impl App {
         }
         if UI_COMMANDS.iter().any(|c| c.id == id) {
             self.view.status = None;
-            crate::ui_cmd::run(self, id);
+            crate::ui_cmd::run_with(self, id, &args);
             return match self.view.status.take() {
                 Some((message, true)) => Err(message),
                 other => {

@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 craft-pdf = { workspace = true }
+kurbo = { workspace = true }
 retex-image = { workspace = true }
 resvg = { workspace = true }
 thiserror = { workspace = true }

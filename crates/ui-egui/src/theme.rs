@@ -56,6 +56,8 @@ pub struct Tokens {
     pub caret_block: Color32,
     pub caret_text: Color32,
     pub shadow: Color32,
+    /// Behind the page in presentation mode.
+    pub presentation: Color32,
     // Syntax
     pub syntax_command: Color32,
     pub syntax_comment: Color32,
@@ -134,6 +136,7 @@ impl Tokens {
             caret_block: text,
             caret_text: rgb(0xFFFFFF),
             shadow: Color32::from_black_alpha(36),
+            presentation: Color32::BLACK,
             syntax_command: rgb(0x2050C0),
             syntax_comment: rgb(0x5A6B4E),
             syntax_group: rgb(0x6A3FA0),
@@ -175,6 +178,7 @@ impl Tokens {
             caret_block: text,
             caret_text: rgb(0x16181C),
             shadow: Color32::from_black_alpha(102),
+            presentation: Color32::BLACK,
             syntax_command: rgb(0x82AEFF),
             syntax_comment: rgb(0x93A38D),
             syntax_group: rgb(0xC3A6F0),

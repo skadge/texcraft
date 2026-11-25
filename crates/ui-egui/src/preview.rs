@@ -47,11 +47,85 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     } else {
         // While a build's later passes run, its draft; otherwise the last PDF a build wrote, so a
         // draft never outlives its build (finished, failed or stopped).
-        app.pdf.sync(app.view.draft.as_ref().map(|d| &d.pdf).or(app.session.pdf()));
+        sync(app);
         app.pdf.show(ui, &t, building.as_ref());
         if let Some((page, x, y)) = app.pdf.clicked.take() {
             go_to_source(app, page, x, y);
         }
+        if let Some(text) = app.pdf.copied.take() {
+            let message = if text.trim().is_empty() {
+                tl!("The selected part of the PDF has no text to copy: its font does not say which characters it draws.").to_owned()
+            } else {
+                tl!("Copied {n} characters from the PDF.").replace("{n}", &text.chars().count().to_string())
+            };
+            app.view.status = Some((message, false));
+        }
+        match app.pdf.followed.take() {
+            Some(crate::pdf_view::Followed::Opened(uri)) => {
+                app.view.status = Some((tl!("Opening {address} in your browser.").replace("{address}", uri.trim()), false));
+            }
+            Some(crate::pdf_view::Followed::Refused(uri)) => {
+                let text = tl!("Not opened: {address} is not a web or mail address. Links from the PDF open only those.");
+                app.view.status = Some((text.replace("{address}", uri.trim()), true));
+            }
+            None => {}
+        }
+    }
+}
+
+/// Shows the PDF to show: the running build's draft, or the last build's.
+pub(crate) fn sync(app: &mut App) {
+    app.pdf.sync(app.view.draft.as_ref().map(|d| &d.pdf).or(app.session.pdf()));
+}
+
+/// Presentation mode: the page presented takes the whole window. The arrows, Space, Enter,
+/// Page Up and Page Down, Home and End move through the pages; Escape leaves.
+pub(crate) fn present(app: &mut App, ui: &mut egui::Ui) {
+    let t = app.tokens;
+    sync(app);
+    let keys = ui.input_mut(|i| {
+        let mut pressed = |keys: &[egui::Key]| keys.iter().filter(|k| i.consume_key(egui::Modifiers::NONE, **k)).count() > 0;
+        let next = pressed(&[egui::Key::ArrowRight, egui::Key::ArrowDown, egui::Key::Space, egui::Key::PageDown, egui::Key::Enter]);
+        let previous = pressed(&[egui::Key::ArrowLeft, egui::Key::ArrowUp, egui::Key::PageUp, egui::Key::Backspace]);
+        let first = pressed(&[egui::Key::Home]);
+        let last = pressed(&[egui::Key::End]);
+        let end = pressed(&[egui::Key::Escape]);
+        (next, previous, first, last, end)
+    });
+    match keys {
+        (true, ..) => ui_cmd::run(app, "view.present.next"),
+        (_, true, ..) => ui_cmd::run(app, "view.present.previous"),
+        (_, _, true, ..) => app.pdf.present_step(-(app.pdf.page_count() as isize)),
+        (_, _, _, true, _) => app.pdf.present_step(app.pdf.page_count() as isize),
+        _ => {}
+    }
+    if keys.4 {
+        ui_cmd::run(app, "view.present.end");
+        return;
+    }
+    app.pdf.show_slide(ui, &t);
+    // Where it is, and how to leave, said once the page changes; shown for a moment at the start.
+    let Some(page) = app.pdf.presenting() else { return };
+    let text = tl!("Page {n} of {count}. Escape leaves the presentation.")
+        .replace("{n}", &(page + 1).to_string())
+        .replace("{count}", &app.pdf.page_count().to_string());
+    let now = ui.input(|i| i.time);
+    let shown = now - app.pdf.presented_since(now) < 3.0;
+    let strip = egui::Rect::from_min_max(egui::pos2(ui.max_rect().left(), ui.max_rect().bottom() - t.unit * 14.0), ui.max_rect().max);
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(strip).layout(egui::Layout::bottom_up(egui::Align::Center)));
+    child.add_space(t.unit * 3.0);
+    let chip = egui::Frame::new()
+        .fill(if shown { t.raised } else { egui::Color32::TRANSPARENT })
+        .corner_radius(t.corner())
+        .inner_margin(egui::Margin::symmetric(10, 4))
+        .show(&mut child, |ui| {
+            let color = if shown { t.text } else { egui::Color32::TRANSPARENT };
+            ui.add(egui::Label::new(RichText::new(&text).font(t.small()).color(color)).sense(Sense::hover()))
+        })
+        .inner;
+    crate::status::announce(ui, &chip, &text);
+    if shown {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
     }
 }
 
@@ -107,11 +181,11 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.add_space(t.unit * 2.0);
             if widgets::icon_button(ui, &t, "zoom-in", tl!("Zoom In"), true).clicked() {
-                app.pdf.zoom_by(1.25);
+                ui_cmd::run(app, "view.zoom_in");
             }
             zoom_menu(app, ui);
             if widgets::icon_button(ui, &t, "zoom-out", tl!("Zoom Out"), true).clicked() {
-                app.pdf.zoom_by(0.8);
+                ui_cmd::run(app, "view.zoom_out");
             }
             ui.add_space(t.unit * 2.0);
             let (page, count) = (app.pdf.page, app.pdf.page_count());
@@ -198,6 +272,7 @@ fn export_menu(app: &mut App, ui: &mut egui::Ui) {
     }
 }
 
+/// The zoom menu: the zoom now, and the fits and fixed zooms, each a command.
 fn zoom_menu(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     let label = match app.pdf.fit() {
@@ -206,19 +281,38 @@ fn zoom_menu(app: &mut App, ui: &mut egui::Ui) {
         Fit::Zoom(_) => format!("{:.0} %", app.pdf.zoom() * 100.0),
     };
     let r = widgets::text_button(ui, &t, &label, true);
+    let _ = r.clone().on_hover_text(tl!("Zoom"));
     egui::Popup::menu(&r).show(|ui| {
         ui.set_min_width(140.0);
-        let mut choose = |ui: &mut egui::Ui, text: &str, fit: Fit| {
-            if ui.add(egui::Button::selectable(app.pdf.fit() == fit, text)).clicked() {
-                app.pdf.set_fit(fit);
+        let mut choose = |ui: &mut egui::Ui, text: &str, fit: Fit, id: &str, params: serde_json::Value| {
+            let mut button = egui::Button::selectable(app.pdf.fit() == fit, text);
+            if let Some(k) = app.keys.shortcut_text(id).filter(|_| params.is_null()) {
+                button = button.shortcut_text(k);
+            }
+            if ui.add(button).clicked() {
+                ui_cmd::run_with(app, id, &params);
                 ui.close();
             }
         };
-        choose(ui, tl!("Fit width"), Fit::Width);
-        choose(ui, tl!("Fit page"), Fit::Page);
+        choose(ui, tl!("Fit width"), Fit::Width, "view.fit_width", serde_json::Value::Null);
+        choose(ui, tl!("Fit page"), Fit::Page, "view.fit_page", serde_json::Value::Null);
         ui.separator();
         for z in [50, 75, 100, 125, 150, 200, 300, 400] {
-            choose(ui, &format!("{z} %"), Fit::Zoom(z as f32 / 100.0));
+            let text = format!("{z} %");
+            if z == 100 {
+                choose(ui, &text, Fit::Zoom(1.0), "view.actual_size", serde_json::Value::Null);
+            } else {
+                choose(ui, &text, Fit::Zoom(z as f32 / 100.0), "view.zoom", json!({"percent": z}));
+            }
+        }
+        ui.separator();
+        let mut present = egui::Button::new(tl!("Present"));
+        if let Some(k) = app.keys.shortcut_text("view.present") {
+            present = present.shortcut_text(k);
+        }
+        if ui.add(present).on_hover_text(tl!("Show the PDF a page at a time, in the whole window.")).clicked() {
+            ui.close();
+            ui_cmd::run(app, "view.present");
         }
     });
 }

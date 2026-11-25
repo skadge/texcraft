@@ -76,6 +76,15 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.zoom_in", "Zoom In", "View", "pdf", Some("Cmd+=")),
     ui("view.zoom_out", "Zoom Out", "View", "pdf", Some("Cmd+-")),
     ui("view.fit_width", "Fit Width", "View", "pdf", None),
+    ui("view.fit_page", "Fit Page", "View", "pdf", None),
+    ui("view.actual_size", "Actual Size", "View", "pdf", Some("Cmd+0")),
+    // `{"percent": 200}`: the zoom menu's fixed zooms, and any other from 25 to 400 %.
+    ui("view.zoom", "Zoom To", "View", "pdf", None),
+    ui("view.present", "Present the PDF", "View", "present", Some("F5")),
+    // In presentation mode the arrows, Space, Page Up and Page Down, and Escape run these.
+    ui("view.present.next", "Next Page", "View", "present", None),
+    ui("view.present.previous", "Previous Page", "View", "present", None),
+    ui("view.present.end", "Leave Presentation", "View", "present", None),
     ui("view.next_region", "Next Region", "View", "regions", Some("F6")),
     ui("view.previous_region", "Previous Region", "View", "regions", Some("Shift+F6")),
     ui("view.theme", "Switch Light and Dark", "View", "theme", None),
@@ -108,7 +117,17 @@ pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
 /// Runs `id`: a view command, an engine command that first asks for input, or a plain engine
 /// command.
 pub fn run(app: &mut App, id: &str) {
+    run_with(app, id, &json!({}));
+}
+
+/// Runs `id` with `params`, for the view commands that take some (`view.zoom`); the others
+/// ignore them.
+pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
     match id {
+        "view.zoom" => match params.get("percent").and_then(serde_json::Value::as_f64) {
+            Some(p) if (25.0..=400.0).contains(&p) => app.pdf.set_fit(crate::pdf_view::Fit::Zoom(p as f32 / 100.0)),
+            _ => app.view.status = Some((tl!("Give the zoom as a percentage from 25 to 400.").to_owned(), true)),
+        },
         "view.layout.split" => app.view.layout = Layout::Split,
         "view.layout.editor" => app.view.layout = Layout::EditorOnly,
         "view.layout.preview" => app.view.layout = Layout::PreviewOnly,
@@ -136,7 +155,19 @@ pub fn run(app: &mut App, id: &str) {
         },
         "view.zoom_in" => app.pdf.zoom_by(1.25),
         "view.zoom_out" => app.pdf.zoom_by(0.8),
-        "view.fit_width" => app.pdf.fit_width(),
+        "view.present" => {
+            crate::preview::sync(app);
+            app.pdf.present();
+            if app.pdf.presenting().is_none() {
+                app.view.status = Some((tl!("There is no PDF to present yet: compile the project first.").to_owned(), true));
+            }
+        }
+        "view.present.next" => app.pdf.present_step(1),
+        "view.present.previous" => app.pdf.present_step(-1),
+        "view.present.end" => app.pdf.present_end(),
+        "view.fit_width" => app.pdf.set_fit(crate::pdf_view::Fit::Width),
+        "view.fit_page" => app.pdf.set_fit(crate::pdf_view::Fit::Page),
+        "view.actual_size" => app.pdf.set_fit(crate::pdf_view::Fit::Zoom(1.0)),
         id if id.starts_with("window.") => {
             if !crate::window::run(app, id) {
                 log::warn!("unknown window command {id}");

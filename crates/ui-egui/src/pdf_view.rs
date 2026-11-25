@@ -1,12 +1,13 @@
 //! The PDF preview: the pages of the last PDF a build wrote, stacked on the canvas with a soft
-//! shadow, drawn by texcraft-preview at the zoom and the screen's pixel density. Only the pages in
-//! view are drawn, and each is drawn again only when the zoom changes or a new PDF arrives. The
-//! scroll position is kept across builds.
+//! shadow, drawn by texcraft-preview at the zoom and the screen's pixel density. Pages are drawn
+//! off the window's thread (a page or so a frame in the browser), those in view first, then those
+//! around them; until a page is drawn it shows as drawn before, or blank at its size. Each is drawn
+//! again only when the zoom changes or a new PDF arrives. The scroll position is kept across builds.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use texcraft_preview::Document;
+use texcraft_preview::{Document, Glyph, Link, Target};
 
 use crate::theme::Tokens;
 
@@ -45,34 +46,92 @@ struct Request {
     doc: Arc<Document>,
 }
 
-/// A page drawn, or why not.
+/// A page drawn, or why not; `None` when it was no longer wanted (scrolled away, another zoom,
+/// a newer PDF) and was not drawn.
 struct Drawn {
     generation: u64,
     index: usize,
     scale: f32,
-    image: Result<texcraft_preview::Image, String>,
+    image: Option<Result<texcraft_preview::Image, String>>,
 }
 
-/// Draws pages on a thread of its own, so a slow page (a full-page photograph) never holds the
-/// window up. The newest request for a page wins over older ones still queued. The browser build
-/// has no threads: there the queue is drawn on the window's thread, when the view takes the pages.
-struct Renderer {
-    tx: std::sync::mpsc::Sender<Request>,
-    rx: std::sync::mpsc::Receiver<Drawn>,
-    #[cfg(target_arch = "wasm32")]
-    queue: (std::sync::mpsc::Receiver<Request>, std::sync::mpsc::Sender<Drawn>),
+/// What the view shows now. The renderer draws only these pages, at this scale, of this PDF, in
+/// this order (the pages in view first, then those around them); other requests are dropped.
+#[derive(Default)]
+struct Wanted {
+    generation: u64,
+    scale: f32,
+    pages: Vec<usize>,
 }
 
-/// Draws the newest request of each page of `queue`, in the order asked; stops when `done` refuses.
-fn draw_newest(queue: Vec<Request>, mut done: impl FnMut(Drawn) -> bool) {
+/// What a request is for: the PDF's generation, the page, the scale.
+trait Asked {
+    fn asked(&self) -> (u64, usize, f32);
+}
+
+impl Asked for Request {
+    fn asked(&self) -> (u64, usize, f32) {
+        (self.generation, self.index, self.scale)
+    }
+}
+
+impl Wanted {
+    fn rank(&self, r: &impl Asked) -> Option<usize> {
+        let (generation, index, scale) = r.asked();
+        if generation != self.generation || (scale - self.scale).abs() >= 0.01 {
+            return None;
+        }
+        self.pages.iter().position(|p| *p == index)
+    }
+}
+
+/// Takes from `queue` the request to draw next: the newest of each page, the first of those
+/// `wanted` lists. The requests no longer wanted go to `dropped`.
+fn next_request<R: Asked>(queue: &mut Vec<R>, wanted: &Mutex<Wanted>, mut dropped: impl FnMut(R)) -> Option<R> {
+    let Ok(wanted) = wanted.lock() else {
+        return queue.pop();
+    };
     let mut seen = std::collections::HashSet::new();
-    let newest: Vec<Request> = queue.into_iter().rev().filter(|r| seen.insert(r.index)).collect();
-    for r in newest.into_iter().rev() {
-        let image = r.doc.render(r.index, r.scale).map_err(|e| e.to_string());
-        if !done(Drawn { generation: r.generation, index: r.index, scale: r.scale, image }) {
-            return;
+    let mut keep = Vec::with_capacity(queue.len());
+    for r in std::mem::take(queue).into_iter().rev() {
+        if seen.insert(r.asked().1) && wanted.rank(&r).is_some() {
+            keep.push(r);
+        } else {
+            dropped(r);
         }
     }
+    keep.sort_by_key(|r| std::cmp::Reverse(wanted.rank(r)));
+    let next = keep.pop();
+    *queue = keep;
+    next
+}
+
+fn draw(r: &Request) -> Drawn {
+    let image = r.doc.render(r.index, r.scale).map_err(|e| e.to_string());
+    Drawn { generation: r.generation, index: r.index, scale: r.scale, image: Some(image) }
+}
+
+fn dropped(r: &Request) -> Drawn {
+    Drawn { generation: r.generation, index: r.index, scale: r.scale, image: None }
+}
+
+/// How many pages the browser draws in a frame: it has one thread, so a long queue is drawn over
+/// several frames and the window keeps answering.
+#[cfg(target_arch = "wasm32")]
+const PAGES_PER_FRAME: usize = 1;
+
+/// Draws pages on a thread of its own, so a slow page (a full-page photograph) never holds the
+/// window up. Before each page it takes the view's [`Wanted`]: the pages in view are drawn first,
+/// and pages scrolled away, drawings at a zoom left behind and pages of an older PDF are dropped.
+/// The browser build has no threads: there the queue is drawn on the window's thread, a page or
+/// so a frame, when the view takes the pages.
+struct Renderer {
+    tx: std::sync::mpsc::Sender<Request>,
+    #[cfg(not(target_arch = "wasm32"))]
+    rx: std::sync::mpsc::Receiver<Drawn>,
+    wanted: Arc<Mutex<Wanted>>,
+    #[cfg(target_arch = "wasm32")]
+    queue: (std::sync::mpsc::Receiver<Request>, Vec<Request>),
 }
 
 impl Renderer {
@@ -80,40 +139,65 @@ impl Renderer {
     fn start(ctx: &egui::Context) -> Option<Self> {
         let (tx, requests) = std::sync::mpsc::channel::<Request>();
         let (done, rx) = std::sync::mpsc::channel();
+        let wanted = Arc::new(Mutex::new(Wanted::default()));
         let ctx = ctx.clone();
+        let shared = wanted.clone();
         std::thread::Builder::new()
             .name("texcraft-pdf-pages".to_owned())
             .spawn(move || {
+                let mut queue = Vec::new();
                 while let Ok(first) = requests.recv() {
-                    let mut queue = vec![first];
-                    queue.extend(requests.try_iter());
-                    let mut open = true;
-                    draw_newest(queue, |d| {
-                        open = done.send(d).is_ok();
+                    queue.push(first);
+                    loop {
+                        queue.extend(requests.try_iter());
+                        let mut open = true;
+                        let next = next_request(&mut queue, &shared, |r| open &= done.send(dropped(&r)).is_ok());
+                        let Some(r) = next else { break };
+                        open &= done.send(draw(&r)).is_ok();
                         ctx.request_repaint();
-                        open
-                    });
-                    if !open {
-                        return;
+                        if !open {
+                            return;
+                        }
                     }
                 }
             })
             .ok()?;
-        Some(Self { tx, rx })
+        Some(Self { tx, rx, wanted })
     }
 
     #[cfg(target_arch = "wasm32")]
     fn start(_: &egui::Context) -> Option<Self> {
         let (tx, requests) = std::sync::mpsc::channel::<Request>();
-        let (done, rx) = std::sync::mpsc::channel();
-        Some(Self { tx, rx, queue: (requests, done) })
+        Some(Self { tx, wanted: Arc::new(Mutex::new(Wanted::default())), queue: (requests, Vec::new()) })
     }
 
     /// The pages drawn since last asked.
-    fn drawn(&self) -> Vec<Drawn> {
-        #[cfg(target_arch = "wasm32")]
-        draw_newest(self.queue.0.try_iter().collect(), |d| self.queue.1.send(d).is_ok());
+    #[cfg(not(target_arch = "wasm32"))]
+    fn drawn(&mut self, _: &egui::Context) -> Vec<Drawn> {
         self.rx.try_iter().collect()
+    }
+
+    /// The pages drawn since last asked: in the browser, drawn now, a few at most.
+    #[cfg(target_arch = "wasm32")]
+    fn drawn(&mut self, ctx: &egui::Context) -> Vec<Drawn> {
+        let (requests, queue) = &mut self.queue;
+        queue.extend(requests.try_iter());
+        let mut out = Vec::new();
+        for _ in 0..PAGES_PER_FRAME {
+            let Some(r) = next_request(queue, &self.wanted, |r| out.push(dropped(&r))) else { break };
+            out.push(draw(&r));
+        }
+        if !queue.is_empty() {
+            ctx.request_repaint();
+        }
+        out
+    }
+
+    /// Tells the renderer what the view shows now.
+    fn want(&self, generation: u64, scale: f32, pages: Vec<usize>) {
+        if let Ok(mut w) = self.wanted.lock() {
+            *w = Wanted { generation, scale, pages };
+        }
     }
 }
 
@@ -143,6 +227,32 @@ pub(crate) struct PdfView {
     mark: Option<(Vec<texcraft_engine::PageRect>, f64)>,
     /// Scroll to this page and height (PDF points) next frame.
     reveal: Option<(usize, f32)>,
+    /// A link followed: scroll so that this page and height (PDF points) is at the top.
+    jump: Option<(usize, f32)>,
+    /// The links of the pages shown, read once a PDF.
+    links: HashMap<usize, Arc<Vec<Link>>>,
+    /// A link to the web followed, or refused: the preview pane says it in the status bar.
+    pub followed: Option<Followed>,
+    /// The glyphs of the pages text was selected on, read once a PDF.
+    glyphs: HashMap<usize, Arc<Vec<Glyph>>>,
+    /// The text selected by dragging over a page: the page, and the glyphs where the drag started
+    /// and where it is.
+    selection: Option<(usize, usize, usize)>,
+    /// Text copied from the PDF this frame: the preview pane says it in the status bar.
+    pub copied: Option<String>,
+    /// Presentation mode: the page shown, the whole window for it.
+    presenting: Option<usize>,
+    /// When the presentation started (egui time), once drawn.
+    presenting_since: Option<f64>,
+}
+
+/// A link to outside the document, clicked.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Followed {
+    /// Opened in the browser.
+    Opened(String),
+    /// Not opened: not a web or mail address (a file, a program, a script).
+    Refused(String),
 }
 
 impl Default for PdfView {
@@ -163,6 +273,14 @@ impl Default for PdfView {
             clicked: None,
             mark: None,
             reveal: None,
+            jump: None,
+            links: HashMap::new(),
+            followed: None,
+            glyphs: HashMap::new(),
+            selection: None,
+            copied: None,
+            presenting: None,
+            presenting_since: None,
         }
     }
 }
@@ -182,6 +300,9 @@ impl PdfView {
         // The pages drawn stay on screen until the new PDF's are drawn.
         self.generation += 1;
         self.pending.clear();
+        self.links.clear();
+        self.glyphs.clear();
+        self.selection = None;
         self.error = None;
         self.doc = None;
         self.sizes.clear();
@@ -196,6 +317,69 @@ impl PdfView {
             }
         }
         self.page = self.page.min(self.sizes.len().saturating_sub(1));
+        if let Some(p) = &mut self.presenting {
+            *p = (*p).min(self.sizes.len().saturating_sub(1));
+        }
+    }
+
+    /// Starts presenting from the first page in view.
+    pub fn present(&mut self) {
+        if self.doc.is_some() {
+            self.presenting = Some(self.page);
+            self.presenting_since = None;
+        }
+    }
+
+    /// The page presented, while in presentation mode.
+    pub fn presenting(&self) -> Option<usize> {
+        self.presenting
+    }
+
+    /// When the presentation started (egui time): `now` the first time it is asked.
+    pub fn presented_since(&mut self, now: f64) -> f64 {
+        *self.presenting_since.get_or_insert(now)
+    }
+
+    /// Presents the page `by` pages on (back when negative), within the document.
+    pub fn present_step(&mut self, by: isize) {
+        if let Some(p) = &mut self.presenting {
+            *p = p.saturating_add_signed(by).min(self.sizes.len().saturating_sub(1));
+        }
+    }
+
+    /// Leaves presentation mode, the page presented in view.
+    pub fn present_end(&mut self) {
+        if let Some(p) = self.presenting.take() {
+            self.scroll_to = Some(p);
+            self.page = p;
+        }
+    }
+
+    /// Draws the page presented, as large as `ui` allows, on the presentation backdrop. Links
+    /// work; a click elsewhere on the page goes to the next one.
+    pub fn show_slide(&mut self, ui: &mut egui::Ui, t: &Tokens) {
+        self.receive(ui.ctx());
+        let rect = ui.max_rect();
+        ui.painter().rect_filled(rect, 0.0, t.presentation);
+        let Some(p) = self.presenting else { return };
+        let Some(size) = self.sizes.get(p).copied() else { return };
+        let zoom = (rect.width() / size[0]).min(rect.height() / size[1]).max(0.01);
+        let page = egui::Rect::from_center_size(rect.center(), egui::vec2(size[0], size[1]) * zoom);
+        let next: Vec<usize> = [p, p + 1].into_iter().filter(|i| *i < self.sizes.len()).collect();
+        self.request(ui.ctx(), &next, ui.ctx().pixels_per_point() * zoom);
+        ui.painter().rect_filled(page, 0.0, egui::Color32::WHITE);
+        if let Some((_, _, texture)) = self.textures.get(&p) {
+            let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+            ui.painter().image(texture.id(), page, uv, egui::Color32::WHITE);
+        }
+        let name = tl!("Page {n} of {count}").replace("{n}", &(p + 1).to_string()).replace("{count}", &self.sizes.len().to_string());
+        let r = ui.interact(page, ui.scope_id().with("pdf-slide"), egui::Sense::click());
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Document, true, &name));
+        match self.page_links(ui, t, p, page, zoom) {
+            Some((_, target)) => self.follow(ui.ctx(), target),
+            None if r.clicked() => self.present_step(1),
+            None => {}
+        }
     }
 
     pub fn has_pdf(&self) -> bool {
@@ -223,10 +407,6 @@ impl PdfView {
 
     pub fn zoom_by(&mut self, factor: f32) {
         self.set_fit(Fit::Zoom(self.zoom * factor));
-    }
-
-    pub fn fit_width(&mut self) {
-        self.fit = Fit::Width;
     }
 
     pub fn go_to_page(&mut self, page: usize) {
@@ -323,6 +503,11 @@ impl PdfView {
         {
             area = area.vertical_scroll_offset((top + y * zoom - rect.height() / 3.0).max(0.0));
         }
+        if let Some((page, y)) = self.jump.take()
+            && let Some(top) = tops.get(page)
+        {
+            area = area.vertical_scroll_offset((top + y * zoom - PAGE_GAP).max(0.0));
+        }
         let now = ui.input(|i| i.time);
         const MARK_SECONDS: f64 = 1.8;
         if self.mark.as_ref().is_some_and(|(_, since)| now - since > MARK_SECONDS) {
@@ -334,10 +519,17 @@ impl PdfView {
             i.modifiers.command || i.events.iter().any(|e| matches!(e, egui::Event::PointerButton { modifiers, .. } if modifiers.command))
         });
         let mut clicked = None;
+        let mut follow = None;
         let shadow = egui::Shadow { offset: [0, 2], blur: 10, spread: 0, color: t.shadow };
         let sizes = self.sizes.clone();
         area.show_viewport(ui, |ui, viewport| {
             let (outer, _) = ui.allocate_exact_size(total, egui::Sense::hover());
+            // The pages to draw: those in view, then those half a pane above and below it.
+            let span = |i: usize| egui::Rangef::new(tops[i], tops[i] + sizes[i][1] * zoom);
+            let mut wanted: Vec<usize> = (0..tops.len()).filter(|i| viewport.y_range().intersects(span(*i))).collect();
+            let near = viewport.y_range().expand(viewport.height() / 2.0);
+            wanted.extend((0..tops.len()).filter(|i| near.intersects(span(*i)) && !viewport.y_range().intersects(span(*i))));
+            self.request(ui.ctx(), &wanted, pixels);
             let mut first_visible = None;
             for (i, (size, top)) in sizes.iter().zip(&tops).enumerate() {
                 let page = egui::Rect::from_min_size(
@@ -352,16 +544,25 @@ impl PdfView {
                 }
                 ui.painter().add(shadow.as_shape(page, 2));
                 ui.painter().rect_filled(page, 2, egui::Color32::WHITE);
-                if let Some(texture) = self.texture(ui.ctx(), i, pixels) {
+                // Until the page is drawn: as drawn before (another zoom, the last PDF), or blank.
+                if let Some((_, _, texture)) = self.textures.get(&i) {
                     let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
                     ui.painter().image(texture.id(), page, uv, egui::Color32::WHITE);
                 }
-                // Double-click or Ctrl+click: the source of that point.
-                let r = ui.interact(page, ui.scope_id().with(("pdf-page", i)), egui::Sense::click());
+                // Double-click or Ctrl+click: the source of that point. A drag selects text.
+                let r = ui.interact(page, ui.scope_id().with(("pdf-page", i)), egui::Sense::click_and_drag());
+                let name = tl!("Page {n} of {count}").replace("{n}", &(i + 1).to_string()).replace("{count}", &sizes.len().to_string());
+                r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Document, true, &name));
                 if (r.double_clicked() || (r.clicked() && command))
                     && let Some(p) = r.interact_pointer_pos()
                 {
                     clicked = Some((i, (p.x - page.left()) / zoom, (p.y - page.top()) / zoom));
+                }
+                self.select(ui, t, i, page, zoom, &r);
+                match self.page_links(ui, t, i, page, zoom) {
+                    Some((point, _)) if command => clicked = Some((i, point.x, point.y)),
+                    Some((_, target)) => follow = Some(target),
+                    None => {}
                 }
                 // The place shown from the source, fading.
                 if let Some((rects, since)) = &mark {
@@ -382,46 +583,158 @@ impl PdfView {
         if clicked.is_some() {
             self.clicked = clicked;
         }
+        if let Some(target) = follow {
+            self.follow(ui.ctx(), target);
+        }
         if let Some(pass) = building.and_then(|b| b.draft) {
             draft_badge(ui, t, rect, pass);
         }
     }
 
-    fn texture(&mut self, ctx: &egui::Context, index: usize, scale: f32) -> Option<egui::TextureHandle> {
-        let shown = self.textures.get(&index).map(|(drawn, generation, handle)| (*drawn, *generation, handle.clone()));
-        let fresh = shown.as_ref().is_some_and(|(drawn, generation, _)| *generation == self.generation && (drawn - scale).abs() < 0.01);
-        if fresh {
-            return shown.map(|(_, _, h)| h);
+    /// Follows a link: to its page (presented, or scrolled to the top of the pane at the
+    /// destination's height), or to the web after the safe-URL check.
+    fn follow(&mut self, ctx: &egui::Context, target: Target) {
+        match target {
+            Target::Page { page, y } => {
+                if self.presenting.is_some() {
+                    self.presenting = Some(page.min(self.sizes.len().saturating_sub(1)));
+                } else {
+                    self.jump = Some((page, y.unwrap_or(0.0)));
+                }
+                ctx.request_repaint();
+            }
+            Target::Uri(uri) if texcraft_preview::safe_url(&uri) => {
+                ctx.open_url(egui::OpenUrl::new_tab(uri.trim()));
+                self.followed = Some(Followed::Opened(uri));
+            }
+            Target::Uri(uri) => self.followed = Some(Followed::Refused(uri)),
         }
-        let doc = self.doc.clone()?;
+    }
+
+    /// The links of page `i`, drawn at `page`: each a link for the pointer (a hand, its target
+    /// as a tooltip), the keyboard and screen readers. The link clicked, if one was: the point
+    /// clicked (PDF points from the page's top left) and where it goes.
+    fn page_links(&mut self, ui: &mut egui::Ui, t: &Tokens, i: usize, page: egui::Rect, zoom: f32) -> Option<(egui::Pos2, Target)> {
+        let doc = self.doc.as_ref()?;
+        let links = self.links.entry(i).or_insert_with(|| Arc::new(doc.links(i))).clone();
+        let mut clicked = None;
+        for (k, link) in links.iter().enumerate() {
+            let [l, top, r, b] = link.rect;
+            let area = egui::Rect::from_min_max(page.min + egui::vec2(l, top) * zoom, page.min + egui::vec2(r, b) * zoom);
+            let label = link_label(&link.target);
+            let response = ui.interact(area, ui.scope_id().with(("pdf-link", i, k)), egui::Sense::click());
+            response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Link, true, &label));
+            if response.has_focus() {
+                ui.painter().rect_stroke(area.expand(2.0), 2.0, egui::Stroke::new(2.0, t.accent), egui::StrokeKind::Outside);
+            }
+            if response.clicked() {
+                let at = response.interact_pointer_pos().unwrap_or(area.center());
+                clicked = Some((((at - page.min) / zoom).to_pos2(), link.target.clone()));
+            }
+            let _ = response.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(label);
+        }
+        clicked
+    }
+
+    /// Text selection on page `i`, drawn at `page`, through the page's response `r`: a drag
+    /// selects from the glyph nearest where it started to the one nearest the pointer; a click or
+    /// Escape clears it; Ctrl+C (Cmd+C) copies it while the page has the keyboard.
+    fn select(&mut self, ui: &mut egui::Ui, t: &Tokens, i: usize, page: egui::Rect, zoom: f32, r: &egui::Response) {
+        let at = |p: egui::Pos2| ((p - page.min) / zoom).to_pos2();
+        if r.drag_started()
+            && let Some(start) = ui.input(|input| input.pointer.press_origin())
+        {
+            let start = at(start);
+            self.selection = self.page_glyphs(i).and_then(|g| texcraft_preview::glyph_at(&g, start.x, start.y)).map(|g| (i, g, g));
+            r.request_focus();
+        } else if r.dragged()
+            && let Some((page_selected, _, head)) = &mut self.selection
+            && *page_selected == i
+            && let Some(p) = r.interact_pointer_pos()
+            && let Some(glyphs) = self.glyphs.get(&i)
+        {
+            let p = at(p);
+            *head = texcraft_preview::glyph_at(glyphs, p.x, p.y).unwrap_or(*head);
+        } else if r.clicked() && !r.double_clicked() {
+            self.selection = None;
+        }
+        let Some((page_selected, anchor, head)) = self.selection.filter(|s| s.0 == i) else { return };
+        let Some(glyphs) = self.glyphs.get(&page_selected).cloned() else { return };
+        let (a, b) = (anchor.min(head), anchor.max(head));
+        for g in glyphs.iter().take(b + 1).skip(a) {
+            let [l, top, right, bottom] = g.rect;
+            let area = egui::Rect::from_min_max(page.min + egui::vec2(l, top) * zoom, page.min + egui::vec2(right, bottom) * zoom);
+            ui.painter().rect_filled(area, 0.0, t.selection);
+        }
+        if !r.has_focus() {
+            return;
+        }
+        let (copy, escape) = ui.input(|input| {
+            let copy = input.events.iter().any(|e| matches!(e, egui::Event::Copy)) || (input.modifiers.command && input.key_pressed(egui::Key::C));
+            (copy, input.key_pressed(egui::Key::Escape))
+        });
+        if copy {
+            let text = texcraft_preview::text_between(&glyphs, anchor, head);
+            ui.ctx().copy_text(text.clone());
+            self.copied = Some(text);
+        }
+        if escape {
+            self.selection = None;
+        }
+    }
+
+    /// The glyphs of page `i`, read the first time they are asked for.
+    fn page_glyphs(&mut self, i: usize) -> Option<Arc<Vec<Glyph>>> {
+        if let Some(g) = self.glyphs.get(&i) {
+            return Some(g.clone());
+        }
+        let glyphs = match self.doc.as_ref()?.glyphs(i) {
+            Ok(g) => Arc::new(g),
+            Err(e) => {
+                log::warn!("page {}: {e}", i + 1);
+                Arc::new(Vec::new())
+            }
+        };
+        self.glyphs.insert(i, glyphs.clone());
+        Some(glyphs)
+    }
+
+    /// Asks for `pages` (in that order) at `scale`, those not drawn at it yet; the renderer drops
+    /// what it was asked before and is no longer wanted.
+    fn request(&mut self, ctx: &egui::Context, pages: &[usize], scale: f32) {
+        let Some(doc) = self.doc.clone() else { return };
         if self.renderer.is_none() {
             self.renderer = Renderer::start(ctx);
         }
-        match &self.renderer {
-            Some(renderer) => {
-                if self.pending.get(&index).is_none_or(|s| (s - scale).abs() >= 0.01) {
-                    let request = Request { generation: self.generation, index, scale, doc };
-                    if renderer.tx.send(request).is_ok() {
-                        self.pending.insert(index, scale);
-                        // The browser draws the queue next frame.
-                        #[cfg(target_arch = "wasm32")]
-                        ctx.request_repaint();
-                    }
-                }
-                // Until then, the page as it was drawn before (another scale, the last PDF).
-                shown.map(|(_, _, h)| h)
+        let fresh = |textures: &HashMap<usize, (f32, u64, egui::TextureHandle)>, generation: u64, i: &usize| {
+            textures.get(i).is_some_and(|(drawn, g, _)| *g == generation && (drawn - scale).abs() < 0.01)
+        };
+        let Some(renderer) = &self.renderer else {
+            // No thread to draw on: drawn here and now.
+            for i in pages.iter().filter(|i| !fresh(&self.textures, self.generation, i)).copied().collect::<Vec<_>>() {
+                let image = doc.render(i, scale).map_err(|e| e.to_string());
+                self.take(ctx, Drawn { generation: self.generation, index: i, scale, image: Some(image) });
             }
-            None => {
-                let image = doc.render(index, scale).map_err(|e| e.to_string());
-                self.take(ctx, Drawn { generation: self.generation, index, scale, image });
-                self.textures.get(&index).map(|(_, _, h)| h.clone())
+            return;
+        };
+        renderer.want(self.generation, scale, pages.to_vec());
+        for &i in pages {
+            if fresh(&self.textures, self.generation, &i) || self.pending.get(&i).is_some_and(|s| (s - scale).abs() < 0.01) {
+                continue;
+            }
+            let request = Request { generation: self.generation, index: i, scale, doc: doc.clone() };
+            if renderer.tx.send(request).is_ok() {
+                self.pending.insert(i, scale);
+                // The browser draws the queue next frame.
+                #[cfg(target_arch = "wasm32")]
+                ctx.request_repaint();
             }
         }
     }
 
     /// Takes the pages the renderer drew.
     fn receive(&mut self, ctx: &egui::Context) {
-        let drawn: Vec<Drawn> = self.renderer.as_ref().map(Renderer::drawn).unwrap_or_default();
+        let drawn: Vec<Drawn> = self.renderer.as_mut().map(|r| r.drawn(ctx)).unwrap_or_default();
         for d in drawn {
             self.take(ctx, d);
         }
@@ -435,13 +748,23 @@ impl PdfView {
             self.pending.remove(&d.index);
         }
         match d.image {
-            Ok(image) => {
+            // Dropped: asked again when it is in view.
+            None => {}
+            Some(Ok(image)) => {
                 let color = egui::ColorImage::from_rgba_premultiplied([image.width as usize, image.height as usize], &image.rgba);
                 let handle = ctx.load_texture(format!("pdf-page-{}", d.index), color, egui::TextureOptions::LINEAR);
                 self.textures.insert(d.index, (d.scale, d.generation, handle));
             }
-            Err(e) => log::warn!("page {}: {e}", d.index + 1),
+            Some(Err(e)) => log::warn!("page {}: {e}", d.index + 1),
         }
+    }
+}
+
+/// What a link says: where it goes.
+fn link_label(target: &Target) -> String {
+    match target {
+        Target::Page { page, .. } => tl!("Link to page {n}").replace("{n}", &(page + 1).to_string()),
+        Target::Uri(uri) => tl!("Link to {address}").replace("{address}", uri.trim()),
     }
 }
 
@@ -461,4 +784,36 @@ fn draft_badge(ui: &mut egui::Ui, t: &Tokens, pane: egui::Rect, pass: u32) {
             crate::status::announce(ui, &label, &text);
             label.on_hover_text(tl!("The PDF of an earlier pass, shown while the build goes on: its references may not be resolved yet."));
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::{Asked, Wanted, next_request};
+
+    impl Asked for (u64, usize, f32) {
+        fn asked(&self) -> (u64, usize, f32) {
+            *self
+        }
+    }
+
+    #[test]
+    fn the_pages_in_view_are_drawn_first_and_the_others_dropped() {
+        // In view: pages 7 then 8, at scale 2, of the PDF of generation 3.
+        let wanted = Mutex::new(Wanted { generation: 3, scale: 2.0, pages: vec![7, 8] });
+        let mut queue = vec![
+            (3, 8, 2.0),
+            (2, 7, 2.0), // an older PDF
+            (3, 1, 2.0), // scrolled away
+            (3, 7, 1.0), // another zoom
+            (3, 7, 2.0),
+        ];
+        let mut dropped = Vec::new();
+        let first = next_request(&mut queue, &wanted, |r| dropped.push(r));
+        assert_eq!(first, Some((3, 7, 2.0)), "the first page in view is not drawn first");
+        assert_eq!(next_request(&mut queue, &wanted, |r| dropped.push(r)), Some((3, 8, 2.0)));
+        assert_eq!(next_request(&mut queue, &wanted, |r| dropped.push(r)), None);
+        assert_eq!(dropped.len(), 3, "requests no longer wanted were kept: {dropped:?}");
+    }
 }
