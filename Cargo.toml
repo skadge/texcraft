@@ -67,6 +67,7 @@ texcraft-templates = { path = "crates/templates", default-features = false }
 texcraft-review = { path = "crates/review" }
 texcraft-history = { path = "crates/history" }
 texcraft-forge = { path = "crates/forge" }
+texcraft-gitwire = { path = "crates/gitwire" }
 texcraft-wasi = { path = "crates/wasi" }
 
 # foundation

@@ -2567,15 +2567,18 @@ dependencies = [
  "crc32fast",
  "gix-chunk",
  "gix-error",
+ "gix-fs",
  "gix-hash",
  "gix-hashtable",
  "gix-object",
  "gix-parallel",
  "gix-path",
+ "gix-tempfile",
  "gix-trace",
  "gix-utils",
  "gix-zlib",
  "memmap2",
+ "parking_lot 0.13.0",
  "smallvec",
 ]
 
@@ -6506,6 +6509,15 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "webpki-root-certs",
+]
+
+[[package]]
+name = "texcraft-gitwire"
+version = "0.11.0"
+dependencies = [
+ "base64 0.22.1",
+ "gix",
+ "gix-pack",
 ]
 
 [[package]]

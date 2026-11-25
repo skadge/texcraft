@@ -1,0 +1,22 @@
+[package]
+name = "texcraft-gitwire"
+description = "Git's smart HTTP protocol, client side: fetching a branch (git-upload-pack) and pushing one (git-receive-pack) between a repository on disk and a server, over an HTTP client the caller gives"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# HTTP basic authentication's header.
+base64 = "0.22"
+
+# Git on disk (desktop): objects read and written, and a received pack indexed into the
+# repository (gix-pack's streaming input, the version gix uses). gix has no push, and its fetch
+# needs its own HTTP client stack (curl or reqwest); this crate speaks the protocol itself.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+gix = { version = "0.91", default-features = false, features = ["sha1"] }
+gix-pack = { version = "0.78", default-features = false, features = ["sha1", "streaming-input"] }
