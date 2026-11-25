@@ -189,6 +189,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                             }
                         }
                         "project.from_template" => app.template_project_opened(),
+                        "build.export" => crate::ui_cmd::export_started(app, &done),
                         "build.save_output" => {
                             let said = tl!("Saved to {path}.").replace("{path}", done["path"].as_str().unwrap_or_default());
                             app.view.status = Some((said, false));
