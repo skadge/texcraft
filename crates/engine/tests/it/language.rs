@@ -76,3 +76,18 @@ fn a_build_of_our_own_gives_completion_its_bibliography() {
     s.execute("build.compile", &json!({"wait": true})).unwrap();
     assert!(keys(&mut s).contains(&"knuth84".to_owned()), "the build's entry is not offered: {:?}", keys(&mut s));
 }
+
+#[test]
+fn the_formulas_of_a_file_are_typeset_in_reading_order_or_say_why_not() {
+    let text = "\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\n\\begin{itemize}\n\\item Where $x^2$ holds.\n\\end{itemize}\n\\begin{align}\na &= b \\label{eq:a} \\\\\nc &= d\n\\end{align}\nBad $\\nosuchmacro$.\n\\end{document}\n";
+    let mut s = session(text).unwrap();
+    let r = s.execute("language.formulas", &json!({"path": "main.tex"})).unwrap();
+    let f = r["formulas"].as_array().unwrap();
+    let status: Vec<&str> = f.iter().filter_map(|f| f["status"].as_str()).collect();
+    assert_eq!(status, ["typeset", "typeset", "error"], "{r}");
+    assert!(f[1]["display"] == true && f[1]["line"].as_u64() > f[0]["line"].as_u64(), "{r}");
+    assert!(
+        f[1]["height_pt"].as_f64().unwrap() + f[1]["depth_pt"].as_f64().unwrap() > f[0]["height_pt"].as_f64().unwrap() * 2.0,
+        "two aligned lines are not taller than one: {r}"
+    );
+}

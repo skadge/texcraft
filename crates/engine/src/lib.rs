@@ -9,9 +9,11 @@ pub mod cmd;
 mod edits;
 pub mod file_access;
 pub mod find;
+mod formulas;
 mod language;
 mod sync;
 pub use edits::FileEdit;
+pub use formulas::{Formula, FormulaBox, FormulaState, Formulas};
 pub use language::{Completion, Fix, Lint, TextEdit};
 pub use sync::PageRect;
 pub use texcraft_buffer::{Change, Origin, Transaction};
@@ -111,6 +113,8 @@ pub struct Session {
     /// The git repository the project's folder is in (docs/ROADMAP.md, C8): found when the project
     /// is opened, made on its first save when there is none.
     history: Option<texcraft_history::History>,
+    /// The formulas of the file last asked for, and the engine that typesets them.
+    formulas: formulas::State,
     /// The export running on its own thread (`build.export` with `background`).
     #[cfg(not(target_arch = "wasm32"))]
     export: Option<std::sync::mpsc::Receiver<Result<Value>>>,
@@ -160,6 +164,7 @@ impl Session {
             #[cfg(not(target_arch = "wasm32"))]
             on_disk: std::collections::BTreeSet::new(),
             history: None,
+            formulas: formulas::State::default(),
             #[cfg(not(target_arch = "wasm32"))]
             export: None,
             #[cfg(target_arch = "wasm32")]

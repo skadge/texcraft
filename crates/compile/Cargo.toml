@@ -31,3 +31,6 @@ web-sys = { version = "0.3", features = ["Worker", "MessageEvent", "DedicatedWor
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 retex = { workspace = true, optional = true }
+
+[dev-dependencies]
+texcraft-preview = { workspace = true }

@@ -44,3 +44,24 @@ fn the_formatted_view_shows_headings_without_their_commands_and_goes_back_to_the
     // The caret is at the heading's command, on the third line.
     assert!(harness.query_by_label_contains("Ln 3,").is_some(), "the caret is not at the heading");
 }
+
+#[test]
+fn a_formula_is_drawn_typeset_once_retex_has_typeset_it() {
+    let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    let text = "\\documentclass{article}\n\\begin{document}\nInline $x^2$ here.\n\\[ \\frac{a}{b} \\]\nBad $\\nosuchmacro$.\n\\end{document}\n";
+    s.execute("file.write", &json!({"path": "main.tex", "text": text})).unwrap();
+    let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
+    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    harness.run_steps(3);
+    harness.get_by_label("Formatted").click();
+    harness.run_steps(3);
+    // Until it is typeset, the formula shows as its source.
+    let image = |h: &Harness<'_, App>| h.query_by_role_and_label(egui::accesskit::Role::Image, "\\frac{a}{b}").is_some();
+    let started = std::time::Instant::now();
+    while !image(&harness) && started.elapsed() < std::time::Duration::from_secs(120) {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        harness.run_steps(2);
+    }
+    assert!(image(&harness), "the display formula was not drawn typeset");
+    assert!(harness.query_by_role_and_label(egui::accesskit::Role::Paragraph, "Inline x^2 here.").is_some(), "the paragraph's name lost its formula");
+}

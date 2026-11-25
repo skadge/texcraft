@@ -14,6 +14,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         spec("language.hover", "Describe", at_schema, hover),
         spec("language.definition", "Go to Definition", at_schema, definition),
         spec("language.lint", "Hints", path_schema, lint),
+        spec("language.formulas", "Typeset Formulas", path_schema, formulas),
         spec("language.fixes", "Quick Fixes", line_schema, fixes),
         CommandSpec {
             id: "language.fix",
@@ -114,4 +115,35 @@ fn lint(s: &mut Session, p: &Value) -> Result<Value> {
         .map(|l| json!({"line": l.line + 1, "column": l.column + 1, "end_line": l.end_line + 1, "end_column": l.end_column + 1, "severity": l.severity, "message": l.message}))
         .collect();
     Ok(json!({"hints": hints}))
+}
+
+/// The file's formulas typeset as the formatted view draws them, after waiting for the batch:
+/// each one's box in TeX points, or why it was not typeset.
+fn formulas(s: &mut Session, p: &Value) -> Result<Value> {
+    let path = path_param(p, "path")?;
+    s.formulas(&path)?;
+    s.wait_for_formulas();
+    let found = s.formulas(&path)?;
+    let text = s.project().text(&path).map_err(|e| e.to_string())?;
+    let line_of = |byte: usize| text.get(..byte).map_or(0, |t| t.matches('\n').count()) + 1;
+    let items: Vec<Value> = found
+        .formulas
+        .iter()
+        .map(|f| {
+            let mut v = json!({"line": line_of(f.range.start), "display": f.display, "source": f.source});
+            let state = match &f.state {
+                crate::FormulaState::Typeset(b) => {
+                    json!({"status": "typeset", "width_pt": b.width_pt, "height_pt": b.height_pt, "depth_pt": b.depth_pt})
+                }
+                crate::FormulaState::Failed(messages) => json!({"status": "error", "messages": messages}),
+                crate::FormulaState::Pending => json!({"status": "pending"}),
+                crate::FormulaState::Unavailable(why) => json!({"status": "unavailable", "messages": [why]}),
+            };
+            if let (Some(v), Some(state)) = (v.as_object_mut(), state.as_object()) {
+                v.extend(state.clone());
+            }
+            v
+        })
+        .collect();
+    Ok(json!({"body_pt": found.body_pt, "formulas": items}))
 }
