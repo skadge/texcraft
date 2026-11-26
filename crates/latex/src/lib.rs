@@ -17,6 +17,7 @@ pub mod figure;
 pub mod fold;
 pub mod keep;
 pub mod prose;
+pub mod refs;
 pub mod table;
 pub mod tree;
 pub mod view;

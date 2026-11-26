@@ -11,5 +11,6 @@ publish = false
 workspace = true
 
 [dependencies]
+retex-bib = { workspace = true }
 retex-lsp = { workspace = true }
 serde = { workspace = true }
