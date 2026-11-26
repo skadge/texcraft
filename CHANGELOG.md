@@ -5,6 +5,39 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.17.0 (2026-11-26)
+
+Saving by itself and one-click Sync, and fixes from the second round of testing (#27–#42).
+
+### Saving and Sync
+
+- Changes are saved by themselves shortly after you stop typing (and when the window loses the
+  focus or the project closes); the top bar says "All changes saved". Settings › Editor › Save
+  automatically turns it off.
+- Versions are made at moments that matter, not at every save: after a few quiet minutes, when the
+  project closes, before a pull, a restore or Accept All, and on File › Save; each says what
+  changed. History › Name This Version… gives one a name.
+- ⇅ Sync beside the project's name, when it has a remote: one click makes a version, brings in the
+  remote's changes, then sends yours; the counts show what waits on each side (#34).
+- Overleaf projects cloned with git are recognised and synced with an Overleaf git token (#35).
+- The History panel's Push and Pull are real buttons, with less text around them.
+
+### Fixes from testing
+
+- A folder with one very large file opens: that file is listed and left alone, and sizes read in
+  MB (#28).
+- British English spelling from the system's region or polyglossia's variant (#36); the spelling
+  language in the status bar, to switch (#37).
+- In the formatted view a double click selects a word and a triple click the paragraph;
+  Ctrl+double-click shows the source (#38).
+- Ctrl and the wheel change the text's size (#33).
+- "Apply this fix everywhere in this file (n places)" fixes only that kind of hint (#42).
+- A smaller tip of the day and a one-line newcomer hint (#27, #29); the Compile button grey with a
+  spinner while it compiles by itself (#32).
+- Clicking the outline also scrolls the PDF (#30); the outline folds (#31).
+- The PDF bar: Back to Fit (#41), the own-window button at the end (#40); in the PDF's window,
+  pages side by side and page thumbnails (#39).
+
 ## 0.16.0 (2026-11-26)
 
 Fixes from testing (#16–#26), shorter menus with a list of all commands, a toolbar that fits,

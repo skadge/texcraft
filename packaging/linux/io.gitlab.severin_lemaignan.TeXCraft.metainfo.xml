@@ -41,6 +41,19 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.17.0" date="2026-11-26" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.17.0</url>
+      <description>
+        <p>Saving by itself and one-click Sync, and fixes from testing.</p>
+        <ul>
+          <li>Changes saved by themselves, versions made when they matter</li>
+          <li>One-click Sync with GitLab, GitHub, Overleaf and other git remotes</li>
+          <li>Outline folding, page thumbnails and pages side by side</li>
+          <li>British English spelling and the spelling language in the status bar</li>
+          <li>Many fixes from testing</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.16.0" date="2026-11-26" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.16.0</url>
       <description>
