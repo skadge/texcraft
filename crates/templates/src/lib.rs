@@ -59,8 +59,12 @@ pub enum Source {
 pub struct Template {
     pub id: String,
     pub title: String,
+    /// What it is for, in a line (English; shown through the interface's `@msg` rows).
+    #[serde(default)]
+    pub description: String,
     pub publisher: String,
-    /// journal, conference, thesis, report, cv, letter, slides, poster or book.
+    /// journal, conference, thesis, report, cv, letter, slides, poster or book; `example` for the
+    /// example project, which is not offered as a template.
     pub category: String,
     pub source: Source,
     /// Paths inside the source (for TeX Live, inside `doc/latex/<package>/`).
@@ -107,6 +111,11 @@ impl Template {
             Source::TexLive(package) => format!("TeX Live package {package}"),
             Source::Builtin(_) => "TeXCraft's own templates".to_owned(),
         }
+    }
+
+    /// Whether it is the example project the start page offers, not a template to start from.
+    pub fn is_example(&self) -> bool {
+        self.category == "example"
     }
 
     /// Whether its files are compiled in (no download needed).
@@ -223,8 +232,9 @@ impl Store {
             }
             std::fs::write(&target, bytes).map_err(|e| io(e, &target))?;
         }
+        let whose = if template.is_builtin() { "" } else { " (CTAN's catalogue)" };
         let note = format!(
-            "{}\nfrom the {}, under {} (CTAN's catalogue).\nKept by TeXCraft; this notice is copied into projects made from it.\n",
+            "{}\nfrom the {}, under {}{whose}.\nKept by TeXCraft; this notice is copied into projects made from it.\n",
             template.title,
             template.source_text(),
             template.licence

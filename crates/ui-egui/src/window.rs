@@ -45,7 +45,8 @@ pub(crate) fn bar_space(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
     }
 }
 
-/// The minimize, maximize (or restore) and close buttons, right to left from the bar's end.
+/// The minimize, maximize (or restore) and close buttons, in reading order (close last, at the
+/// bar's end).
 pub(crate) fn controls(app: &mut App, ui: &mut egui::Ui) {
     if !app.own_frame() {
         return;
@@ -54,12 +55,12 @@ pub(crate) fn controls(app: &mut App, ui: &mut egui::Ui) {
     let is_max = maximized(ui.ctx());
     let restore = if is_max { tl!("Restore") } else { tl!("Maximize") };
     let mut chosen = None;
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = t.unit;
         for (id, icon, label, danger) in [
-            ("window.close", "x", tl!("Close"), true),
-            ("window.maximize", if is_max { "copy" } else { "square" }, restore, false),
             ("window.minimize", "minus", tl!("Minimize"), false),
+            ("window.maximize", if is_max { "copy" } else { "square" }, restore, false),
+            ("window.close", "x", tl!("Close"), true),
         ] {
             if button(ui, &t, icon, label, danger).clicked() {
                 chosen = Some(id);

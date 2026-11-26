@@ -127,7 +127,8 @@ fn header(ui: &mut egui::Ui, t: &Tokens, title: &str, actions: impl FnOnce(&mut 
     ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), t.toolbar_height), Layout::left_to_right(Align::Center), |ui| {
         ui.add_space(t.unit * 2.0);
         widgets::section_title(ui, t, title);
-        ui.with_layout(Layout::right_to_left(Align::Center), actions);
+        // At the row's end, in reading order.
+        widgets::right_aligned(ui, "header-actions", actions);
     });
 }
 
@@ -213,19 +214,20 @@ enum Action {
 fn files(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     header(ui, &t, tl!("Files"), |ui| {
-        let import = texcraft_engine::cmd::find("file.import").map_or(Ok(()), |c| (c.enabled)(&app.session));
-        let add = widgets::icon_button(ui, &t, "upload", tl!("Add Files…"), import.is_ok());
-        app.region(crate::Region::Side, add.id);
-        if let Err(reason) = &import {
-            let _ = add.on_disabled_hover_text(reason.as_str());
-        } else if add.clicked() {
-            ui_cmd::run(app, "file.import");
+        let new_file = widgets::icon_button(ui, &t, "file-plus", tl!("New File…"), true);
+        app.region(crate::Region::Side, new_file.id);
+        if new_file.clicked() {
+            ui_cmd::run(app, "file.new");
         }
         if widgets::icon_button(ui, &t, "folder-plus", tl!("New Folder…"), true).clicked() {
             ui_cmd::run(app, "file.new_folder");
         }
-        if widgets::icon_button(ui, &t, "file-plus", tl!("New File…"), true).clicked() {
-            ui_cmd::run(app, "file.new");
+        let import = texcraft_engine::cmd::find("file.import").map_or(Ok(()), |c| (c.enabled)(&app.session));
+        let add = widgets::icon_button(ui, &t, "upload", tl!("Add Files…"), import.is_ok());
+        if let Err(reason) = &import {
+            let _ = add.on_disabled_hover_text(reason.as_str());
+        } else if add.clicked() {
+            ui_cmd::run(app, "file.import");
         }
     });
     let root = tree(app.session.project().paths(), app.session.empty_folders());

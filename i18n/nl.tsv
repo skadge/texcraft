@@ -2088,3 +2088,89 @@ unit	{n} s	{n} s
 # History: what a version changed
 	no files	geen bestanden
 @plural	and {n} other|and {n} others	en {n} andere|en {n} andere
+
+# First steps: the example project, template cards, tips of the day
+	A new project is about to replace this one.	Een nieuw project gaat dit project vervangen.
+	A project folder in a git repository can push and pull from its History section.	Een projectmap in een git-repository kan pushen en pullen vanuit de sectie Geschiedenis.
+	A project from GitLab or GitHub is about to open in its place.	Een project van GitLab of GitHub wordt zo in de plaats ervan geopend.
+	A short paper to explore: sections, a list, a table, a figure, equations and a citation.	Een kort artikel om te verkennen: secties, een lijst, een tabel, een figuur, vergelijkingen en een citaat.
+	A tip of the day on the start page, about a feature that is easy to miss.	Een tip van de dag op de startpagina, over een functie die gemakkelijk over het hoofd wordt gezien.
+	Another project is about to open in its place.	Een ander project wordt zo in de plaats ervan geopend.
+	Built in	Ingebouwd
+	Connect an AI model in Settings › AI to explain a build error, rewrite a selection or review a section. Nothing is sent before you connect one.	Koppel een AI-model in Instellingen › AI om een buildfout uit te leggen, een selectie te herschrijven of een sectie te laten beoordelen. Er wordt niets verstuurd voordat u er een koppelt.
+	Did you know that you can drop a whole project as a zip file on the start page? It becomes a new project.	Wist u dat u een heel project als zipbestand op de startpagina kunt neerzetten? Het wordt een nieuw project.
+	Dismiss	Sluiten
+	Double-click a place in the PDF to go to the line that wrote it. Edit › Show in PDF goes the other way.	Dubbelklik op een plek in de pdf om naar de regel te gaan die die plek schreef. Bewerken › In pdf tonen gaat de andere kant op.
+	Downloads when used	Wordt gedownload bij gebruik
+	Drop an image file on the formatted view, and it becomes a figure with a caption.	Sleep een afbeeldingsbestand naar de opgemaakte weergave, en het wordt een figuur met een bijschrift.
+	Edit › Find in Project searches, and replaces, in every file of the project.	Bewerken › Zoeken in project zoekt, en vervangt, in elk bestand van het project.
+	Edit › Go to File… lists the project's files as you type, the ones you opened last first.	Bewerken › Naar bestand gaan… toont de bestanden van het project terwijl u typt, de laatst geopende eerst.
+	Edit › Quick Fix lists the fixes for the error at the caret, such as adding the package a command needs.	Bewerken › Snelle oplossing toont de oplossingen voor de fout bij de cursor, zoals het toevoegen van het pakket dat een commando nodig heeft.
+	Every save that changes something is a version. The History section says what each one changed and can restore any of them.	Elke keer opslaan die iets verandert is een versie. De sectie Geschiedenis zegt wat elke versie veranderde en kan elk ervan terugzetten.
+	Every shortcut can be changed: Keyboard Shortcuts, at the bottom of the rail, lists them all.	Elke sneltoets kan worden gewijzigd: Sneltoetsen, onderaan de sectiebalk, toont ze allemaal.
+	Example paper	Voorbeeldartikel
+	Example project	Voorbeeldproject
+	Export, in the PDF's toolbar, saves your document as a DOCX or OpenDocument text, a web page or Markdown, and beamer slides as a PPTX presentation.	Exporteren, in de werkbalk van de pdf, slaat uw document op als DOCX- of OpenDocument-tekst, als webpagina of als Markdown, en beamer-dia's als PPTX-presentatie.
+	F12 on a reference or a command goes to where it is defined, even in another file.	F12 op een verwijzing of een commando gaat naar waar die gedefinieerd is, ook in een ander bestand.
+	F6 moves the keyboard between the regions of the window: the menus, the rail, the side panel, the editor and the PDF.	F6 verplaatst het toetsenbord tussen de gebieden van het venster: de menu's, de sectiebalk, het zijpaneel, de editor en de pdf.
+	F7 goes to the next spelling or grammar problem in the file.	F7 gaat naar het volgende spel- of grammaticaprobleem in het bestand.
+	First steps	Eerste stappen
+	Free to use (LPPL)	Vrij te gebruiken (LPPL)
+	Free to use (MIT)	Vrij te gebruiken (MIT)
+	Free to use (public domain)	Vrij te gebruiken (publiek domein)
+	Hint dismissed. Help › First Steps shows it again.	Hint gesloten. Help › Eerste stappen toont hem weer.
+	If you are a Vim user, you can turn on Vim mode in Settings › Editor: modes, motions, registers, and text objects for environments and formulas.	Als u Vim gebruikt, kunt u de Vim-modus aanzetten in Instellingen › Editor: modi, bewegingen, registers en tekstobjecten voor omgevingen en formules.
+	Insert › Symbols… opens a palette of mathematical symbols you can search by name, and says which package a symbol needs.	Invoegen › Symbolen… opent een palet met wiskundige symbolen dat u op naam kunt doorzoeken, en zegt welk pakket een symbool nodig heeft.
+	Licence: {licence}	Licentie: {licence}
+	New Project has journal and conference templates from publishers such as Elsevier, IEEE and ACM, kept for offline use once downloaded.	Nieuw project heeft sjablonen voor tijdschriften en conferenties van uitgevers zoals Elsevier, IEEE en ACM, die na het downloaden offline bewaard blijven.
+	New here? Formatted, above the text, shows your document as it reads, and you can edit it there. The PDF's Build log explains any error. Help › User Guide (F1) has the rest.	Nieuw hier? Opgemaakt, boven de tekst, toont uw document zoals het leest, en u kunt het daar bewerken. De Buildlog van de pdf legt elke fout uit. Help › Gebruikershandleiding (F1) vertelt de rest.
+	Next Tip	Volgende tip
+	No projects in this browser yet.	Nog geen projecten in deze browser.
+	No projects yet.	Nog geen projecten.
+	Not needed for a server on this computer	Niet nodig voor een server op deze computer
+	On a phone or in a narrow window, the editor and the PDF become two tabs, and the side panel a drawer.	Op een telefoon of in een smal venster worden de editor en de pdf twee tabbladen, en het zijpaneel een uitschuifpaneel.
+	Open the Example Project	Voorbeeldproject openen
+	Open the Guide	Gebruikershandleiding openen
+	Previous Tip	Vorige tip
+	Projects in the browser stay in this browser. File › Download Project as Zip keeps a copy elsewhere.	Projecten in de browser blijven in deze browser. Bestand › Project downloaden als zip bewaart elders een kopie.
+	Read More in the Guide	Meer lezen in de Gebruikershandleiding
+	Ready offline	Klaar voor offline
+	Save Project to GitLab or GitHub puts a project online in a new repository, ready to share.	Project opslaan in GitHub of GitLab zet een project online in een nieuwe repository, klaar om te delen.
+	Select some text and right-click it to add a comment beside it. The Review section lists every comment of the project.	Selecteer wat tekst en klik er met de rechtermuisknop op om er een opmerking naast te zetten. De sectie Review toont elke opmerking van het project.
+	Show tips at startup	Tips tonen bij het opstarten
+	TeXCraft is about to close.	TeXCraft wordt zo afgesloten.
+	The Formatted switch above the text shows your document as it reads, without the markup, and you can edit it there too.	De schakelaar Opgemaakt boven de tekst toont uw document zoals het leest, zonder de opmaakcode, en u kunt het daar ook bewerken.
+	The imported project is about to open in its place.	Het geïmporteerde project wordt zo in de plaats ervan geopend.
+	This build has no example project.	Deze versie van TeXCraft heeft geen voorbeeldproject.
+	Tip of the day	Tip van de dag
+	Tips are off. Settings › Appearance turns them on again.	Tips staan uit. Instellingen › Weergave zet ze weer aan.
+	To begin, try the example: a short paper you can change and build, to see how TeXCraft works. Or choose New Project for a template, Open Folder… for a project you have, or drop a folder or zip file here.	Probeer om te beginnen het voorbeeld: een kort artikel dat u kunt wijzigen en compileren, om te zien hoe TeXCraft werkt. Of kies Nieuw project voor een sjabloon, Map openen… voor een project dat u al hebt, of sleep hierheen een map of zipbestand.
+	To begin, try the example: a short paper you can change and build, to see how TeXCraft works. Or choose New Project for a template, or drop a zip file of a project here.	Probeer om te beginnen het voorbeeld: een kort artikel dat u kunt wijzigen en compileren, om te zien hoe TeXCraft werkt. Of kies Nieuw project voor een sjabloon, of sleep hierheen het zipbestand van een project.
+	Try an Example	Voorbeeld proberen
+	Turn on Suggest in the editor's toolbar, and your edits become suggestions that can be accepted or rejected one by one.	Zet Voorstellen aan in de werkbalk van de editor, en uw bewerkingen worden voorstellen die één voor één kunnen worden geaccepteerd of afgewezen.
+	{publisher} · from the {source} · {licence}	{publisher} · bron: {source} · {licence}
+@id	help.example	Voorbeeldproject openen…
+@id	help.first_steps	Eerste stappen
+@msg	A CV in the European Union's Europass layout.	Een cv in de Europass-opmaak van de Europese Unie.
+@msg	A CV with a modern look and several styles.	Een cv met een moderne uitstraling en meerdere stijlen.
+@msg	A formal letter with addresses, date and signature.	Een formele brief met adressen, datum en handtekening.
+@msg	A large poster for a conference, drawn with TikZ.	Een grote poster voor een conferentie, getekend met TikZ.
+@msg	A long document with a title page and one file per chapter.	Een lang document met een titelpagina en één bestand per hoofdstuk.
+@msg	A manuscript in APA style, 7th edition.	Een manuscript in APA-stijl, 7e editie.
+@msg	A one-page CV with education, experience and skills.	Een cv van één pagina met opleiding, ervaring en vaardigheden.
+@msg	A short paper or report with sections, ready to fill in.	Een kort artikel of rapport met secties, klaar om in te vullen.
+@msg	A short paper to explore: sections, a list, a table, a figure, equations and a citation.	Een kort artikel om te verkennen: secties, een lijst, een tabel, een figuur, vergelijkingen en een citaat.
+@msg	Example paper: folding a sheet of paper	Voorbeeldartikel: een vel papier vouwen
+@msg	For ACM conferences that use the sigconf format.	Voor ACM-conferenties die het sigconf-formaat gebruiken.
+@msg	For ASME conference papers.	Voor ASME-conferentieartikelen.
+@msg	For Elsevier journals that cite by author and year.	Voor Elsevier-tijdschriften die op auteur en jaar citeren.
+@msg	For Elsevier journals whose references are numbered.	Voor Elsevier-tijdschriften met genummerde referenties.
+@msg	For IEEE Transactions and other IEEE journals.	Voor IEEE Transactions en andere IEEE-tijdschriften.
+@msg	For IEEE conference proceedings, two columns.	Voor IEEE-conferentieverslagen, in twee kolommen.
+@msg	For Monthly Notices of the Royal Astronomical Society.	Voor Monthly Notices of the Royal Astronomical Society.
+@msg	For Physical Review and other APS journals.	Voor Physical Review en andere APS-tijdschriften.
+@msg	For journals of the American Chemical Society.	Voor tijdschriften van de American Chemical Society.
+@msg	For submitting a manuscript to Nature.	Om een manuscript bij Nature in te dienen.
+@msg	For the Astrophysical Journal and other AAS journals.	Voor het Astrophysical Journal en andere AAS-tijdschriften.
+@msg	Numbered exercises with their points, for a course.	Genummerde opgaven met hun punten, voor een cursus.
+@msg	Slides for a talk, in widescreen.	Dia's voor een presentatie, in breedbeeld.

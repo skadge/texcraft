@@ -95,9 +95,14 @@ pub fn text_button(ui: &mut Ui, t: &Tokens, text: &str, enabled: bool) -> Respon
 
 /// A rail section: an 18 px icon in a 36 px square, with an accent bar on its inner edge when
 /// active.
-pub fn rail_button(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, active: bool) -> Response {
+pub fn rail_button(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, active: Option<bool>) -> Response {
     let (rect, r) = ui.allocate_exact_size(Vec2::splat(t.rail_button), Sense::click());
-    r.widget_info(|| WidgetInfo::selected(Role::Tab, true, active, label));
+    // A section's tab (selected or not), or a button that opens a dialog (`active` is `None`).
+    r.widget_info(|| match active {
+        Some(selected) => WidgetInfo::selected(Role::Tab, true, selected, label),
+        None => WidgetInfo::labeled(Role::Button, true, label),
+    });
+    let active = active.unwrap_or(false);
     if ui.is_rect_visible(rect) {
         let base = if active { blend(t.frame, t.accent_soft) } else { t.frame };
         let fill = state_fill(t, &r, base);
@@ -405,7 +410,9 @@ pub fn right_aligned<R>(ui: &mut Ui, key: &str, add: impl FnOnce(&mut Ui) -> R) 
     // Against the row's end, as a right-to-left layout would put them (over what is before them
     // when the row is too narrow).
     let row = ui.available_rect_before_wrap();
-    let rect = Rect::from_min_max(egui::pos2(row.right() - last.unwrap_or(0.0), row.top()), row.max);
+    // Not measured yet: from the row's start, so this first pass (discarded) does not reach past
+    // the row's end and widen what holds it.
+    let rect = Rect::from_min_max(egui::pos2(row.right() - last.unwrap_or(row.width()), row.top()), row.max);
     let inner = ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)), add);
     let width = inner.response.rect.width();
     if last.is_none_or(|w| (width - w).abs() > 0.5) {

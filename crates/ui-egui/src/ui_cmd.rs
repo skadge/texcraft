@@ -155,6 +155,12 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("help.guide", "User Guide", "Help", "help", Some("F1")),
     ui("help.shortcuts", "Keyboard Shortcuts", "Help", "help", None),
     ui("help.manual", "retex User Manual", "Help", "help", None),
+    // A short paper of TeXCraft's to explore (`templates/builtin/example`), made a project as a
+    // template is: in a folder the user picks, or in the browser under a name.
+    ui("help.example", "Open the Example Project…", "Help", "start", None),
+    // Shows the hint above the editor that says where the formatted view, the build log and the
+    // guide are, or dismisses it.
+    ui("help.first_steps", "First Steps", "Help", "start", None),
     ui("help.about", "About TeXCraft", "Help", "about", None),
 ];
 
@@ -337,7 +343,15 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             app.view.status = Some((tl!("Opening the retex user manual (PDF) in your browser.").to_owned(), false));
         }
         "help.about" => app.view.dialog = Some(Dialog::About),
-        "app.settings" => app.view.dialog = Some(Dialog::Settings),
+        // `{"tab": "editor"}` opens Settings on that tab (by its English name, in lower case).
+        "app.settings" => {
+            if let Some(tab) = params.get("tab").and_then(serde_json::Value::as_str) {
+                crate::settings::choose_tab(app, tab);
+            }
+            app.view.dialog = Some(Dialog::Settings);
+        }
+        "help.example" => app.open_example(),
+        "help.first_steps" => crate::first_steps::toggle(app),
         "app.start" => app.start = true,
         "view.menu_bar" => crate::top_bar::toggle_menu_bar(app),
         "view.focus_mode" => {

@@ -61,3 +61,14 @@ fn every_builtin_template_is_compiled_in_and_kept_without_a_download() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn every_template_says_what_it_is_for_and_the_example_needs_no_download() {
+    let catalog = Catalog::builtin().unwrap();
+    for t in catalog.templates() {
+        assert!(!t.description.trim().is_empty(), "{} has no description for its card", t.id);
+    }
+    let examples: Vec<_> = catalog.templates().iter().filter(|t| t.is_example()).collect();
+    assert_eq!(examples.len(), 1, "the start page offers one example project");
+    assert!(examples[0].is_builtin(), "the example must work offline and in the browser");
+}

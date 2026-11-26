@@ -664,7 +664,7 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     };
     ui.label(RichText::new(place).font(t.small()).color(t.text_muted));
     let has_token = status["token"].as_bool().unwrap_or(false);
-    let hint = if has_token { tl!("A token is kept: type to replace it") } else { tl!("None") };
+    let hint = if has_token { tl!("A token is kept: type to replace it") } else { tl!("Not needed for a server on this computer") };
     let hide = app.ai.hide_token;
     let token = field(ui, t, tl!("Token"), &mut app.ai.token, hint, hide);
     ui.horizontal_wrapped(|ui| {

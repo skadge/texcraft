@@ -158,12 +158,24 @@ impl App {
         }
     }
 
+    /// `help.example`: the example project, made as a template's project is (in a folder the
+    /// user picks, or in the browser under a name).
+    pub(crate) fn open_example(&mut self) {
+        let example = Catalog::builtin().ok().and_then(|c| c.templates().iter().find(|t| t.is_example()).map(|t| t.id.clone()));
+        match example {
+            Some(id) => self.create_from_template(id),
+            None => self.view.status = Some((tl!("This build has no example project.").to_owned(), true)),
+        }
+    }
+
     /// Asks for the name of the project of the browser's library made from template `id`.
     fn ask_template_project_name(&mut self, id: String) {
+        // The example gets a name to accept as it is.
+        let example = Catalog::builtin().ok().and_then(|c| c.find(&id).ok().map(Template::is_example)).unwrap_or(false);
         let prompt = crate::dialogs::Prompt {
-            title: tl!("New Project from Template"),
+            title: if example { tl!("Open the Example Project") } else { tl!("New Project from Template") },
             label: tl!("A name for the project, kept in this browser"),
-            value: String::new(),
+            value: if example { tl!("Example paper").to_owned() } else { String::new() },
             action: tl!("Create"),
             command: "project.from_template",
             params: Box::new(move |v| json!({"template": id, "folder": v})),
@@ -229,7 +241,8 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     }
     let t = app.tokens;
     let catalog = Catalog::builtin().ok();
-    let templates: Vec<Template> = catalog.map(|c| c.templates().to_vec()).unwrap_or_default();
+    // The example project is offered on the start page and in the Help menu, not as a template.
+    let templates: Vec<Template> = catalog.map(|c| c.templates().iter().filter(|t| !t.is_example()).cloned().collect()).unwrap_or_default();
     let kept_ids: Vec<String> =
         Catalog::builtin().map(|c| c.templates().iter().filter(|t| app.template_kept(t)).map(|t| t.id.clone()).collect()).unwrap_or_default();
     let kept = |t: &Template| kept_ids.contains(&t.id);
@@ -395,10 +408,13 @@ fn details(app: &mut App, ui: &mut egui::Ui, t: &Tokens, listing: &Listing<'_>, 
             Some(template) => {
                 ui.vertical(|ui| {
                     ui.label(RichText::new(crate::i18n::msg(&template.title)).font(t.strong()));
-                    let where_ = tl!("{publisher} · from the {source} · licence {licence}")
+                    if !template.description.is_empty() {
+                        ui.label(RichText::new(crate::i18n::msg(&template.description)).color(t.text_muted));
+                    }
+                    let where_ = tl!("{publisher} · from the {source} · {licence}")
                         .replace("{publisher}", &template.publisher)
                         .replace("{source}", &template.source_text())
-                        .replace("{licence}", &template.licence);
+                        .replace("{licence}", &licence_words(&template.licence));
                     ui.label(RichText::new(where_).font(t.small()).color(t.text_muted));
                     let state = state(kept(template), app.session.library().is_some());
                     ui.label(RichText::new(state).font(t.small()).color(t.text_muted));
@@ -436,9 +452,8 @@ fn create_button(app: &App, ui: &mut egui::Ui, t: &Tokens, selected: Option<&Tem
     }
 }
 
-pub(crate) const CARD: egui::Vec2 = egui::vec2(160.0, 168.0);
+pub(crate) const CARD: egui::Vec2 = egui::vec2(168.0, 236.0);
 
-/// A template's card; returns whether it was clicked.
 /// Whether the template is ready, or where it comes from when the project is made.
 fn state(kept: bool, in_browser: bool) -> &'static str {
     match (kept, in_browser) {
@@ -449,43 +464,87 @@ fn state(kept: bool, in_browser: bool) -> &'static str {
     }
 }
 
+/// A card's short state: ready without a download, or downloaded when used (with its icon, so
+/// colour is not the only sign).
+fn short_state(kept: bool) -> (&'static str, &'static str) {
+    if kept { ("circle-check", tl!("Ready offline")) } else { ("download", tl!("Downloads when used")) }
+}
+
+/// A licence in words, for people who do not read SPDX ids (the id is shown on hover).
+pub(crate) fn licence_words(id: &str) -> String {
+    if id == "CC0-1.0" {
+        tl!("Free to use (public domain)").to_owned()
+    } else if id.starts_with("LPPL") {
+        tl!("Free to use (LPPL)").to_owned()
+    } else if id == "MIT" {
+        tl!("Free to use (MIT)").to_owned()
+    } else {
+        tl!("Licence: {licence}").replace("{licence}", id)
+    }
+}
+
+/// Who a template is from: the publisher, or "Built in" for TeXCraft's own.
+fn publisher(template: &Template) -> String {
+    if template.is_builtin() { tl!("Built in").to_owned() } else { template.publisher.clone() }
+}
+
 /// A card's size: on a phone's sheet as wide as the sheet, so the cards make one column.
 fn card_size(ui: &egui::Ui) -> egui::Vec2 {
     if crate::sheet::in_sheet(ui) { vec2(ui.available_width().max(CARD.x), CARD.y) } else { CARD }
 }
 
+/// Draws `text` from `y` in `rows` lines at most, `width` wide; returns where the next line starts.
+fn text_block(ui: &egui::Ui, text: &str, font: egui::FontId, color: egui::Color32, at: egui::Pos2, width: f32, rows: usize) -> f32 {
+    let mut job = egui::text::LayoutJob::simple(text.to_owned(), font, color, width);
+    job.wrap.max_rows = rows;
+    let galley = ui.painter().layout_job(job);
+    let h = galley.size().y;
+    ui.painter().galley(at, galley, color);
+    at.y + h
+}
+
+/// A template's card: its title, what it is for, who it is from, its licence in words and
+/// whether it is ready offline. Returns whether it was clicked.
 pub(crate) fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected: bool, kept: bool, in_browser: bool) -> bool {
     let size = card_size(ui);
     let (rect, r) = ui.allocate_exact_size(size, Sense::click());
-    // The catalogue's titles are English, shown through the catalogs' `@msg` rows.
+    // The catalogue's titles and descriptions are English, shown through the catalogs' `@msg` rows.
     let title = crate::i18n::msg(&template.title);
+    let description = crate::i18n::msg(&template.description);
+    let from = publisher(template);
+    let licence = licence_words(&template.licence);
+    let (state_icon, short) = short_state(kept);
     r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, selected, &title));
+    let said = [description.as_str(), &from, &licence, short].iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join(". ");
+    ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(said));
     let base = if selected { blend(t.surface, t.accent_soft) } else { t.surface };
     let fill = if r.hovered() { blend(base, t.hover) } else { base };
     ui.painter().rect_filled(rect, t.corner_large(), fill);
     let stroke = if selected { egui::Stroke::new(2.0, t.accent) } else { t.hairline() };
     ui.painter().rect_stroke(rect, t.corner_large(), stroke, egui::StrokeKind::Inside);
-    let top = egui::Rect::from_min_size(rect.min + vec2(12.0, 12.0), vec2(size.x - 24.0, 40.0));
-    icons::paint(ui, egui::Rect::from_min_size(top.min, vec2(24.0, 24.0)), icon_for(&template.category), 20.0, t.accent);
-    if kept {
-        let badge = egui::Rect::from_min_size(egui::pos2(rect.right() - 30.0, rect.top() + 10.0), vec2(20.0, 20.0));
-        icons::paint(ui, badge, "circle-check", 16.0, t.success);
-    }
-    let mut y = top.top() + 32.0;
-    for (text, font, color, rows) in [(&template.publisher, t.strong(), t.text, 2), (&title, t.small(), t.text_muted, 3)] {
-        let mut job = egui::text::LayoutJob::simple(text.clone(), font, color, size.x - 24.0);
-        job.wrap.max_rows = rows;
+    let left = rect.left() + 12.0;
+    let width = size.x - 24.0;
+    icons::paint(ui, egui::Rect::from_min_size(rect.min + vec2(12.0, 12.0), vec2(22.0, 22.0)), icon_for(&template.category), 18.0, t.accent);
+    let mut y = rect.top() + 42.0;
+    y = text_block(ui, &title, t.strong(), t.text, egui::pos2(left, y), width, 3) + 4.0;
+    text_block(ui, &description, t.small(), t.text_muted, egui::pos2(left, y), width, 4);
+    // Who, the licence and the state, against the card's bottom.
+    let line = ui.fonts_mut(|f| f.row_height(&t.small())) + 3.0;
+    let mut y = rect.bottom() - 12.0 - 3.0 * line;
+    for text in [&from, &licence] {
+        let mut job = egui::text::LayoutJob::simple_singleline(text.clone(), t.small(), t.text_muted);
+        job.wrap = egui::text::TextWrapping::truncate_at_width(width);
         let galley = ui.painter().layout_job(job);
-        let h = galley.size().y;
-        ui.painter().galley(egui::pos2(rect.left() + 12.0, y), galley, color);
-        y += h + 4.0;
+        ui.painter().galley(egui::pos2(left, y), galley, t.text_muted);
+        y += line;
     }
-    ui.painter().text(egui::pos2(rect.left() + 12.0, rect.bottom() - 12.0), egui::Align2::LEFT_BOTTOM, &template.licence, t.small(), t.text_muted);
+    let (state_color, text_color) = if kept { (t.success, t.text) } else { (t.text_muted, t.text_muted) };
+    icons::paint(ui, egui::Rect::from_min_size(egui::pos2(left, y), vec2(line, line)), state_icon, line - 3.0, state_color);
+    ui.painter().text(egui::pos2(left + line + 4.0, y + line / 2.0), egui::Align2::LEFT_CENTER, short, t.small(), text_color);
     widgets::focus_ring(ui, t, &r, rect, t.corner_large());
-    let state = state(kept, in_browser);
     let tip = tl!("{source} · licence {licence}").replace("{source}", &template.source_text()).replace("{licence}", &template.licence);
     let clicked = r.clicked();
-    let _ = r.on_hover_text(format!("{title}\n{tip}\n{state}"));
+    let _ = r.on_hover_text(format!("{title}\n{tip}\n{}", state(kept, in_browser)));
     clicked
 }
 

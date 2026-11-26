@@ -66,6 +66,10 @@ pub struct Prefs {
     pub ai_complete: bool,
     /// The instructions last given to Ask AI to Change This, the latest first.
     pub ai_instructions: Vec<String>,
+    /// The start page shows a tip of the day.
+    pub show_tips: bool,
+    /// The first-steps hint above the editor was dismissed (it shows with the first project).
+    pub first_steps_seen: bool,
 }
 
 /// The name and key a person's comments carry (docs/collaboration-roadmap.md, R1). No accounts:
@@ -124,6 +128,8 @@ impl Default for Prefs {
             recent_symbols: Vec::new(),
             ai_complete: false,
             ai_instructions: Vec::new(),
+            show_tips: true,
+            first_steps_seen: false,
         }
     }
 }
