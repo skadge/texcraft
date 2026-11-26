@@ -22,6 +22,7 @@ use texcraft_project::{Project, ProjectPath};
 
 #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
 pub mod formulas;
+pub mod places;
 pub mod records;
 #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
 pub mod retex_backend;
@@ -175,6 +176,17 @@ pub struct Diagnostic {
     pub help: Vec<String>,
     /// Edits that fix it, on its line.
     pub fixes: Vec<DiagnosticFix>,
+    /// Where TeX noticed it, when it is placed where it starts instead (an environment left open
+    /// in an included file, noticed at the main document's `\end{document}`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub noticed: Option<Place>,
+}
+
+/// A place in the project: a file, and a line from 1 when known.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Place {
+    pub file: String,
+    pub line: Option<u32>,
 }
 
 /// An edit that fixes a diagnostic, on its line: the characters from `column` to before

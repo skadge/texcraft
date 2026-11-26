@@ -91,6 +91,7 @@ impl Backend for Printing {
             end_column: None,
             help: Vec::new(),
             fixes: Vec::new(),
+            noticed: None,
         };
         Outcome {
             status: texcraft_compile::Status::Built,

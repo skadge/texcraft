@@ -1,5 +1,5 @@
 //! The side panel's History (docs/ROADMAP.md, C4): the project's saved versions, newest first,
-//! from its git repository (C8). Choosing a version lists the files it changed; choosing a file
+//! from its git repository (C8), each with what it changed (C9). Choosing a version lists the files it changed; choosing a file
 //! compares it with the version before, line by line, read-only. A file, or the whole project, can
 //! be brought back as it was, as unsaved changes; in a repository the user made, a Commit button
 //! commits the saved project.
@@ -501,17 +501,40 @@ fn restore_file(view: &HistoryView) -> Option<Dialog> {
     }))
 }
 
-/// A version: its message, then when, who, and how many files, on a second line.
+/// The files a version changed, by name: at most three, then how many others.
+fn changed_files(changes: &[(String, String)]) -> String {
+    let names: Vec<&str> = changes.iter().map(|(p, _)| p.rsplit('/').next().unwrap_or(p)).collect();
+    match names.len() {
+        0 => tl!("no files").to_owned(),
+        1..=3 => names.join(", "),
+        n => format!("{}, {}", names[..2].join(", "), trn(n - 2, "and {n} other", "and {n} others")),
+    }
+}
+
+/// A message's body: what follows its subject line, trimmed.
+fn body(message: &str) -> &str {
+    message.split_once('\n').map_or("", |(_, rest)| rest.trim())
+}
+
+/// A version: its message's subject, then when, who, and the files it changed, on a second line;
+/// the message's body on hover (and as the row's description).
 fn commit_row(ui: &mut egui::Ui, t: &Tokens, c: &Commit, selected: bool, now: chrono::DateTime<chrono::Utc>) -> egui::Response {
     let height = 2.0 * t.row_height - 2.0 * t.unit;
     let (rect, r) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::click());
     let message = c.message.lines().next().unwrap_or_default();
     let when = c.time.map(|time| crate::i18n::ago(time, now)).unwrap_or_default();
-    let files = trn(c.changes.len(), "{n} file", "{n} files");
+    let files = changed_files(&c.changes);
     let meta = format!("{when} · {} · {files}", c.author);
     let name = format!("{message}, {when}, {}, {files}", c.author);
+    let details = body(&c.message);
     r.widget_info(|| egui::WidgetInfo::selected(egui::Role::TreeItem, true, selected, &name));
-    ui.ctx().accesskit_node_builder(r.id, |node| node.set_expanded(selected));
+    ui.ctx().accesskit_node_builder(r.id, |node| {
+        node.set_expanded(selected);
+        if !details.is_empty() {
+            node.set_description(details.to_owned());
+        }
+    });
+    let r = if details.is_empty() { r } else { r.on_hover_text(details) };
     if !ui.is_rect_visible(rect) {
         return r;
     }

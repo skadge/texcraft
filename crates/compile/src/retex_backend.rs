@@ -227,7 +227,7 @@ impl Backend for Retex {
         if outcome.cancelled {
             return Outcome { status: Status::Cancelled, log: "The build was stopped.".to_owned(), ..base };
         }
-        match outcome.result {
+        let mut outcome = match outcome.result {
             Ok(doc) => Outcome {
                 status: Status::Built,
                 pdf: Some(Arc::new(doc.pdf().to_vec())),
@@ -240,7 +240,9 @@ impl Backend for Retex {
                 Outcome { status: Status::Failed, diagnostics: diagnostics.iter().map(place).collect(), log, ..base }
             }
             Err(other) => Outcome { log: other.to_string(), ..base.clone() }.with_failure(&other.to_string()),
-        }
+        };
+        crate::places::place_where_started(&mut outcome.diagnostics, &outcome.log, &job.files, &job.main, main_dir.as_deref());
+        outcome
     }
 }
 
@@ -326,6 +328,7 @@ fn failure(job: u64, message: &str) -> Outcome {
         end_column: None,
         help: Vec::new(),
         fixes: Vec::new(),
+        noticed: None,
     };
     Outcome { status: Status::Failed, diagnostics: vec![diagnostic], ..Outcome::unavailable(job, "") }
 }
@@ -366,6 +369,7 @@ fn convert(d: &retex::Diagnostic, src: &Path, main_dir: Option<&str>) -> Diagnos
             .iter()
             .map(|f| DiagnosticFix { column: f.column, end_column: f.end_column, replacement: f.replacement.clone(), title: f.title.clone() })
             .collect(),
+        noticed: None,
     }
 }
 

@@ -164,3 +164,17 @@ fn kept_versions_share_unchanged_files_and_come_back_in_order() -> R {
     assert_eq!(messages, ["3", "2", "1"]);
     Ok(())
 }
+
+#[test]
+fn a_commit_s_file_ids_are_those_of_its_files_without_reading_them() -> R {
+    // A save compares the project with the latest version by these ids, for its message.
+    let scratch = Scratch::new("ids")?;
+    let history = History::open_or_init(&scratch.0)?;
+    let files = [("main.tex", "Hello\n"), ("figures/a.png", "png"), (".texcraft/review/t.json", "{}")];
+    let id = history.commit(&snapshot(&files), "first", Some(&ada()), now())?.ok_or("no commit")?;
+    let ids = history.ids_at(&id)?;
+    let expected: Vec<(String, String)> = vec![("figures/a.png".into(), blob_id(b"png")?), ("main.tex".into(), blob_id(b"Hello\n")?)];
+    assert_eq!(ids, expected, "hidden files are left out, the others have git's ids");
+    assert_eq!(Versioned::latest(&history)?, Some(id));
+    Ok(())
+}

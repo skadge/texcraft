@@ -378,6 +378,7 @@ impl Backend for Failing {
             end_column: None,
             help: Vec::new(),
             fixes: Vec::new(),
+            noticed: None,
         }];
         outcome
     }
@@ -521,9 +522,9 @@ fn the_history_s_versions_files_and_changes_are_reached_from_the_keyboard() -> R
     run(&mut h, "view.side.history");
     let side: Vec<Stop> = (0..3).map(|_| key(&mut h, egui::Key::F6)).collect();
     let version = side.last().cloned().unwrap_or_else(|| now(&h));
-    assert!(version.name.contains("Saved with TeXCraft"), "F6 reaches the newest version: {:?}", names(&side));
+    assert!(version.name.contains("Edited main.tex"), "F6 reaches the newest version: {:?}", names(&side));
     let older = key(&mut h, egui::Key::ArrowDown);
-    assert!(older.name.contains("Saved with TeXCraft") && older.id != version.id, "Down goes to the older version: {older:?}");
+    assert!(older.name.contains("Added main.tex") && older.id != version.id, "Down goes to the older version: {older:?}");
     key(&mut h, egui::Key::Enter);
     tab_to(&mut h, Role::TreeItem, "main.tex", 4);
     key(&mut h, egui::Key::Enter);

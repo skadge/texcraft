@@ -55,6 +55,7 @@ impl Backend for Failing {
             end_column: None,
             help: Vec::new(),
             fixes: Vec::new(),
+            noticed: None,
         };
         Outcome { status: Status::Failed, diagnostics: vec![d], ..Outcome::unavailable(job.id, "") }
     }

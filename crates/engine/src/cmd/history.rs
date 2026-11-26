@@ -14,8 +14,6 @@ use super::{CommandSpec, always, path_param, string};
 use crate::file_access::Access;
 use crate::{Origin, Result, Session};
 
-/// The message of the commit each save makes.
-const SAVE_MESSAGE: &str = "Saved with TeXCraft";
 /// How many commits `history.list` gives without a `limit`, and at most.
 const DEFAULT_LIMIT: usize = 50;
 const MAX_LIMIT: usize = 1000;
@@ -182,7 +180,7 @@ fn commit_save(s: &mut Session, moved: bool) -> Result<Value> {
         // Someone else's repository: commits only when asked.
         return Ok(json!({"repository": "theirs", "commit": null}));
     }
-    let id = commit_now(s, SAVE_MESSAGE)?;
+    let id = commit_now(s, None)?;
     Ok(json!({"repository": "ours", "commit": id}))
 }
 
@@ -192,7 +190,11 @@ pub(super) fn after_library_save(s: &mut Session, name: &str) -> Value {
     let recorded = snapshot(s).and_then(|snapshot| {
         let author = s.author.as_ref().map_or_else(|| "TeXCraft".to_owned(), |a| a.name.clone());
         let now = s.now();
-        s.library.as_mut().ok_or_else(|| "The project is not kept in the browser.".to_owned())?.record(name, &snapshot, SAVE_MESSAGE, &author, now)
+        let message = match s.library.as_ref().and_then(|l| l.history(name)) {
+            Some(versions) => save_message(versions, &snapshot),
+            None => save_message(&texcraft_history::store::Versions::default(), &snapshot),
+        };
+        s.library.as_mut().ok_or_else(|| "The project is not kept in the browser.".to_owned())?.record(name, &snapshot, &message, &author, now)
     });
     match recorded {
         Ok(id) => json!({"repository": "ours", "commit": id}),
@@ -200,13 +202,24 @@ pub(super) fn after_library_save(s: &mut Session, name: &str) -> Value {
     }
 }
 
-/// Commits the session's files and review as they are with `message`; none when nothing changed.
-fn commit_now(s: &mut Session, message: &str) -> Result<Option<String>> {
+/// Commits the session's files and review as they are with `message` (none: what the save
+/// changed, [`crate::describe`]); none when nothing changed.
+fn commit_now(s: &mut Session, message: Option<&str>) -> Result<Option<String>> {
     let snapshot = snapshot(s)?;
     let history = s.history.as_ref().ok_or("The project has no history.")?;
     allowed(s, history, Access::Write)?;
     let author = s.author.as_ref().map(|a| Person::new(a.name.clone(), ""));
-    history.commit(&snapshot, message, author.as_ref(), s.now())
+    let message = message.map_or_else(|| save_message(history, &snapshot), str::to_owned);
+    history.commit(&snapshot, &message, author.as_ref(), s.now())
+}
+
+/// The message of the version a save makes of `snapshot`: what changed since the latest one.
+fn save_message(versions: &dyn Versioned, snapshot: &Snapshot) -> String {
+    // A repository with no commit yet, or one that cannot be read: everything is new.
+    let latest = versions.latest().ok().flatten();
+    let before = latest.as_deref().and_then(|c| versions.ids_at(c).ok()).unwrap_or_default();
+    let old_text = |path: &str| latest.as_deref().and_then(|c| versions.file_at(c, path).ok().flatten());
+    crate::describe::message(&before, &snapshot.files, &old_text)
 }
 
 /// The project's files and its review threads' files, as the session holds them.
@@ -439,7 +452,7 @@ fn commit(s: &mut Session, p: &Value) -> Result<Value> {
     if message.is_empty() {
         return Err("A commit needs a message.".to_owned());
     }
-    let id = commit_now(s, &message)?;
+    let id = commit_now(s, Some(&message))?;
     let note = if id.is_none() { Some("Nothing changed since the last commit.") } else { None };
     Ok(json!({"commit": id, "note": note}))
 }

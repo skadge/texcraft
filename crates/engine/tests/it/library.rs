@@ -229,6 +229,20 @@ fn each_save_that_changes_a_library_project_is_a_version_newest_first() -> Resul
 }
 
 #[test]
+fn a_library_version_says_which_sections_it_changed() -> Result<(), String> {
+    let mut s = session();
+    let paper = "\\section{Introduction}\nWe begin.\n\\section{Results}\nIt works.\n";
+    write(&mut s, paper)?;
+    s.execute("project.save_as", &json!({"path": "Paper"}))?;
+    write(&mut s, &paper.replace("It works.", "It works well."))?;
+    s.execute("project.save", &json!({}))?;
+    let list = s.execute("history.list", &json!({}))?;
+    assert_eq!(list["commits"][0]["message"], "Edited Results (main.tex)");
+    assert!(list["commits"][1]["message"].as_str().is_some_and(|m| m.starts_with("Added main.tex")), "{list}");
+    Ok(())
+}
+
+#[test]
 fn restoring_a_library_version_brings_it_back_unsaved_and_the_next_save_is_a_version() -> Result<(), String> {
     let mut s = session();
     write(&mut s, "old\n")?;

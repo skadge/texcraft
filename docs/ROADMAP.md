@@ -68,7 +68,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | B7 | ✅ 0.5.0 | Progress beside the PDF | The page being built also in the PDF pane's header. |
 | B8 | ✅ 0.6.0 | A better preview | Pages drawn in the background, zoom presets, links, text selection, presentation mode. Selection is on one page at a time; presentations fill the window, not the screen. |
 | B9 | ✅ 0.10.0 | The raw log and outputs | Search in the raw log (count of matches, previous and next, marked and scrolled to), and the build's files (PDF, PDF/X, SyncTeX, log) with Save As…, Download in the browser and Show in Folder on the desktop. |
-| B10 | ⬜ | Errors where they are | An unclosed environment reported at its `\begin` as well as where TeX noticed (the example: `sections/intro.tex:3`, not `main.tex:59`), both linked and marked in the editor; messages written as sentences; the build log's button named with its count (retex; UX review, findings 6, 20 and 27). |
+| B10 | 🚧 | Errors where they are | Done (unreleased): an environment left open, or a `{` never closed, in an included file is reported at its `\begin` (or its `{`) in that file, read from TeX's log (the files it opened, the line it names) and the project's files; where TeX noticed it (`main.tex:59`) is linked under the message and marked in the editor too; the build log's button is named with its count ("Build log, 2 errors"). Still to do: messages written as sentences (retex) (UX review, findings 6, 20 and 27). |
 
 ## Comments and working together
 
@@ -82,7 +82,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | C6 | ⬜ | Cloud projects and sharing | Projects in cloud storage, shared with others. |
 | C7 | ⬜ | Real-time editing together | Waits for the suite's shared-text layer; one participant commits for the session (retex's collaboration notes). |
 | C8 | ✅ 0.7.0 | Every project a git repository | As Overleaf does: a project's history is a git repository, whether or not it is ever pushed anywhere. A folder that is not in one becomes one on its first save, and each save is a commit; a folder already in a repository is used as it is, and commits only when asked. Browser projects keep the same history in the browser, as versions whose files have git's blob ids. A folder's history goes to GitHub or GitLab with Push and Pull, or Save Project to GitHub or GitLab (C5, step 5). |
-| C9 | ⬜ | A history that says what changed | Automatic versions described by what they changed (files, sections), naming a version on save, unsaved changes as the first row, so the version before a change is found without opening each (UX review, finding 7). |
+| C9 | 🚧 | A history that says what changed | Done (unreleased): a save's version describes itself (the files added, edited, deleted or renamed, at most three names; for a LaTeX file the sections whose text changed, from the outline: "Edited Introduction and Results (main.tex); added figures/plot.png"), its subject at most 72 characters and each file in its body; a commit made with a message keeps it; the History panel shows the subject, when, who and the files' names, the body on hover; desktop repositories and browser versions alike. Still to do: naming a version on save, unsaved changes as the first row (UX review, finding 7). |
 
 ## In the browser
 

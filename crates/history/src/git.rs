@@ -381,6 +381,19 @@ impl History {
         Ok(out)
     }
 
+    /// The paths of the project's files at commit `commit` with their blob ids, not read: those a
+    /// project loads, not hidden ones.
+    pub fn ids_at(&self, commit: &str) -> Result<Vec<(String, String)>> {
+        let tree = self.commit_tree(self.parse(commit)?)?;
+        let mut flat = BTreeMap::new();
+        self.flatten(self.subtree(tree, &self.prefix)?, "", &mut flat)?;
+        Ok(flat
+            .into_iter()
+            .filter(|(_, (mode, _))| mode.is_blob())
+            .filter_map(|(path, (_, id))| path.to_str().ok().filter(|p| !is_hidden(p)).map(|p| (p.to_owned(), id.to_string())))
+            .collect())
+    }
+
     /// The first parent of commit `commit` (a full id); none for a first commit.
     pub fn parent_of(&self, commit: &str) -> Result<Option<String>> {
         let object = git!("A commit cannot be read", self.repo.find_object(self.parse(commit)?))?;

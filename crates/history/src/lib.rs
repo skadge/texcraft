@@ -32,6 +32,11 @@ pub trait Versioned {
     fn file_at(&self, commit: &str, path: &str) -> Result<Option<Vec<u8>>>;
     /// The project's files at version `commit`: those a project loads, not hidden ones.
     fn files_at(&self, commit: &str) -> Result<Vec<(String, Vec<u8>)>>;
+    /// The paths of the project's files at version `commit` with their git blob ids
+    /// ([`store::blob_id`]), without reading them: those a project loads, not hidden ones.
+    fn ids_at(&self, commit: &str) -> Result<Vec<(String, String)>>;
+    /// The latest version's id; none before the first.
+    fn latest(&self) -> Result<Option<String>>;
     /// The version before `commit`; none for a first one.
     fn parent_of(&self, commit: &str) -> Result<Option<String>>;
 }
@@ -45,6 +50,12 @@ impl Versioned for History {
     }
     fn files_at(&self, commit: &str) -> Result<Vec<(String, Vec<u8>)>> {
         History::files_at(self, commit)
+    }
+    fn ids_at(&self, commit: &str) -> Result<Vec<(String, String)>> {
+        History::ids_at(self, commit)
+    }
+    fn latest(&self) -> Result<Option<String>> {
+        History::head(self)
     }
     fn parent_of(&self, commit: &str) -> Result<Option<String>> {
         History::parent_of(self, commit)
