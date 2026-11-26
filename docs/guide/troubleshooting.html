@@ -82,6 +82,23 @@
         <dd>They are kept in your system's keychain (the Secret Service on Linux, the Keychain on macOS, the Credential Manager on Windows). Without a working keychain they last only while TeXCraft runs.</dd>
       </dl>
 
+      <h3 id="updates">Updates</h3>
+      <p>When a newer version is out, the status bar says <span class="ui">TeXCraft 0.20.0 is available</span>; click it, or choose <span class="ui">Help › Check for Updates…</span>, for its notes (<span class="ui">What's New</span>) and what this copy can do:</p>
+      <dl>
+        <dt>AppImage</dt>
+        <dd><span class="ui">Download and Install</span> downloads the new AppImage beside yours, checks it against the release's <code>SHA256SUMS</code> and puts it in your AppImage's place (same file name). The old one is kept beside it, with <code>.old</code> added to its name, until the new one starts. <span class="ui">Restart Now</span> asks about unsaved changes, closes TeXCraft and starts the new version. A download that does not match its checksum replaces nothing.</dd>
+        <dt>Flatpak</dt>
+        <dd>TeXCraft does not replace itself: update it in your software centre, or install the release's bundle with <code>flatpak install --user TeXCraft-X.Y.Z-x86_64.flatpak</code>.</dd>
+        <dt>Windows and macOS</dt>
+        <dd>The builds are not signed, so TeXCraft does not replace itself: the dialog downloads the new zip (Windows) or app (macOS) from the release; unpack it in place of the old one.</dd>
+        <dt>Built from source</dt>
+        <dd>The dialog links the release page.</dd>
+        <dt>In the browser</dt>
+        <dd><span class="ui">Reload</span> loads the new version. Your projects stay in the browser; changes not yet saved are saved first, or you are asked about them.</dd>
+        <dt>"The check for updates did not work"</dt>
+        <dd>Neither gitlab.com nor github.com answered (offline, a proxy, a firewall). Nothing was changed; the next start tries again, or choose <span class="ui">Check Again</span>.</dd>
+      </dl>
+
       <h3 id="browser-problems">In the browser</h3>
       <ul>
         <li><strong>My projects are gone:</strong> projects live in the browser's storage for the site; clearing the site's data, or using a private window, removes them. Save projects you care about to <a href="forges.html#save-to">GitLab or GitHub</a>.</li>

@@ -81,6 +81,27 @@ the wasm-bindgen that matches `Cargo.lock` and binaryen's wasm-opt itself. The F
 from Debian (flatpak-builder) and from Flathub's signed `org.flatpak.Builder` (the cargo source
 generator and the linter); the job prints the Builder's version and commit.
 
+## What the update check reads
+
+TeXCraft's update check (`crates/engine/src/update.rs`, docs/ROADMAP.md A8) reads releases in
+the shape this pipeline makes them, so keep that shape:
+
+- GitLab's `GET /projects/severin-lemaignan%2Ftexcraft/releases/permalink/latest` (the latest
+  release, not an upcoming one): `tag_name` `vX.Y.Z`, the changelog section as `description` (the
+  What's New dialog shows it as text), `_links.self`, and the asset links named
+  `TeXCraft-X.Y.Z-x86_64.AppImage`, `TeXCraft-X.Y.Z-x86_64.flatpak` and `SHA256SUMS` (with a
+  line for the AppImage), their URLs on gitlab.com.
+- When gitlab.com cannot be reached, the mirror's `GET /repos/skadge/texcraft/releases/latest`:
+  the same tag, and the same files attached (GitHub's checksums are used there).
+- Windows and macOS copies link `https://github.com/skadge/texcraft/releases/download/vX.Y.Z/`
+  `TeXCraft-X.Y.Z-x86_64-windows.zip` and `TeXCraft-X.Y.Z-aarch64-macos.zip`.
+- The browser build compares its version with `version.txt` beside its page, which
+  `cargo xtask version-worker` (Trunk's post-build hook) writes.
+
+An AppImage updates itself only from a release whose AppImage has its line in `SHA256SUMS`. To
+try an update by hand, set `TEXCRAFT_PRETEND_VERSION` to an older version (craft-update's
+convention) before starting a released AppImage: it is then offered the latest release.
+
 ## The packages
 
 ### AppImage
@@ -145,6 +166,7 @@ With the packages from step 8 (or from the release):
   GitHub releases are experimental and unsigned.
 - In the browser, a document that needs a package outside the site's TeX tree does not build.
 - The translation catalogs are new: what they lack shows in English.
-- The packages are not signed, and the AppImage carries no update information.
+- The packages are not signed, and the AppImage carries no AppImageUpdate information: it
+  updates itself through TeXCraft's own check (above).
 - The Flatpak does not use a host TeX Live.
 - The Flatpak job needs a runner that runs containers privileged (bubblewrap's user namespaces).
