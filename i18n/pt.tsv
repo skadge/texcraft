@@ -241,6 +241,7 @@
 	Download	Transferir
 	Downloaded from TeX Live when you create the project.	Transferido do TeX Live quando cria o projeto.
 	Downloaded: available offline.	Transferido: disponível offline.
+	Downloading LaTeX packages: {done} of {files}…	A transferir pacotes LaTeX: {done} de {files}…
 	Downloading the template from TeX Live…	A transferir o modelo do TeX Live…
 	Downloading {file}.	A transferir {file}.
 	Draft Another	Redigir outra
@@ -654,6 +655,7 @@
 	Put the caret in a paragraph, or in a list of the other kind.	Coloque o cursor num parágrafo ou numa lista do outro tipo.
 	Quick Fix	Correção rápida
 	Raw log	Registo em bruto
+	Reading the downloaded LaTeX packages…	A ler os pacotes LaTeX transferidos…
 	Ready for print	Pronto para impressão
 	Recent	Recentes
 	Recent projects	Projetos recentes

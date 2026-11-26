@@ -14,7 +14,10 @@
 //!    `texmf.cnf` and `ls-R`.
 //! 3. **The seed** (`OUT/seed/`): the indexes retex makes of the tree (`ls-R`, the fonts' names)
 //!    and the files the blank project reads (`reads/blank.txt`), so that a first visit neither
-//!    scans every font nor fetches files one after the other. retex keys its indexes on the
+//!    scans every font nor fetches files one after the other; and for each class and package of
+//!    `tree.txt`, the files a document loading it reads beyond those (`reads/class/NAME.txt`,
+//!    `reads/package/NAME.txt`), which the browser fetches together before a project's first
+//!    build, from its `\documentclass` and `\usepackage` lines (#16). retex keys its indexes on the
 //!    tree's absolute paths and checks them against the files' sizes and times: they are made
 //!    by the native retex with the tree at `/texlive/texmf-dist` and every time 0, as in the
 //!    browser (directly when run as root, as in CI; otherwise in a bubblewrap sandbox). retex's
@@ -89,7 +92,7 @@ pub fn run(root: &Path, out: &Path) -> Result<()> {
     let tree = select(&root.join("apps/texcraft-web/tree.txt"), &retex, out, &work)?;
     let contents = contents(&tree)?;
     let index = write(&contents, &out.join("tree"))?;
-    seed(&contents, &index, &tree.read, &retex, out, &work)?;
+    seed(&contents, &index, &tree, &retex, out, &work)?;
     fs::remove_dir_all(&work).map_err(io(&work))?;
     Ok(())
 }
@@ -286,6 +289,9 @@ fn templates(site: &Path) -> Result<Vec<PathBuf>> {
 struct Tree {
     files: BTreeMap<String, PathBuf>,
     read: Vec<String>,
+    /// The files each document of a class or package read (`class/NAME`, `package/NAME`), by
+    /// their path in the tree.
+    loads: BTreeMap<String, BTreeSet<String>>,
 }
 
 /// The tree that `spec` describes, `retex` typesetting its documents in `work`.
@@ -298,6 +304,8 @@ fn select(spec: &Path, retex: &Path, out: &Path, work: &Path) -> Result<Tree> {
     let mut packages = BTreeSet::new();
     let mut read = Vec::new();
     let mut docs = Vec::new();
+    // The documents of a class or package, by their index in `docs`.
+    let mut named: BTreeMap<usize, String> = BTreeMap::new();
     for line in text.lines().map(str::trim) {
         if line.is_empty() || line.starts_with('#') {
             continue;
@@ -320,6 +328,7 @@ fn select(spec: &Path, retex: &Path, out: &Path, work: &Path) -> Result<Tree> {
                     // Not `{name}.tex`: packages load files of that name (chemfig).
                     let doc = dir.join("test.tex");
                     fs::write(&doc, test_document(name, kind == "class")).map_err(io(&doc))?;
+                    named.insert(docs.len(), format!("{kind}/{name}"));
                     docs.push(doc);
                 }
             }
@@ -329,7 +338,7 @@ fn select(spec: &Path, retex: &Path, out: &Path, work: &Path) -> Result<Tree> {
     eprintln!("  {} documents", docs.len());
     let next = std::sync::atomic::AtomicUsize::new(0);
     let runs = work.join("runs");
-    let mut recordings: Vec<Result<Vec<PathBuf>>> = std::thread::scope(|scope| {
+    let mut recordings: Vec<(Option<usize>, Result<Vec<PathBuf>>)> = std::thread::scope(|scope| {
         let workers: Vec<_> = (0..4)
             .map(|_| {
                 scope.spawn(|| {
@@ -337,24 +346,30 @@ fn select(spec: &Path, retex: &Path, out: &Path, work: &Path) -> Result<Tree> {
                     loop {
                         let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         let Some(doc) = docs.get(i) else { break found };
-                        found.push(recorded(retex, doc, &runs));
+                        found.push((Some(i), recorded(retex, doc, &runs)));
                     }
                 })
             })
             .collect();
         workers.into_iter().flat_map(|w| w.join().unwrap_or_default()).collect()
     });
-    recordings.push(format_recorded(retex, work));
+    recordings.push((None, format_recorded(retex, work)));
     let mut outside = BTreeSet::new();
-    for files in recordings {
+    let mut loads: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for (doc, files) in recordings {
         let files = files.unwrap_or_else(|e| {
             eprintln!("warning: {e}");
             Vec::new()
         });
+        let name = doc.and_then(|i| named.get(&i));
         for file in files {
             match trees.iter().find_map(|t| file.strip_prefix(t).ok()) {
                 Some(rel) => {
-                    packages.insert(package_of(&rel.to_string_lossy()));
+                    let rel = rel.to_string_lossy();
+                    packages.insert(package_of(&rel));
+                    if let Some(name) = name {
+                        loads.entry(name.clone()).or_default().insert(rel.into_owned());
+                    }
                 }
                 // The format is the browser's own.
                 None if file.extension().is_some_and(|e| e == "fmt") => {}
@@ -385,7 +400,7 @@ fn select(spec: &Path, retex: &Path, out: &Path, work: &Path) -> Result<Tree> {
     // Made here.
     files.remove("ls-R");
     files.remove("web2c/texmf.cnf");
-    Ok(Tree { files, read })
+    Ok(Tree { files, read, loads })
 }
 
 /// The tree's files with their bytes, its `texmf.cnf` and `ls-R` among them.
@@ -523,7 +538,8 @@ fn stage(contents: &BTreeMap<String, Vec<u8>>, root: &Path) -> Result<()> {
 
 /// Makes the seed: retex's indexes of the tree, made by the native retex building the blank
 /// project with the tree where the browser has it, and the files that build reads.
-fn seed(contents: &BTreeMap<String, Vec<u8>>, index: &Index, read: &[String], retex: &Path, out: &Path, work: &Path) -> Result<()> {
+fn seed(contents: &BTreeMap<String, Vec<u8>>, index: &Index, tree: &Tree, retex: &Path, out: &Path, work: &Path) -> Result<()> {
+    let read = &tree.read;
     let root = is_root();
     // The system's root as root (CI); a folder bubblewrap mounts as `/texlive` and `/cache`.
     let stage_root = if root { PathBuf::from("/") } else { work.join("stage") };
@@ -619,7 +635,15 @@ fn seed(contents: &BTreeMap<String, Vec<u8>>, index: &Index, read: &[String], re
     let reads_dir = seed.join("reads");
     fs::create_dir_all(&reads_dir).map_err(io(&reads_dir))?;
     let to = reads_dir.join("blank.txt");
-    fs::write(&to, reads.into_iter().map(|p| format!("{p}\n")).collect::<String>()).map_err(io(&to))?;
+    fs::write(&to, reads.iter().map(|p| format!("{p}\n")).collect::<String>()).map_err(io(&to))?;
+    // What each class and package reads beyond that.
+    for (name, files) in &tree.loads {
+        let to = reads_dir.join(format!("{name}.txt"));
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent).map_err(io(parent))?;
+        }
+        fs::write(&to, load_list(files, index, &reads)).map_err(io(&to))?;
+    }
     if root {
         for dir in [stage_root.join("texlive"), cache] {
             let _ = fs::remove_dir_all(&dir);
@@ -627,6 +651,13 @@ fn seed(contents: &BTreeMap<String, Vec<u8>>, index: &Index, read: &[String], re
     }
     eprintln!("{}: the seed", seed.display());
     Ok(())
+}
+
+/// The site's files of `files` (paths in the tree) that are not among `blank`'s, a line each:
+/// what a document loading one class or package fetches beyond the blank project.
+fn load_list(files: &BTreeSet<String>, index: &Index, blank: &BTreeSet<&String>) -> String {
+    let sites: BTreeSet<&String> = files.iter().filter_map(|rel| index.get(rel)).filter(|site| !blank.contains(site)).collect();
+    sites.into_iter().map(|p| format!("{p}\n")).collect()
 }
 
 #[cfg(test)]

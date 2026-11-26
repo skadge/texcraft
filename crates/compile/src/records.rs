@@ -120,7 +120,9 @@ pub fn parse(line: &str, main_dir: Option<&str>) -> Option<Record> {
     match v.get("type")?.as_str()? {
         "diagnostic" => diagnostic(&v, main_dir).map(Record::Diagnostic),
         "progress" => {
-            if let Some(name) = text(&v, "file") {
+            if let Some(total) = number(&v, "fetching") {
+                Some(Record::Event(Event::Fetching { done: number(&v, "fetched").unwrap_or(0), total }))
+            } else if let Some(name) = text(&v, "file") {
                 Some(Record::Event(Event::File { name }))
             } else if let Some(what) = text(&v, "note") {
                 Some(Record::Event(Event::Step { what }))
