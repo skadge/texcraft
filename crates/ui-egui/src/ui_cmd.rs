@@ -404,6 +404,35 @@ pub fn run(app: &mut App, id: &str) {
     run_with(app, id, &json!({}));
 }
 
+/// The view commands that are AI's: shown, in menus, All Commands and Keyboard Shortcuts, only
+/// while AI is offered ([`crate::ai::offered`]); the user can turn them all off (issue #43).
+pub const AI_COMMANDS: &[&str] =
+    &["edit.ai_grammar", "edit.ai_review", "edit.rewrite", "edit.instruct", "edit.ai_make", "edit.ai_reference", "view.side.ask"];
+
+/// Whether `id` is one of AI's commands (a view command of [`AI_COMMANDS`], or the engine's `ai.*`).
+pub fn is_ai(id: &str) -> bool {
+    AI_COMMANDS.contains(&id) || id.starts_with("ai.")
+}
+
+/// Runs AI's view command `id` ([`AI_COMMANDS`]). A shortcut or the automation interface reaches
+/// them even while their entries are hidden: then they say why nothing happens.
+fn run_ai(app: &mut App, id: &str, params: &serde_json::Value) {
+    if !crate::ai::offered(app) {
+        app.view.status = Some((crate::ai::not_offered(app), true));
+        return;
+    }
+    match id {
+        "edit.rewrite" => crate::ai::rewrite(app, params),
+        "edit.instruct" => crate::ai::open_instruct(app),
+        "edit.ai_make" => crate::ai_make::open_make(app),
+        "edit.ai_reference" => crate::ai_make::open_reference(app),
+        "edit.ai_review" => crate::ai_ask::review(app),
+        "edit.ai_grammar" => crate::grammar::check_with_ai(app),
+        "view.side.ask" => app.view.side = Some(Side::Ask),
+        _ => log::warn!("unknown AI command {id}"),
+    }
+}
+
 /// Runs `id` with `params`, for the view commands that take some (`view.zoom`); the others
 /// ignore them.
 pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
@@ -450,7 +479,6 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "view.side.review" => app.view.side = Some(Side::Review),
         "view.side.search" => app.view.side = Some(Side::Search),
         "view.side.history" => app.view.side = Some(Side::History),
-        "view.side.ask" => app.view.side = Some(Side::Ask),
         "view.find_in_project" => crate::search::open(app),
         "view.side.hide" => app.view.side = None,
         "outline.collapse_all" => crate::side::fold_all(app, true),
@@ -512,12 +540,10 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
                 log::warn!("unknown window command {id}");
             }
         }
-        "edit.rewrite" => crate::ai::rewrite(app, params),
-        "edit.instruct" => crate::ai::open_instruct(app),
-        "edit.ai_make" => crate::ai_make::open_make(app),
-        "edit.ai_reference" => crate::ai_make::open_reference(app),
-        "edit.ai_review" => crate::ai_ask::review(app),
-        "edit.ai_grammar" => crate::grammar::check_with_ai(app),
+        // AI_COMMANDS.
+        "edit.ai_grammar" | "edit.ai_review" | "edit.rewrite" | "edit.instruct" | "edit.ai_make" | "edit.ai_reference" | "view.side.ask" => {
+            run_ai(app, id, params);
+        }
         id if id.starts_with("edit.") => {
             if !crate::editor::edit_with(app, id, params) {
                 app.view.status = Some((tl!("Open a text file to edit it.").to_owned(), true));
@@ -664,14 +690,14 @@ pub(crate) fn label(app: &App, id: &'static str, english: &'static str) -> &'sta
 /// Whether the menus offer command `id` here: downloading the project as a zip is the browser's
 /// way to keep a copy elsewhere (a desktop project is a folder already); committing to and
 /// updating from a forge are for a project opened from one, saving to one for the others; AI's
-/// entries need a connected model. All Commands lists them all the same.
+/// entries need AI features on and a connected model. All Commands lists the others all the same.
 pub fn in_menus(app: &App, id: &str) -> bool {
     match id {
         "project.download_zip" => app.session.library().is_some(),
         "forge.commit" | "forge.pull" => app.session.forge().is_some(),
         "project.sync" => crate::sync::has_remote(app),
         "forge.save_to_github" | "forge.save_to_gitlab" => app.session.forge().is_none(),
-        "edit.ai_grammar" | "edit.ai_review" | "edit.ai_make" | "edit.ai_reference" | "edit.instruct" => crate::ai::offered(app),
+        id if AI_COMMANDS.contains(&id) => crate::ai::offered(app),
         _ => true,
     }
 }

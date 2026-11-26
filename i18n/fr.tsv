@@ -42,6 +42,7 @@
 	Address	Adresse
 	After the address	Après l'adresse
 	AI	IA
+	AI features are turned off: they are hidden everywhere, and nothing is sent. Turn this on to use them again.	Les fonctions d'IA sont désactivées : elles sont masquées partout et rien n'est envoyé. Activez ceci pour les utiliser à nouveau.
 	AI is off until you connect a model: any OpenAI-compatible endpoint, a server on this computer (llama.cpp, Ollama, vLLM) included. Every change it proposes arrives as a suggested change.	L'IA est désactivée tant que vous ne connectez pas de modèle : tout point d'accès compatible OpenAI, y compris un serveur sur cet ordinateur (llama.cpp, Ollama, vLLM). Chaque modification qu'elle propose arrive sous forme de modification suggérée.
 	Abstract	Résumé
 	Accents	Accents
@@ -1113,6 +1114,7 @@
 	Turn Off This Rule	Désactiver cette règle
 	Turn On	Activer
 	Turned off from the text's menu (Turn Off This Rule).	Désactivée depuis le menu du texte (Désactiver cette règle).
+	Turned off, every AI feature is hidden from the menus, the panels and the build log, and nothing is sent.	Désactivé, toutes les fonctions d'IA sont masquées dans les menus, les panneaux et le journal de compilation, et rien n'est envoyé.
 	Turned off, the project's sources are never sent; the choice is kept in its .texcraft folder.	Désactivé, les sources du projet ne sont jamais envoyées ; le choix est conservé dans son dossier .texcraft.
 	Type a line number, from 1.	Saisissez un numéro de ligne, à partir de 1.
 	Type part of a file's path	Saisissez une partie du chemin d'un fichier
@@ -1146,6 +1148,7 @@
 	Updating from GitHub…	Mise à jour depuis GitHub…
 	Updating from GitLab…	Mise à jour depuis GitLab…
 	Upsilon, capital	Upsilon majuscule
+	Use AI features	Utiliser les fonctions d'IA
 	Use AI in this project	Utiliser l'IA dans ce projet
 	Use a personal access token instead	Utiliser plutôt un jeton d'accès personnel
 	Use a personal access token instead of the sign-in	Utiliser un jeton d'accès personnel au lieu de la connexion
@@ -1771,6 +1774,7 @@ unit	{n} s	{n} s
 @msg	AAS journal article (AASTeX)	Article de revue AAS (AASTeX)
 @msg	ACM conference paper (sigconf)	Article de conférence ACM (sigconf)
 @msg	AI ({model})	IA ({model})
+@msg	AI features are turned off: turn them on in Settings › AI to use them.	Les fonctions d'IA sont désactivées : activez-les dans Paramètres › IA pour les utiliser.
 @msg	AI is not available in the browser yet: the suite's AI layer cannot reach an endpoint from a web page. Use the desktop app.	L'IA n'est pas encore disponible dans le navigateur : la couche IA de la suite ne peut pas joindre un point d'accès depuis une page web. Utilisez l'application de bureau.
 @msg	AI is off: connect a model first (Settings › AI).	L'IA est désactivée : connectez d'abord un modèle (Paramètres › IA).
 @msg	AI is turned off for this project (Settings › AI).	L'IA est désactivée pour ce projet (Paramètres › IA).

@@ -63,12 +63,15 @@ fn listed_view_command(id: &str, menu: &str) -> bool {
 /// Every command the list offers, in the registry's order then the view's.
 pub(crate) fn rows(app: &App) -> Vec<Row> {
     let browser_only = |id: &str| id == "project.download_zip" && app.session.library().is_none();
-    let engine = cmd::all().iter().filter(|c| (!c.menu.is_empty() || c.shortcut.is_some()) && !browser_only(c.id)).map(|c| {
-        let (label, enabled) = ui_cmd::menu_entry(app, c.id);
-        let place = c.menu.first().map_or_else(String::new, |m| crate::i18n::t(m).to_owned());
-        Row { id: c.id, label: label.to_owned(), place, shortcut: app.keys.shortcut_text(c.id), enabled, alias: alias(c.id), marks: Vec::new() }
-    });
-    let view = UI_COMMANDS.iter().filter(|c| listed_view_command(c.id, c.menu)).map(|c| {
+    // AI's commands only while AI is offered (issue #43).
+    let ai = crate::ai::offered(app);
+    let engine =
+        cmd::all().iter().filter(|c| (!c.menu.is_empty() || c.shortcut.is_some()) && !browser_only(c.id) && (ai || !ui_cmd::is_ai(c.id))).map(|c| {
+            let (label, enabled) = ui_cmd::menu_entry(app, c.id);
+            let place = c.menu.first().map_or_else(String::new, |m| crate::i18n::t(m).to_owned());
+            Row { id: c.id, label: label.to_owned(), place, shortcut: app.keys.shortcut_text(c.id), enabled, alias: alias(c.id), marks: Vec::new() }
+        });
+    let view = UI_COMMANDS.iter().filter(|c| listed_view_command(c.id, c.menu) && (ai || !ui_cmd::is_ai(c.id))).map(|c| {
         let (label, enabled) = ui_cmd::menu_entry(app, c.id);
         Row {
             id: c.id,

@@ -29,6 +29,9 @@
 //! entry drafted from a title or DOI, suggested at the end of a `.bib` under a line saying a model
 //! drafted it. AI5 ([`ask`]): questions about the open file or the project, answered with links
 //! to the lines they name, and a section reviewed as comments on the words each remark quotes.
+//!
+//! The user can turn every AI feature off (`ai.enabled`, issue #43): every other command is then
+//! refused ([`TURNED_OFF`]) before anything else is checked, so nothing is contacted.
 
 mod ask;
 mod grammar;
@@ -103,6 +106,11 @@ const MAX_SENT: usize = 20;
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Saved {
+    /// The user turned every AI feature off (Settings › AI › Use AI features, `ai.enabled`):
+    /// nothing is offered or sent, whatever else is kept here. False by default (the features
+    /// on), since nothing is offered or sent before a model is connected anyway.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub disabled: bool,
     pub connection: Option<Connection>,
     pub model: Option<String>,
     pub consent: ConsentLedger,
@@ -198,6 +206,9 @@ pub fn openai_compatible() -> Connect {
 
 /// Why a request cannot be made before a model is connected.
 const OFF: &str = "AI is off: connect a model first (Settings › AI).";
+
+/// Why nothing AI does is offered or sent while the user turned AI features off.
+pub const TURNED_OFF: &str = "AI features are turned off: turn them on in Settings › AI to use them.";
 
 /// Why AI does not work in this build, if it does not.
 pub const UNAVAILABLE: &str =
@@ -640,8 +651,33 @@ impl Session {
         }
     }
 
+    /// Whether the user left AI features on (`ai.enabled`); off, nothing is offered or sent.
+    pub fn ai_enabled(&self) -> bool {
+        !self.ai.saved.disabled
+    }
+
+    /// `ai.enabled`: turns every AI feature on or off. Off stops the request in flight and takes
+    /// away the next words shown; the connection, its agreements and the switches are kept for
+    /// when it is turned on again. Turning on is the person's (agents can only turn it off).
+    pub(crate) fn ai_set_enabled(&mut self, on: bool, person: bool) -> Result<Value> {
+        if on && !person {
+            return Err("Turning AI features on is for the person at the window (Settings › AI), not an agent session.".to_owned());
+        }
+        if self.ai.saved.disabled == on {
+            self.ai.saved.disabled = !on;
+            if !on {
+                self.ai_cancel(false);
+            }
+            self.changed_ai();
+        }
+        Ok(json!({"enabled": on}))
+    }
+
     /// Why AI requests cannot be made now, if they cannot.
     pub(crate) fn ai_ready(&mut self) -> Result<()> {
+        if self.ai.saved.disabled {
+            return Err(TURNED_OFF.to_owned());
+        }
         if !available() {
             return Err(UNAVAILABLE.to_owned());
         }
@@ -679,6 +715,7 @@ impl Session {
         let c = a.saved.connection.as_ref();
         let requests: Vec<Value> = a.log.iter().filter_map(|r| serde_json::to_value(r).ok()).collect();
         json!({
+            "enabled": !a.saved.disabled,
             "available": available(),
             "why_not": (!available()).then_some(UNAVAILABLE),
             "connected": c.is_some(),

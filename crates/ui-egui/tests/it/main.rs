@@ -2,6 +2,7 @@
 
 mod ai;
 mod ai_make_ask;
+mod ai_off;
 mod all_commands;
 mod autosave;
 mod carets;

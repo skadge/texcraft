@@ -1,7 +1,8 @@
 //! The start page's tip of the day: one tip about a feature that is easy to miss, chosen by the
 //! date (the same all day, another the next), with Previous and Next to look at others and, when
 //! the feature has one, a button that does it. Only tips whose feature exists in this build are
-//! shown (the AI and push and pull on the desktop, the zip download in the browser).
+//! shown (the AI and push and pull on the desktop, the zip download in the browser); the AI's only
+//! while AI features are on.
 
 use egui::{RichText, vec2};
 use serde_json::{Value, json};
@@ -17,6 +18,8 @@ pub(crate) enum Needs {
     Desktop,
     /// The browser version (its projects live in the browser).
     Browser,
+    /// AI features on (Settings › AI, issue #43), on the desktop.
+    Ai,
 }
 
 /// A tip: its text, where it applies, and what its button does.
@@ -126,7 +129,7 @@ pub(crate) const TIPS: &[Tip] = &[
         tn!(
             "Connect an AI model in Settings › AI to explain a build error, rewrite a selection or review a section. Nothing is sent before you connect one."
         ),
-        Needs::Desktop,
+        Needs::Ai,
         Some(Action { label: tn!("Open Settings"), command: "app.settings", params: || json!({"tab": "ai"}) }),
     ),
     tip(
@@ -173,6 +176,7 @@ pub(crate) fn available(app: &App) -> Vec<&'static Tip> {
             Needs::Anywhere => true,
             Needs::Desktop => !in_browser,
             Needs::Browser => in_browser,
+            Needs::Ai => !in_browser && app.session.ai_enabled(),
         })
         .collect()
 }

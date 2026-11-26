@@ -12,17 +12,18 @@ pub(super) fn specs() -> Vec<CommandSpec> {
     let spec = |id, label, params, enabled, run, changes| CommandSpec { id, label, menu: &[], shortcut: None, params, enabled, run, changes };
     vec![
         spec("ai.status", "AI Status", no_params, always, status, false),
+        spec("ai.enabled", "Use AI Features", enabled_schema, always, enabled, true),
         spec("ai.connect", "Connect a Model", connect_schema, platform, connect, true),
         spec("ai.model", "Choose the Model", model_schema, connected, model, true),
         spec("ai.models", "List the Models", background_schema, connected, models, true),
-        spec("ai.forget", "Forget the AI Connection", no_params, always, forget, true),
-        spec("ai.project", "AI in This Project", project_schema, always, project, true),
+        spec("ai.forget", "Forget the AI Connection", no_params, on, forget, true),
+        spec("ai.project", "AI in This Project", project_schema, on, project, true),
         spec("ai.disclose", "What an AI Request Sends", disclose_schema, connected, disclose, false),
         spec("ai.consent", "Agree to Send", consent_schema, connected, consent, true),
         spec("ai.revoke", "Withdraw an Agreement to Send", revoke_schema, connected, revoke, true),
-        spec("ai.switch", "Switch a Kind of AI Request On or Off", switch_schema, always, switch, true),
-        spec("ai.prompts", "AI Prompts", no_params, always, prompts, false),
-        spec("ai.set_prompt", "Change an AI Prompt", set_prompt_schema, always, set_prompt, true),
+        spec("ai.switch", "Switch a Kind of AI Request On or Off", switch_schema, on, switch, true),
+        spec("ai.prompts", "AI Prompts", no_params, on, prompts, false),
+        spec("ai.set_prompt", "Change an AI Prompt", set_prompt_schema, on, set_prompt, true),
         spec("ai.sent", "What an AI Request Sent", sent_schema, connected, sent, false),
         spec("ai.explain", "Explain", explain_schema, explain_on, explain, true),
         spec("ai.rewrite", "Rewrite with AI", rewrite_schema, rewrite_on, rewrite, true),
@@ -34,11 +35,17 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         spec("ai.ask", "Ask AI", ask_schema, ask_on, ask, true),
         spec("ai.review", "Review with AI", review_schema, review_on, review, true),
         spec("ai.grammar", "Check Grammar with AI", grammar_schema, grammar_on, grammar, true),
-        spec("ai.cancel", "Cancel the AI Request", cancel_schema, always, cancel, true),
+        spec("ai.cancel", "Cancel the AI Request", cancel_schema, on, cancel, true),
     ]
 }
 
-fn platform(_: &Session) -> Result<()> {
+/// Every `ai.*` command but `ai.status` and `ai.enabled`: refused while AI features are off.
+fn on(s: &Session) -> Result<()> {
+    if s.ai_enabled() { Ok(()) } else { Err(crate::ai::TURNED_OFF.to_owned()) }
+}
+
+fn platform(s: &Session) -> Result<()> {
+    on(s)?;
     if crate::ai::available() { Ok(()) } else { Err(crate::ai::UNAVAILABLE.to_owned()) }
 }
 
@@ -81,6 +88,20 @@ fn review_on(s: &Session) -> Result<()> {
 }
 fn grammar_on(s: &Session) -> Result<()> {
     kind_on(s, "grammar")
+}
+
+fn enabled_schema() -> Value {
+    json!({"type": "object", "description": "Turns every AI feature on or off (Settings › AI › Use AI features; ai.status's `enabled`). \
+Off, nothing AI does is offered in the window and every other ai.* command but ai.status is refused, so nothing is sent; the connection, its agreements and the switches are kept for when it is on again. \
+Turning it on is the person's; an agent session can only turn it off.", "properties": {
+        "on": {"type": "boolean"}
+    }, "required": ["on"], "additionalProperties": false})
+}
+
+fn enabled(s: &mut Session, p: &Value) -> Result<Value> {
+    let on = p.get("on").and_then(Value::as_bool).ok_or("`on` (true or false) is missing")?;
+    let person = person(s);
+    s.ai_set_enabled(on, person)
 }
 
 fn switch_schema() -> Value {

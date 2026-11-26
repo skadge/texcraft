@@ -452,6 +452,11 @@ fn confirm(ui: &mut egui::Ui, t: &Tokens, c: &Confirm) -> Outcome {
     buttons(ui, t, c.action, true, true)
 }
 
+/// Whether the Keyboard Shortcuts dialog lists `b` while AI is not offered: not when it is AI's.
+fn not_ai(b: &craft_keymap::Bindable) -> bool {
+    !crate::ui_cmd::is_ai(&b.command.id)
+}
+
 /// The shared Keyboard Shortcuts dialog (craft-keymap): every command, its shortcuts, editing
 /// and conflicts. Changes are kept in the preferences.
 ///
@@ -464,6 +469,7 @@ fn shortcuts(app: &mut App, ctx: &egui::Context) {
     }
     let text = crate::i18n::keymap_text();
     let t = app.tokens;
+    let ai = crate::ai::offered(app);
     let screen = ctx.content_rect().size();
     let size = (screen * 0.8).min(egui::vec2(1320.0, 900.0)).max(egui::vec2(240.0, 180.0)).min(screen - egui::vec2(48.0, 48.0));
     let mut outcome = None;
@@ -472,7 +478,10 @@ fn shortcuts(app: &mut App, ctx: &egui::Context) {
         let body = egui::vec2(size.x, (size.y - ui.min_rect().height()).max(120.0));
         ui.allocate_ui(body, |ui| {
             ui.set_min_size(body);
-            outcome = craft_keymap::ui::ShortcutsDialog::new(&mut app.keys.keymap, &text).ui(ui, &mut app.keys.dialog);
+            // AI's commands are listed only while AI is offered (issue #43); hidden, they keep
+            // their shortcuts.
+            let options = craft_keymap::ui::Options::default().with(|o| o.visible = (!ai).then_some(not_ai as fn(&craft_keymap::Bindable) -> bool));
+            outcome = craft_keymap::ui::ShortcutsDialog::new(&mut app.keys.keymap, &text).options(&options).ui(ui, &mut app.keys.dialog);
         });
     });
     match outcome {

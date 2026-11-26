@@ -37,7 +37,7 @@
     </nav>
     <main id="main" tabindex="-1">
       <h1>AI assistance <span class="tag">Desktop only</span></h1>
-      <p class="lead">TeXCraft can use a language model to explain build errors, rewrite a passage, write a table or a diagram, draft a reference, answer questions about your project and review a section. It is off until you connect a model, and every change it proposes arrives as a suggestion for you to accept or reject.</p>
+      <p class="lead">TeXCraft can use a language model to explain build errors, rewrite a passage, write a table or a diagram, draft a reference, answer questions about your project and review a section. It is off until you connect a model, and every change it proposes arrives as a suggestion for you to accept or reject. Until then, nothing of it shows in the menus or panels; and if you do not want it at all, one switch <a href="#turn-off">hides it everywhere</a>.</p>
       <p class="not-yet"><strong>Not yet in the browser:</strong> a web page cannot reach a model's endpoint through the suite's AI layer yet. Use the desktop app for AI assistance.</p>
 
       <h2 id="connect">Connecting a model</h2>
@@ -71,6 +71,10 @@
       </div>
       <p>Each kind's instructions to the model are a prompt you can change, under <span class="ui">Prompts</span> in Settings › AI. Its placeholders (such as <code>{passage}</code> or <code>{instruction}</code>) are explained beside it, and <span class="ui">Reset to Default</span> brings back TeXCraft's own. A prompt that lost a placeholder it needs is kept but not used: TeXCraft sends its own and says so. Whatever the prompt says, the answer is checked in the same way.</p>
       <p><span class="ui">Show What Was Sent</span> lists this session's last requests: when, how many bytes, to which address and model, and how each ended, with the text that went.</p>
+
+      <h3 id="turn-off">Turning AI features off</h3>
+      <p>Untick <span class="ui">Use AI features</span>, at the top of Settings › AI, and every AI feature is hidden: the AI entries of the menus (and of the macOS menu bar), of the text's context menu and of All Commands, <span class="ui">Explain</span> on build messages and in the problem popup, the <span class="ui">Ask AI</span> section of the rail, the next words as you type, and the tip of the day about AI. Nothing is sent, and the endpoint is not contacted. Settings › AI then shows only the switch, so you can turn the features back on: the connection, what you agreed to and your prompts are kept for then. The choice is kept in your preferences, and it overrides each project's own switch. <a href="agents.html">Agents</a> are refused too, saying AI is turned off in Settings; they can turn the features off, never on.</p>
+      <p>The features are on by default, but they show only once a model is connected: before that, Settings › AI is the only place they appear.</p>
 
       <h3 id="project-switch">Turning AI off for a project</h3>
       <p>Untick <span class="ui">Use AI in this project</span> in Settings › AI: the project's sources are then never sent, whatever the other settings. The choice is kept in the project's <code>.texcraft</code> folder, so it travels with the project.</p>
@@ -106,7 +110,7 @@
         <li>Nothing is sent until you connect a model, and then only the kinds of request you left switched on, to the address and model you agreed to.</li>
         <li>With a model on your own computer, nothing leaves it.</li>
         <li>The token stays in your system's keychain. The preferences keep the connection and what you agreed to, never any of your text.</li>
-        <li>A project can turn AI off for itself.</li>
+        <li>A project can turn AI off for itself, and <span class="ui">Use AI features</span> turns it off, and hides it, everywhere.</li>
         <li><a href="agents.html">Agents</a> driving TeXCraft can switch kinds of request off, but never on, and cannot agree for you.</li>
         <li>What the service does with what it receives is up to the service: read its terms, or use a local model.</li>
       </ul>

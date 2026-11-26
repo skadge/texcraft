@@ -147,15 +147,28 @@ pub(crate) const LANGUAGES: [&str; 14] = [
 /// The pause in typing after which the next words are asked for, in seconds.
 const PAUSE: f64 = 1.0;
 
-/// Whether the window offers AI actions: the build can, a model is connected.
+/// Whether the window offers AI actions: AI features are on (issue #43), the build can, and a
+/// model is connected. Every AI entry point (its menus, context menus, the Ask section, Explain,
+/// the next words, the tip, All Commands) is shown only then, so someone who does not use AI
+/// never sees it; Settings › AI stays, to connect a model or turn the features back on.
 pub(crate) fn offered(app: &App) -> bool {
-    available() && app.session.ai_saved().0.connection.is_some() && app.session.ai_saved().0.model.is_some()
+    let saved = app.session.ai_saved().0;
+    app.session.ai_enabled() && available() && saved.connection.is_some() && saved.model.is_some()
+}
+
+/// Why AI is not offered: turned off, or no model connected.
+pub(crate) fn not_offered(app: &App) -> String {
+    if app.session.ai_enabled() {
+        tl!("Connect a model first (Settings › AI).").to_owned()
+    } else {
+        crate::i18n::msg(texcraft_engine::ai::TURNED_OFF)
+    }
 }
 
 /// Why requests of `kind` cannot be sent now, if they cannot: no model, switched off, not agreed.
 pub(crate) fn allowed(app: &App, kind: Kind) -> Result<(), String> {
     if !offered(app) {
-        return Err(tl!("Connect a model first (Settings › AI).").to_owned());
+        return Err(not_offered(app));
     }
     match app.session.ai_permit(kind.request()) {
         texcraft_engine::ai::Permit::On => Ok(()),
@@ -631,8 +644,12 @@ pub(crate) fn explanation(ui: &mut egui::Ui, t: &Tokens, e: Option<&Explanation>
     act
 }
 
-/// Settings › AI.
+/// Settings › AI: first the switch that turns every AI feature on or off; while off, only it.
 pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    if !use_ai(app, ui, t) {
+        return;
+    }
+    ui.separator();
     if !available() {
         ui.label(RichText::new(crate::i18n::msg(UNAVAILABLE)).color(t.text));
         return;
@@ -836,6 +853,23 @@ fn prompts(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             });
         }
     });
+}
+
+/// Use AI features (issue #43): off hides every AI entry point and sends nothing; the connection
+/// and the agreements are kept for when it is on again. Gives whether it is on.
+fn use_ai(app: &mut App, ui: &mut egui::Ui, t: &Tokens) -> bool {
+    let mut on = app.session.ai_enabled();
+    if ui.checkbox(&mut on, tl!("Use AI features")).changed() {
+        app.run("ai.enabled", json!({"on": on}));
+        app.ai.filled = false;
+    }
+    let help = if app.session.ai_enabled() {
+        tl!("Turned off, every AI feature is hidden from the menus, the panels and the build log, and nothing is sent.")
+    } else {
+        tl!("AI features are turned off: they are hidden everywhere, and nothing is sent. Turn this on to use them again.")
+    };
+    ui.label(RichText::new(help).font(t.small()).color(t.text_muted));
+    app.session.ai_enabled()
 }
 
 fn typing_setting(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {

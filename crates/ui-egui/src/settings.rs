@@ -387,7 +387,7 @@ fn grammar_group(id: &str) -> &'static str {
 fn grammar(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     // A build without Harper (the browser's) says so where the switch would be (AGENTS.md rule 15).
     if !texcraft_engine::grammar::OFFLINE {
-        let help = if texcraft_engine::ai::available() {
+        let help = if texcraft_engine::ai::available() && app.session.ai_enabled() {
             tl!("Grammar checking is not in this build; Check Grammar with AI is available.")
         } else {
             tl!("Grammar checking is not in this build.")

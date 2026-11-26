@@ -22,7 +22,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                     (Side::Review, "message-square-text", tl!("Review")),
                     (Side::Ask, crate::ai::ICON, tl!("Ask AI")),
                 ];
-                for (side, icon, label) in sections {
+                // Ask AI only while AI is offered (issue #43): nothing of AI's shows otherwise.
+                let ai = crate::ai::offered(app);
+                for (side, icon, label) in sections.into_iter().filter(|(side, _, _)| *side != Side::Ask || ai) {
                     let active = app.view.side == Some(side);
                     let r = widgets::rail_button(ui, &t, icon, label, Some(active));
                     app.region(crate::Region::Rail, r.id);

@@ -37,6 +37,7 @@
 	A token is kept on this computer: leave this empty to use it.	Há um token guardado neste computador: deixe isto vazio para o usar.
 	A token is kept: type to replace it	Há um token guardado: escreva para o substituir
 	AI	IA
+	AI features are turned off: they are hidden everywhere, and nothing is sent. Turn this on to use them again.	As funções de IA estão desligadas: ficam ocultas em todo o lado e nada é enviado. Ligue isto para voltar a usá-las.
 	AI is off until you connect a model: any OpenAI-compatible endpoint, a server on this computer (llama.cpp, Ollama, vLLM) included. Every change it proposes arrives as a suggested change.	A IA está desligada até ligar um modelo: qualquer endpoint compatível com OpenAI, incluindo um servidor neste computador (llama.cpp, Ollama, vLLM). Cada alteração que propõe chega como sugestão de alteração.
 	Abstract	Resumo
 	Accents	Acentos
@@ -1113,6 +1114,7 @@
 	Turn Off This Rule	Desligar esta regra
 	Turn On	Ligar
 	Turned off from the text's menu (Turn Off This Rule).	Desligada a partir do menu do texto (Desligar esta regra).
+	Turned off, every AI feature is hidden from the menus, the panels and the build log, and nothing is sent.	Desligado, todas as funções de IA ficam ocultas nos menus, nos painéis e no registo de compilação, e nada é enviado.
 	Turned off, the project's sources are never sent; the choice is kept in its .texcraft folder.	Desligado, o código-fonte do projeto nunca é enviado; a escolha fica guardada na pasta .texcraft.
 	Type a line number, from 1.	Escreva um número de linha, a partir de 1.
 	Type part of a file's path	Escreva parte do caminho de um ficheiro
@@ -1146,6 +1148,7 @@
 	Updating from GitHub…	A atualizar a partir do GitHub…
 	Updating from GitLab…	A atualizar a partir do GitLab…
 	Upsilon, capital	Ípsilon maiúsculo
+	Use AI features	Usar as funções de IA
 	Use AI in this project	Usar IA neste projeto
 	Use a personal access token instead	Usar antes um token de acesso pessoal
 	Use a personal access token instead of the sign-in	Usar um token de acesso pessoal em vez de iniciar sessão
@@ -1771,6 +1774,7 @@ unit	{n} s	{n} s
 @msg	AAS journal article (AASTeX)	Artigo de revista da AAS (AASTeX)
 @msg	ACM conference paper (sigconf)	Artigo de conferência da ACM (sigconf)
 @msg	AI ({model})	IA ({model})
+@msg	AI features are turned off: turn them on in Settings › AI to use them.	As funções de IA estão desligadas: ligue-as em Definições › IA para as usar.
 @msg	AI is not available in the browser yet: the suite's AI layer cannot reach an endpoint from a web page. Use the desktop app.	A IA ainda não está disponível no navegador: a camada de IA da suite não consegue chegar a um endpoint a partir de uma página web. Use a aplicação de computador.
 @msg	AI is off: connect a model first (Settings › AI).	A IA está desligada: ligue primeiro um modelo (Definições › IA).
 @msg	AI is turned off for this project (Settings › AI).	A IA está desativada para este projeto (Definições › IA).

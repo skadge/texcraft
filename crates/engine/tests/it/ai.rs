@@ -219,6 +219,60 @@ fn an_agent_can_switch_kinds_off_but_not_on() -> R {
     Ok(())
 }
 
+/// Issue #43: AI features turned off refuse every `ai.*` command but `ai.status` and
+/// `ai.enabled`, saying where to turn them on, and make no provider (nothing is listed or sent);
+/// kept with the settings, and on again the connection works as before. The project's own switch
+/// stays as it was.
+#[test]
+fn ai_features_turned_off_refuse_every_request_and_contact_nothing() -> R {
+    let seen = Seen::default();
+    let keychain: Arc<dyn Secrets> = Arc::new(texcraft_engine::ai::SessionSecrets::default());
+    let mut s = session(20, "It is a brace.", &seen)?;
+    s.set_ai_secrets(keychain.clone());
+    connect_remote(&mut s)?;
+    let made = seen.made();
+    s.execute("ai.enabled", &json!({"on": false}))?;
+    assert_eq!(s.execute("ai.status", &json!({}))?["enabled"], false);
+    let saved = s.ai_saved().0.clone();
+    for c in texcraft_engine::cmd::all().iter().filter(|c| c.id.starts_with("ai.") && !matches!(c.id, "ai.status" | "ai.enabled")) {
+        let why = (c.enabled)(&s).err().ok_or(format!("{} is enabled with AI turned off", c.id))?;
+        assert!(why.contains("turned off") && why.contains("Settings › AI"), "{}: {why}", c.id);
+    }
+    for (id, p) in [
+        ("ai.models", json!({})),
+        ("ai.explain", json!({"index": 0})),
+        ("ai.complete", json!({"path": "main.tex", "at": 10})),
+        ("ai.ask", json!({"question": "What is this?"})),
+    ] {
+        assert!(s.execute(id, &p).is_err(), "{id} ran with AI turned off");
+    }
+    assert_eq!(seen.made(), made, "a provider was made with AI turned off");
+    assert!(seen.prompts().is_empty(), "something was sent with AI turned off");
+    // Kept in the settings, which a new session restores.
+    let mut again = session(20, "It is a brace.", &seen)?;
+    again.set_ai_secrets(keychain);
+    again.restore_ai(saved);
+    assert!(again.execute("ai.explain", &json!({"index": 0})).is_err(), "turned off was not kept");
+    again.execute("ai.enabled", &json!({"on": true}))?;
+    again.execute("ai.explain", &json!({"index": 0}))?;
+    assert_eq!(seen.prompts().len(), 1, "on again, the connection did not work as before");
+    Ok(())
+}
+
+/// Issue #43: an agent can turn AI features off, never on.
+#[test]
+fn an_agent_can_turn_ai_features_off_but_not_on() -> R {
+    let seen = Seen::default();
+    let mut s = session(20, "fine", &seen)?;
+    connect_remote(&mut s)?;
+    let dir = confined(&mut s, "enabled")?;
+    s.execute("ai.enabled", &json!({"on": false}))?;
+    assert!(s.execute("ai.enabled", &json!({"on": true})).is_err(), "an agent turned AI features on");
+    assert!(!s.ai_enabled());
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
 /// Issue #15: a changed prompt is what is sent; a reset sends the app's own again; one that lost a
 /// required placeholder is kept but not used, the app's own sent instead, and said.
 #[test]

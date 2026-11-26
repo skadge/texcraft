@@ -52,6 +52,7 @@ fn every_command_is_in_the_menus_or_the_list() {
     let own_control = ["view.zoom", "edit.rewrite", "edit.insert_symbol", "view.commands"];
     let own_menu = |id: &str| (id.starts_with("edit.spelling.") && id != "edit.spelling.next") || id.starts_with("edit.grammar.");
     let view = UI_COMMANDS.iter().map(|c| c.id).filter(|id| !own_control.contains(id) && !own_menu(id) && !id.starts_with("view.present."));
-    let lost: Vec<&str> = engine.chain(view).filter(|id| !reachable(id) && *id != "project.download_zip").collect();
+    // AI's are listed only while a model is connected and AI is on (ai_off.rs checks they are then).
+    let lost: Vec<&str> = engine.chain(view).filter(|id| !reachable(id) && *id != "project.download_zip" && !ui_cmd::is_ai(id)).collect();
     assert!(lost.is_empty(), "not in the menus or All Commands: {lost:?}");
 }

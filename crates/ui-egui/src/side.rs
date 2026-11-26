@@ -103,6 +103,11 @@ fn content(app: &mut App, ui: &mut egui::Ui) {
         return;
     }
     if app.view.side == Some(Side::Ask) {
+        if !crate::ai::offered(app) {
+            // AI turned off (or its model forgotten) while the section was open.
+            app.view.side = None;
+            return;
+        }
         crate::ai_ask::panel(app, ui);
         return;
     }
