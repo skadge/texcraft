@@ -212,10 +212,17 @@ struct Target {
     instance: String,
 }
 
-fn target(s: &Session, p: &Value, missing: &str) -> Result<Target> {
+/// `push`: the target of a push (its refusal says how to get a remote).
+fn target(s: &Session, p: &Value, push: bool) -> Result<Target> {
     let h = history(s)?;
     let (remote, branch) = which(h, p)?;
-    let url = h.remote_url(&remote)?.ok_or_else(|| missing.replace("{remote}", &remote))?;
+    let url = h.remote_url(&remote)?.ok_or_else(|| {
+        if push {
+            format!("The project has no remote {remote}: set one (git.set_remote), or save the project to GitLab or GitHub.")
+        } else {
+            format!("The project has no remote {remote}: set one (git.set_remote) first.")
+        }
+    })?;
     let https = https_url(&url)?;
     let (service, instance) = server_of(s, &https);
     Ok(Target { remote, branch, url, https, service, instance })
@@ -297,7 +304,7 @@ pub(super) fn push(s: &mut Session, p: &Value) -> Result<Value> {
 fn start_push(s: &mut Session, p: &Value, sync: Option<Box<Syncing>>) -> Result<Option<Value>> {
     let h = history(s)?;
     allowed(s, h, Access::Read)?;
-    let target = target(s, p, "The project has no remote {remote}: set one (git.set_remote), or save the project to GitLab or GitHub.")?;
+    let target = target(s, p, true)?;
     check_committed(s, "a push sends what is committed")?;
     let h = history(s)?;
     let head = h.head()?.ok_or("The project has no commit yet: save it first.")?;
@@ -363,7 +370,7 @@ pub(super) fn pull(s: &mut Session, p: &Value) -> Result<Value> {
 fn start_pull(s: &mut Session, p: &Value, sync: Option<Box<Syncing>>) -> Result<Option<Value>> {
     let h = history(s)?;
     allowed(s, h, Access::Write)?;
-    let target = target(s, p, "The project has no remote {remote}: set one (git.set_remote) first.")?;
+    let target = target(s, p, false)?;
     let choices = super::super::forge::choices(p)?;
     check_committed(s, "a pull changes the files on disk")?;
     let h = history(s)?;

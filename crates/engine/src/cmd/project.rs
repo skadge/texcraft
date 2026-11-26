@@ -284,7 +284,7 @@ fn write(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn autosave(s: &mut Session, p: &Value) -> Result<Value> {
-    let on = p.get("on").and_then(Value::as_bool).ok_or("the parameter `on` (true or false) is missing")?;
+    let on = p.get("on").and_then(Value::as_bool).ok_or("`on` (true or false) is missing")?;
     s.settings.autosave = on;
     Ok(json!({"autosave": on}))
 }
