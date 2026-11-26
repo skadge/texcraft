@@ -153,7 +153,11 @@ fn latin_faces(dir: &Path) -> Result<Vec<(&'static str, PathBuf)>, String> {
     Ok(out)
 }
 
-/// `ICONS`: every SVG in `assets/icons/` (the Lucide subset listed in ATTRIBUTION.md), by name.
+/// `ICONS`: every SVG in `assets/icons/` (the Lucide subset and our own, listed in ATTRIBUTION.md),
+/// by name. The loader tints an icon by drawing its `currentColor` white: Lucide's and ours are
+/// strokes in `currentColor`, while the services' marks (`brand-*.svg`, from Simple Icons, kept as
+/// released) are fills in the default black; each is embedded with `fill="currentColor"` on its
+/// root, so that it takes the text colour as the others do.
 fn icons() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/icons");
     println!("cargo::rerun-if-changed={}", dir.display());
@@ -162,12 +166,21 @@ fn icons() {
         .unwrap_or_default();
     names.sort();
     let mut out = String::from("/// The embedded icon catalog (build.rs): (name, SVG).\npub static ICONS: &[(&str, &[u8])] = &[\n");
+    let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").unwrap_or_default());
     for name in names {
-        let path = dir.join(format!("{name}.svg"));
+        let mut path = dir.join(format!("{name}.svg"));
+        if name.starts_with("brand-") {
+            let filled = std::fs::read_to_string(&path).map(|svg| svg.replacen("<svg ", "<svg fill=\"currentColor\" ", 1));
+            let target = out_dir.join(format!("{name}.svg"));
+            match filled.and_then(|svg| std::fs::write(&target, svg)) {
+                Ok(()) => path = target,
+                Err(e) => println!("cargo::error=preparing {}: {e}", path.display()),
+            }
+        }
         let _ = writeln!(out, "    ({name:?}, include_bytes!({:?})),", path.display().to_string());
     }
     out.push_str("];\n");
-    let target = PathBuf::from(std::env::var_os("OUT_DIR").unwrap_or_default()).join("icons.rs");
+    let target = out_dir.join("icons.rs");
     if let Err(e) = std::fs::write(&target, out) {
         println!("cargo::error=writing {}: {e}", target.display());
     }

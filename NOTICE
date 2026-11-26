@@ -6,6 +6,7 @@ Third-party material:
 - retex (https://gitlab.com/severin-lemaignan/retex), CC0-1.0: the typesetting engine and language server, linked as a library.
 - storytold/craft-libs, MIT OR Apache-2.0: shared Craft libraries, including its vendored copies of hayro and vello (MIT OR Apache-2.0).
 - Lucide icons (https://lucide.dev), release 1.77.0, ISC AND MIT: assets/icons/, licence text in assets/icons/LICENSE.
+- Simple Icons (https://simpleicons.org), release 16.37.0, CC0-1.0: assets/icons/brand-gitlab.svg, brand-github.svg and brand-overleaf.svg. The marks are trademarks of their owners (GitLab Inc., GitHub, Inc., Overleaf's owner, Digital Science), shown only to name the service a project is imported from.
 - option-ext 0.2 (MPL-2.0), used unmodified through the `dirs` crate by the desktop app; its source is at https://github.com/soc/option-ext and on crates.io. Under MPL-2.0 that source stays available to users.
 - Noto Emoji (SIL Open Font License 1.1) and emoji-icon-font (MIT), embedded through egui's default fonts.
 - jpeg-encoder (MIT OR Apache-2.0, AND IJG), used through retex's PDF writer: this software is based in part on the work of the Independent JPEG Group.
