@@ -82,6 +82,12 @@ pub(crate) fn run(app: &mut App, id: &str, params: &Value) {
         return;
     };
     let Some(mark) = problem.grammar.clone() else { return };
+    act(app, &mark, &problem, id, params);
+}
+
+/// Runs grammar command `id` on `problem` (marked `mark`), wherever the caret is: the context
+/// menu's and the popup's entries.
+pub(crate) fn act(app: &mut App, mark: &GrammarMark, problem: &Problem, id: &str, params: &Value) {
     match id {
         "edit.grammar.replace" => {
             let text = params.get("text").and_then(Value::as_str);

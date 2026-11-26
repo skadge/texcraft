@@ -1309,6 +1309,14 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     if let Some(fix) = out.apply_fix {
         app.editor.source.apply_fix(&fix);
     }
+    if let Some((id, problem)) = out.popup_action {
+        if problem.spelling {
+            let word = crate::spell::word_of(app, &problem);
+            crate::spell::keep(app, id, &word, &json!({}));
+        } else if let Some(mark) = &problem.grammar {
+            crate::grammar::act(app, mark, &problem, id, &json!({}));
+        }
+    }
     if let Some(line) = out.explain {
         crate::ai::explain(app, json!({"path": path.as_str(), "line": line + 1}));
     }
