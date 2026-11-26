@@ -1079,6 +1079,7 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     let mut action = None;
     let mut remove = None;
     let mut add = None;
+    let mut forget: Option<String> = None;
     let servers = app.session.forge_servers();
     let browser = app.session.library().is_some();
     egui::ScrollArea::vertical().id_salt("forge-accounts").max_height(440.0).auto_shrink([false, true]).show(ui, |ui| {
@@ -1115,6 +1116,25 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
                 }
             });
         }
+        // Git servers whose token Import a Project remembered (Overleaf's, any git server's).
+        let (hosts, _) = app.session.git_hosts_saved();
+        if !hosts.is_empty() {
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = t.unit * 2.0;
+                ui.label(RichText::new(tl!("Git servers")).font(t.strong()));
+                for host in hosts {
+                    ui.horizontal(|ui| {
+                        ui.label(tl!("{host}: a token is kept in the keychain.").replace("{host}", host));
+                        let r = ui.button(tl!("Forget"));
+                        let name = format!("{}: {host}", tl!("Forget"));
+                        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+                        if r.clicked() {
+                            forget = Some(host.clone());
+                        }
+                    });
+                }
+            });
+        }
         for problem in app.session.forge_server_problems() {
             let text = tl!("Your organisation's list of servers has an entry TeXCraft left out: {problem}").replace("{problem}", &crate::i18n::msg(problem));
             ui.label(RichText::new(text).font(t.small()).color(t.error));
@@ -1144,6 +1164,11 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     });
     if let Some(action) = action {
         act(app, action);
+    }
+    if let Some(host) = forget
+        && app.run("git.forget_credential", json!({"host": host})).is_some()
+    {
+        app.view.status = Some((tl!("Forgot the token kept for {host}.").replace("{host}", &host), false));
     }
     if let Some(instance) = remove
         && let Some(done) = app.run("forge.remove_server", json!({"address": instance}))

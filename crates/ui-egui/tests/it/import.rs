@@ -405,6 +405,18 @@ fn an_overleaf_project_is_cloned_with_its_git_token() {
     assert!(said(&h, "Imported 6f2c1a9e4b7d (main) into"), "not imported");
     let remotes = h.state_mut().control("engine.execute", &json!({"command": "git.remotes", "params": {}}))["result"].clone();
     assert_eq!(remotes["hosting"], "overleaf", "{remotes}");
+    // Remembered: the host goes to the preferences (the token to the keychain), and Settings ›
+    // Accounts lists it with Forget.
+    let prefs = h.state_mut().take_changed_prefs().expect("the preferences changed");
+    assert_eq!(prefs.git_hosts, ["git.overleaf.com"]);
+    ui_cmd::run(h.state_mut(), "app.settings");
+    h.run();
+    h.get_by_label("Accounts").click();
+    h.run();
+    h.get_by_role_and_label(Role::Button, "Forget: git.overleaf.com").click();
+    h.run();
+    assert!(said(&h, "Forgot the token kept for git.overleaf.com."));
+    assert!(h.state_mut().take_changed_prefs().is_some_and(|p| p.git_hosts.is_empty()), "the host is still in the preferences");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
