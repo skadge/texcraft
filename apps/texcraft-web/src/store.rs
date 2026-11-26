@@ -190,13 +190,16 @@ impl Store {
 
     /// Adds `versions` and the files' bytes `blobs` (by blob id) to project `name`'s history, in
     /// one transaction.
-    pub async fn put_versions(&self, name: &str, versions: &[Version], blobs: &[(String, Vec<u8>)]) -> Result<(), String> {
+    pub async fn put_versions(&self, name: &str, versions: &[Version], blobs: &[(String, Vec<u8>)], removed: &[String]) -> Result<(), String> {
         let names = Array::of2(&JsValue::from_str(VERSIONS), &JsValue::from_str(BLOBS));
         let tx = self.db.transaction_with_str_sequence_and_mode(&names, IdbTransactionMode::Readwrite).map_err(why)?;
         let version_store = tx.object_store(VERSIONS).map_err(why)?;
         let blob_store = tx.object_store(BLOBS).map_err(why)?;
         for (id, bytes) in blobs {
             blob_store.put_with_key(&Uint8Array::from(&bytes[..]), &JsValue::from_str(&thread_key(name, id))).map_err(why)?;
+        }
+        for id in removed {
+            version_store.delete(&JsValue::from_str(&thread_key(name, id))).map_err(why)?;
         }
         for version in versions {
             version_store.put_with_key(&version_to(version), &JsValue::from_str(&thread_key(name, &version.id))).map_err(why)?;

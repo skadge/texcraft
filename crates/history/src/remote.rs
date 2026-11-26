@@ -16,7 +16,7 @@ use gix::objs::tree::{EntryKind, EntryMode};
 use gix::refs::transaction::PreviousValue;
 
 use super::{Folder, History};
-use crate::{ChangeKind, Person, Result};
+use crate::{Amended, ChangeKind, Person, Result};
 
 /// A remote of the repository's configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -365,6 +365,82 @@ impl History {
         self.write_work_tree(&ours, &result)?;
         self.write_index(root)?;
         Ok(Merged::Done { commit: id.to_string(), changed: self.project_changes(&ours, &result) })
+    }
+
+    /// Whether commit `id` is on a ref other than the branch checked out: a remote's branch as
+    /// last fetched or pushed (`refs/remotes/…`), a tag, another branch, a stash. Such a commit is
+    /// others' too, and is never rewritten.
+    pub fn shared(&self, id: &str) -> Result<bool> {
+        let id = self.commit_id(id)?;
+        let branch = git!("The repository's HEAD cannot be read", self.repo.head_name())?;
+        let refs = git!("The repository's refs cannot be read", self.repo.references())?;
+        let all = git!("The repository's refs cannot be read", refs.all())?;
+        for reference in all {
+            let Ok(mut reference) = reference else { return Ok(true) };
+            if branch.as_ref().is_some_and(|b| b.as_ref() == reference.name()) {
+                continue;
+            }
+            let Ok(tip) = reference.peel_to_id() else { continue };
+            let tip = tip.detach();
+            if tip == id || self.ancestors(tip)?.contains(&id) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Makes `snapshot` with `message` the commit in place of HEAD `replaced` (a commit amended:
+    /// the same parents, the changes since them combined), the branch moved to it. `author`
+    /// none: the repository's configured identity, else "TeXCraft". Refuses when HEAD is no
+    /// longer `replaced`; a commit whose changes all went is dropped, the branch back on its
+    /// parent.
+    pub fn amend(
+        &self,
+        replaced: &str,
+        snapshot: &crate::Snapshot,
+        message: &str,
+        author: Option<&Person>,
+        time: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Amended> {
+        let old = self.commit_id(replaced)?;
+        let built = self.build(snapshot)?;
+        if built.head != Some(old) {
+            return Err("The branch moved since TeXCraft's last version: a new version is made instead.".to_owned());
+        }
+        let object = git!("A commit cannot be read", self.repo.find_object(old))?;
+        let commit = git!("A commit cannot be read", object.try_into_commit())?;
+        let same_message = commit.message_raw_sloppy().to_str_lossy().trim() == message.trim();
+        if built.head_tree == Some(built.root) && same_message {
+            return Ok(Amended::Same);
+        }
+        let parents = self.parents(old)?;
+        let parent_tree = parents.first().map(|p| self.commit_tree(*p)).transpose()?;
+        if let Some(parent) = parents.first().copied()
+            && parent_tree == Some(built.root)
+        {
+            self.move_branch(Some(old), parent, "reset: TeXCraft's version undone")?;
+            self.write_index(built.root)?;
+            return Ok(Amended::Undone(parent.to_string()));
+        }
+        let person = match author {
+            Some(p) => p.clone(),
+            None => self.configured_person().unwrap_or_else(|| Person::new("TeXCraft", "")),
+        };
+        let signature =
+            gix::actor::Signature { name: person.name.into(), email: person.email.into(), time: gix::date::Time::new(time.timestamp(), 0) };
+        let new = gix::objs::Commit {
+            message: message.into(),
+            tree: built.root,
+            author: signature.clone(),
+            committer: signature,
+            encoding: None,
+            parents: parents.into_iter().collect(),
+            extra_headers: Vec::new(),
+        };
+        let id = git!("The commit cannot be made", self.repo.write_object(&new))?.detach();
+        self.move_branch(Some(old), id, "commit (amend): TeXCraft")?;
+        self.write_index(built.root)?;
+        Ok(Amended::Replaced(id.to_string()))
     }
 
     /// Moves the checked-out branch (or makes it, before the first commit) from `from` to `to`.

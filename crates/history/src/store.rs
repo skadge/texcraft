@@ -46,6 +46,9 @@ impl Version {
     }
 }
 
+/// Files' bytes by blob id.
+type Blobs = BTreeMap<String, Vec<u8>>;
+
 /// A version just recorded, with the files' bytes the history did not hold yet: what a shell
 /// adds to what it stores.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,9 +116,9 @@ impl Versions {
         self.versions.last().map(|v| v.id.as_str())
     }
 
-    /// Records `snapshot` (all its files) as a new version; none when its files are those of the
-    /// latest version.
-    pub fn record(&mut self, snapshot: &Snapshot, message: &str, author: &str, time: chrono::DateTime<chrono::Utc>) -> Result<Option<Recorded>> {
+    /// The files of `snapshot` by path with their blob ids, and the bytes the history does not
+    /// hold yet.
+    fn files_of(&self, snapshot: &Snapshot) -> Result<(Vec<(String, String)>, Blobs)> {
         let mut files = Vec::new();
         let mut new_blobs: BTreeMap<String, Vec<u8>> = BTreeMap::new();
         for (path, bytes) in &snapshot.files {
@@ -127,13 +130,22 @@ impl Versions {
         }
         files.sort();
         files.dedup_by(|a, b| a.0 == b.0);
-        if self.versions.last().is_some_and(|v| v.files == files) {
-            return Ok(None);
-        }
+        Ok((files, new_blobs))
+    }
+
+    /// Adds a version of `files` after the latest one.
+    fn push(
+        &mut self,
+        files: Vec<(String, String)>,
+        new_blobs: BTreeMap<String, Vec<u8>>,
+        message: &str,
+        author: &str,
+        time: i64,
+    ) -> Result<Recorded> {
         let mut version = Version {
             id: String::new(),
             parent: self.head().map(str::to_owned),
-            time: time.timestamp(),
+            time,
             author: author.to_owned(),
             message: message.to_owned(),
             files,
@@ -141,7 +153,45 @@ impl Versions {
         version.id = sha1(&[&version.manifest()])?;
         self.blobs.extend(new_blobs.iter().map(|(k, v)| (k.clone(), v.clone())));
         self.versions.push(version.clone());
-        Ok(Some(Recorded { version, blobs: new_blobs.into_iter().collect() }))
+        Ok(Recorded { version, blobs: new_blobs.into_iter().collect() })
+    }
+
+    /// Records `snapshot` (all its files) as a new version; none when its files are those of the
+    /// latest version.
+    pub fn record(&mut self, snapshot: &Snapshot, message: &str, author: &str, time: chrono::DateTime<chrono::Utc>) -> Result<Option<Recorded>> {
+        let (files, new_blobs) = self.files_of(snapshot)?;
+        if self.versions.last().is_some_and(|v| v.files == files) {
+            return Ok(None);
+        }
+        self.push(files, new_blobs, message, author, time.timestamp()).map(Some)
+    }
+
+    /// Records `snapshot` with `message` in place of the latest version, `replaced` (as git
+    /// amends a commit): after the same version, with the changes since it combined. A version
+    /// whose changes all went is dropped. Refuses when `replaced` is no longer the latest.
+    pub fn amend(
+        &mut self,
+        replaced: &str,
+        snapshot: &Snapshot,
+        message: &str,
+        author: &str,
+        time: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(crate::Amended, Option<Recorded>)> {
+        if self.head() != Some(replaced) {
+            return Err("The history moved since TeXCraft's last version: a new version is made instead.".to_owned());
+        }
+        let (files, new_blobs) = self.files_of(snapshot)?;
+        if self.versions.last().is_some_and(|v| v.files == files && v.message == message) {
+            return Ok((crate::Amended::Same, None));
+        }
+        self.versions.pop();
+        if let Some(before) = self.versions.last()
+            && before.files == files
+        {
+            return Ok((crate::Amended::Undone(before.id.clone()), None));
+        }
+        let recorded = self.push(files, new_blobs, message, author, time.timestamp())?;
+        Ok((crate::Amended::Replaced(recorded.version.id.clone()), Some(recorded)))
     }
 
     fn find(&self, id: &str) -> Result<&Version> {

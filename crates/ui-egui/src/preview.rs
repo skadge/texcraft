@@ -3,7 +3,9 @@
 
 use egui::{Align, Layout, RichText, Sense, vec2};
 use serde_json::json;
+use texcraft_engine::Engine;
 use texcraft_engine::Export;
+use texcraft_engine::engine_choice::{Chosen, Why};
 use texcraft_engine::project::ProjectPath;
 use texcraft_engine::{Diagnostic, Outcome, Output, PageRect, Severity, Status};
 
@@ -334,9 +336,35 @@ fn cmd_enabled(app: &App, id: &str) -> Result<(), String> {
     ui_cmd::command_enabled(app, id)
 }
 
+/// The engine a build runs, and why: the settings name it, the document asks for it (its comment
+/// line, a pdfTeX primitive and where it is first used), or nothing asks and retex chooses.
+pub(crate) fn engine_said(setting: Engine, chosen: Option<&Chosen>) -> String {
+    let name = |e: Engine| match e {
+        Engine::PdfLatex => "pdfLaTeX",
+        Engine::LuaLatex | Engine::Auto => "LuaLaTeX",
+    };
+    match (setting, chosen) {
+        (Engine::Auto, Some(Chosen { engine, why: Why::Asked { comment, .. } })) => {
+            tl!("{engine}: the main file asks for it ({comment})").replace("{engine}", name(*engine)).replace("{comment}", comment)
+        }
+        (Engine::Auto, Some(Chosen { engine, why: Why::Primitive { command, file, line } })) => {
+            tl!("{engine}: the document uses {command} ({place})")
+                .replace("{engine}", name(*engine))
+                .replace("{command}", command)
+                .replace("{place}", &format!("{file}:{line}"))
+        }
+        (Engine::Auto, None) => tl!("LuaLaTeX: nothing in the document asks for pdfLaTeX").to_owned(),
+        (e, _) => tl!("{engine}: chosen in Settings › Building").replace("{engine}", name(e)),
+    }
+}
+
 fn compile_menu(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     ui.set_min_width(260.0);
+    // The engine the next build runs, and why.
+    let engine = engine_said(app.session.settings.build.engine, app.session.engine_choice().as_ref());
+    ui.label(RichText::new(engine).font(t.small()).color(t.text_muted));
+    ui.separator();
     let mut auto = app.session.settings.auto_compile;
     if ui.checkbox(&mut auto, tl!("Compile automatically")).changed() {
         app.run("build.auto", json!({"on": auto}));
@@ -596,6 +624,9 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                     }
                 });
             });
+            // Which engine typeset it, and why (the document's choice, or the settings').
+            let engine = engine_said(app.session.settings.build.engine, app.session.built_engine());
+            ui.label(RichText::new(engine).font(t.small()).color(t.text_muted));
             if hidden_count > 0 {
                 ui.horizontal(|ui| {
                     let said = crate::i18n::trn(hidden_count, "{n} hidden message", "{n} hidden messages");

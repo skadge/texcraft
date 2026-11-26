@@ -1,13 +1,15 @@
 //! The project's history (docs/ROADMAP.md, C8): the git repository its folder is in. A folder in
-//! none becomes one on its first save and each save of it is a commit; a repository someone else
-//! made is committed to only when asked (`history.commit`).
+//! none becomes one on its first save and each save of it is a commit; in a repository someone
+//! else made, File › Save commits nothing, and versions are the automatic ones and those asked for.
+//! An automatic version amends the one this session made before it while that one is not pushed
+//! (C9), so they stay few in every repository.
 //!
 //! A project of the library (the browser) keeps its history there instead, as values: each save
 //! that changed it is a version, and the same commands read it.
 
 use base64::Engine as _;
 use serde_json::{Value, json};
-use texcraft_history::{History, Owner, Person, Snapshot, Versioned};
+use texcraft_history::{Amended, History, Owner, Person, Snapshot, Versioned};
 use texcraft_project::{Contents, ProjectPath};
 
 use super::{CommandSpec, always, path_param, string};
@@ -122,7 +124,7 @@ fn commit_schema() -> Value {
 fn version_schema() -> Value {
     json!({"type": "object", "properties": {
         "message": {"type": "string", "description": "The version's name (its commit message); by default it says what changed."},
-        "automatic": {"type": "boolean", "description": "Made by TeXCraft itself (after a pause in typing, when the project closes): then none is made in a repository someone else made, where TeXCraft commits only when asked. Default false."}
+        "automatic": {"type": "boolean", "description": "Made by TeXCraft itself (after a pause in typing, when the project closes). A version without a message amends the one this session made before it, when that one was not named and not pushed, so automatic versions stay few. Default false."}
     }, "additionalProperties": false})
 }
 
@@ -147,9 +149,10 @@ fn version_command(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Writes the project's changes, then makes a version of it with `message` (none: what changed,
 /// [`crate::describe`]): a commit in its folder's repository (made when there is none), or a
-/// version in the library. `automatic`: TeXCraft's own (after a pause, on closing, before files are
-/// rewritten), which a repository someone else made does not get. Says what was done; `commit`
-/// is null when nothing changed since the latest version, or when none was made.
+/// version in the library, in any repository. It amends the session's own automatic version
+/// before it while that one is not pushed ([`commit_now`]); `automatic` (TeXCraft's own, after a
+/// pause, on closing, before files are rewritten) makes it one the next version amends. Says what
+/// was done; `commit` is null when nothing changed since the latest version.
 pub(crate) fn make_version(s: &mut Session, message: Option<&str>, automatic: bool) -> Result<Value> {
     let Some(dir) = s.dir.clone() else { return Ok(json!({"commit": null, "why": "no place"})) };
     if s.dirty {
@@ -157,17 +160,8 @@ pub(crate) fn make_version(s: &mut Session, message: Option<&str>, automatic: bo
     }
     if s.library.is_some() {
         let name = dir.display().to_string();
-        let snapshot = snapshot(s)?;
-        let empty = texcraft_history::store::Versions::default();
-        let message = match message {
-            Some(m) => m.to_owned(),
-            None => save_message(s.library.as_ref().and_then(|l| l.history(&name)).unwrap_or(&empty), &snapshot),
-        };
-        let author = s.author.as_ref().map_or_else(|| "TeXCraft".to_owned(), |a| a.name.clone());
-        let now = s.now();
-        let id = s.library.as_mut().ok_or("The project is not kept in the browser.")?.record(&name, &snapshot, &message, &author, now)?;
-        s.mark_versioned();
-        return Ok(json!({"repository": "ours", "commit": id}));
+        let (id, amended) = record_in_library(s, &name, message, automatic)?;
+        return Ok(json!({"repository": "ours", "commit": id, "amended": amended, "automatic": automatic}));
     }
     if s.history.is_none() {
         let history = History::open_or_init(&dir)?;
@@ -175,11 +169,67 @@ pub(crate) fn make_version(s: &mut Session, message: Option<&str>, automatic: bo
         s.history = Some(history);
     }
     let owner = s.history.as_ref().map(History::owner);
-    if automatic && owner == Some(Owner::Theirs) {
-        return Ok(json!({"repository": "theirs", "commit": null, "why": "theirs"}));
+    let (id, amended) = commit_now(s, message, automatic)?;
+    Ok(json!({"repository": owner.map(Owner::as_str), "commit": id, "amended": amended, "automatic": automatic}))
+}
+
+/// Records the project as a version of library project `name`, with `message` (none: what
+/// changed), in place of the session's own automatic version while it is the latest, as
+/// [`commit_now`] amends a commit.
+fn record_in_library(s: &mut Session, name: &str, message: Option<&str>, automatic: bool) -> Result<(Option<String>, bool)> {
+    let snapshot = snapshot(s)?;
+    let empty = texcraft_history::store::Versions::default();
+    let author = s.author.as_ref().map_or_else(|| "TeXCraft".to_owned(), |a| a.name.clone());
+    let now = s.now();
+    let own = s.own_version.clone().filter(|id| s.library.as_ref().and_then(|l| l.history(name)).and_then(|v| v.head()) == Some(id.as_str()));
+    let library = s.library.as_mut().ok_or("The project is not kept in the browser.")?;
+    let made = match &own {
+        Some(old) => {
+            let versions = library.history(name).unwrap_or(&empty);
+            let parent = versions.parent_of(old)?;
+            let message = message.map_or_else(|| message_since(versions, parent.as_deref(), &snapshot), str::to_owned);
+            Made::from(library.amend(name, old, &snapshot, &message, &author, now)?)
+        }
+        None => {
+            let message = message.map_or_else(|| save_message(library.history(name).unwrap_or(&empty), &snapshot), str::to_owned);
+            library.record(name, &snapshot, &message, &author, now)?.map_or(Made::Nothing, Made::New)
+        }
+    };
+    Ok(made.keep(s, automatic))
+}
+
+/// What making a version did.
+enum Made {
+    /// Nothing changed since the latest version.
+    Nothing,
+    New(String),
+    /// The session's own version was replaced by this one ([`Amended`]).
+    Amended(Amended),
+}
+
+impl From<Amended> for Made {
+    fn from(a: Amended) -> Self {
+        Made::Amended(a)
     }
-    let id = commit_now(s, message)?;
-    Ok(json!({"repository": owner.map(Owner::as_str), "commit": id}))
+}
+
+impl Made {
+    /// Remembers the version as the session's own to amend next when TeXCraft made it by itself
+    /// (`automatic`); one asked for (named, a save, before a sync or a push), or one undone back
+    /// to the version before, is never amended: the next version is a commit of its own.
+    /// The version's id (none: nothing changed), and whether it amended one.
+    fn keep(self, s: &mut Session, automatic: bool) -> (Option<String>, bool) {
+        s.mark_versioned();
+        let (id, amended, own) = match self {
+            Made::Nothing => return (None, false),
+            Made::Amended(Amended::Same) => return (None, false),
+            Made::New(id) => (id, false, true),
+            Made::Amended(Amended::Replaced(id)) => (id, true, true),
+            Made::Amended(Amended::Undone(parent)) => (parent, true, false),
+        };
+        s.own_version = (own && automatic).then(|| id.clone());
+        (Some(id), amended)
+    }
 }
 
 fn has_history(s: &Session) -> Result<()> {
@@ -250,53 +300,66 @@ fn commit_save(s: &mut Session, moved: bool) -> Result<Value> {
     }
     let Some(history) = &s.history else { return Ok(json!({"repository": null, "commit": null})) };
     if history.owner() == Owner::Theirs {
-        // Someone else's repository: commits only when asked.
+        // Someone else's repository: a save is not a commit there (versions are).
         return Ok(json!({"repository": "theirs", "commit": null}));
     }
-    let id = commit_now(s, None)?;
-    Ok(json!({"repository": "ours", "commit": id}))
+    let (id, amended) = commit_now(s, None, false)?;
+    Ok(json!({"repository": "ours", "commit": id, "amended": amended}))
 }
 
 /// After the project was saved in the library as `name`: records the save as a version of its
-/// history. Says what was done.
+/// history (amending the session's own latest one, [`record_in_library`]). Says what was done.
 pub(super) fn after_library_save(s: &mut Session, name: &str) -> Value {
-    let recorded = snapshot(s).and_then(|snapshot| {
-        let author = s.author.as_ref().map_or_else(|| "TeXCraft".to_owned(), |a| a.name.clone());
-        let now = s.now();
-        let message = match s.library.as_ref().and_then(|l| l.history(name)) {
-            Some(versions) => save_message(versions, &snapshot),
-            None => save_message(&texcraft_history::store::Versions::default(), &snapshot),
-        };
-        s.library.as_mut().ok_or_else(|| "The project is not kept in the browser.".to_owned())?.record(name, &snapshot, &message, &author, now)
-    });
-    match recorded {
-        Ok(id) => {
-            s.mark_versioned();
-            json!({"repository": "ours", "commit": id})
-        }
+    match record_in_library(s, name, None, false) {
+        Ok((id, amended)) => json!({"repository": "ours", "commit": id, "amended": amended}),
         Err(e) => json!({"repository": "ours", "commit": null, "error": e}),
     }
 }
 
-/// Commits the session's files and review as they are with `message` (none: what the save
-/// changed, [`crate::describe`]); none when nothing changed.
-fn commit_now(s: &mut Session, message: Option<&str>) -> Result<Option<String>> {
+/// Commits the session's files and review as they are with `message` (none: what changed,
+/// [`crate::describe`]). The commit amends the session's own automatic one (made by this process,
+/// [`Made::keep`]) while that is still the branch's tip and on no other ref: not pushed, not
+/// someone else's; the amended commit's message says what changed since its parent. `automatic`:
+/// the next commit may amend this one. The commit's id (none: nothing changed), and whether it
+/// amended one.
+fn commit_now(s: &mut Session, message: Option<&str>, automatic: bool) -> Result<(Option<String>, bool)> {
     let snapshot = snapshot(s)?;
     let history = s.history.as_ref().ok_or("The project has no history.")?;
     allowed(s, history, Access::Write)?;
     let author = s.author.as_ref().map(|a| Person::new(a.name.clone(), ""));
-    let message = message.map_or_else(|| save_message(history, &snapshot), str::to_owned);
-    let id = history.commit(&snapshot, &message, author.as_ref(), s.now())?;
-    s.mark_versioned();
-    Ok(id)
+    let now = s.now();
+    let own = s.own_version.clone().filter(|id| history.head().ok().flatten().as_deref() == Some(id.as_str()) && history.shared(id) == Ok(false));
+    let amended = match &own {
+        Some(old) => {
+            let parent = history.parent_of(old)?;
+            let message = message.map_or_else(|| message_since(history, parent.as_deref(), &snapshot), str::to_owned);
+            // A branch moved meanwhile (git outside TeXCraft): a new commit instead.
+            history.amend(old, &snapshot, &message, author.as_ref(), now).ok().map(Made::from)
+        }
+        None => None,
+    };
+    let made = match amended {
+        Some(made) => made,
+        None => {
+            let message = message.map_or_else(|| save_message(history, &snapshot), str::to_owned);
+            history.commit(&snapshot, &message, author.as_ref(), now)?.map_or(Made::Nothing, Made::New)
+        }
+    };
+    Ok(made.keep(s, automatic))
 }
 
 /// The message of the version a save makes of `snapshot`: what changed since the latest one.
 fn save_message(versions: &dyn Versioned, snapshot: &Snapshot) -> String {
     // A repository with no commit yet, or one that cannot be read: everything is new.
     let latest = versions.latest().ok().flatten();
-    let before = latest.as_deref().and_then(|c| versions.ids_at(c).ok()).unwrap_or_default();
-    let old_text = |path: &str| latest.as_deref().and_then(|c| versions.file_at(c, path).ok().flatten());
+    message_since(versions, latest.as_deref(), snapshot)
+}
+
+/// What changed in `snapshot` since version `base` (none: everything is new), as a version's
+/// message.
+fn message_since(versions: &dyn Versioned, base: Option<&str>, snapshot: &Snapshot) -> String {
+    let before = base.and_then(|c| versions.ids_at(c).ok()).unwrap_or_default();
+    let old_text = |path: &str| base.and_then(|c| versions.file_at(c, path).ok().flatten());
     crate::describe::message(&before, &snapshot.files, &old_text)
 }
 
@@ -530,7 +593,7 @@ fn commit(s: &mut Session, p: &Value) -> Result<Value> {
     if message.is_empty() {
         return Err("A commit needs a message.".to_owned());
     }
-    let id = commit_now(s, Some(&message))?;
+    let (id, _) = commit_now(s, Some(&message), false)?;
     let note = if id.is_none() { Some("Nothing changed since the last commit.") } else { None };
     Ok(json!({"commit": id, "note": note}))
 }

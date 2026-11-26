@@ -299,7 +299,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot 0.12.5",
  "percent-encoding",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
  "wl-clipboard-rs",
  "x11rb",
 ]
@@ -1417,7 +1417,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2638,7 +2638,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3131,7 +3131,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6919,7 +6919,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7513,7 +7513,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7879,9 +7879,9 @@ dependencies = [
 
 [[package]]
 name = "retex"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4149971a6ba4bd4742870c30f838c4e0fc50f926340b157bb3201c4d13d5346b"
+checksum = "2515a9482ac929838d5b8968ce5aba6d4f4a9a3b3afab7bb2e48fe5aeb5637b2"
 dependencies = [
  "landlock",
  "libc",
@@ -7910,15 +7910,15 @@ dependencies = [
 
 [[package]]
 name = "retex-arith"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff36d5f8ff311e730ac0df4e1a822ece6e8d626b2c3fb250fa6a0993a7533b87"
+checksum = "f2a466c6711d2d99c4bf307508cf114473e652893c9723889abdd9c701c83341"
 
 [[package]]
 name = "retex-bib"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bba0517776d8997c7d8de4347ab361109c4819ab93d7bc317b229309b273b84"
+checksum = "a2b4ae7f1519376844415918feb7f434c3ae5f69d43c3cf9495c0f108c7b9f3d"
 dependencies = [
  "roxmltree 0.21.2",
  "thiserror 2.0.21",
@@ -7926,15 +7926,15 @@ dependencies = [
 
 [[package]]
 name = "retex-diag"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "960868c0a5d51beae1e3eeca5cecac70dd1d46463c22ef89bfbfc0cd317bd85f"
+checksum = "0a2328665f2482a676b06bee017c99c7e106613e6cab973d3fe8efd4e0007c2d"
 
 [[package]]
 name = "retex-engine"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f03e472f5fe3a68bc742c72209c0be90f840e66dc828a5b3581c27e4e712155b"
+checksum = "f1841439ad67109dbd8bb86d1e8f2cc4608a66aeb124e96dd5fdf0a9ea7f2743"
 dependencies = [
  "flate2",
  "retex-arith",
@@ -7949,9 +7949,9 @@ dependencies = [
 
 [[package]]
 name = "retex-font"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "407884cecb3ce8b4f3f46610612a65ec255021ddd1e93e91e4de77e5bc65f0da"
+checksum = "3299ad98401f2dfb63b590fd331a7fcbae2514ac868ef2f03019c06756bf37fe"
 dependencies = [
  "flate2",
  "harfrust 0.14.0",
@@ -7962,33 +7962,33 @@ dependencies = [
 
 [[package]]
 name = "retex-fragments"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1160f12fef85f967d42489b56af7228cf49a31478d24571a33777bcdf297c4dc"
+checksum = "19ccd5b39703ced66f2569ad6d2f91481b3d030b7c5d999e768fc54b90f7db61"
 
 [[package]]
 name = "retex-highlight"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e01b545938866f22cd25860fbb5f938aa5b95ded71efcf819eacd12ba310471"
+checksum = "1b117862d0e6098d5b17e2c18fa3cff6123833c07e49a8a9604b3f2f586d6b18"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "retex-hyph"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bc47157dbd650d8fc5b076f4026c3331eb39798255c963d07e48760a0404322"
+checksum = "b97b123e864ab9767745459087cd13f452edcd1b8ba71ee8f2d4dda4b6b04815"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "retex-image"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75a2c5dab30a0bd3382c76768cdf8c47ff14870a2e4df0aa404486cd9593aa18"
+checksum = "0bfd4653fe41b1b88278f59901359b68f1ff96e51d9920665a614490680404ff"
 dependencies = [
  "flate2",
  "gif",
@@ -8005,36 +8005,36 @@ dependencies = [
 
 [[package]]
 name = "retex-index"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf573bac2a239f6a9474b02737b44f80fa525603923f1e2733055c4e6662dfdd"
+checksum = "8b17eba18dc6364d628b8cc6835a6568f509d99876dc7396f599f1955ef7db45"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "retex-kpath"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "682860cbf4174058145ddf77d396becf8998eed46f9ff03698919bac2ec83c6a"
+checksum = "a6301d28c04878c004be9a24ef17ac20a4cddd1c3191c8f3aa55097cf020ec26"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "retex-lpeg"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7d69e5ea36f7ff3f53754112e55fe9c56b275622d77efe70aec02b85dcf3a06"
+checksum = "bd059ba81a272af00529a40486deac21b13694369ee2beb551365cc064d2ed38"
 dependencies = [
  "mlua",
 ]
 
 [[package]]
 name = "retex-lsp"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d35bbbd1d8c438e700b7d0ae80240515f62e6afef977cde3990a9945c915713"
+checksum = "6900db79220871d9760ae12c67161a70eff72c11e17672f25b2a7966f664bfa6"
 dependencies = [
  "retex-diag",
  "serde_json",
@@ -8042,9 +8042,9 @@ dependencies = [
 
 [[package]]
 name = "retex-lua"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a21633c5f92f342685749b4e48390c9575b9103414e4095e063972d2a7c309d"
+checksum = "1aca13a4508c06037491963b1b0a430a4460c09122f11e7436532b127b76033a"
 dependencies = [
  "flate2",
  "mlua",
@@ -8059,15 +8059,15 @@ dependencies = [
 
 [[package]]
 name = "retex-mp"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfce8abe687ec70b2ea03da2e11c28ac994555f9eb766e171d82c51de36f2d3f"
+checksum = "455aeacfa25cd6cce8617bc8b59f40a85483f7aeca3c68300623bbdada41c789"
 
 [[package]]
 name = "retex-odf"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa43ef2d4b53441c0e67bf4f1d713bbf0d5f8047d9b7e9f093815b7c971239e5"
+checksum = "88dd0e7da895301b047bac709046ee5af30bce6d0a01280918317dd00ee126a1"
 dependencies = [
  "flate2",
  "jpeg-encoder",
@@ -8080,9 +8080,9 @@ dependencies = [
 
 [[package]]
 name = "retex-pdf"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1c0b1dd8e6c5e2b20ef75a629d26b366b9bb83405bcef24a4eac1f19b7804cd"
+checksum = "ffff7d67370007121ddbfabeebfac4f0ff9366bce6c8364f2b0bec76ace598cb"
 dependencies = [
  "flate2",
  "jpeg-encoder",
@@ -8092,9 +8092,9 @@ dependencies = [
 
 [[package]]
 name = "retex-pdfx"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93fc84f3af2cb0cb9677c7ebf49099fc7af35d8816440abf16567c580ebe674f"
+checksum = "5d09257d88677b02f7fbd31c209a0e03a0237db868a99d98e540b6f277c90cdf"
 dependencies = [
  "flate2",
  "jpeg-encoder",
@@ -8110,9 +8110,9 @@ dependencies = [
 
 [[package]]
 name = "retex-svg"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9e0e309a18dbc7bdf5e0a45756406aaed3c2f7e12ffdf811caeca914cc5e415"
+checksum = "69a5d4c5d65e22d967a9480d2b96ce085669597f8b5eeced0a89a1dd7dfcd905"
 dependencies = [
  "flate2",
  "png 0.18.1",
@@ -8123,18 +8123,18 @@ dependencies = [
 
 [[package]]
 name = "retex-synctex"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72b43cfd62f01d25a9d86fa0f126c753bb3bef5f8c0ea5444bf0b28395316629"
+checksum = "a6a6cf2498a453a3b32ebf23e2489fe1744a84280f0ad05ddc13e54c511f4d2a"
 dependencies = [
  "flate2",
 ]
 
 [[package]]
 name = "retex-texlive"
-version = "2.5.0"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a09f4a4f666bd27aa24faced89cb198b52f1a46c72dc420a3e7275ca764acce8"
+checksum = "6928368d94960fe4bf05462c311e1c9c84f2ba78e5bbc6b11618d4e3e7eb9f36"
 dependencies = [
  "lzma-rust2",
  "retex-kpath",
@@ -8291,7 +8291,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -8349,7 +8349,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -9121,7 +9121,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -10966,7 +10966,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -11435,7 +11435,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d6f32a0ff4a9f6f01231eb2059cc85479330739333e0e58cadf03b6af2cca10"
 dependencies = [
  "cfg-if",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

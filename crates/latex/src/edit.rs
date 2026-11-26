@@ -413,6 +413,16 @@ pub fn offsets(text: &str, range: Range<usize>, shown: &str) -> Option<Vec<usize
             continue;
         }
         if first == '\\' {
+            // An accent command shown as its letter (`\'e` as é): edited as one character.
+            if let Some((letter, len)) = view::accented(rest) {
+                if c != letter {
+                    return None;
+                }
+                out.push(base + i);
+                i += len;
+                k += 1;
+                continue;
+            }
             let after = rest.get(1..).unwrap_or_default();
             let letters = after.len() - after.trim_start_matches(|c: char| c.is_ascii_alphabetic()).len();
             if letters > 0 {

@@ -168,3 +168,25 @@ fn builds_ignore_suggestions_unless_asked_to_show_them_and_the_file_never_change
     assert_eq!(seen, ["The colour.", "The color."]);
     assert_eq!(s.execute("file.read", &json!({"path": "main.tex"})).unwrap()["text"], "The colour.");
 }
+
+#[test]
+fn a_document_for_pdflatex_builds_as_pdflatex_when_the_document_chooses() {
+    // #52: a document using pdfTeX's primitives failed as LuaLaTeX.
+    let dir = std::env::temp_dir().join(format!("texcraft-pdflatex-only-{}", std::process::id()));
+    let mut s = Session::with_backend(Box::new(texcraft_compile::retex_backend::Retex::new(Some(dir.clone()))));
+    let text = include_str!("../fixtures/pdflatex-only.tex");
+    s.execute("file.write", &json!({"path": "main.tex", "text": text})).unwrap();
+    s.execute("file.set_main", &json!({"path": "main.tex"})).unwrap();
+    assert_eq!(s.engine_choice().map(|c| c.engine), Some(texcraft_compile::Engine::PdfLatex));
+    let done = s.execute("build.compile", &json!({"wait": true})).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(done["result"]["status"], "built", "{done}");
+    assert_eq!(done["errors"], 0, "{done}");
+    assert_eq!(done["engine"]["engine"], "pdflatex", "{done}");
+    assert_eq!(done["engine"]["chosen"], "document");
+    assert_eq!(done["engine"]["why"]["command"], "\\pdfcompresslevel", "the first primitive, where it is: {done}");
+    assert_eq!(done["engine"]["why"]["line"], 3);
+    // The settings' engine wins over the document's.
+    s.execute("build.options", &json!({"engine": "lualatex"})).unwrap();
+    assert!(s.engine_choice().is_none());
+}

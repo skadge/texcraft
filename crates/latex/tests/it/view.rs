@@ -190,3 +190,36 @@ fn an_elsarticle_front_matter_is_a_title_block_with_its_abstract_and_keywords() 
 fn shown_blocks(blocks: &[Block]) -> String {
     texts(&inlines(blocks)).into_iter().map(|(t, _)| t).collect()
 }
+
+#[test]
+fn accent_commands_show_their_letters() {
+    // Found fixing #44: `S\'everin` showed as its source.
+    assert_eq!(
+        shown("S\\'everin, G\\\"odel, Fran\\c{c}ois, Fran\\c cois, cr\\^epe, Espa\\~na, {\\'e}t\\'{e}, na\\\"{\\i}ve, \\v{S}koda."),
+        "Séverin, Gödel, François, François, crêpe, España, été, naïve, Škoda."
+    );
+    // An accent the view does not know on a letter stays as its source, as do the text's other
+    // commands.
+    let kept = view("x\\'q y");
+    assert!(inlines(&kept).iter().any(|i| matches!(i.kind, InlineKind::Source)), "{kept:?}");
+}
+
+#[test]
+fn every_author_of_the_title_shows() {
+    // Found fixing #44: several `\author` commands showed only the last.
+    let text = "\\title{T}\n\\author{Ada}\n\\author{Grace}\n\\begin{document}\n\\maketitle\n\\end{document}\n";
+    let blocks = view(text);
+    let Some(BlockKind::Title { author, .. }) = blocks.iter().map(|b| &b.kind).find(|k| matches!(k, BlockKind::Title { .. })) else {
+        panic!("no title block")
+    };
+    let names: Vec<&str> =
+        author.iter().filter_map(|i| if let InlineKind::Text { text, .. } = &i.kind { Some(text.as_str()) } else { None }).collect();
+    assert_eq!(names, ["Ada", "Grace"]);
+    assert!(author.iter().any(|i| matches!(i.kind, InlineKind::LineBreak)), "the authors are not on lines of their own");
+    // The last `\title` is the one LaTeX prints.
+    let retitled = view("\\title{Old}\n\\title{New}\n\\begin{document}\n\\maketitle\n\\end{document}\n");
+    assert!(
+        retitled.iter().any(|b| matches!(&b.kind, BlockKind::Title { title, .. } if matches!(title.as_slice(), [Inline { kind: InlineKind::Text { text, .. }, .. }] if text == "New"))),
+        "{retitled:?}"
+    );
+}

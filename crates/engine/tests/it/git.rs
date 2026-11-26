@@ -460,3 +460,30 @@ fn in_the_browser_sync_commits_the_changes_to_the_linked_branch_saying_what_chan
     std::fs::remove_dir_all(&dir)?;
     Ok(())
 }
+
+#[test]
+fn after_a_push_an_automatic_version_is_a_commit_of_its_own() -> R {
+    // C9: an automatic version amends the session's automatic one only while it is not pushed.
+    let dir = temp("push-amend")?;
+    let fake = Fake::account(Service::GitHub, "", "ada", TOKEN);
+    let server = server(&dir)?;
+    let a_dir = dir.join("a");
+    let mut a = session(&fake, &server);
+    write(&mut a, "main.tex", "one\n")?;
+    a.execute("project.save_as", &json!({"path": a_dir.display().to_string()}))?;
+    a.execute("git.set_remote", &json!({"name": "origin", "url": "https://github.com/ada/paper.git"}))?;
+    write(&mut a, "main.tex", "two\n")?;
+    a.execute("history.version", &json!({"automatic": true}))?;
+    a.execute("git.push", &json!({"token": TOKEN}))?;
+    let pushed = head(&mut a)?;
+    let before = commits(&mut a)?;
+    write(&mut a, "main.tex", "three\n")?;
+    let next = a.execute("history.version", &json!({"automatic": true}))?;
+    assert_eq!(next["amended"], false, "{next}");
+    assert_eq!(commits(&mut a)?, before + 1, "the pushed version stays, the new one follows it");
+    let log = a.execute("history.list", &json!({}))?;
+    assert_eq!(log["commits"][1]["id"], pushed.as_str());
+    assert_eq!(server.get("refs/heads/main").map(|id| id.to_string()), Some(pushed));
+    std::fs::remove_dir_all(&dir)?;
+    Ok(())
+}

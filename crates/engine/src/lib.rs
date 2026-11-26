@@ -47,6 +47,7 @@ pub use cmd::forge_auth::{Progress as SignInProgress, Unavailable as SignInUnava
 pub use cmd::forge_pick::Lookup as ForgeLookup;
 /// A git hosting service recognised by a remote's address (`git.remotes`' `hosting`).
 pub use cmd::git::{Hosting as GitHosting, hosting as git_hosting};
+pub use texcraft_compile::engine_choice;
 pub use texcraft_compile::{
     Diagnostic, Draft, Engine, Export, MAX_BLEED_MM, Options as BuildOptions, Outcome, Output, PdfX, Progress, Severity, Status,
 };
@@ -153,6 +154,9 @@ pub struct Session {
     built_revision: Option<u64>,
     /// The review revision the last build started at, for builds with suggestions.
     built_review: u64,
+    /// The engine the document chose for the last build started, when the settings left it to
+    /// the document and it said ([`texcraft_compile::engine_choice`]).
+    built_engine: Option<texcraft_compile::engine_choice::Chosen>,
     builder: Builder,
     next_job: u64,
     last: Option<Outcome>,
@@ -194,6 +198,11 @@ pub struct Session {
     /// The git repository the project's folder is in (docs/ROADMAP.md, C8): found when the project
     /// is opened, made on its first save when there is none.
     history: Option<texcraft_history::History>,
+    /// The latest automatic version this session made (after a pause, on closing, before a
+    /// restore), which the next version amends: its commit (or the library's version) id. Only a
+    /// version this process made is ever amended, and only while it is still the branch's tip and
+    /// on no other ref (not pushed).
+    own_version: Option<String>,
     /// The formulas of the file last asked for, and the engine that typesets them.
     formulas: formulas::State,
     /// What the last build that wrote an `.aux` numbered, and the document's numbers from it.
@@ -263,6 +272,7 @@ impl Session {
             revision: 0,
             built_revision: None,
             built_review: 0,
+            built_engine: None,
             builder,
             next_job: 1,
             last: None,
@@ -283,6 +293,7 @@ impl Session {
             #[cfg(not(target_arch = "wasm32"))]
             on_disk: std::collections::BTreeSet::new(),
             history: None,
+            own_version: None,
             formulas: formulas::State::default(),
             numbering: numbering::State::default(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -405,6 +416,11 @@ impl Session {
         (self.revision, self.review.revision) != self.versioned
     }
 
+    /// The session's versions were sent (pushed, synced): none of them is amended any more.
+    pub(crate) fn versions_sent(&mut self) {
+        self.own_version = None;
+    }
+
     /// The project as it is now is the latest version.
     pub(crate) fn mark_versioned(&mut self) {
         self.versioned = (self.revision, self.review.revision);
@@ -424,6 +440,23 @@ impl Session {
 
     pub fn last_outcome(&self) -> Option<&Outcome> {
         self.last.as_ref()
+    }
+
+    /// The engine the document chose for the last build started (Settings › Building › Engine
+    /// "Chosen from the document"), and why; none when the settings name one, or the document
+    /// did not say (retex then chooses).
+    pub fn built_engine(&self) -> Option<&texcraft_compile::engine_choice::Chosen> {
+        self.built_engine.as_ref()
+    }
+
+    /// The engine the document chooses now, as [`Self::built_engine`] would be for a build of
+    /// the project as it is.
+    pub fn engine_choice(&self) -> Option<texcraft_compile::engine_choice::Chosen> {
+        if self.settings.build.engine != texcraft_compile::Engine::Auto {
+            return None;
+        }
+        let main = self.project.main()?;
+        texcraft_compile::engine_choice::choose_with(main, |p| self.project.text(p).ok().map(str::to_owned))
     }
 
     pub fn pdf(&self) -> Option<&Arc<Vec<u8>>> {
@@ -694,6 +727,7 @@ impl Session {
     pub(crate) fn export_job(&self) -> Result<Job> {
         let mut job = Job::from_project(&self.project, 0).ok_or("The project has no main document to export.")?;
         job.options = self.settings.build;
+        job.choose_engine();
         job.project = self.project_key();
         Ok(job)
     }
@@ -884,6 +918,7 @@ impl Session {
         };
         self.sync = None;
         self.history = None;
+        self.own_version = None;
         // A project of the library keeps its forge link; any other opens unlinked.
         let link = match (&self.library, &dir) {
             (Some(library), Some(name)) => library.forge(&name.display().to_string()).cloned(),
@@ -914,6 +949,7 @@ impl Session {
         let suggested = self.settings.with_suggestions.then(|| self.with_suggestions());
         let mut job = Job::from_project(suggested.as_ref().unwrap_or(&self.project), id).ok_or("The project has no main document to build.")?;
         job.options = self.settings.build;
+        self.built_engine = job.choose_engine();
         job.project = self.project_key();
         self.built_revision = Some(self.revision);
         self.built_review = self.review.revision;

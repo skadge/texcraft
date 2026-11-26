@@ -351,6 +351,8 @@ fn start_push(s: &mut Session, p: &Value, sync: Option<Box<Syncing>>) -> Result<
 /// A push's outcome: the remote's branch, as now known, moves; the branch follows it when it
 /// followed none.
 pub(super) fn pushed(s: &mut Session, remote: &str, branch: &str, done: std::result::Result<texcraft_gitwire::Pushed, String>) -> Result<Value> {
+    // Sent, or maybe sent: the session's versions are no longer its own to amend.
+    s.versions_sent();
     let pushed = done?;
     let h = s.history.as_mut().ok_or("The project has no git repository.")?;
     h.set_ref(&format!("refs/remotes/{remote}/{branch}"), &pushed.new, "push")?;
@@ -619,6 +621,7 @@ pub(super) fn prepare_push(s: &mut Session, p: &Value) -> Result<Prepared> {
 /// The desktop's part of a new repository's outcome: `origin` set to it, and after the push the
 /// remote's branch known and followed.
 pub(super) fn created(s: &mut Session, made: &Made, result: &mut Value) -> Result<()> {
+    s.versions_sent();
     let h = s.history.as_mut().ok_or("The project has no git repository.")?;
     h.set_remote("origin", &made.created.clone_url)?;
     result["remote"] = json!("origin");

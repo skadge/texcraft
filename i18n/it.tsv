@@ -2460,3 +2460,9 @@ unit	{n} s	{n} s
 @msg	Give your {value} git authentication token for this project (token); git.keep_credential keeps it for next time.	Fornisci il tuo token di autenticazione git di {value} per questo progetto (token); git.keep_credential lo conserva per la prossima volta.
 @msg	Sign in to {instance} (forge.sign_in with its instance), or give a personal access token for it (remember keeps it for next time).	Accedi a {instance} (forge.sign_in con la sua istanza), o fornisci un token di accesso personale (remember lo conserva per la prossima volta).
 @msg	Sign in to {name} (forge.sign_in), or give a personal access token for {instance} (remember keeps it for next time).	Accedi a {name} (forge.sign_in), o fornisci un token di accesso personale per {instance} (remember lo conserva per la prossima volta).
+	{engine}: the main file asks for it ({comment})	{engine}: il file principale lo richiede ({comment})
+	{engine}: the document uses {command} ({place})	{engine}: il documento usa {command} ({place})
+	LuaLaTeX: nothing in the document asks for pdfLaTeX	LuaLaTeX: nulla nel documento richiede pdfLaTeX
+	{engine}: chosen in Settings › Building	{engine}: scelto in Impostazioni › Compilazione
+@msg	The branch moved since TeXCraft's last version: a new version is made instead.	Il ramo si è spostato dall'ultima versione di TeXCraft: viene creata invece una nuova versione.
+@msg	The history moved since TeXCraft's last version: a new version is made instead.	La cronologia è cambiata dall'ultima versione di TeXCraft: viene creata invece una nuova versione.

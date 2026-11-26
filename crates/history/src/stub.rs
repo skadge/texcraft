@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::{Entry, Owner, Person, Result, Snapshot};
+use crate::{Amended, Entry, Owner, Person, Result, Snapshot};
 
 const NOT_YET: &str = "A folder's git repository cannot be reached in the browser.";
 
@@ -48,6 +48,14 @@ impl History {
     }
 
     pub fn commit(&self, _: &Snapshot, _: &str, _: Option<&Person>, _: chrono::DateTime<chrono::Utc>) -> Result<Option<String>> {
+        Err(NOT_YET.to_owned())
+    }
+
+    pub fn amend(&self, _: &str, _: &Snapshot, _: &str, _: Option<&Person>, _: chrono::DateTime<chrono::Utc>) -> Result<Amended> {
+        Err(NOT_YET.to_owned())
+    }
+
+    pub fn shared(&self, _id: &str) -> Result<bool> {
         Err(NOT_YET.to_owned())
     }
 

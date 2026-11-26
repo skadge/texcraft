@@ -2,10 +2,10 @@
 //! stops, at once when the window loses the keyboard focus and before the project closes, to its
 //! folder (in the browser, to its storage). A version of the history is not made on every write:
 //! one is made after a longer pause in typing when something changed since the latest, and when the
-//! project closes (only in a repository TeXCraft made: in someone else's, versions are made when
-//! asked: Sync, Name This Version…, File › Save). The top bar says where the writing stands; a
-//! write that failed is said in words, and the project has unsaved changes again (AGENTS.md rule
-//! 15), so leaving it asks first.
+//! project closes, in any repository; each amends the automatic one before it while this session
+//! made that one and did not push it, so they stay few (`history.version`). The top bar says where
+//! the writing stands; a write that failed is said in words, and the project has unsaved changes
+//! again (AGENTS.md rule 15), so leaving it asks first.
 //!
 //! Everything goes through `project.write` and `history.version`; the timing is the window's, on
 //! egui's clock.

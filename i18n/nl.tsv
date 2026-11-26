@@ -2460,3 +2460,9 @@ unit	{n} s	{n} s
 @msg	Give your {value} git authentication token for this project (token); git.keep_credential keeps it for next time.	Geef je {value}-git-authenticatietoken voor dit project (token); git.keep_credential bewaart het voor de volgende keer.
 @msg	Sign in to {instance} (forge.sign_in with its instance), or give a personal access token for it (remember keeps it for next time).	Meld je aan bij {instance} (forge.sign_in met de instantie), of geef er een persoonlijk toegangstoken voor (remember bewaart het voor de volgende keer).
 @msg	Sign in to {name} (forge.sign_in), or give a personal access token for {instance} (remember keeps it for next time).	Meld je aan bij {name} (forge.sign_in), of geef een persoonlijk toegangstoken voor {instance} (remember bewaart het voor de volgende keer).
+	{engine}: the main file asks for it ({comment})	{engine}: het hoofdbestand vraagt erom ({comment})
+	{engine}: the document uses {command} ({place})	{engine}: het document gebruikt {command} ({place})
+	LuaLaTeX: nothing in the document asks for pdfLaTeX	LuaLaTeX: niets in het document vraagt om pdfLaTeX
+	{engine}: chosen in Settings › Building	{engine}: gekozen in Instellingen › Bezig met bouwen
+@msg	The branch moved since TeXCraft's last version: a new version is made instead.	De branch is verplaatst sinds de laatste versie van TeXCraft: er wordt in plaats daarvan een nieuwe versie gemaakt.
+@msg	The history moved since TeXCraft's last version: a new version is made instead.	De geschiedenis is veranderd sinds de laatste versie van TeXCraft: er wordt in plaats daarvan een nieuwe versie gemaakt.

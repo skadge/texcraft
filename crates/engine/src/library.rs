@@ -12,8 +12,8 @@
 
 use std::collections::BTreeMap;
 
-use texcraft_history::Snapshot;
 use texcraft_history::store::{Version, Versions};
+use texcraft_history::{Amended, Snapshot};
 use texcraft_project::{Contents, Project, ProjectPath};
 
 use crate::Result;
@@ -46,11 +46,13 @@ pub enum Change {
     /// left empty here: what the history gains comes as [`Change::Versions`].
     Saved(String, Box<Stored>),
     /// Versions to add to the history of a project, with the files' bytes (by blob id) the stored
-    /// history does not have yet.
+    /// history does not have yet, and the ids of versions to remove from it (one replaced by an
+    /// amended version).
     Versions {
         project: String,
         versions: Vec<Version>,
         blobs: Vec<(String, Vec<u8>)>,
+        removed: Vec<String>,
     },
     Deleted(String),
     /// A review thread of a project changed: its file name and new text, or `None` when it was
@@ -183,8 +185,33 @@ impl Library {
         let project = self.projects.get_mut(name).ok_or_else(|| format!("There is no project named {name} in this browser."))?;
         let Some(recorded) = project.history.record(snapshot, message, author, time)? else { return Ok(None) };
         let id = recorded.version.id.clone();
-        self.changes.push(Change::Versions { project: name.to_owned(), versions: vec![recorded.version], blobs: recorded.blobs });
+        self.changes.push(Change::Versions {
+            project: name.to_owned(),
+            versions: vec![recorded.version],
+            blobs: recorded.blobs,
+            removed: Vec::new(),
+        });
         Ok(Some(id))
+    }
+
+    /// Records `snapshot` as a version of project `name` in place of its latest, `replaced`
+    /// ([`Versions::amend`]).
+    pub fn amend(
+        &mut self,
+        name: &str,
+        replaced: &str,
+        snapshot: &Snapshot,
+        message: &str,
+        author: &str,
+        time: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Amended> {
+        let project = self.projects.get_mut(name).ok_or_else(|| format!("There is no project named {name} in this browser."))?;
+        let (amended, recorded) = project.history.amend(replaced, snapshot, message, author, time)?;
+        if amended != Amended::Same {
+            let (versions, blobs) = recorded.map(|r| (vec![r.version], r.blobs)).unwrap_or_default();
+            self.changes.push(Change::Versions { project: name.to_owned(), versions, blobs, removed: vec![replaced.to_owned()] });
+        }
+        Ok(amended)
     }
 
     /// Keeps review thread `file` of project `name` with `text`.
@@ -215,7 +242,7 @@ impl Library {
         // The history moves with it.
         if stored.history.head().is_some() {
             let blobs = stored.history.blobs().iter().map(|(id, bytes)| (id.clone(), bytes.clone())).collect();
-            self.changes.push(Change::Versions { project: to.to_owned(), versions: stored.history.versions().to_vec(), blobs });
+            self.changes.push(Change::Versions { project: to.to_owned(), versions: stored.history.versions().to_vec(), blobs, removed: Vec::new() });
         }
         self.projects.insert(to.to_owned(), stored);
         Ok(())

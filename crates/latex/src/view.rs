@@ -380,8 +380,9 @@ fn build_with(text: &str, tree: &[Node], declared: &[TheoremKind]) -> Vec<Block>
 
 struct View<'a> {
     text: &'a str,
-    /// The bodies of `\title`, `\author` and `\date`.
-    titles: [Option<&'a [Node]>; 3],
+    /// The arguments of `\title`, `\author` and `\date`: the last one of each, and of `\author`
+    /// all of them (classes such as revtex, amsart and acmart take an `\author` per author).
+    titles: [Vec<&'a Arg>; 3],
     /// The theorem-like environments declared.
     theorems: Vec<TheoremKind>,
 }
@@ -542,6 +543,61 @@ pub(crate) fn logo(name: &str) -> Option<&'static str> {
     })
 }
 
+/// The letters an accent command makes of the letters it takes: `(accent, bases, accented)`,
+/// the two strings in step.
+const ACCENTS: &[(&str, &str, &str)] = &[
+    ("`", "AEIOUaeiou\u{131}", "ÀÈÌÒÙàèìòùì"),
+    ("'", "AEIOUYaeiouyCcNnSsZzLlRrGg\u{131}", "ÁÉÍÓÚÝáéíóúýĆćŃńŚśŹźĹĺŔŕǴǵí"),
+    ("^", "AEIOUaeiouCcGgHhJjSsWwYy\u{131}", "ÂÊÎÔÛâêîôûĈĉĜĝĤĥĴĵŜŝŴŵŶŷî"),
+    ("\"", "AEIOUaeiouyY\u{131}", "ÄËÏÖÜäëïöüÿŸï"),
+    ("~", "ANOanoIiUu", "ÃÑÕãñõĨĩŨũ"),
+    ("=", "AEIOUaeiou", "ĀĒĪŌŪāēīōū"),
+    (".", "CEGIZcegz", "ĊĖĠİŻċėġż"),
+    ("c", "CcSsTtGgKkLlNnRr", "ÇçŞşŢţĢģĶķĻļŅņŖŗ"),
+    ("v", "CcDdEeNnRrSsTtZz", "ČčĎďĚěŇňŘřŠšŤťŽž"),
+    ("u", "AaGgUuEeIiOo", "ĂăĞğŬŭĔĕĬĭŎŏ"),
+    ("H", "OoUu", "ŐőŰű"),
+    ("k", "AaEeIiUu", "ĄąĘęĮįŲų"),
+    ("r", "AaUu", "ÅåŮů"),
+];
+
+/// The accented letter that `src` starts with as an accent command (`\'e`, `\'{e}`, `\"{\i}`,
+/// `\c{c}`, `\c c`), and how many bytes of `src` it takes; `None` when `src` starts with none
+/// the view knows.
+pub(crate) fn accented(src: &str) -> Option<(char, usize)> {
+    let after = src.strip_prefix('\\')?;
+    let name_len = match after.chars().next()? {
+        c if c.is_ascii_alphabetic() => after.len() - after.trim_start_matches(|c: char| c.is_ascii_alphabetic()).len(),
+        c => c.len_utf8(),
+    };
+    let name = after.get(..name_len)?;
+    let (_, bases, accented) = ACCENTS.iter().find(|(a, _, _)| *a == name)?;
+    let rest = after.get(name_len..)?;
+    let letter_named = name.chars().all(|c| c.is_ascii_alphabetic());
+    // The letter it takes: `{e}` or `{\i}`; after a symbol, `e` itself; after a letter's name,
+    // one space then `e`.
+    let (base, taken) = if let Some(group) = rest.strip_prefix('{') {
+        let close = group.find('}')?;
+        let inner = group.get(..close)?.trim();
+        let base = if inner == "\\i" { '\u{131}' } else { single(inner)? };
+        (base, close + 2)
+    } else if letter_named {
+        let spaced = rest.strip_prefix(' ')?;
+        (spaced.chars().next().filter(char::is_ascii_alphabetic)?, 2)
+    } else {
+        (rest.chars().next().filter(char::is_ascii_alphabetic)?, 1)
+    };
+    let at = bases.chars().position(|b| b == base)?;
+    Some((accented.chars().nth(at)?, 1 + name_len + taken))
+}
+
+/// The one character of `s`, if it has exactly one.
+fn single(s: &str) -> Option<char> {
+    let mut chars = s.chars();
+    let c = chars.next()?;
+    chars.next().is_none().then_some(c)
+}
+
 /// What a control symbol shows; `None` for those shown as their source.
 pub(crate) fn control_symbol(symbol: &str) -> Option<&'static str> {
     Some(match symbol {
@@ -686,13 +742,17 @@ impl Flow {
 
 impl<'a> View<'a> {
     fn new(text: &'a str, top: &'a [Node], body: &'a [Node], theorems: Vec<TheoremKind>) -> Self {
-        let mut titles = [None; 3];
+        let mut titles: [Vec<&'a Arg>; 3] = Default::default();
         for n in top.iter().chain(body) {
             if let Kind::Command { name, args, .. } = &n.kind
                 && let Some(slot) = ["title", "author", "date"].iter().position(|t| t == name)
                 && let Some(arg) = required(args)
+                && let Some(kept) = titles.get_mut(slot)
             {
-                titles[slot] = Some(arg.body.as_slice());
+                if slot != 1 {
+                    kept.clear();
+                }
+                kept.push(arg);
             }
         }
         View { text, titles, theorems }
@@ -831,7 +891,20 @@ impl<'a> View<'a> {
     }
 
     fn title(&self) -> BlockKind {
-        let [title, author, date] = self.titles.map(|t| t.map(|nodes| self.inlines(nodes, Style::default())).unwrap_or_default());
+        // Each `\author` on a line of its own, as `\and` puts them: the break stands for the source
+        // from one's closing brace to the next one's opening brace, so deleting it joins the two.
+        let [title, author, date] = self.titles.each_ref().map(|args| {
+            let mut out = Vec::new();
+            for (k, arg) in args.iter().enumerate() {
+                if k > 0
+                    && let Some(before) = args.get(k - 1)
+                {
+                    out.push(Inline { kind: InlineKind::LineBreak, range: before.inner.end..arg.inner.start });
+                }
+                out.extend(self.inlines(&arg.body, Style::default()));
+            }
+            out
+        });
         BlockKind::Title { title, author, date }
     }
 
@@ -1005,6 +1078,11 @@ impl<'a> View<'a> {
         let Some(n) = nodes.get(i) else { return i + 1 };
         let range = n.range.clone();
         let source = Inline { kind: InlineKind::Source, range: range.clone() };
+        if matches!(n.kind, Kind::ControlSymbol | Kind::Command { .. })
+            && let Some((letter, len)) = accented(self.text.get(range.start..).unwrap_or_default())
+        {
+            return self.accent(nodes, i, (letter, range.start + len), *style, out);
+        }
         match &n.kind {
             Kind::Text => out.push(text_inline(&typography(self.src(&range)), *style, range)),
             Kind::ParBreak => out.push(Inline { kind: InlineKind::LineBreak, range }),
@@ -1034,6 +1112,27 @@ impl<'a> View<'a> {
             Kind::Special | Kind::Environment { .. } | Kind::Verbatim { .. } | Kind::Error => out.push(source),
         }
         i + 1
+    }
+
+    /// An accent command at `nodes[i]` shown as its letter, the source up to `end`: the nodes it
+    /// takes (its argument) skipped, and the rest of a text it takes a letter from shown after it.
+    /// Returns the next index.
+    fn accent(&self, nodes: &[Node], i: usize, (letter, end): (char, usize), style: Style, out: &mut Vec<Inline>) -> usize {
+        let start = nodes.get(i).map_or(end, |n| n.range.start);
+        out.push(text_inline(&letter.to_string(), style, start..end));
+        let mut next = i + 1;
+        while let Some(n) = nodes.get(next)
+            && n.range.start < end
+        {
+            if n.range.end > end
+                && let Kind::Text = n.kind
+            {
+                let rest = end..n.range.end;
+                out.push(text_inline(&typography(self.src(&rest)), style, rest));
+            }
+            next += 1;
+        }
+        next
     }
 
     /// Like [`Self::inlines`] without trimming: a group's spaces are the paragraph's.
