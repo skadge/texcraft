@@ -1,6 +1,6 @@
 # Import a Project
 
-> **Status:** design, not built · **Roadmap:** C11 (docs/ROADMAP.md) · **Written:** 2026-11-26
+> **Status:** built (next release; see the ROADMAP's C11 row for what is left) · **Roadmap:** C11 (docs/ROADMAP.md) · **Written:** 2026-11-26
 
 One dialog brings an existing project into TeXCraft from wherever it lives: GitLab, GitHub,
 Overleaf (through its git clone address), a self-managed GitLab server, any git address over

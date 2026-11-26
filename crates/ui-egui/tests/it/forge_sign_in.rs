@@ -1,7 +1,7 @@
 //! Signing in through the dialogs (docs/forges.md, step 4): the Sign In button first and the token
 //! as the fallback, the button off with its reason in a build without an application, and a
 //! GitLab sign-in on the desktop (the browser's visit to the loopback redirect made by the test)
-//! that then opens a project with no token. No test reaches the network.
+//! that then imports a project with no token (a clone, over the git server in memory). No test reaches the network.
 
 use std::io::{Read, Write};
 
@@ -36,12 +36,27 @@ impl Transport for Router {
 }
 
 fn harness(clients: Clients, script: &Script, fake: &FakeGitLab) -> Harness<'static, App> {
+    with_git(clients, script, fake, None)
+}
+
+/// The window, its git requests to `git` (a server in memory and the documents folder) if given.
+fn with_git(
+    clients: Clients,
+    script: &Script,
+    fake: &FakeGitLab,
+    git: Option<(texcraft_engine::gitwire::fake::Server, std::path::PathBuf)>,
+) -> Harness<'static, App> {
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    let documents = git.as_ref().map(|(_, d)| d.clone());
+    if let Some((server, _)) = git {
+        s.set_git_http(move || Box::new(server.clone()));
+    }
     let (script, fake) = (script.clone(), fake.clone());
     s.set_forge_transport(move || Box::new(Router { script: script.clone(), fake: fake.clone() }));
     s.set_forge_clients(clients);
     s.set_forge_loopback("127.0.0.1:0");
-    let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
+    let mut app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
+    app.set_documents_dir(documents);
     let mut h = Harness::builder()
         .with_size(egui::vec2(1400.0, 800.0))
         .with_step_dt(1.0 / 60.0)
@@ -63,7 +78,7 @@ fn type_into(h: &mut Harness<'_, App>, label: &str, text: &str) {
 }
 
 #[test]
-fn the_open_dialog_offers_signing_in_first_and_the_token_second() {
+fn the_gitlab_page_offers_signing_in_first_and_the_token_second() {
     let (script, fake) = (Script::default(), FakeGitLab::new("https://gitlab.com", "group/paper", ACCESS, &[]));
     let mut h = harness(clients(), &script, &fake);
     ui_cmd::run(h.state_mut(), "forge.open");
@@ -88,12 +103,14 @@ fn without_an_application_the_button_is_off_and_says_why() {
 }
 
 #[test]
-fn signing_in_from_the_dialog_then_opens_with_no_token() {
+fn signing_in_from_the_dialog_then_imports_with_no_token() {
     let (script, fake) =
         (Script::default(), FakeGitLab::new("https://gitlab.com", "group/paper", ACCESS, &[("main.tex", b"\\documentclass{article}\n")]));
     script.answer(200, json!({"access_token": ACCESS, "refresh_token": "r", "expires_in": 7200, "scope": "read_api read_user"}));
     script.answer(200, json!({"name": "Ada Lovelace", "username": "ada"}));
-    let mut h = harness(clients(), &script, &fake);
+    let dir = crate::import::temp("sign-in");
+    let server = crate::import::published(&dir, "https://gitlab.com/group/paper.git", Some(("oauth2", ACCESS))).unwrap();
+    let mut h = with_git(clients(), &script, &fake, Some((server, dir.clone())));
     ui_cmd::run(h.state_mut(), "forge.open");
     h.run();
     h.get_by_role_and_label(Role::Button, "Sign In with GitLab").click();
@@ -119,10 +136,11 @@ fn signing_in_from_the_dialog_then_opens_with_no_token() {
     h.run();
     assert!(h.query_all_by_label_contains("Signed in to GitLab as Ada Lovelace (@ada)").count() >= 1, "who is signed in is not shown");
 
-    type_into(&mut h, "Project address", "https://gitlab.com/group/paper");
-    h.get_by_role_and_label(Role::Button, "Open").click();
-    assert!(crate::forge::settle(&mut h), "the GitLab operation did not end");
-    assert!(h.query_by_label_contains("Opened group/paper from GitLab").is_some(), "the project did not open with the sign-in");
+    type_into(&mut h, "Project", "https://gitlab.com/group/paper");
+    h.get_by_role_and_label(Role::Button, "Import").click();
+    crate::import::settle(&mut h);
+    assert!(h.query_by_label_contains("Imported paper (main) into").is_some(), "the project was not imported with the sign-in");
+    assert!(dir.join("paper/.git").is_dir(), "not cloned into the documents folder");
 
     // Settings › Accounts: who, and Sign Out.
     ui_cmd::run(h.state_mut(), "app.settings");

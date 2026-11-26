@@ -193,9 +193,9 @@ fn header(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
 /// The start page's New Project button, which opens the gallery rather than running a command.
 const NEW: &str = "";
 
-/// The start page's buttons with their commands, the main one first: New Project, on the desktop
-/// Open Folder… (in the browser the projects are listed below: there are no folders), and Open
-/// from GitLab or GitHub….
+/// The start page's buttons with their commands, the main one first: New Project, Import… (Import
+/// a Project: GitLab, GitHub, Overleaf, a git address, a folder or a zip), and on the desktop Open
+/// Folder… (in the browser the projects are listed below: there are no folders).
 fn buttons(app: &App, t: &Tokens) -> Vec<(&'static str, egui::Button<'static>)> {
     let new = egui::Button::image_and_text(
         icons::image("file-plus", t.icon_size, t.on_accent),
@@ -204,14 +204,12 @@ fn buttons(app: &App, t: &Tokens) -> Vec<(&'static str, egui::Button<'static>)> 
     .fill(t.accent)
     .stroke(egui::Stroke::NONE)
     .min_size(vec2(0.0, 34.0));
-    let gitlab =
-        egui::Button::image_and_text(icons::image("download", t.icon_size, t.text), tl!("Open from GitLab or GitHub…")).min_size(vec2(0.0, 34.0));
-    let mut all = vec![(NEW, new)];
+    let import = egui::Button::image_and_text(icons::image("import", t.icon_size, t.text), tl!("Import…")).min_size(vec2(0.0, 34.0));
+    let mut all = vec![(NEW, new), ("project.import_dialog", import)];
     if app.session.library().is_none() {
         let open = egui::Button::image_and_text(icons::image("folder-open", t.icon_size, t.text), tl!("Open Folder…")).min_size(vec2(0.0, 34.0));
         all.push(("project.open", open));
     }
-    all.push(("forge.open", gitlab));
     all
 }
 
@@ -329,7 +327,7 @@ fn first_visit(app: &mut App, ui: &mut egui::Ui, t: &Tokens, in_browser: bool) {
         let what = if in_browser {
             tl!("To begin, try the example: a short paper you can change and build, to see how TeXCraft works. Or choose New Project for a template, or drop a zip file of a project here.")
         } else {
-            tl!("To begin, try the example: a short paper you can change and build, to see how TeXCraft works. Or choose New Project for a template, Open Folder… for a project you have, or drop a folder or zip file here.")
+            tl!("To begin, try the example: a short paper you can change and build, to see how TeXCraft works. Or choose New Project for a template, Import… for a project you have elsewhere, or drop a folder or zip file here.")
         };
         ui.horizontal_wrapped(|ui| ui.label(RichText::new(what).color(t.text_muted)));
         ui.add_space(t.unit * 3.0);

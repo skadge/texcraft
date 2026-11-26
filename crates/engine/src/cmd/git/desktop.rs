@@ -113,7 +113,7 @@ pub(crate) fn https_url(url: &str) -> Result<String> {
 
 /// The forge an HTTPS address is on, and its instance: github.com's and gitlab.com's, a server
 /// added, else a GitLab.
-fn server_of(s: &Session, https: &str) -> (Service, String) {
+pub(crate) fn server_of(s: &Session, https: &str) -> (Service, String) {
     let (scheme, rest) = https.split_once("://").unwrap_or(("https", https));
     let host = rest.split('/').next().unwrap_or_default();
     let instance = format!("{scheme}://{host}");
@@ -245,15 +245,25 @@ fn git_key(s: &mut Session, p: &Value, target: &Target, write: bool) -> Result<O
         if let Some(token) = s.forge_tokens.get(&target.instance) {
             return Ok(Some(Key::Token(token.clone())));
         }
+        if let Some(token) = s.kept_git_token(texcraft_forge::servers::host_of(&target.instance)) {
+            return Ok(Some(Key::Token(token)));
+        }
         needs(s);
         return Err(format!(
             "Give your {} git authentication token for this project (token): TeXCraft keeps it only while it runs, never on disk.",
             h.name()
         ));
     }
+    let host = texcraft_forge::servers::host_of(&target.instance).to_owned();
     if write {
         return match write_key(s, p, &target.instance, target.service) {
             Ok(key) => Ok(Some(key)),
+            Err(_)
+                if given.is_none()
+                    && let Some(token) = s.kept_git_token(&host) =>
+            {
+                Ok(Some(Key::Token(token)))
+            }
             Err(e) => {
                 if s.forge_problem.is_none() {
                     needs(s);
@@ -266,7 +276,7 @@ fn git_key(s: &mut Session, p: &Value, target: &Target, write: bool) -> Result<O
     if given.is_some() {
         super::super::forge::key_at(s, p, &target.instance, target.service).map(Some)
     } else {
-        Ok(super::super::forge::key_at(s, p, &target.instance, target.service).ok())
+        Ok(super::super::forge::key_at(s, p, &target.instance, target.service).ok().or_else(|| s.kept_git_token(&host).map(Key::Token)))
     }
 }
 

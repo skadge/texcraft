@@ -37,14 +37,15 @@ fn a_phone_s_start_page_shows_its_buttons_whole_the_main_one_first() {
     let h = harness(PHONE).unwrap();
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, PHONE);
     let mut tops = Vec::new();
-    for label in ["New Project", "Open Folder…", "Open from GitLab or GitHub…"] {
+    for label in ["New Project", "Import…", "Open Folder…"] {
         let rect = h.get_by_role_and_label(Role::Button, label).rect();
         assert!(screen.contains_rect(rect), "{label} is cut off at the window's edge: {rect:?}");
         tops.push(rect.top());
     }
     assert!(tops.windows(2).all(|w| w[0] < w[1]), "the buttons are not one under the other, the main one first");
     // The keyboard meets them in that order too.
-    let order: Vec<String> = h.query_all_by_role(Role::Button).map(|n| name(&n)).filter(|n| n == "New Project" || n.starts_with("Open ")).collect();
+    let order: Vec<String> =
+        h.query_all_by_role(Role::Button).map(|n| name(&n)).filter(|n| n == "New Project" || n == "Import…" || n.starts_with("Open ")).collect();
     assert_eq!(order.first().map(String::as_str), Some("New Project"), "the main button is not first in reading order: {order:?}");
 }
 
@@ -54,7 +55,7 @@ fn a_wide_start_page_reads_its_buttons_in_order_and_reports_no_build() {
     let buttons: Vec<(String, f32)> = h
         .query_all_by_role(Role::Button)
         .map(|n| (name(&n), n.rect().left()))
-        .filter(|(n, _)| n == "New Project" || n.starts_with("Open "))
+        .filter(|(n, _)| n == "New Project" || n == "Import…" || n.starts_with("Open "))
         .collect();
     assert_eq!(buttons.len(), 3, "{buttons:?}");
     assert!(buttons.windows(2).all(|w| w[0].1 < w[1].1), "the reading order is not left to right: {buttons:?}");

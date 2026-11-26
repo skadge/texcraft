@@ -157,6 +157,10 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.focus_mode", "Focus Mode", "View", Some("Cmd+Shift+Enter")),
     ui("view.theme", "Switch Light and Dark", "View", None),
     ui("app.start", "Start Page", "View", None),
+    // Import a Project (docs/design/import-dialog.md): GitLab, GitHub, Overleaf, a GitLab server,
+    // a git address, a folder or a zip file. `{"source": "overleaf", "address": …}` opens it at a
+    // source (`import.sources` lists them).
+    ui("project.import_dialog", "Import a Project…", "File", Some("Cmd+Shift+O")),
     // The text's context menu on a misspelled word; `{"text": …}` chooses the spelling, `{"to":
     // "project"}` adds to the project's words.
     ui("edit.spelling.replace", "Change Spelling", "Spelling", None),
@@ -229,7 +233,7 @@ pub const MENU_BAR: &[(&str, &[Entry])] = &[
             C("project.from_template"),
             C("project.open"),
             Recent,
-            C("forge.open"),
+            C("project.import_dialog"),
             S,
             C("project.save"),
             C("project.save_as"),
@@ -564,8 +568,10 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             Some(path) => app.guard(Next::OpenProject(path.to_owned())),
             None => app.guard(Next::PickProject),
         },
-        // Opening from a forge replaces the project: unsaved changes are asked about first.
-        "forge.open" => app.guard(Next::OpenFromForge),
+        // Importing replaces the project: unsaved changes are asked about first. `forge.open`
+        // opens Import a Project at the GitLab or GitHub card (`{url, service}` fill it in).
+        "project.import_dialog" => crate::import::run(app, params),
+        "forge.open" => crate::import::run_forge_open(app, params),
         "forge.commit" => crate::forge::ask_commit(app),
         "forge.pull" => crate::forge::pull(app),
         "forge.save_to_github" => crate::forge_save::ask(app, texcraft_engine::forge::Service::GitHub),

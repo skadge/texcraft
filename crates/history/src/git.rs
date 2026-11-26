@@ -122,6 +122,22 @@ impl History {
         Self::find(dir)?.ok_or_else(|| "The project's new git repository cannot be found.".to_owned())
     }
 
+    /// A new, empty repository in `dir` for a clone (Import a Project): HEAD names `branch`, which
+    /// has no commit yet, and the repository is marked as TeXCraft's (TeXCraft made it, so saves
+    /// are versions). Nothing else is written: the files, the ignore rules among them, come from
+    /// the remote's history.
+    pub fn init_for_clone(dir: &Path, branch: &str) -> Result<Self> {
+        git!("The project's git repository cannot be made", gix::init(dir))?;
+        let git_dir = dir.join(".git");
+        std::fs::write(git_dir.join("HEAD"), format!("ref: refs/heads/{branch}\n")).map_err(|e| format!("writing {}: {e}", git_dir.display()))?;
+        let config = git_dir.join("config");
+        let mut text = std::fs::read_to_string(&config).map_err(|e| format!("reading {}: {e}", config.display()))?;
+        let (section, key) = OURS_KEY.split_once('.').unwrap_or((OURS_KEY, "on"));
+        text.push_str(&format!("[{section}]\n\t{key} = true\n"));
+        std::fs::write(&config, text).map_err(|e| format!("writing {}: {e}", config.display()))?;
+        Self::find(dir)?.ok_or_else(|| "The project's new git repository cannot be found.".to_owned())
+    }
+
     pub fn owner(&self) -> Owner {
         self.owner
     }

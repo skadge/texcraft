@@ -13,6 +13,7 @@ use crate::{Result, Session};
 
 mod ai;
 mod build;
+pub(crate) mod clone;
 mod file;
 mod floats;
 pub(crate) mod forge;
@@ -95,6 +96,7 @@ pub fn all() -> &'static [CommandSpec] {
         v.extend(forge_auth::specs());
         v.extend(forge_pick::specs());
         v.extend(git::specs());
+        v.extend(clone::specs());
         v.extend(ai::specs());
         v
     })

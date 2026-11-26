@@ -567,7 +567,7 @@ fn credentials(service: Service, token: &texcraft_forge::Token) -> texcraft_gitw
 /// The credentials for a remote at `url` on `service`: the user the address names
 /// (`https://git@host/…`), else the recognised hosting service's, else the forge's.
 #[cfg(not(target_arch = "wasm32"))]
-fn remote_credentials(url: &str, service: Service, token: &texcraft_forge::Token) -> texcraft_gitwire::Credentials {
+pub(crate) fn remote_credentials(url: &str, service: Service, token: &texcraft_forge::Token) -> texcraft_gitwire::Credentials {
     let named = url.split_once("://").and_then(|(_, rest)| rest.split('/').next()).and_then(|h| h.rsplit_once('@')).map(|(u, _)| u);
     let named = named.map(|u| u.split(':').next().unwrap_or(u)).filter(|u| !u.is_empty());
     match (named, hosting(url)) {
@@ -702,7 +702,7 @@ enum Ended {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-mod desktop;
+pub(crate) mod desktop;
 #[cfg(not(target_arch = "wasm32"))]
 pub use desktop::{GitHttp, default_http};
 

@@ -17,8 +17,8 @@ use crate::theme::Tokens;
 pub(crate) enum Back {
     /// Settings, on Accounts.
     Settings,
-    /// The Open dialog it was opened from, as it was.
-    Open(Box<crate::forge::OpenForm>),
+    /// Import a Project, as it was (its GitLab Server page).
+    Import(Box<crate::import::ImportForm>),
     /// Nowhere.
     Close,
 }
@@ -123,10 +123,14 @@ pub(crate) fn propose(app: &mut App, query: &str) -> bool {
     true
 }
 
-/// The Open dialog on `project`, when there is one.
+/// Import a Project on `project`, when there is one: at the GitLab Server card for a GitLab
+/// server's.
 fn open_project(app: &mut App, service: Service, project: Option<String>) {
     if let Some(project) = project {
-        crate::forge::ask_open_at(app, service, &project);
+        match service {
+            Service::GitLab => crate::import::open_at(app, Some(crate::import::Source::GitLabServer), &project),
+            Service::GitHub => crate::forge::ask_open_at(app, service, &project),
+        }
     }
 }
 
@@ -204,9 +208,9 @@ fn run_server_form(app: &mut App, mut form: ServerForm) {
 fn go_back(app: &mut App, back: Back) {
     app.view.dialog = match back {
         Back::Settings => Some(Dialog::Settings),
-        Back::Open(mut form) => {
-            crate::forge::refresh_use_token(app, &mut form);
-            Some(Dialog::ForgeOpen(*form))
+        Back::Import(form) => {
+            crate::import::back_from_server(app, form);
+            return;
         }
         Back::Close => None,
     };

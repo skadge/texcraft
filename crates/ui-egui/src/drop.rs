@@ -232,6 +232,31 @@ impl App {
         self.view.status = Some((said.to_owned(), true));
     }
 
+    /// Import a Project's Zip File in the browser: the zip the browser read (its name and
+    /// contents) becomes a new project, kept in the browser under its name.
+    pub fn import_zip_project(&mut self, name: String, bytes: Vec<u8>) {
+        if matches!(self.view.dialog, Some(Dialog::Import(_))) {
+            self.view.dialog = None;
+        }
+        let stem = name.rsplit_once('.').map_or(name.as_str(), |(s, _)| s).to_owned();
+        self.import_project(json!({"data": base64(&bytes)}), stem);
+    }
+
+    /// Import a Project's Folder in the browser: the files of the folder the browser read, by
+    /// their path from the folder's name, become a new project kept in the browser.
+    pub fn import_folder_project(&mut self, files: Vec<(String, Vec<u8>)>) {
+        if matches!(self.view.dialog, Some(Dialog::Import(_))) {
+            self.view.dialog = None;
+        }
+        let name = files.first().and_then(|(p, _)| p.replace('\\', "/").split('/').next().map(str::to_owned)).unwrap_or_else(|| "Project".to_owned());
+        let files: Vec<Value> = files.iter().map(|(path, bytes)| json!({"path": path.replace('\\', "/"), "data": base64(bytes)})).collect();
+        if files.is_empty() {
+            self.view.status = Some((tl!("The folder chosen is empty: there is nothing to import.").to_owned(), true));
+            return;
+        }
+        self.import_project(json!({"files": files}), name);
+    }
+
     /// Makes the new project (`project.import`), then asks where to keep it, as `name`.
     pub(crate) fn import_project(&mut self, params: Value, name: String) {
         let Some(done) = self.run("project.import", params) else { return };
@@ -242,6 +267,18 @@ impl App {
         tally.add_skipped(&done);
         let (said, error) = tally.said();
         self.view.status = Some((said, error));
+        if self.session.library().is_none()
+            && let Some(parent) = self.zip_into.take()
+        {
+            // Import a Project's Zip File: into a new folder where new projects go.
+            let folder = texcraft_engine::free_folder(&parent, &name);
+            if self.run("project.save_as", json!({"path": folder.display().to_string()})).is_some() {
+                self.remember_project();
+                let said = tl!("Imported {name} into {folder}.").replace("{name}", &name).replace("{folder}", &folder.display().to_string());
+                self.view.status = Some((said, error));
+            }
+            return;
+        }
         if self.session.library().is_some() {
             let prompt = crate::dialogs::Prompt {
                 title: tl!("Keep the New Project"),

@@ -1,5 +1,5 @@
-//! Projects from GitLab or GitHub (docs/forges.md): the Open from GitLab or GitHub and Commit
-//! dialogs, the files in conflict with the branch (keep mine or take theirs, or a new branch with
+//! Projects from GitLab or GitHub (docs/forges.md): the Commit dialog (a project is brought in
+//! through Import a Project, `import.rs`, whose GitLab and GitHub pages use [`OpenForm`]), the files in conflict with the branch (keep mine or take theirs, or a new branch with
 //! a merge request, a pull request on GitHub), the project and branch in the top bar, the branch checked for new commits every two
 //! minutes and when the window comes back, and the outcomes of the engine's forge operations on
 //! the status line. Everything goes through `forge.open`, `forge.pull`, `forge.commit` and
@@ -20,16 +20,18 @@ use crate::i18n::trn;
 use crate::theme::Tokens;
 use crate::{App, icons};
 
-/// The Open from GitLab or GitHub dialog's fields.
+/// Import a Project's GitLab, GitHub and GitLab Server page: its fields.
 pub(crate) struct OpenForm {
-    /// The service chosen; an address on gitlab.com or github.com chooses it as it is typed.
+    /// The service of the page's card.
     pub service: Service,
+    /// The server projects are looked up on: the service's public one, or (the GitLab Server
+    /// card) a server added.
+    pub instance: String,
     pub address: String,
     pub branch: String,
     pub token: String,
     /// The token field instead of signing in.
     pub use_token: bool,
-    pub focus: bool,
     /// The project's suggestions and the branch list.
     pub picker: crate::forge_pick::Picker,
 }
@@ -167,7 +169,7 @@ pub(crate) fn sign_in_view(app: &App, service: Service, instance: &str) -> SignI
 
 /// The instance a project at `address` (as typed) for `service` is on; `service`'s public one
 /// while the address cannot be read yet.
-fn instance_of(address: &str, service: Service) -> String {
+pub(crate) fn instance_of(address: &str, service: Service) -> String {
     match texcraft_engine::forge::Address::parse_as(address, Some(service)) {
         Ok(a) => a.instance,
         Err(_) => texcraft_engine::forge::oauth::instance(service).to_owned(),
@@ -255,7 +257,7 @@ pub(crate) fn act(app: &mut App, action: SignInAction) {
         SignInAction::Open(url) => app.ctx.open_url(egui::OpenUrl::new_tab(url)),
         SignInAction::AddServer { service, address } => {
             let back = match app.view.dialog.take() {
-                Some(Dialog::ForgeOpen(form)) => crate::forge_server::Back::Open(Box::new(form)),
+                Some(Dialog::Import(form)) => crate::forge_server::Back::Import(form),
                 other => {
                     app.view.dialog = other;
                     crate::forge_server::Back::Close
@@ -374,30 +376,36 @@ fn resolve(rows: &[ConflictRow]) -> Value {
         .into()
 }
 
-/// Opens the Open from GitLab or GitHub dialog, on the service last opened from.
-pub(crate) fn ask_open(app: &mut App) {
-    let service = app.forge_check.opening;
-    ask_open_at(app, service, "");
+/// Import a Project at the GitLab or GitHub card of `service`, the address filled in
+/// (`forge.open`'s way into the dialog).
+pub(crate) fn ask_open_at(app: &mut App, service: Service, address: &str) {
+    let source = match service {
+        Service::GitLab => crate::import::Source::GitLab,
+        Service::GitHub => crate::import::Source::GitHub,
+    };
+    crate::import::open_at(app, Some(source), address);
 }
 
-/// Opens the Open from GitLab or GitHub dialog on `address` (a link's project), for `service`.
-pub(crate) fn ask_open_at(app: &mut App, service: Service, address: &str) {
-    let mut form = OpenForm {
-        service,
-        address: address.to_owned(),
-        branch: String::new(),
-        token: String::new(),
-        use_token: false,
-        focus: true,
-        picker: crate::forge_pick::Picker::new(),
-    };
-    refresh_use_token(app, &mut form);
-    app.view.dialog = Some(Dialog::ForgeOpen(form));
+/// The service last imported from.
+pub(crate) fn last_service(app: &App) -> Service {
+    app.forge_check.opening
+}
+
+/// Remembers the service a project is being imported from.
+pub(crate) fn set_opening(app: &mut App, service: Service) {
+    app.forge_check.opening = service;
 }
 
 /// Offers the token first only where signing in is not offered (the form's instance).
 pub(crate) fn refresh_use_token(app: &App, form: &mut OpenForm) {
-    form.use_token = app.session.forge_sign_in_unavailable_at(form.service, &instance_of(&form.address, form.service)).is_some();
+    form.use_token = app.session.forge_sign_in_unavailable_at(form.service, &instance_of_form(form)).is_some();
+}
+
+/// The instance the form's project is on: the address's, else the page's server.
+pub(crate) fn instance_of_form(form: &OpenForm) -> String {
+    let text = form.address.trim();
+    let names_host = text.contains("://") || text.starts_with("git@") || text.split('/').next().is_some_and(|first| first.contains('.'));
+    if names_host { instance_of(text, form.service) } else { form.instance.clone() }
 }
 
 /// Opens the Commit dialog, with the files changed since the base.
@@ -494,16 +502,12 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
     let browser = app.session.library().is_some();
     let mut outcome = Outcome::Open;
     let (service, instance) = match &app.view.dialog {
-        Some(Dialog::ForgeOpen(form)) => (form.service, instance_of(&form.address, form.service)),
         Some(Dialog::ForgeCommit(form)) => (form.service, form.instance.clone()),
         _ => (Service::GitLab, texcraft_engine::forge::GITLAB_COM.to_owned()),
     };
     let view = sign_in_view(app, service, &instance);
-    let unknown = app.session.forge_sign_in_unavailable_at(service, &instance) == Some(SignInUnavailable::UnknownServer);
-    crate::forge_pick::tick(app, ctx);
     let mut action = None;
     let modal = crate::sheet::show(ctx, &t, "texcraft-forge-dialog", 460.0, crate::sheet::Leave::Close, |ui| match app.view.dialog.as_mut() {
-        Some(Dialog::ForgeOpen(form)) => outcome = open_form(ui, &t, form, browser, &view, unknown, &mut action),
         Some(Dialog::ForgeCommit(form)) => outcome = commit_form(ui, &t, form, browser, &view, &mut action),
         Some(Dialog::ForgeResolve(form)) => outcome = resolve_form(ui, &t, form),
         Some(Dialog::ForgeMergeRequest(note)) => outcome = merge_request_note(ui, &t, note),
@@ -522,21 +526,6 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
         Outcome::Open | Outcome::Discard => {}
         Outcome::Cancel => app.view.dialog = None,
         Outcome::Run => match app.view.dialog.take() {
-            Some(Dialog::ForgeOpen(form)) => {
-                // Signed in and not asked for a token: the sign-in's.
-                let token = if form.use_token { form.token.trim() } else { "" };
-                let params = json!({
-                    "url": form.address.trim(),
-                    "service": form.service.id(),
-                    "token": token,
-                    "ref": form.branch.trim(),
-                    "background": true,
-                });
-                app.forge_check.opening = form.service;
-                if app.run("forge.open", params).is_some() {
-                    app.view.status = Some((opening(form.service).to_owned(), false));
-                }
-            }
             Some(Dialog::ForgeCommit(form)) => {
                 let mut params = json!({"message": form.message.trim(), "background": true});
                 if let Some(token) = form.token.as_ref().filter(|_| form.use_token) {
@@ -575,7 +564,7 @@ pub(crate) fn field(ui: &mut egui::Ui, t: &Tokens, label: &str, value: &mut Stri
 }
 
 /// What the status line says while a project is opened from `service`.
-fn opening(service: Service) -> &'static str {
+pub(crate) fn opening(service: Service) -> &'static str {
     say(service, tl!("Opening the project from GitLab…"), tl!("Opening the project from GitHub…"))
 }
 
@@ -633,94 +622,6 @@ pub(crate) fn sign_in_or_token(
         *use_token = true;
     }
     signed_in && !*use_token
-}
-
-fn open_form(
-    ui: &mut egui::Ui,
-    t: &Tokens,
-    form: &mut OpenForm,
-    browser: bool,
-    view: &SignInView,
-    unknown: bool,
-    action: &mut Option<SignInAction>,
-) -> Outcome {
-    let now = ui.input(|i| i.time);
-    title(ui, t, tl!("Open from GitLab or GitHub"));
-    ui.add_space(t.unit * 2.0);
-    // The service, as two radio buttons named by the group's label (AGENTS.md rule 21).
-    let group = tl!("Service");
-    ui.horizontal(|ui| {
-        ui.label(RichText::new(group).color(t.text_muted));
-        for service in [Service::GitLab, Service::GitHub] {
-            let on = form.service == service;
-            let r = ui.radio(on, service.name());
-            let name = format!("{}: {group}", service.name());
-            r.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, true, on, &name));
-            if r.clicked() && form.service != service {
-                form.service = service;
-                crate::forge_pick::service_changed(form, now);
-            }
-        }
-    });
-    let address = crate::forge_pick::project_field(ui, t, form);
-    if std::mem::take(&mut form.focus) {
-        address.request_focus();
-    }
-    if address.changed() {
-        // An address on gitlab.com or github.com says its service; a bare path (typed to find
-        // a project) does not, though it would read as one on gitlab.com.
-        let names_host = {
-            let text = form.address.trim();
-            text.contains("://") || text.starts_with("git@") || text.split('/').next().is_some_and(|first| first.contains('.'))
-        };
-        if names_host
-            && let Ok(known) = texcraft_engine::forge::Address::parse(&form.address)
-            && matches!(known.instance.as_str(), texcraft_engine::forge::GITHUB_COM | texcraft_engine::forge::GITLAB_COM)
-            && known.service != form.service
-        {
-            form.service = known.service;
-            let open = form.picker.open;
-            crate::forge_pick::service_changed(form, now);
-            form.picker.open = open;
-        }
-    }
-    let mut responses = vec![address];
-    responses.extend(crate::forge_pick::branch_field(ui, t, form));
-    let host = texcraft_engine::forge::servers::host_of(&view.instance).to_owned();
-    // A server TeXCraft has no application on can be added from here (not GitHub in the browser,
-    // where it would need a token still).
-    if unknown && !(form.service == Service::GitHub && browser) && !form.address.trim().is_empty() {
-        ui.add_space(t.unit * 2.0);
-        let text = tl!(
-            "TeXCraft cannot sign in to {host} yet: add the server once, and sign in to it as to gitlab.com. Until then, use a personal access token."
-        )
-        .replace("{host}", &host);
-        ui.label(RichText::new(text).font(t.small()).color(t.text_muted));
-        let label = tl!("Add {host} for Signing In…").replace("{host}", &host);
-        if ui.button(label).clicked() {
-            *action = Some(SignInAction::AddServer { service: form.service, address: view.instance.clone() });
-        }
-    }
-    let was_token = form.use_token;
-    let signed_in = sign_in_or_token(ui, t, view, &mut form.use_token, !unknown, action);
-    let mut key_changed = was_token != form.use_token;
-    if form.use_token {
-        let token = field(ui, t, tl!("Personal access token"), &mut form.token, token_hint(form.service), true);
-        key_changed |= token.changed();
-        responses.push(token);
-        ui.add_space(t.unit);
-        token_note(ui, t, browser, form.service);
-    }
-    if key_changed {
-        // Another key: the suggestions and the branches looked up again with it.
-        crate::forge_pick::key_changed(form, now);
-    }
-    let enter = responses.iter().any(|r| r.lost_focus()) && ui.input(|i| i.key_pressed(egui::Key::Enter));
-    let ready = !form.address.trim().is_empty() && (signed_in || (form.use_token && !form.token.trim().is_empty()));
-    match buttons(ui, t, tl!("Open"), false, ready) {
-        Outcome::Open if enter && ready => Outcome::Run,
-        o => o,
-    }
 }
 
 fn commit_form(ui: &mut egui::Ui, t: &Tokens, form: &mut CommitForm, browser: bool, view: &SignInView, action: &mut Option<SignInAction>) -> Outcome {
@@ -907,7 +808,7 @@ fn merge_request_note(ui: &mut egui::Ui, t: &Tokens, note: &mut MergeRequestNote
 
 /// Takes the outcome of a forge operation that ended, and keeps the window looking while one runs.
 pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
-    let was = app.session.forge_busy().or(app.session.git_busy());
+    let was = app.session.forge_busy().or(app.session.git_busy()).or(app.session.import_busy());
     match app.session.poll_forge() {
         Some(Ok(done)) => {
             // A Sync of a forge branch ends with its commit or its pull.
@@ -925,6 +826,8 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
                 Some("git_push") => crate::history::pushed(app, &done),
                 Some("git_pull") => crate::history::git_pulled(app, &done),
                 Some("sync") => crate::sync::synced(app, &done),
+                Some("clone") => crate::import::cloned(app, &done),
+                Some("check_address") => crate::import::checked(app, Ok(done.clone())),
                 _ => committed(app, &done),
             }
             if forge_ended {
@@ -943,8 +846,20 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
         app.forge_check.servers_kept = revision;
         app.prefs_changed = true;
     }
+    // The git servers whose credential the keychain keeps, by host (no secret in them).
+    let (hosts, revision) = app.session.git_hosts_saved();
+    if revision != app.git_hosts_kept {
+        app.prefs.git_hosts = hosts.to_vec();
+        app.git_hosts_kept = revision;
+        app.prefs_changed = true;
+    }
     crate::forge_pick::poll(app);
-    if app.session.forge_busy().is_some() || app.session.git_busy().is_some() || app.session.forge_auth_busy() || app.session.forge_lookup_busy() {
+    if app.session.forge_busy().is_some()
+        || app.session.git_busy().is_some()
+        || app.session.import_busy().is_some()
+        || app.session.forge_auth_busy()
+        || app.session.forge_lookup_busy()
+    {
         ctx.request_repaint_after(std::time::Duration::from_millis(200));
     }
     // GitHub's code came: its page is opened once, where the user enters it.
@@ -960,6 +875,9 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
 /// A forge operation failed: said, and for a commit or a pull that a choice can get through
 /// (conflicts, a branch that does not take the commit), its dialog opened again with it.
 fn failed(app: &mut App, was: Option<&str>, e: String) {
+    if crate::import::failed(app, was, &e) {
+        return;
+    }
     if crate::forge_save::failed(app, was, &e) || crate::sync::failed(app, was, &e) {
         return;
     }
@@ -1161,6 +1079,7 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     let mut action = None;
     let mut remove = None;
     let mut add = None;
+    let mut forget: Option<String> = None;
     let servers = app.session.forge_servers();
     let browser = app.session.library().is_some();
     egui::ScrollArea::vertical().id_salt("forge-accounts").max_height(440.0).auto_shrink([false, true]).show(ui, |ui| {
@@ -1197,6 +1116,25 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
                 }
             });
         }
+        // Git servers whose token Import a Project remembered (Overleaf's, any git server's).
+        let (hosts, _) = app.session.git_hosts_saved();
+        if !hosts.is_empty() {
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = t.unit * 2.0;
+                ui.label(RichText::new(tl!("Git servers")).font(t.strong()));
+                for host in hosts {
+                    ui.horizontal(|ui| {
+                        ui.label(tl!("{host}: a token is kept in the keychain.").replace("{host}", host));
+                        let r = ui.button(tl!("Forget"));
+                        let name = format!("{}: {host}", tl!("Forget"));
+                        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+                        if r.clicked() {
+                            forget = Some(host.clone());
+                        }
+                    });
+                }
+            });
+        }
         for problem in app.session.forge_server_problems() {
             let text = tl!("Your organisation's list of servers has an entry TeXCraft left out: {problem}").replace("{problem}", &crate::i18n::msg(problem));
             ui.label(RichText::new(text).font(t.small()).color(t.error));
@@ -1226,6 +1164,11 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     });
     if let Some(action) = action {
         act(app, action);
+    }
+    if let Some(host) = forget
+        && app.run("git.forget_credential", json!({"host": host})).is_some()
+    {
+        app.view.status = Some((tl!("Forgot the token kept for {host}.").replace("{host}", &host), false));
     }
     if let Some(instance) = remove
         && let Some(done) = app.run("forge.remove_server", json!({"address": instance}))

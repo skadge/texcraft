@@ -90,7 +90,8 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         CommandSpec {
             id: "forge.open",
             label: "Open from GitLab or GitHub…",
-            menu: &["File"],
+            // In the window, Import a Project's GitLab and GitHub cards.
+            menu: &[],
             shortcut: None,
             params: open_schema,
             enabled: idle,
@@ -716,6 +717,9 @@ impl Session {
             return Some(done);
         }
         if let Some(done) = self.poll_git() {
+            return Some(done);
+        }
+        if let Some(done) = self.poll_import() {
             return Some(done);
         }
         let outcome = match self.forge_task.as_mut()? {

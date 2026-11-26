@@ -1,4 +1,4 @@
-//! The Open from GitLab or GitHub dialog's project suggestions and branch list (docs/forges.md,
+//! Import a Project's GitLab and GitHub pages: the project suggestions and branch list (docs/forges.md,
 //! "Choosing a project and a branch"), through `forge.projects` and `forge.branches`.
 //!
 //! The project field is an editable combo box (WAI-ARIA's combobox with a list box): as the user
@@ -19,7 +19,6 @@ use texcraft_engine::ForgeLookup;
 use texcraft_engine::forge::{Address, Service};
 
 use crate::App;
-use crate::dialogs::Dialog;
 use crate::forge::OpenForm;
 use crate::i18n::trn;
 use crate::theme::Tokens;
@@ -161,29 +160,6 @@ fn target(text: &str, server: &str, service: Service) -> (String, String) {
     (instance, path.to_owned())
 }
 
-/// The instances of `service` the dialog can look projects up on: its public one and the
-/// servers added.
-pub(crate) fn servers(app: &App, service: Service) -> Vec<String> {
-    let mut list = vec![texcraft_engine::forge::oauth::instance(service).to_owned()];
-    for s in app.session.forge_servers().into_iter().filter(|s| s.service == service) {
-        if !list.contains(&s.instance) {
-            list.push(s.instance);
-        }
-    }
-    list
-}
-
-/// The server first offered for `service`: the public one, unless only a server added is signed
-/// in to.
-fn default_server(app: &App, service: Service) -> String {
-    let list = servers(app, service);
-    let public = list[0].clone();
-    if app.session.forge_reaches(&public, service) {
-        return public;
-    }
-    list.into_iter().find(|i| app.session.forge_reaches(i, service)).unwrap_or(public)
-}
-
 /// The key a lookup goes with: the token typed (by its hash), or the session's (sign-in, or a
 /// token given earlier); none when there is neither.
 fn key(app: &App, form: &OpenForm, instance: &str) -> Option<Option<u64>> {
@@ -203,28 +179,25 @@ fn key(app: &App, form: &OpenForm, instance: &str) -> Option<Option<u64>> {
 /// chosen. Before the dialog is drawn, each frame it is open.
 pub(crate) fn tick(app: &mut App, ctx: &egui::Context) {
     let now = ctx.input(|i| i.time);
-    let Some(Dialog::ForgeOpen(form)) = app.view.dialog.as_ref() else { return };
-    let service = form.service;
-    let (list, server) = (servers(app, service), form.picker.server.is_empty().then(|| default_server(app, service)));
-    if let Some(Dialog::ForgeOpen(form)) = app.view.dialog.as_mut() {
-        form.picker.servers = list;
-        if let Some(server) = server {
-            form.picker.server = server;
-        }
+    let Some(form) = crate::import::forge_form_mut(&mut app.view.dialog) else { return };
+    // The page's server only: the GitLab Server card chooses among the servers added itself.
+    form.picker.servers = vec![form.instance.clone()];
+    if form.picker.server != form.instance {
+        form.picker.server = form.instance.clone();
     }
-    let Some(Dialog::ForgeOpen(form)) = app.view.dialog.as_ref() else { return };
+    let Some(form) = crate::import::forge_form(&app.view.dialog) else { return };
     if let Some(at) = form.picker.due {
         let wait = PAUSE - (now - at);
         if wait > 0.0 {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
         } else {
             look_up_projects(app);
-            if let Some(Dialog::ForgeOpen(form)) = app.view.dialog.as_mut() {
+            if let Some(form) = crate::import::forge_form_mut(&mut app.view.dialog) {
                 form.picker.branches_due |= std::mem::take(&mut form.picker.branches_later);
             }
         }
     }
-    if let Some(Dialog::ForgeOpen(form)) = app.view.dialog.as_ref()
+    if let Some(form) = crate::import::forge_form(&app.view.dialog)
         && form.picker.branches_due
     {
         look_up_branches(app);
@@ -238,10 +211,10 @@ fn token_param(form: &OpenForm, params: &mut Value) {
 }
 
 fn look_up_projects(app: &mut App) {
-    let Some(Dialog::ForgeOpen(form)) = app.view.dialog.as_ref() else { return };
+    let Some(form) = crate::import::forge_form(&app.view.dialog) else { return };
     let (instance, query) = target(&form.address, &form.picker.server, form.service);
     let Some(key) = key(app, form, &instance) else {
-        if let Some(Dialog::ForgeOpen(form)) = app.view.dialog.as_mut() {
+        if let Some(form) = crate::import::forge_form_mut(&mut app.view.dialog) {
             form.picker.due = None;
             form.picker.projects = Projects::NeedsKey;
             form.picker.shown_for = None;
@@ -253,7 +226,7 @@ fn look_up_projects(app: &mut App) {
     token_param(form, &mut params);
     let fresh = form.picker.shown_for.as_ref() == Some(&asked) && matches!(form.picker.projects, Projects::Shown { .. });
     let outcome = if fresh { None } else { Some(app.session.execute("forge.projects", &params)) };
-    let Some(Dialog::ForgeOpen(form)) = app.view.dialog.as_mut() else { return };
+    let Some(form) = crate::import::forge_form_mut(&mut app.view.dialog) else { return };
     form.picker.due = None;
     if outcome.is_some() {
         form.picker.asked = Some(asked.clone());
@@ -270,7 +243,7 @@ fn look_up_projects(app: &mut App) {
 }
 
 fn look_up_branches(app: &mut App) {
-    let Some(Dialog::ForgeOpen(form)) = app.view.dialog.as_ref() else { return };
+    let Some(form) = crate::import::forge_form(&app.view.dialog) else { return };
     let address = Address::parse_as(&qualified(&form.address, &form.picker.server, form.service), Some(form.service));
     let outcome = match address {
         Err(_) => Err(None),
@@ -288,7 +261,7 @@ fn look_up_branches(app: &mut App) {
             }
         },
     };
-    let Some(Dialog::ForgeOpen(form)) = app.view.dialog.as_mut() else { return };
+    let Some(form) = crate::import::forge_form_mut(&mut app.view.dialog) else { return };
     form.picker.branches_due = false;
     match outcome {
         Err(None) => {}
@@ -320,7 +293,7 @@ fn qualified(text: &str, server: &str, service: Service) -> String {
 /// another query or project than the dialog's is dropped (a newer one is on its way).
 pub(crate) fn poll(app: &mut App) {
     while let Some((kind, outcome)) = app.session.poll_forge_lookup() {
-        let Some(Dialog::ForgeOpen(form)) = app.view.dialog.as_mut() else { continue };
+        let Some(form) = crate::import::forge_form_mut(&mut app.view.dialog) else { continue };
         match (kind, outcome) {
             (ForgeLookup::Projects, Ok(v)) => {
                 form.picker.loading = false;
@@ -429,11 +402,6 @@ pub(crate) fn key_changed(form: &mut OpenForm, now: f64) {
     form.picker.branches_later = !matches!(form.picker.branches, Branches::None);
 }
 
-/// The service changed: the suggestions and the branches start again, on its server.
-pub(crate) fn service_changed(form: &mut OpenForm, now: f64) {
-    form.picker = Picker { due: Some(now), ..Picker::default() };
-}
-
 /// The server drop-down, when `servers` has more than the public instance.
 fn server_choice(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm, now: f64) {
     let servers = form.picker.servers.clone();
@@ -462,8 +430,9 @@ fn server_choice(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm, now: f64) {
     }
 }
 
-/// The project field and its suggestions. Returns the field's response.
-pub(crate) fn project_field(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm) -> egui::Response {
+/// The project field and its suggestions, named by the row's label `label`. Returns the field's
+/// response.
+pub(crate) fn project_field(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm, label: egui::Id) -> egui::Response {
     let now = ui.input(|i| i.time);
     ui.scope(|ui| server_choice(ui, t, form, now));
     let field_id = egui::Id::unique("texcraft-forge-project-address");
@@ -504,8 +473,6 @@ pub(crate) fn project_field(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm) 
             form.picker.branches_due = true;
         }
     }
-    ui.add_space(t.unit * 2.0);
-    let label = ui.label(RichText::new(tl!("Project address")).color(t.text_muted));
     let example = match form.service {
         Service::GitLab => tl!("Type to find a project, or paste its address"),
         Service::GitHub => tl!("Type to find a repository, or paste its address"),
@@ -520,7 +487,7 @@ pub(crate) fn project_field(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm) 
         .desired_width(f32::INFINITY)
         .margin(egui::vec2(8.0, 6.0))
         .event_filter(filter);
-    let field = ui.add(edit).labelled_by(label.id);
+    let field = ui.add(edit).labelled_by(label);
     if field.changed() {
         typed(&mut form.picker, now);
         // A pasted address: its branches at once.
@@ -643,15 +610,15 @@ fn branch_text(b: &BranchRow) -> String {
     text
 }
 
-/// The branch: a drop-down of the project's branches once they are listed, else a field to type
-/// it in, with why. Returns the field's response when it is the field.
-pub(crate) fn branch_field(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm) -> Option<egui::Response> {
+/// The branch, named by the row's label `label`: a drop-down of the project's branches once they
+/// are listed, else a field to type it in, with why. Returns the field's response when it is the
+/// field.
+pub(crate) fn branch_field(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm, label: egui::Id) -> Option<egui::Response> {
     // In one scope, so that the widgets after it keep their ids whether it is a list or a field.
-    ui.scope(|ui| branch_part(ui, t, form)).inner
+    ui.scope(|ui| branch_part(ui, t, form, label)).inner
 }
 
-fn branch_part(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm) -> Option<egui::Response> {
-    ui.add_space(t.unit * 2.0);
+fn branch_part(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm, label: egui::Id) -> Option<egui::Response> {
     let listed = match &form.picker.branches {
         Branches::Listed { items, truncated } if !form.picker.typing_branch => Some((items.clone(), *truncated)),
         _ => None,
@@ -659,7 +626,6 @@ fn branch_part(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm) -> Option<egu
     let mut field = None;
     let control_height = 28.0;
     if let Some((items, truncated)) = &listed {
-        let label = ui.label(RichText::new(tl!("Branch")).color(t.text_muted));
         let shown = items.iter().find(|b| b.name == form.branch).map_or_else(|| form.branch.clone(), branch_text);
         let mut chosen = None;
         let mut typing = false;
@@ -675,7 +641,7 @@ fn branch_part(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm) -> Option<egu
                 }
             })
         });
-        let _ = combo.inner.response.labelled_by(label.id);
+        let _ = combo.inner.response.labelled_by(label);
         if let Some(name) = chosen {
             form.branch = name;
         }
@@ -685,10 +651,9 @@ fn branch_part(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm) -> Option<egu
         let note = if *truncated { tl!("Only the first branches are listed: choose Another branch… to type one.") } else { "" };
         status_line(ui, t, note, None);
     } else {
-        let label = ui.label(RichText::new(tl!("Branch (the default branch if left empty)")).color(t.text_muted));
-        let hint = if matches!(form.picker.branches, Branches::Loading) { tl!("Listing the branches…") } else { "main" };
+        let hint = if matches!(form.picker.branches, Branches::Loading) { tl!("Listing the branches…") } else { tl!("The default branch") };
         let edit = egui::TextEdit::singleline(&mut form.branch).hint_text(hint).desired_width(f32::INFINITY).margin(egui::vec2(8.0, 6.0));
-        field = Some(ui.add_sized(egui::vec2(ui.available_width(), control_height), edit).labelled_by(label.id));
+        field = Some(ui.add_sized(egui::vec2(ui.available_width(), control_height), edit).labelled_by(label));
         let note = match &form.picker.branches {
             Branches::Failed(e) => {
                 format!(

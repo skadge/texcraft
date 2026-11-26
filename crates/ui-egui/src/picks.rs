@@ -27,6 +27,13 @@ pub enum Pick {
     ImportZip,
     /// A new or empty folder for a project made from a template.
     TemplateFolder,
+    /// Import a Project's Change…: the folder new projects go in.
+    CloneFolder,
+    /// Import a Project's Zip File: the zip a new project is made of.
+    ImportProjectZip,
+    /// Import a Project's Folder in the browser: a folder whose files become a project kept in
+    /// the browser (the desktop opens a folder where it is, with `OpenProject`).
+    ImportProjectFolder,
 }
 
 /// The kind of native dialog.
@@ -64,7 +71,10 @@ impl App {
     pub fn picked(&mut self, pick: Pick, paths: Vec<PathBuf>) {
         let Some(first) = paths.first().map(|p| p.display().to_string()) else { return };
         match pick {
-            Pick::OpenProject => self.open_project(&first),
+            Pick::OpenProject => {
+                crate::import::folder_opened(self);
+                self.open_project(&first);
+            }
             Pick::SaveProjectAs => {
                 if self.run("project.save_as", json!({"path": first})).is_some() {
                     self.remember_project();
@@ -92,6 +102,10 @@ impl App {
             Pick::TemplateFolder => self.template_folder_chosen(first),
             Pick::AddFiles => self.import_items(paths.into_iter().map(Item::Path).collect(), false),
             Pick::ImportZip => self.unzip_items(paths.into_iter().map(Item::Path).collect()),
+            Pick::CloneFolder => crate::import::parent_chosen(self, std::path::Path::new(&first)),
+            Pick::ImportProjectZip => crate::import::zip_chosen(self, std::path::Path::new(&first)),
+            // The browser hands its files over with `import_folder_project`.
+            Pick::ImportProjectFolder => {}
         }
     }
 
@@ -243,6 +257,16 @@ impl App {
             Pick::AddFiles => (PickKind::OpenFiles, tl!("Add Files to the Project"), None, None),
             Pick::ImportZip => (PickKind::OpenFiles, tl!("Import a Zip File"), None, Some((tl!("Zip files").to_owned(), vec!["zip"]))),
             Pick::TemplateFolder => (PickKind::Folder, tl!("Choose a New or Empty Folder for the Project"), None, None),
+            Pick::CloneFolder => (PickKind::Folder, tl!("Choose Where New Projects Go"), None, None),
+            Pick::ImportProjectZip => {
+                (PickKind::OpenFiles, tl!("Import a Zip File as a Project"), None, Some((tl!("Zip files").to_owned(), vec!["zip"])))
+            }
+            Pick::ImportProjectFolder => (PickKind::Folder, tl!("Import a Folder as a Project"), None, None),
+        };
+        let directory = match pick {
+            // Where new projects go.
+            Pick::CloneFolder => self.prefs.clone_folder.as_ref().map(PathBuf::from).or_else(|| self.documents.clone()).or(directory),
+            _ => directory,
         };
         self.picks.push(PickRequest { pick, kind, title: title.to_owned(), directory, file_name, filter });
     }

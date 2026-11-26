@@ -2,6 +2,7 @@
 
 mod ai;
 mod build_options;
+mod clone;
 mod command_sweep;
 mod deleted;
 mod document_outline;

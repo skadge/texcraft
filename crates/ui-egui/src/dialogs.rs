@@ -37,8 +37,8 @@ pub(crate) enum Next {
     OpenProject(String),
     /// Choose a project folder, then open it.
     PickProject,
-    /// Ask for a project on GitLab or GitHub to open.
-    OpenFromForge,
+    /// Import a Project, at a source if given, with an address filled in.
+    Import(Option<crate::import::Source>, String),
     /// Make a new project from a zip file or a folder's files (`project.import` with these
     /// parameters), to keep under this name.
     ImportProject(Value, String),
@@ -57,7 +57,8 @@ pub(crate) enum Dialog {
     Commands(crate::commands::Palette),
     /// The formatted view's picker of a citation, a cross-reference or a figure's image.
     Choose(Box<crate::insert_pick::Chooser>),
-    ForgeOpen(crate::forge::OpenForm),
+    /// Import a Project: the sources, then a source's page.
+    Import(Box<crate::import::ImportForm>),
     ForgeCommit(crate::forge::CommitForm),
     ForgeResolve(crate::forge::ResolveForm),
     ForgeMergeRequest(crate::forge::MergeRequestNote),
@@ -92,7 +93,7 @@ impl Dialog {
             Dialog::GoToFile(_) => "go_to_file",
             Dialog::Commands(_) => "commands",
             Dialog::Choose(_) => "choose",
-            Dialog::ForgeOpen(_) => "forge_open",
+            Dialog::Import(_) => "import",
             Dialog::ForgeCommit(_) => "forge_commit",
             Dialog::ForgeResolve(_) => "forge_resolve",
             Dialog::ForgeMergeRequest(_) => "forge_merge_request",
@@ -124,7 +125,8 @@ fn own_window(app: &mut App, ctx: &egui::Context) -> bool {
         Some(Dialog::ForgeServer(_) | Dialog::ForgeProposal(_)) => crate::forge_server::dialog,
         Some(Dialog::ForgeSave(_)) => crate::forge_save::dialog,
         Some(Dialog::GitToken(_)) => crate::sync::dialog,
-        Some(Dialog::ForgeOpen(_) | Dialog::ForgeCommit(_) | Dialog::ForgeResolve(_) | Dialog::ForgeMergeRequest(_)) => crate::forge::dialog,
+        Some(Dialog::Import(_)) => crate::import::dialog,
+        Some(Dialog::ForgeCommit(_) | Dialog::ForgeResolve(_) | Dialog::ForgeMergeRequest(_)) => crate::forge::dialog,
         _ => return false,
     };
     draw(app, ctx);
@@ -156,7 +158,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         | Dialog::GoToFile(_)
         | Dialog::Commands(_)
         | Dialog::Choose(_)
-        | Dialog::ForgeOpen(_)
+        | Dialog::Import(_)
         | Dialog::ForgeCommit(_)
         | Dialog::ForgeResolve(_)
         | Dialog::ForgeMergeRequest(_)
@@ -284,7 +286,7 @@ fn why_now(next: &Next) -> &'static str {
         Next::Quit => tl!("TeXCraft is about to close."),
         Next::NewProject => tl!("A new project is about to replace this one."),
         Next::OpenProject(_) | Next::PickProject => tl!("Another project is about to open in its place."),
-        Next::OpenFromForge => tl!("A project from GitLab or GitHub is about to open in its place."),
+        Next::Import(..) => tl!("An imported project is about to open in its place."),
         Next::ImportProject(..) => tl!("The imported project is about to open in its place."),
     }
 }
