@@ -607,7 +607,33 @@ fn type_text(app: &mut App, f: &Frame<'_>, s: &str) {
         return;
     }
     let kind = if a == h { EditKind::Typing { at: f.now } } else { EditKind::Other };
-    replace(app, f, &edit::escape(s), kind);
+    let mut source = edit::escape(s);
+    let at = caret_byte(app);
+    // After a command shown as text (`\dots`), a letter would lengthen its name and TeX would
+    // skip a space: an empty group ends it.
+    if a == h && s.starts_with(|c: char| c.is_alphabetic() || c.is_whitespace()) && edit::after_control_word(f.text, at) {
+        source.insert_str(0, "{}");
+    }
+    let version = app.editor.source.doc.buffer.version();
+    replace(app, f, &source, kind);
+    if a == h && s.ends_with('.') && app.editor.source.doc.buffer.version() != version {
+        typographic(app, at + source.len());
+    }
+}
+
+/// Three dots typed become `\dots` ([`edit::ellipsis`]): an edit of its own after the typing, so
+/// Undo brings the dots back.
+fn typographic(app: &mut App, at: usize) {
+    let d = &mut app.editor.source.doc;
+    let Some(c) = edit::ellipsis(&d.buffer.text(), at) else { return };
+    let (start, end) = (d.buffer.byte_to_char(c.range.start), d.buffer.byte_to_char(c.range.end));
+    let caret = start + c.text.chars().count();
+    let before = d.selection.clone();
+    d.buffer.seal();
+    if d.buffer.edit(Transaction::replace(start, end, &c.text), &before, &Selection::single(caret, caret), EditKind::Other).is_ok() {
+        d.selection = Selection::single(caret, caret);
+        d.buffer.seal();
+    }
 }
 
 /// Whether deleting the selection removes more than the source of what it shows: list items it

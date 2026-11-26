@@ -503,3 +503,32 @@ fn pasted_lines_with_bullets_or_numbers_become_lists() {
     // One line is text as typed, even with a dash in front.
     assert_eq!(edit::paste("Text.", 5, "- 5 degrees"), "- 5 degrees");
 }
+
+#[test]
+fn three_dots_typed_in_text_become_dots_and_nowhere_else() {
+    // #45. `at` is just after the third dot.
+    let made = |text: &str| edit::ellipsis(text, text.rfind("...").map_or(0, |i| i + 3)).map(|c| edit::apply(text, &[c]));
+    assert_eq!(made("Wait... then").as_deref(), Some("Wait\\dots then"));
+    assert_eq!(made("\\section{So...}").as_deref(), Some("\\section{So\\dots}"));
+    assert_eq!(made("A note\\footnote{and...}").as_deref(), Some("A note\\footnote{and\\dots}"));
+    for kept in [
+        "$a, ..., z$",
+        "\\(1...\\)",
+        "\\texttt{x...}",
+        "{\\ttfamily x...}",
+        "\\verb|...|",
+        "\\label{a...}",
+        "\\url{a...}",
+        "a....",
+        "\\...",
+        "\\begin{verbatim}\n...\n\\end{verbatim}",
+    ] {
+        assert!(made(kept).is_none(), "{kept:?} was changed");
+    }
+    // The view shows the ellipsis as a character of its own.
+    assert_eq!(paragraphs("Wait\\dots then"), ["Wait… then"]);
+    // A letter typed after it would lengthen the command's name.
+    assert!(edit::after_control_word("Wait\\dots", 9));
+    assert!(!edit::after_control_word("Wait\\\\dots", 10), "after a line break `\\\\`, letters are text");
+    assert!(!edit::after_control_word("Wait...", 7));
+}

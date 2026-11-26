@@ -477,6 +477,45 @@ pub fn escape(typed: &str) -> String {
     out
 }
 
+/// The typographic replacement typing makes, `at` just after what was typed: three dots become
+/// `\dots` (shown as an ellipsis). `None` where it does not apply: in math, verbatim, typewriter
+/// text, an argument that is not text (a label, an address), after a fourth dot or `\.`.
+pub fn ellipsis(text: &str, at: usize) -> Option<Change> {
+    let start = at.checked_sub(3)?;
+    if text.get(start..at)? != "..." || text.get(..start)?.ends_with(['.', '\\']) {
+        return None;
+    }
+    let tree = tree::parse(text);
+    let mut frames = Vec::new();
+    path(&tree, start, &mut frames);
+    let text_arg = |name: &str| {
+        view::heading_level(name).is_some()
+            || view::styled(name, Style::default()).is_some()
+            || matches!(name, "footnote" | "caption" | "thanks" | "title" | "author" | "date" | "tnotetext" | "cortext" | "fntext")
+    };
+    let in_text = frames.iter().all(|f| match f {
+        Frame::Math => false,
+        Frame::Command { name, .. } => text_arg(name),
+        Frame::Group(_) | Frame::Environment { .. } => true,
+    });
+    if !in_text || here(text, start).code {
+        return None;
+    }
+    Some(change(start..at, "\\dots"))
+}
+
+/// Whether source offset `at` is just after a control word (`\dots`), whose name a letter typed
+/// there would lengthen and after which TeX skips a space.
+pub fn after_control_word(text: &str, at: usize) -> bool {
+    let Some(before) = text.get(..at) else { return false };
+    let name = before.trim_end_matches(|c: char| c.is_ascii_alphabetic());
+    if name.len() == before.len() {
+        return false;
+    }
+    let slashes = name.len() - name.trim_end_matches('\\').len();
+    slashes % 2 == 1
+}
+
 /// A change of the source: `range` replaced by `text`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Change {

@@ -215,3 +215,25 @@ fn deleting_selected_items_removes_them_and_typing_over_two_joins_them() {
     h.run();
     assert_eq!(text(&mut h), start.replace("one\n  \\item two", "oXo"));
 }
+
+#[test]
+fn three_dots_typed_become_an_ellipsis_that_undo_takes_back() {
+    // #45.
+    let mut h = formatted("Wait\n");
+    key(&mut h, egui::Modifiers::NONE, egui::Key::End);
+    for _ in 0..3 {
+        h.event(egui::Event::Text(".".into()));
+        h.run();
+    }
+    assert_eq!(text(&mut h), "Wait\\dots\n");
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Paragraph, "Wait…").is_some(), "the view does not show an ellipsis");
+    // A word typed after it stays a word, not part of the command's name.
+    h.event(egui::Event::Text("x".into()));
+    h.run();
+    assert_eq!(text(&mut h), "Wait\\dots{}x\n");
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Paragraph, "Wait…x").is_some());
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::Z);
+    assert_eq!(text(&mut h), "Wait\\dots\n", "undo took back more than the word");
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::Z);
+    assert_eq!(text(&mut h), "Wait...\n", "undo did not bring the dots back");
+}
