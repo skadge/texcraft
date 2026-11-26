@@ -281,8 +281,10 @@ impl Shell {
                     self.blobs.remove(&name);
                 }
                 Change::Thread { .. } => {}
-                Change::Versions { project, versions, blobs } => {
-                    self.versions.entry(project.clone()).or_default().extend(versions);
+                Change::Versions { project, versions, blobs, removed } => {
+                    let kept = self.versions.entry(project.clone()).or_default();
+                    kept.retain(|v| !removed.contains(&v.id));
+                    kept.extend(versions);
                     self.blobs.entry(project).or_default().extend(blobs);
                 }
             }

@@ -198,6 +198,11 @@ pub struct Session {
     /// The git repository the project's folder is in (docs/ROADMAP.md, C8): found when the project
     /// is opened, made on its first save when there is none.
     history: Option<texcraft_history::History>,
+    /// The latest automatic version this session made (after a pause, on closing, before a
+    /// restore), which the next version amends: its commit (or the library's version) id. Only a
+    /// version this process made is ever amended, and only while it is still the branch's tip and
+    /// on no other ref (not pushed).
+    own_version: Option<String>,
     /// The formulas of the file last asked for, and the engine that typesets them.
     formulas: formulas::State,
     /// What the last build that wrote an `.aux` numbered, and the document's numbers from it.
@@ -267,12 +272,12 @@ impl Session {
             revision: 0,
             built_revision: None,
             built_review: 0,
+            built_engine: None,
             builder,
             next_job: 1,
             last: None,
             pdf: None,
             pdf_output: texcraft_compile::Output::Screen,
-            built_engine: None,
             pdfx: None,
             settings: Settings::default(),
             roots: None,
@@ -288,6 +293,7 @@ impl Session {
             #[cfg(not(target_arch = "wasm32"))]
             on_disk: std::collections::BTreeSet::new(),
             history: None,
+            own_version: None,
             formulas: formulas::State::default(),
             numbering: numbering::State::default(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -410,6 +416,11 @@ impl Session {
         (self.revision, self.review.revision) != self.versioned
     }
 
+    /// The session's versions were sent (pushed, synced): none of them is amended any more.
+    pub(crate) fn versions_sent(&mut self) {
+        self.own_version = None;
+    }
+
     /// The project as it is now is the latest version.
     pub(crate) fn mark_versioned(&mut self) {
         self.versioned = (self.revision, self.review.revision);
@@ -431,17 +442,6 @@ impl Session {
         self.last.as_ref()
     }
 
-    pub fn pdf(&self) -> Option<&Arc<Vec<u8>>> {
-        self.pdf.as_ref()
-    }
-
-    /// The PDF to save or export: a print build's PDF/X, or the PDF; and its kind (`screen`,
-    /// `PDF/UA`, `PDF/X-4`). A print build that wrote no PDF/X has nothing to save.
-    pub fn pdf_to_save(&self) -> Result<(Arc<Vec<u8>>, &'static str)> {
-        let pdf = self.pdf.clone().ok_or("There is no PDF yet: compile the project first.")?;
-        match &self.pdfx {
-            None if self.pdf_output == texcraft_compile::Output::Accessible => Ok((pdf, "PDF/UA")),
-            None => Ok((pdf, "screen")),
     /// The engine the document chose for the last build started (Settings › Building › Engine
     /// "Chosen from the document"), and why; none when the settings name one, or the document
     /// did not say (retex then chooses).
@@ -459,6 +459,17 @@ impl Session {
         texcraft_compile::engine_choice::choose_with(main, |p| self.project.text(p).ok().map(str::to_owned))
     }
 
+    pub fn pdf(&self) -> Option<&Arc<Vec<u8>>> {
+        self.pdf.as_ref()
+    }
+
+    /// The PDF to save or export: a print build's PDF/X, or the PDF; and its kind (`screen`,
+    /// `PDF/UA`, `PDF/X-4`). A print build that wrote no PDF/X has nothing to save.
+    pub fn pdf_to_save(&self) -> Result<(Arc<Vec<u8>>, &'static str)> {
+        let pdf = self.pdf.clone().ok_or("There is no PDF yet: compile the project first.")?;
+        match &self.pdfx {
+            None if self.pdf_output == texcraft_compile::Output::Accessible => Ok((pdf, "PDF/UA")),
+            None => Ok((pdf, "screen")),
             Some(Ok((standard, pdfx))) => Ok((pdfx.clone(), standard.name())),
             Some(Err(why)) => Err(why.clone()),
         }
@@ -716,6 +727,7 @@ impl Session {
     pub(crate) fn export_job(&self) -> Result<Job> {
         let mut job = Job::from_project(&self.project, 0).ok_or("The project has no main document to export.")?;
         job.options = self.settings.build;
+        job.choose_engine();
         job.project = self.project_key();
         Ok(job)
     }
@@ -727,7 +739,6 @@ impl Session {
         self.project.text(main).is_ok_and(class_is_beamer)
     }
 
-        job.choose_engine();
     /// Deletes the build files (not the PDF shown); the next build starts from scratch.
     pub(crate) fn clean_build(&mut self) -> Result<()> {
         match &mut self.builder {
@@ -907,6 +918,7 @@ impl Session {
         };
         self.sync = None;
         self.history = None;
+        self.own_version = None;
         // A project of the library keeps its forge link; any other opens unlinked.
         let link = match (&self.library, &dir) {
             (Some(library), Some(name)) => library.forge(&name.display().to_string()).cloned(),
@@ -937,6 +949,7 @@ impl Session {
         let suggested = self.settings.with_suggestions.then(|| self.with_suggestions());
         let mut job = Job::from_project(suggested.as_ref().unwrap_or(&self.project), id).ok_or("The project has no main document to build.")?;
         job.options = self.settings.build;
+        self.built_engine = job.choose_engine();
         job.project = self.project_key();
         self.built_revision = Some(self.revision);
         self.built_review = self.review.revision;
@@ -949,7 +962,6 @@ impl Session {
             Builder::Web(w) => w.submit(job),
         }
         Ok(id)
-        self.built_engine = job.choose_engine();
     }
 
     /// Takes a finished build's outcome, if one arrived. The frontends call this each frame.

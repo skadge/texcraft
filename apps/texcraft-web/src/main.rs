@@ -181,7 +181,7 @@ mod web {
                         let result = match &change {
                             Change::Saved(name, project) => store.put_project(name, project).await,
                             Change::Deleted(name) => store.delete_project(name).await,
-                            Change::Versions { project, versions, blobs } => store.put_versions(project, versions, blobs).await,
+                            Change::Versions { project, versions, blobs, removed } => store.put_versions(project, versions, blobs, removed).await,
                             Change::Thread { project, file, text } => store.put_thread(project, file, text.as_deref()).await,
                         };
                         match result {

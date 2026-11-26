@@ -109,10 +109,22 @@ fn a_version_is_made_after_the_long_pause_and_on_closing_not_on_each_write() {
 
     edit(&mut h, "five\n");
     h.step();
+    let before_closing = latest(&mut h);
     assert!(!h.state_mut().close_requested(), "closing asks although the window saves by itself");
     assert_eq!(on_disk(&dir), "five\n", "closing did not write");
-    assert_eq!(versions(&mut h), first + 2, "closing made no version");
+    // The version on closing amends the session's automatic one (not pushed): one version of both.
+    assert_eq!(versions(&mut h), first + 1, "closing added a version beside the session's automatic one");
+    assert_ne!(latest(&mut h), before_closing, "closing made no version");
+    let commit = latest(&mut h);
+    let text = h.state_mut().control("engine.execute", &json!({"command": "history.show", "params": {"commit": commit, "path": "main.tex"}}));
+    assert_eq!(text["result"]["text"], "five\n", "the version on closing does not hold the last change");
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// The latest version's id.
+fn latest(h: &mut Harness<'_, App>) -> Value {
+    let list = h.state_mut().control("engine.execute", &json!({"command": "history.list", "params": {"limit": 1}}));
+    list["result"]["commits"][0]["id"].clone()
 }
 
 #[test]

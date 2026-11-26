@@ -1,6 +1,7 @@
 //! A project's history as a git repository (docs/ROADMAP.md, C8): a project folder that is not in
 //! a repository becomes one on its first save, and each save is a commit; a folder already in a
-//! repository is used as it is, and committed to only when asked.
+//! repository is used as it is: committed to by versions (automatic ones, and those asked for),
+//! not by each save.
 //!
 //! A commit's tree is what the caller hands over ([`Snapshot`]: the project's files as the session
 //! holds them, paths and bytes), not what is on disk, so the same rules can serve projects that
@@ -76,7 +77,8 @@ pub const OURS_KEY: &str = "texcraft.history";
 pub enum Owner {
     /// Made by TeXCraft for this project: every save is a commit.
     Ours,
-    /// Made by someone else (the project's own, or a folder above it): commits only when asked.
+    /// Made by someone else (the project's own, or a folder above it): a save is not a commit,
+    /// versions are.
     Theirs,
 }
 
@@ -96,6 +98,17 @@ pub struct Snapshot {
     /// Hidden folders (`.texcraft/review`) whose files come from `files` too: what is in them in
     /// the repository and not in `files` is deleted. Other hidden entries keep their versions.
     pub owned_dirs: Vec<String>,
+}
+
+/// What `History::amend` did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Amended {
+    /// The commit in its place: the changes since its parents, combined.
+    Replaced(String),
+    /// Nothing changed since the commit, nor its message.
+    Same,
+    /// Its changes all went: the branch is back on its parent (this id).
+    Undone(String),
 }
 
 /// Who made a commit.

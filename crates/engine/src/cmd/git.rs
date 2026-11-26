@@ -352,6 +352,8 @@ fn sync(s: &mut Session, p: &Value) -> Result<Value> {
             params["message"] = json!(crate::describe::message(&before, &files, &|_| None));
             super::forge::run_commit(s, &params)?
         };
+        // The changes went to the branch: the session's versions are not amended any more.
+        s.versions_sent();
         result["sync"] = json!(true);
         result["version"] = version;
         return Ok(result);

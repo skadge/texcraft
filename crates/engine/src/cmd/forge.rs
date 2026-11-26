@@ -381,6 +381,8 @@ pub(super) fn run_pull(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// `forge.commit`, for Sync.
 pub(super) fn run_commit(s: &mut Session, p: &Value) -> Result<Value> {
+    // The project's changes go to the branch: the session's versions are not amended after.
+    s.versions_sent();
     commit(s, p)
 }
 

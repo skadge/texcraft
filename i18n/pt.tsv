@@ -2430,3 +2430,5 @@ unit	{n} s	{n} s
 	{engine}: the document uses {command} ({place})	{engine}: o documento usa {command} ({place})
 	LuaLaTeX: nothing in the document asks for pdfLaTeX	LuaLaTeX: nada no documento pede pdfLaTeX
 	{engine}: chosen in Settings › Building	{engine}: escolhido em Definições › A compilar
+@msg	The branch moved since TeXCraft's last version: a new version is made instead.	O ramo mudou desde a última versão do TeXCraft: é criada uma nova versão em vez disso.
+@msg	The history moved since TeXCraft's last version: a new version is made instead.	O histórico mudou desde a última versão do TeXCraft: é criada uma nova versão em vez disso.
