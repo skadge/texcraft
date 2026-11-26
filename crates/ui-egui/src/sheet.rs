@@ -82,7 +82,11 @@ pub(crate) fn show(ctx: &egui::Context, t: &Tokens, id: &str, width: f32, leave:
         }
         let body = (footer.top() - ui.cursor().top() - t.unit).max(t.row_height);
         ui.data_mut(|d| d.insert_temp(open_key(), Open { id, footer }));
-        egui::ScrollArea::vertical().id_salt(id.with("body")).max_height(body).auto_shrink([false, false]).show(ui, |ui| {
+        let mut area = egui::ScrollArea::vertical().id_salt(id.with("body")).max_height(body).auto_shrink([false, false]);
+        if ui.data_mut(|d| d.remove_temp::<bool>(id.with("to-top"))).unwrap_or(false) {
+            area = area.vertical_scroll_offset(0.0);
+        }
+        area.show(ui, |ui| {
             ui.add_space(t.unit * 3.0);
             add(ui);
             ui.add_space(t.unit * 3.0);
@@ -165,6 +169,12 @@ pub(crate) fn actions(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
 /// Gives the keyboard to the Close or Back of sheet `id` next pass (a page of it opened).
 pub(crate) fn focus_leave(ctx: &egui::Context, id: &str) {
     ctx.data_mut(|d| d.insert_temp(Id::unique(id).with("focus-leave"), true));
+}
+
+/// The sheet `id`'s content starts at its top when it is next drawn (a dialog that shows other
+/// content in it: Settings' sections).
+pub(crate) fn to_top(ctx: &egui::Context, id: &str) {
+    ctx.data_mut(|d| d.insert_temp(Id::unique(id).with("to-top"), true));
 }
 
 /// Whether `ui` is a sheet's content (a phone's dialog).

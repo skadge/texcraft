@@ -25,6 +25,9 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let narrow = crate::sheet::narrow(ctx, &t);
     // On a phone the sections are a list, each opening as a page of its own with Back to it.
     let page = narrow && app.view.settings_page;
+    if narrow && starts_over(app, ctx) {
+        crate::sheet::to_top(ctx, "texcraft-settings");
+    }
     let leave = if page { crate::sheet::Leave::Back(tl!("Back to Settings")) } else { crate::sheet::Leave::Close };
     let mut close = false;
     let shown = crate::sheet::show(ctx, &t, "texcraft-settings", 720.0, leave, |ui| {
@@ -58,7 +61,12 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                 sections(app, ui, &t, false);
             });
             ui.add_space(t.unit * 4.0);
-            egui::ScrollArea::vertical().id_salt("settings-tab").max_height(room).auto_shrink([false, true]).show(ui, |ui| {
+            // Another section starts at its top.
+            let mut area = egui::ScrollArea::vertical().id_salt("settings-tab").max_height(room).auto_shrink([false, true]);
+            if starts_over(app, ui.ctx()) {
+                area = area.vertical_scroll_offset(0.0);
+            }
+            area.show(ui, |ui| {
                 ui.vertical(|ui| {
                     ui.set_min_height(room.min(640.0));
                     ui.spacing_mut().item_spacing.y = t.unit * 3.0;
@@ -75,6 +83,15 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         app.view.dialog = None;
         app.view.settings_page = false;
     }
+}
+
+/// Whether Settings shows another section than on the pass before: it then starts at its top.
+fn starts_over(app: &App, ctx: &egui::Context) -> bool {
+    let key = egui::Id::unique("texcraft-settings-shown");
+    let shown = (app.view.settings_tab, app.view.settings_page);
+    let last: Option<(usize, bool)> = ctx.data_mut(|d| d.get_temp(key));
+    ctx.data_mut(|d| d.insert_temp(key, shown));
+    last.is_some_and(|l| l != shown)
 }
 
 /// Chooses the tab named `name` (its English name in lower case: `editor`, `ai`), if there is one.
