@@ -41,6 +41,19 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.15.0" date="2026-11-26" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.15.0</url>
+      <description>
+        <p>The formatted view reads like the PDF and edits more of the document, first steps for new users, errors where they start, and versions that say what changed.</p>
+        <ul>
+          <li>References, numbers and included files in the formatted view as in the PDF</li>
+          <li>LaTeX, formulas, tables and figures edited in the formatted view</li>
+          <li>An example project, clearer templates and a tip of the day</li>
+          <li>Build errors reported where they start</li>
+          <li>Saved versions that say what changed</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.14.0" date="2026-11-26" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.14.0</url>
       <description>

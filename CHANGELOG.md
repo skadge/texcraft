@@ -5,6 +5,44 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.15.0 (2026-11-26)
+
+The formatted view reads like the PDF and edits more of the document; first steps for new users;
+build errors where they start, and versions that say what changed.
+
+### The formatted view
+
+- Cross-references and citations show what the PDF shows ("(2)", "Figure 1", "[Knuth, 1984]"),
+  from the last build; before one, the key with a "?" and why. Headings, captions, theorems and
+  numbered formulas carry their numbers; labels are a small tag, not text.
+- An included file's text is shown in place under its name, with Edit Here.
+- Parts the view shows as LaTeX are edited in place, as source; formulas open an editor with
+  their typeset preview (desktop).
+- Tables: a header row, merging and splitting cells, a caption and a label. Figures: resized by a
+  handle, captioned in the view, placed and labelled from their menu.
+- The toolbar also shows `\emph` and declarations such as `\bfseries`.
+
+### First steps
+
+- Try an Example: a short paper of our own that shows what TeXCraft does.
+- Template cards say what each template is for, who it is from, its licence in words, and whether
+  it works offline. An empty start page says what to do first.
+- A tip of the day on the start page, each with a button to try it (can be turned off).
+- A dismissible strip pointing to the formatted view, the build log and the user guide.
+
+### Building and history
+
+- An error in an included file (an environment left open, a brace never closed) is reported where
+  it starts, with where TeX noticed it linked too; the build log's button says its count.
+- Each saved version says what changed: the files and, for LaTeX files, the sections ("Edited
+  Introduction and Results (main.tex); added figures/plot.png").
+
+### Keyboard and screen readers
+
+- Tab follows the order things are shown in the top bar, the panels' headers, the toolbar and the
+  rail; Settings and Keyboard Shortcuts on the rail are buttons, not tabs.
+- The question about unsaved changes says what is about to replace the project.
+
 ## 0.14.0 (2026-11-26)
 
 TeXCraft on a phone, projects kept for good in the browser, and what an in-depth review of the
