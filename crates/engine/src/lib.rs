@@ -39,6 +39,7 @@ use texcraft_compile::Job;
 use texcraft_project::{Project, ProjectPath};
 
 /// Why the last forge pull or commit was refused ([`Session::forge_problem`]).
+pub use cmd::clone::{ClonePhase, ImportProblem, folder_free, free_folder, is_ssh, repository_name, typed_address};
 pub use cmd::forge::Problem as ForgeProblem;
 /// Where a sign-in to a forge stands, and why one is not offered.
 pub use cmd::forge_auth::{Progress as SignInProgress, Unavailable as SignInUnavailable};
@@ -223,6 +224,8 @@ pub struct Session {
     forge_lookups: cmd::forge_pick::State,
     /// The push, pull or new repository running in the background (docs/forges.md, step 5).
     git_task: Option<cmd::git::Task>,
+    /// Import a Project's check of a git address and clone (C11).
+    import: cmd::clone::State,
     /// How git's smart HTTP protocol reaches servers: over this build's transport, or a fake.
     #[cfg(not(target_arch = "wasm32"))]
     git_http: cmd::git::GitHttp,
@@ -297,6 +300,7 @@ impl Session {
             forge_auth: cmd::forge_auth::State::default(),
             forge_lookups: cmd::forge_pick::State::default(),
             git_task: None,
+            import: cmd::clone::State::default(),
             #[cfg(not(target_arch = "wasm32"))]
             git_http: cmd::git::default_http(),
             ai: ai::State::default(),

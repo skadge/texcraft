@@ -211,7 +211,7 @@ fn new(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({}))
 }
 
-fn open(s: &mut Session, params: &Value) -> Result<Value> {
+pub(super) fn open(s: &mut Session, params: &Value) -> Result<Value> {
     let path = string(params, "path")?;
     let (project, dir) = match &s.library {
         Some(library) => (library.load(path)?, PathBuf::from(path)),

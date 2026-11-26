@@ -108,6 +108,11 @@ pub(crate) struct State {
     revision: u64,
     /// A server being checked (`forge.check_server` in the background).
     checking: Option<Pending<Probed>>,
+    /// The git servers whose credential is kept in the store (Import a Project's Remember on
+    /// this computer), by host, kept in the preferences by the shell (no secret in them).
+    git_hosts: Vec<String>,
+    /// Goes up when `git_hosts` changes.
+    git_revision: u64,
 }
 
 impl Default for State {
@@ -127,8 +132,21 @@ impl Default for State {
             provided_problems: Vec::new(),
             revision: 0,
             checking: None,
+            git_hosts: Vec::new(),
+            git_revision: 0,
         }
     }
+}
+
+/// Whether `host` reads as a server's name: letters, digits, `.`, `-` and a port.
+fn is_host(host: &str) -> bool {
+    !host.is_empty() && host.len() <= 253 && host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':'))
+}
+
+/// The store's entry of the git credential kept for `host` (a git server's token, Overleaf's
+/// git token).
+fn git_handle(host: &str) -> String {
+    format!("texcraft.git.{}", host.to_ascii_lowercase())
 }
 
 /// The store's entry of the sign-in to `instance`.
@@ -717,6 +735,71 @@ impl Session {
     /// What to register on `instance` for `service`: the browser's page is among the redirects.
     pub fn forge_registration(&self, service: Service, instance: &str) -> Registration {
         servers::registration(service, instance, self.forge_auth.redirect.as_deref())
+    }
+
+    /// The git servers whose credential the store keeps, as the shell kept them (the
+    /// preferences); hosts that are not one are dropped.
+    pub fn restore_git_hosts(&mut self, hosts: Vec<String>) {
+        let mut hosts: Vec<String> = hosts.into_iter().map(|h| h.trim().to_ascii_lowercase()).filter(|h| is_host(h)).collect();
+        hosts.sort();
+        hosts.dedup();
+        self.forge_auth.git_hosts = hosts;
+    }
+
+    /// The git servers whose credential the store keeps, to keep in the preferences (no secret
+    /// in them), and a number that goes up when they change.
+    pub fn git_hosts_saved(&self) -> (&[String], u64) {
+        (&self.forge_auth.git_hosts, self.forge_auth.git_revision)
+    }
+
+    /// The token the store keeps for git server `host`, if it keeps one.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn kept_git_token(&self, host: &str) -> Option<Token> {
+        if !self.forge_auth.git_hosts.iter().any(|h| h.eq_ignore_ascii_case(host)) {
+            return None;
+        }
+        match self.forge_auth.secrets.get(&git_handle(host)) {
+            Ok(Some(secret)) => Token::new(secret.expose()).ok(),
+            Ok(None) => None,
+            Err(e) => {
+                log::warn!("the git credential kept for {host} cannot be read: {e}");
+                None
+            }
+        }
+    }
+
+    /// Keeps `token` for git server `host` in the store (the keychain on the desktop). Says why
+    /// when the store could not keep it.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn keep_git_token(&mut self, host: &str, token: &Token) -> std::result::Result<(), String> {
+        let host = host.to_ascii_lowercase();
+        if !is_host(&host) {
+            return Err(format!("{host} is not a server's name."));
+        }
+        self.forge_auth.secrets.put(&git_handle(&host), &SecretString::new(token.secret().to_owned()))?;
+        if !self.forge_auth.git_hosts.contains(&host) {
+            self.forge_auth.git_hosts.push(host);
+            self.forge_auth.git_hosts.sort();
+            self.forge_auth.git_revision += 1;
+        }
+        Ok(())
+    }
+
+    /// Forgets the credential kept for git server `host`: from the store, and for this session.
+    pub(crate) fn forget_git_token(&mut self, host: &str) -> std::result::Result<bool, String> {
+        let host = host.trim().to_ascii_lowercase();
+        let known = self.forge_auth.git_hosts.contains(&host);
+        self.forge_auth.secrets.remove(&git_handle(&host))?;
+        self.forge_auth.git_hosts.retain(|h| *h != host);
+        if known {
+            self.forge_auth.git_revision += 1;
+        }
+        Ok(known)
+    }
+
+    /// Where a git credential remembered is kept: `keychain`, `tab` or `session`.
+    pub fn git_token_kept(&self) -> &'static str {
+        self.forge_sign_in_kept()
     }
 
     /// Whether a server is being checked.

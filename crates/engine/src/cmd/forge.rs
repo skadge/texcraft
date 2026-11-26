@@ -718,6 +718,9 @@ impl Session {
         if let Some(done) = self.poll_git() {
             return Some(done);
         }
+        if let Some(done) = self.poll_import() {
+            return Some(done);
+        }
         let outcome = match self.forge_task.as_mut()? {
             Task::Open { pending, .. } => pending.poll()?.map(Ended::Opened),
             Task::Commit { pending, .. } => pending.poll()?.map(Ended::Committed),
