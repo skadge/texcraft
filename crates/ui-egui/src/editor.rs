@@ -663,7 +663,7 @@ const GROUPS: [(f32, &[(&str, &str)]); 3] = [
             (tn!("Section"), "edit.section"),
             (tn!("Subsection"), "edit.subsection"),
             (tn!("Subsubsection"), "edit.subsubsection"),
-            (tn!("Paragraph"), "edit.paragraph"),
+            (tn!("Paragraph Heading"), "edit.paragraph"),
             (tn!("Bold"), "edit.bold"),
             (tn!("Italic"), "edit.italic"),
         ],
@@ -671,11 +671,11 @@ const GROUPS: [(f32, &[(&str, &str)]); 3] = [
     (
         160.0,
         &[
-            (tn!("Inline formula"), "edit.math_inline"),
-            (tn!("Displayed formula"), "edit.math_display"),
-            (tn!("Numbered equation"), "edit.equation"),
-            (tn!("Symbols"), "edit.symbols"),
-            (tn!("Cross-reference"), "edit.ref"),
+            (tn!("Inline Formula"), "edit.math_inline"),
+            (tn!("Displayed Formula"), "edit.math_display"),
+            (tn!("Numbered Equation"), "edit.equation"),
+            (tn!("Symbols…"), "edit.symbols"),
+            (tn!("Cross-Reference"), "edit.ref"),
             (tn!("Citation"), "edit.cite"),
             (tn!("Link"), "edit.link"),
         ],
@@ -685,11 +685,17 @@ const GROUPS: [(f32, &[(&str, &str)]); 3] = [
         &[
             (tn!("Figure"), "edit.figure"),
             (tn!("Table"), "edit.table"),
-            (tn!("Bulleted list"), "edit.itemize"),
-            (tn!("Numbered list"), "edit.enumerate"),
+            (tn!("Bulleted List"), "edit.itemize"),
+            (tn!("Numbered List"), "edit.enumerate"),
         ],
     ),
 ];
+
+/// The label of command `id` (`label`, its English), translated: a toolbar entry is named as the
+/// command is in the menus and the shortcuts list.
+fn cmd(id: &str, label: &'static str) -> &'static str {
+    crate::i18n::tid(id, label)
+}
 
 /// A toolbar button that runs `id`.
 fn tool(ui: &mut egui::Ui, t: &Tokens, (icon, label, id): (&str, &str, &'static str), chosen: &mut Option<&'static str>) {
@@ -707,10 +713,10 @@ fn group(ui: &mut egui::Ui, t: &Tokens, index: usize, chosen: &mut Option<&'stat
             egui::Popup::menu(&heading).show(|ui| {
                 ui.set_min_width(180.0);
                 for (label, id, size) in [
-                    (tl!("Section"), "edit.section", 16.0),
-                    (tl!("Subsection"), "edit.subsection", 14.5),
-                    (tl!("Subsubsection"), "edit.subsubsection", 13.5),
-                    (tl!("Paragraph"), "edit.paragraph", 13.0),
+                    (cmd("edit.section", tn!("Section")), "edit.section", 16.0),
+                    (cmd("edit.subsection", tn!("Subsection")), "edit.subsection", 14.5),
+                    (cmd("edit.subsubsection", tn!("Subsubsection")), "edit.subsubsection", 13.5),
+                    (cmd("edit.paragraph", tn!("Paragraph Heading")), "edit.paragraph", 13.0),
                 ] {
                     if menu_entry(ui, egui::RichText::new(label).font(egui::FontId::new(size, crate::fonts::semibold()))) {
                         *chosen = Some(id);
@@ -723,14 +729,14 @@ fn group(ui: &mut egui::Ui, t: &Tokens, index: usize, chosen: &mut Option<&'stat
             tool(ui, t, ("italic", tl!("Italic"), "edit.italic"), chosen);
         }
         1 => {
-            let math = widgets::icon_button(ui, t, "sigma", tl!("Math"), true);
+            let math = widgets::icon_button(ui, t, "sigma", tl!("Formula"), true);
             crate::widgets::keyboard_menu(ui, &math);
             egui::Popup::menu(&math).show(|ui| {
                 ui.set_min_width(180.0);
                 for (label, id) in [
-                    (tl!("Inline formula"), "edit.math_inline"),
-                    (tl!("Displayed formula"), "edit.math_display"),
-                    (tl!("Numbered equation"), "edit.equation"),
+                    (cmd("edit.math_inline", tn!("Inline Formula")), "edit.math_inline"),
+                    (cmd("edit.math_display", tn!("Displayed Formula")), "edit.math_display"),
+                    (cmd("edit.equation", tn!("Numbered Equation")), "edit.equation"),
                 ] {
                     if menu_entry(ui, label) {
                         *chosen = Some(id);
@@ -738,15 +744,15 @@ fn group(ui: &mut egui::Ui, t: &Tokens, index: usize, chosen: &mut Option<&'stat
                 }
             });
             tool(ui, t, ("omega", tl!("Symbols"), "edit.symbols"), chosen);
-            tool(ui, t, ("tag", tl!("Cross-reference"), "edit.ref"), chosen);
+            tool(ui, t, ("tag", cmd("edit.ref", tn!("Cross-Reference")), "edit.ref"), chosen);
             tool(ui, t, ("book-open", tl!("Citation"), "edit.cite"), chosen);
             tool(ui, t, ("link", tl!("Link"), "edit.link"), chosen);
         }
         _ => {
             tool(ui, t, ("image", tl!("Figure"), "edit.figure"), chosen);
             tool(ui, t, ("table", tl!("Table"), "edit.table"), chosen);
-            tool(ui, t, ("list", tl!("Bulleted list"), "edit.itemize"), chosen);
-            tool(ui, t, ("list-ordered", tl!("Numbered list"), "edit.enumerate"), chosen);
+            tool(ui, t, ("list", cmd("edit.itemize", tn!("Bulleted List")), "edit.itemize"), chosen);
+            tool(ui, t, ("list-ordered", cmd("edit.enumerate", tn!("Numbered List")), "edit.enumerate"), chosen);
         }
     }
 }
@@ -813,7 +819,7 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
                             ui.separator();
                         }
                         for (label, id) in GROUPS[*i].1 {
-                            if menu_entry(ui, crate::i18n::t(label)) {
+                            if menu_entry(ui, cmd(id, label)) {
                                 chosen = Some(id);
                             }
                         }
