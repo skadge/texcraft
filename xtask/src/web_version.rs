@@ -14,6 +14,9 @@
 //! as for every Trunk build. A build without this step keeps the plain names, which the app and
 //! the worker also take.
 //!
+//! It also writes `version.txt`, the build's version, which an open page compares with its own
+//! once a day to say that a new version is ready (`texcraft_engine::update`, docs/ROADMAP.md, A8).
+//!
 //! The worker's Cache Storage stays consistent: its caches are named after a hash of retex's
 //! module and of the tree's index, whatever the files are called.
 
@@ -68,6 +71,7 @@ pub fn run(dir: &Path) -> Result<String, String> {
     write(dir, &format!("retex-{h}.wasm"), &retex)?;
     write(dir, &format!("engine-worker-{h}_loader.js"), renamed.as_bytes())?;
     write(dir, "index.html", page.as_bytes())?;
+    write(dir, "version.txt", format!("{}\n", env!("CARGO_PKG_VERSION")).as_bytes())?;
     for old in ["engine-worker.js", "engine-worker_bg.wasm", "retex.wasm", "engine-worker_loader.js"] {
         std::fs::remove_file(dir.join(old)).map_err(|e| format!("{old}: {e}"))?;
     }
@@ -101,6 +105,9 @@ mod tests {
             assert!(dir.join(name).exists(), "the loader names {name}, which is not there");
         }
         assert!(loader.contains(&first) && dir.join(format!("retex-{first}.wasm")).exists());
+        // The version an open page compares with its own.
+        let version = std::fs::read_to_string(dir.join("version.txt")).unwrap();
+        assert_eq!(version.trim(), env!("CARGO_PKG_VERSION"));
         assert!(!dir.join("retex.wasm").exists() && !dir.join("engine-worker_loader.js").exists(), "the plain names are left");
         // Another retex: every name changes.
         build(&dir, b"retex 2");

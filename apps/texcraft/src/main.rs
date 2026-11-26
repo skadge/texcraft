@@ -148,6 +148,13 @@ impl eframe::App for Shell {
         if let Err(e) = self.settings.flush() {
             log::warn!("saving the preferences: {e}");
         }
+        // Restart Now, after an update put the new AppImage in place: the new version starts as
+        // this one ends.
+        if let Some(program) = self.app.restart_program()
+            && let Err(e) = texcraft_engine::update::appimage::start(program)
+        {
+            log::error!("updates: {e}");
+        }
     }
 }
 
@@ -290,6 +297,8 @@ fn run() -> eframe::Result {
     session.set_forge_secrets(Arc::new(texcraft_engine::ai::Keychain));
     let (provided, problems) = provided_servers(settings.dir());
     session.set_forge_provided_servers(provided, problems);
+    // The daily update check, and the update this kind of install allows (docs/ROADMAP.md, A8).
+    session.enable_updates(texcraft_engine::update::Install::detect());
     if let Some(data) = dirs::data_dir() {
         session.set_template_store(data.join("TeXCraft").join("templates"));
     }
