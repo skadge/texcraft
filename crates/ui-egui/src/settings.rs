@@ -6,6 +6,7 @@ use serde_json::json;
 use texcraft_engine::{Engine, Output, PdfX};
 
 use crate::dialogs::Dialog;
+use crate::i18n::trn;
 use crate::prefs::ThemePref;
 use crate::theme::Tokens;
 use crate::{App, widgets};
@@ -23,6 +24,10 @@ const TABS: &[(&str, &str)] = &[
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let t = app.tokens;
     let narrow = crate::sheet::narrow(ctx, &t);
+    // Escape clears the search first; the next one closes Settings.
+    if !app.view.settings_search.is_empty() && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+        app.view.settings_search.clear();
+    }
     // On a phone the sections are a list, each opening as a page of its own with Back to it.
     let page = narrow && app.view.settings_page;
     if narrow && starts_over(app, ctx) {
@@ -39,7 +44,13 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                 section(app, ui, &t);
             } else {
                 crate::dialogs::title(ui, &t, tl!("Settings"));
-                sections(app, ui, &t, true);
+                search_field(app, ui, ui.available_width());
+                if app.view.settings_search.trim().is_empty() {
+                    sections(app, ui, &t, true);
+                } else {
+                    ui.spacing_mut().item_spacing.y = t.unit * 3.0;
+                    results(app, ui, &t);
+                }
             }
             return;
         }
@@ -49,19 +60,22 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                 if widgets::icon_button(ui, &t, "x", tl!("Close"), true).clicked() {
                     close = true;
                 }
+                // The search beside the title: it takes no room from the sections.
+                search_field(app, ui, ui.available_width().min(260.0));
             });
         });
         ui.add_space(t.unit * 3.0);
         // As tall as the window allows (the AI tab's Connect is not below the fold); a tab taller
         // than that (a long language, a small window) scrolls, so the title and Close stay.
         let room = (ui.ctx().content_rect().height() - 160.0).max(200.0);
+        let searching = !app.view.settings_search.trim().is_empty();
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
                 ui.set_width(160.0);
                 sections(app, ui, &t, false);
             });
             ui.add_space(t.unit * 4.0);
-            // Another section starts at its top.
+            // Another section, or other results, start at their top.
             let mut area = egui::ScrollArea::vertical().id_salt("settings-tab").max_height(room).auto_shrink([false, true]);
             if starts_over(app, ui.ctx()) {
                 area = area.vertical_scroll_offset(0.0);
@@ -70,7 +84,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                 ui.vertical(|ui| {
                     ui.set_min_height(room.min(640.0));
                     ui.spacing_mut().item_spacing.y = t.unit * 3.0;
-                    section(app, ui, &t);
+                    if searching { results(app, ui, &t) } else { section(app, ui, &t) }
                 });
             });
         });
@@ -82,20 +96,199 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     if close || shown.close {
         app.view.dialog = None;
         app.view.settings_page = false;
+        app.view.settings_search.clear();
     }
 }
 
-/// Whether Settings shows another section than on the pass before: it then starts at its top.
+/// Ctrl+F (Cmd+F on a Mac) while Settings is open gives the keyboard to its search.
+pub(crate) fn claim_keys(app: &mut App, ctx: &egui::Context) {
+    if !matches!(app.view.dialog, Some(Dialog::Settings)) {
+        return;
+    }
+    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F)) {
+        app.view.settings_search_focus = true;
+        // On a phone the search is on the list of sections.
+        app.view.settings_page = false;
+    }
+}
+
+/// Whether Settings shows something else than on the pass before (another section, or the
+/// search's results for other words): it then starts at its top.
 fn starts_over(app: &App, ctx: &egui::Context) -> bool {
     let key = egui::Id::unique("texcraft-settings-shown");
-    let shown = (app.view.settings_tab, app.view.settings_page);
-    let last: Option<(usize, bool)> = ctx.data_mut(|d| d.get_temp(key));
-    ctx.data_mut(|d| d.insert_temp(key, shown));
+    let shown = (app.view.settings_tab, app.view.settings_page, app.view.settings_search.trim().to_owned());
+    let last: Option<(usize, bool, String)> = ctx.data_mut(|d| d.get_temp(key));
+    ctx.data_mut(|d| d.insert_temp(key, shown.clone()));
     last.is_some_and(|l| l != shown)
 }
 
+/// The search field.
+fn search_field(app: &mut App, ui: &mut egui::Ui, width: f32) {
+    let edit = ui.add(egui::TextEdit::singleline(&mut app.view.settings_search).hint_text(tl!("Search settings")).desired_width(width));
+    if std::mem::take(&mut app.view.settings_search_focus) {
+        edit.request_focus();
+    }
+    let _ = edit.accessible_name(tl!("Search settings"));
+}
+
+/// How many settings the search found, said to screen readers as it changes. Counted on the
+/// pass before: the results are drawn after this line.
+fn found_line(ui: &mut egui::Ui, t: &Tokens) {
+    let found: usize = ui.data(|d| d.get_temp(found_key())).unwrap_or(0);
+    let said = if found == 0 { tl!("No setting matches the search.").to_owned() } else { trn(found, "{n} setting found", "{n} settings found") };
+    let label = ui.label(RichText::new(&said).font(t.small()).color(t.text_muted));
+    crate::status::announce(ui, &label, &said);
+}
+
+fn found_key() -> egui::Id {
+    egui::Id::unique("texcraft-settings-found")
+}
+
+/// What the search looks for while results are drawn, and how many settings matched.
+#[derive(Clone, Default)]
+struct Filter {
+    /// The words looked for, folded ([`fold`]): a setting matches when it has them all.
+    words: Vec<String>,
+    /// The section being searched, by name: its settings match its name's words too.
+    section: &'static str,
+    /// Its name is not shown yet (it is, above its first match).
+    heading: bool,
+    /// The settings shown, by name and help, so a setting in two sections shows once.
+    shown: Vec<(String, String)>,
+}
+
+fn filter_key() -> egui::Id {
+    egui::Id::unique("texcraft-settings-filter")
+}
+
+/// The search's filter, while results are drawn.
+fn filter(ui: &egui::Ui) -> Option<Filter> {
+    ui.data(|d| d.get_temp::<Filter>(filter_key()))
+}
+
+/// `text` in lower case, without accents, so "théme" finds "Theme" and "thème".
+fn fold(text: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    text.nfd().filter(|c| !unicode_normalization::char::is_combining_mark(*c)).flat_map(char::to_lowercase).collect()
+}
+
+impl Filter {
+    fn new(search: &str) -> Self {
+        Self { words: fold(search).split_whitespace().map(str::to_owned).collect(), section: "", heading: false, shown: Vec::new() }
+    }
+
+    /// Whether the texts, as shown and as their English, have every word.
+    fn matches(&self, texts: &[&str]) -> bool {
+        let mut all = String::new();
+        for text in texts {
+            all.push_str(&fold(text));
+            all.push('\n');
+            if let Some(english) = crate::i18n::english(text) {
+                all.push_str(&fold(english));
+                all.push('\n');
+            }
+        }
+        self.words.iter().all(|w| all.contains(w.as_str()))
+    }
+}
+
+/// While results are drawn: whether the setting `name` (with `help`) is one, its section's name
+/// shown above the first of them. Otherwise every setting is shown.
+fn wanted(ui: &mut egui::Ui, t: &Tokens, name: &str, help: &str) -> bool {
+    let Some(mut f) = filter(ui) else { return true };
+    let key = (name.to_owned(), help.to_owned());
+    if !f.matches(&[name, help, f.section]) || f.shown.contains(&key) {
+        return false;
+    }
+    f.shown.push(key);
+    if std::mem::take(&mut f.heading) {
+        section_heading(ui, t, f.section);
+    }
+    ui.data_mut(|d| d.insert_temp(filter_key(), f));
+    true
+}
+
+/// A section's name above its settings found.
+fn section_heading(ui: &mut egui::Ui, t: &Tokens, name: &str) {
+    ui.add_space(t.unit * 2.0);
+    let r = ui.label(RichText::new(name).font(t.title()));
+    ui.ctx().accesskit_node_builder(r.id, |node| {
+        node.set_role(egui::accesskit::Role::Heading);
+        node.set_label(name);
+    });
+}
+
+/// Whether results are drawn (a section's text that is not a setting is left out then).
+fn searching(ui: &egui::Ui) -> bool {
+    filter(ui).is_some()
+}
+
+/// The search's results: the settings that match, under their sections' names, each usable here.
+/// AI and Accounts, not made of settings, show whole when their words match.
+fn results(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    found_line(ui, t);
+    let mut filter = Filter::new(&app.view.settings_search);
+    for (i, (label, _)) in TABS.iter().enumerate() {
+        let name = crate::i18n::t(label);
+        (filter.section, filter.heading) = (name, true);
+        ui.data_mut(|d| d.insert_temp(filter_key(), filter.clone()));
+        match i {
+            0..=4 => section_at(app, ui, t, i),
+            _ => {
+                let terms = whole_section_terms(i);
+                let mut texts = vec![name];
+                texts.extend(terms.iter().map(|t| crate::i18n::t(t)));
+                if filter.matches(&texts) {
+                    ui.data_mut(|d| d.remove::<Filter>(filter_key()));
+                    section_heading(ui, t, name);
+                    section_at(app, ui, t, i);
+                    filter.shown.push((name.to_owned(), String::new()));
+                    continue;
+                }
+            }
+        }
+        if let Some(f) = ui.data_mut(|d| d.remove_temp::<Filter>(filter_key())) {
+            filter.shown = f.shown;
+        }
+    }
+    ui.data_mut(|d| d.remove::<Filter>(filter_key()));
+    let found = filter.shown.len();
+    if ui.data(|d| d.get_temp::<usize>(found_key())) != Some(found) {
+        ui.data_mut(|d| d.insert_temp(found_key(), found));
+        ui.ctx().request_repaint();
+    }
+}
+
+/// What the sections not made of settings are searched by, besides their names.
+fn whole_section_terms(tab: usize) -> &'static [&'static str] {
+    match tab {
+        5 => &[tn!("Endpoint"), tn!("Model"), tn!("Token"), tn!("Connect"), tn!("Test Connection")],
+        _ => &[
+            tn!("GitLab (gitlab.com)"),
+            tn!("GitHub (github.com)"),
+            tn!("Sign In with GitLab"),
+            tn!("Sign In with GitHub"),
+            tn!("Add a GitLab Server…"),
+            tn!("Add a GitHub Enterprise Server…"),
+        ],
+    }
+}
+
+/// Opens Settings: `{"tab": "editor"}` on that tab (by its English name, in lower case);
+/// `{"search": "font"}` with the settings that match those words.
+pub(crate) fn open(app: &mut App, params: &serde_json::Value) {
+    if let Some(tab) = params.get("tab").and_then(serde_json::Value::as_str) {
+        choose_tab(app, tab);
+    }
+    if let Some(words) = params.get("search").and_then(serde_json::Value::as_str) {
+        app.view.settings_search = words.to_owned();
+        app.view.settings_page = false;
+    }
+    app.view.dialog = Some(Dialog::Settings);
+}
+
 /// Chooses the tab named `name` (its English name in lower case: `editor`, `ai`), if there is one.
-pub(crate) fn choose_tab(app: &mut App, name: &str) {
+fn choose_tab(app: &mut App, name: &str) {
     if let Some(i) = TABS.iter().position(|(label, _)| label.eq_ignore_ascii_case(name)) {
         app.view.settings_tab = i;
         app.view.settings_page = true;
@@ -127,7 +320,12 @@ fn sections(app: &mut App, ui: &mut egui::Ui, t: &Tokens, list: bool) {
 
 /// The section chosen.
 fn section(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
-    match app.view.settings_tab {
+    section_at(app, ui, t, app.view.settings_tab);
+}
+
+/// The section `tab`.
+fn section_at(app: &mut App, ui: &mut egui::Ui, t: &Tokens, tab: usize) {
+    match tab {
         0 => appearance(app, ui, t),
         1 => editor(app, ui, t),
         2 => building(app, ui, t),
@@ -141,6 +339,9 @@ fn section(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
 /// A setting: its name and explanation on the left, its control on the right. The control's
 /// response, when it returns one, is named after the setting (AGENTS.md rule 21).
 fn setting(ui: &mut egui::Ui, t: &Tokens, name: &str, help: &str, control: impl FnOnce(&mut egui::Ui) -> Option<egui::Response>) {
+    if !wanted(ui, t, name, help) {
+        return;
+    }
     // Too narrow for both side by side (a phone): the control goes under its explanation.
     if ui.available_width() < 480.0 {
         ui.vertical(|ui| {
@@ -291,6 +492,9 @@ fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     );
     spelling(app, ui, t);
     grammar(app, ui, t);
+    if searching(ui) {
+        return;
+    }
     let preview =
         egui::text::LayoutJob::simple_singleline("\\section{Introduction} % E = mc^2".to_owned(), app.tokens.code_font(), app.tokens.syntax_command);
     egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner()).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
@@ -520,9 +724,16 @@ fn building(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
 fn hidden_messages(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     let project = app.session.hidden_for_project();
     let user = app.session.hidden_for_user().to_vec();
-    ui.add_space(t.unit * 3.0);
-    ui.label(RichText::new(tl!("Hidden messages")).font(t.strong()));
+    // The search finds the kinds hidden, not this heading.
+    let searching = searching(ui);
+    if !searching {
+        ui.add_space(t.unit * 3.0);
+        ui.label(RichText::new(tl!("Hidden messages")).font(t.strong()));
+    }
     if project.is_empty() && user.is_empty() {
+        if searching {
+            return;
+        }
         let none = tl!("No kind of message is hidden. In the build log, Hide Like This hides a warning's kind, here or in all projects.");
         ui.label(RichText::new(none).font(t.small()).color(t.text_muted));
         return;
@@ -638,13 +849,15 @@ fn review(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             setting(ui, t, tl!("Your key"), tl!("Made on this computer for your comments; others see this short form of it."), |ui| {
                 Some(ui.label(RichText::new(fingerprint).font(t.code_font()).color(t.text)))
             });
-            ui.label(
-                RichText::new(tl!(
-                    "The key's secret half is kept in the preferences file. There are no accounts: the name and key are all a comment carries."
-                ))
-                .font(t.small())
-                .color(t.text_muted),
-            );
+            if !searching(ui) {
+                ui.label(
+                    RichText::new(tl!(
+                        "The key's secret half is kept in the preferences file. There are no accounts: the name and key are all a comment carries."
+                    ))
+                    .font(t.small())
+                    .color(t.text_muted),
+                );
+            }
         }
         None => {
             app.view.identity_draft = name.clone();

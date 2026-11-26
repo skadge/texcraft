@@ -9368,6 +9368,7 @@ dependencies = [
  "texcraft-preview",
  "texcraft-templates",
  "texcraft-vim",
+ "unicode-normalization",
 ]
 
 [[package]]

@@ -168,7 +168,8 @@ fn settings_on_a_phone_is_a_list_of_sections_each_a_page_with_back() -> Result<(
     let mut h = phone()?;
     ui_cmd::run(h.state_mut(), "app.settings");
     run(&mut h);
-    let sections: Vec<String> = controls(&h).into_iter().map(|(n, _)| n).filter(|n| n != "Close").collect();
+    // The list's rows, after Close and the search over them.
+    let sections: Vec<String> = controls(&h).into_iter().map(|(n, _)| n).filter(|n| n != "Close" && n != "Search settings").collect();
     assert!(sections.len() >= 6, "Settings does not list its sections: {sections:?}");
     assert!(h.query_all_by_role(Role::Tab).all(|n| !label(&n).starts_with("Appearance")), "the sections are still tabs");
     let mut found = check(&mut h, "Settings", &[], &[]);

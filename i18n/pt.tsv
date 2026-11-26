@@ -2466,3 +2466,6 @@ unit	{n} s	{n} s
 	{engine}: chosen in Settings › Building	{engine}: escolhido em Definições › A compilar
 @msg	The branch moved since TeXCraft's last version: a new version is made instead.	O ramo mudou desde a última versão do TeXCraft: é criada uma nova versão em vez disso.
 @msg	The history moved since TeXCraft's last version: a new version is made instead.	O histórico mudou desde a última versão do TeXCraft: é criada uma nova versão em vez disso.
+	Search settings	Pesquisar nas definições
+	No setting matches the search.	Nenhuma definição corresponde à pesquisa.
+@plural	{n} setting found|{n} settings found	{n} definição encontrada|{n} definições encontradas

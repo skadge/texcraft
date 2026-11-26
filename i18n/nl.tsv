@@ -2466,3 +2466,6 @@ unit	{n} s	{n} s
 	{engine}: chosen in Settings › Building	{engine}: gekozen in Instellingen › Bezig met bouwen
 @msg	The branch moved since TeXCraft's last version: a new version is made instead.	De branch is verplaatst sinds de laatste versie van TeXCraft: er wordt in plaats daarvan een nieuwe versie gemaakt.
 @msg	The history moved since TeXCraft's last version: a new version is made instead.	De geschiedenis is veranderd sinds de laatste versie van TeXCraft: er wordt in plaats daarvan een nieuwe versie gemaakt.
+	Search settings	Instellingen doorzoeken
+	No setting matches the search.	Geen instelling past bij de zoekopdracht.
+@plural	{n} setting found|{n} settings found	{n} instelling gevonden|{n} instellingen gevonden
