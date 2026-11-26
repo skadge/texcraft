@@ -48,6 +48,7 @@ mod symbols;
 pub use picks::{Pick, PickKind, PickRequest};
 pub use start::{BrowserStorage, THUMBNAIL_WIDTH, Thumbnail};
 mod history;
+mod import;
 mod panes;
 mod picks;
 mod preview;
@@ -286,6 +287,13 @@ pub struct App {
     autosave: autosave::Autosave,
     /// The project's remote and the Sync under way.
     sync: sync::SyncView,
+    /// The system's documents folder, where Import a Project puts new folders until another is
+    /// chosen (the shell says where it is).
+    documents: Option<std::path::PathBuf>,
+    /// Import a Project's Zip File: the folder to unzip the new project into (the desktop).
+    zip_into: Option<std::path::PathBuf>,
+    /// The git servers' credentials last put in the preferences, by revision.
+    git_hosts_kept: u64,
 }
 
 impl App {
@@ -302,6 +310,7 @@ impl App {
         session.set_author(prefs.identity.as_ref().map(prefs::Identity::author));
         session.restore_ai(prefs.ai.clone());
         session.restore_forge_servers(prefs.forge_servers.clone());
+        session.restore_git_hosts(prefs.git_hosts.clone());
         session.settings.spelling = prefs.spelling.clone();
         session.settings.grammar = prefs.grammar.clone();
         session.settings.hidden_messages = prefs.hidden_messages.clone();
@@ -394,6 +403,9 @@ impl App {
             symbols: symbols::Palette::default(),
             autosave: autosave::Autosave::default(),
             sync: sync::SyncView::default(),
+            documents: None,
+            zip_into: None,
+            git_hosts_kept: 0,
         };
         app.remember_project();
         app
@@ -509,7 +521,7 @@ impl App {
             }
             dialogs::Next::OpenProject(folder) => self.open_project(&folder),
             dialogs::Next::PickProject => ui_cmd::pick_project(self),
-            dialogs::Next::OpenFromForge => forge::ask_open(self),
+            dialogs::Next::Import(source, address) => import::open_at(self, source, &address),
             dialogs::Next::ImportProject(params, name) => self.import_project(params, name),
         }
     }
@@ -541,6 +553,12 @@ impl App {
     /// Whether the user chose to quit since the last call; the shell then closes the window.
     pub fn take_quit(&mut self) -> bool {
         std::mem::take(&mut self.quit)
+    }
+
+    /// The system's documents folder, where Import a Project makes new folders until another is
+    /// chosen (the desktop app gives it).
+    pub fn set_documents_dir(&mut self, dir: Option<std::path::PathBuf>) {
+        self.documents = dir;
     }
 
     /// Shows the start page (the desktop app does when it starts without a project).

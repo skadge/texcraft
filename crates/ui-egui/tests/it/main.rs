@@ -34,6 +34,7 @@ mod goto_file;
 mod hidden_messages;
 mod history;
 mod image_drop;
+mod import;
 mod insert;
 mod keyboard_paths;
 mod languages;

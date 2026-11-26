@@ -36,8 +36,21 @@ pub(crate) struct Row {
     pub place: String,
     pub shortcut: Option<String>,
     pub enabled: Result<(), String>,
+    /// Another name it is found by and that is not shown: a label it had before
+    /// (standards/naming.md rule 6).
+    alias: Option<String>,
     /// Byte offsets of the label's characters the query matched.
     marks: Vec<usize>,
+}
+
+/// The label a command had before it was renamed or folded into another, by the command that
+/// does it now: a search finds it under its old name too.
+fn alias(id: &str) -> Option<String> {
+    match id {
+        // Open from GitLab or GitHub… is a card of Import a Project now.
+        "project.import_dialog" => Some(tl!("Open from GitLab or GitHub").to_owned()),
+        _ => None,
+    }
 }
 
 /// View commands that need what only their own control gives, or that only make sense where
@@ -53,7 +66,7 @@ pub(crate) fn rows(app: &App) -> Vec<Row> {
     let engine = cmd::all().iter().filter(|c| (!c.menu.is_empty() || c.shortcut.is_some()) && !browser_only(c.id)).map(|c| {
         let (label, enabled) = ui_cmd::menu_entry(app, c.id);
         let place = c.menu.first().map_or_else(String::new, |m| crate::i18n::t(m).to_owned());
-        Row { id: c.id, label: label.to_owned(), place, shortcut: app.keys.shortcut_text(c.id), enabled, marks: Vec::new() }
+        Row { id: c.id, label: label.to_owned(), place, shortcut: app.keys.shortcut_text(c.id), enabled, alias: alias(c.id), marks: Vec::new() }
     });
     let view = UI_COMMANDS.iter().filter(|c| listed_view_command(c.id, c.menu)).map(|c| {
         let (label, enabled) = ui_cmd::menu_entry(app, c.id);
@@ -63,6 +76,7 @@ pub(crate) fn rows(app: &App) -> Vec<Row> {
             place: crate::i18n::t(c.menu).to_owned(),
             shortcut: app.keys.shortcut_text(c.id),
             enabled,
+            alias: alias(c.id),
             marks: Vec::new(),
         }
     });
@@ -83,10 +97,12 @@ pub(crate) fn filter(query: &str, rows: Vec<Row>) -> Vec<Row> {
     }
     let mut scored: Vec<(i64, Row)> = rows
         .into_iter()
-        .filter_map(|mut r| {
-            let (score, marks) = crate::goto_file::score(&query, &r.label)?;
-            r.marks = marks;
-            Some((score, r))
+        .filter_map(|mut r| match crate::goto_file::score(&query, &r.label) {
+            Some((score, marks)) => {
+                r.marks = marks;
+                Some((score, r))
+            }
+            None => r.alias.as_deref().and_then(|a| crate::goto_file::score(&query, a)).map(|(score, _)| (score, r)),
         })
         .collect();
     // Commands that can run now first, then the best matches, shorter names breaking ties.
@@ -225,7 +241,7 @@ mod tests {
 
     fn row(id: &'static str, label: &str, enabled: bool) -> Row {
         let enabled = if enabled { Ok(()) } else { Err(String::new()) };
-        Row { id, label: label.to_owned(), place: String::new(), shortcut: None, enabled, marks: Vec::new() }
+        Row { id, label: label.to_owned(), place: String::new(), shortcut: None, enabled, alias: None, marks: Vec::new() }
     }
 
     #[test]

@@ -797,6 +797,13 @@ impl Session {
         Ok(known)
     }
 
+    /// Whether a credential for git server `host` is known: given in this session, or kept in the
+    /// store (never which one).
+    pub fn has_git_credential(&self, host: &str) -> bool {
+        let host = host.to_ascii_lowercase();
+        self.forge_tokens.contains_key(&format!("https://{host}")) || self.forge_auth.git_hosts.contains(&host)
+    }
+
     /// Where a git credential remembered is kept: `keychain`, `tab` or `session`.
     pub fn git_token_kept(&self) -> &'static str {
         self.forge_sign_in_kept()

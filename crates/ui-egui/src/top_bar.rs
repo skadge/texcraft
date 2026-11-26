@@ -332,7 +332,7 @@ pub(crate) fn icon_for(id: &str) -> Option<&'static str> {
         "edit.spelling.ignore" | "edit.grammar.ignore" => "eraser",
         "edit.grammar.rule_off" => "x",
         "project.open" => "folder-open",
-        "forge.open" => "download",
+        "forge.open" | "project.import_dialog" => "import",
         "forge.commit" => "git-commit-horizontal",
         "forge.pull" => "refresh-cw",
         "project.save" => "download",

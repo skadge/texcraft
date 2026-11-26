@@ -1,7 +1,7 @@
 //! Dialogs on a phone (docs/ROADMAP.md, A12): below the narrow width every dialog is a sheet over
 //! the window, its Close at the top and its actions in a bar at the bottom. In each family —
-//! the one-line prompts and questions, About, Settings, the template gallery, Open from GitLab or
-//! GitHub, Save to GitHub, Make with AI, Go to File — every control lies inside the window and
+//! the one-line prompts and questions, About, Settings, the template gallery, Import a Project
+//! (its sources and its GitLab page), Save to GitHub, Make with AI, Go to File — every control lies inside the window and
 //! apart from the others (what scrolls under the bottom bar is reached by scrolling), and the
 //! keyboard reaches Close and the actions. Settings' sections are a list; each opens as a page
 //! whose Back returns to it.
@@ -219,8 +219,11 @@ fn opening_from_and_saving_to_a_forge_fit_a_phone() -> Result<(), String> {
     run(&mut h);
     h.get_by_label("Don't Save").click();
     run(&mut h);
-    found.extend(check(&mut h, "Open from GitLab or GitHub", &["Open", "Cancel"], &["Cancel"]));
+    found.extend(check(&mut h, "Import from GitLab", &["Import", "Cancel"], &["Cancel"]));
     close(&mut h);
+    ui_cmd::run(h.state_mut(), "project.import_dialog");
+    run(&mut h);
+    found.extend(problems(&h, "Import a Project", &[]));
     ui_cmd::run(h.state_mut(), "forge.save_to_github");
     run(&mut h);
     found.extend(problems(&h, "Save Project to GitHub", &["Cancel"]));

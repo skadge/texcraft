@@ -300,6 +300,8 @@ fn run() -> eframe::Result {
     }
     app.set_native_pickers(true);
     app.set_file_manager(true);
+    // Import a Project makes its folders in the documents folder until another is chosen.
+    app.set_documents_dir(dirs::document_dir());
     for project in &settings.get().0.recent {
         if let Some(thumbnail) = thumbnails::load(project) {
             app.set_thumbnail(thumbnail);

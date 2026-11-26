@@ -81,6 +81,12 @@ pub struct Prefs {
     pub first_steps_seen: bool,
     /// The kinds of build message hidden in every project (Hide Messages Like This).
     pub hidden_messages: Vec<String>,
+    /// The folder Import a Project makes its clones and unzipped projects in, once one was
+    /// chosen with Change… (the system's documents folder until then).
+    pub clone_folder: Option<String>,
+    /// The git servers whose credential is kept in the keychain (Remember on this computer), by
+    /// host; the credentials themselves are in the keychain, never here.
+    pub git_hosts: Vec<String>,
 }
 
 /// The name and key a person's comments carry (docs/collaboration-roadmap.md, R1). No accounts:
@@ -143,6 +149,8 @@ impl Default for Prefs {
             ai_instructions: Vec::new(),
             show_tips: true,
             first_steps_seen: false,
+            clone_folder: None,
+            git_hosts: Vec::new(),
         }
     }
 }

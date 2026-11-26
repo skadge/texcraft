@@ -119,7 +119,7 @@ fn longer_languages_fit_the_main_window_settings_and_dialogs() {
     let mut found = problems(&h, "main window", &Vec::new());
     let window = controls(&h);
     // Keyboard Shortcuts is craft-keymap's dialog, laid out and tested there.
-    for (screen, command) in [("About", "help.about"), ("Go to File", "view.go_to_file")] {
+    for (screen, command) in [("About", "help.about"), ("Go to File", "view.go_to_file"), ("Import a Project", "project.import_dialog")] {
         ui_cmd::run(h.state_mut(), command);
         run(&mut h);
         found.extend(problems(&h, screen, &window));

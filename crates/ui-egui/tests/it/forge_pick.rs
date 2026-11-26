@@ -1,4 +1,4 @@
-//! The Open dialog's project suggestions and branch list (docs/forges.md, "Choosing a project
+//! Import a Project's GitHub page: the project suggestions and branch list (docs/forges.md, "Choosing a project
 //! and a branch"), against the fake GitHub: typing filters the suggestions, Down and Enter choose
 //! one by keyboard and its branches fill the drop-down with the default one chosen, Escape closes
 //! the list and keeps the text, and the list is a named list box whose count is announced.
@@ -23,9 +23,7 @@ fn github() -> Fake {
 /// The Open dialog on GitHub with the token typed, and `text` typed into the project field.
 fn dialog(fake: &Fake, text: &str) -> Harness<'static, App> {
     let mut h = harness(fake);
-    ui_cmd::run(h.state_mut(), "forge.open");
-    h.run();
-    h.get_by_role_and_label(Role::RadioButton, "GitHub: Service").click();
+    ui_cmd::run_with(h.state_mut(), "project.import_dialog", &serde_json::json!({"source": "github"}));
     h.run();
     if h.query_by_label("Personal access token").is_none() {
         h.get_by_label("Use a personal access token instead").click();
@@ -35,9 +33,9 @@ fn dialog(fake: &Fake, text: &str) -> Harness<'static, App> {
     h.run();
     h.get_by_label("Personal access token").type_text(TOKEN);
     quiet(&mut h);
-    h.get_by_role_and_label(Role::EditableComboBox, "Project address").click();
+    h.get_by_role_and_label(Role::EditableComboBox, "Project").click();
     h.run();
-    h.get_by_role_and_label(Role::EditableComboBox, "Project address").type_text(text);
+    h.get_by_role_and_label(Role::EditableComboBox, "Project").type_text(text);
     quiet(&mut h);
     h
 }
@@ -61,12 +59,12 @@ fn typing_filters_the_suggestions_in_a_named_list_whose_count_is_announced() {
     assert!(all[1].contains("Public") && all[1].contains("default branch trunk"), "{all:?}");
     let list = h.get_by_role(Role::ListBox);
     assert_eq!(list.accesskit_node().label().as_deref(), Some("Projects"));
-    let field = h.get_by_role_and_label(Role::EditableComboBox, "Project address");
+    let field = h.get_by_role_and_label(Role::EditableComboBox, "Project");
     assert_eq!(field.accesskit_node().data().is_expanded(), Some(true), "the field does not say its list is open");
     let announced = |h: &Harness<'_, App>, text: &str| h.query_all_by_label_contains(text).any(|n| n.accesskit_node().live() != Live::Off);
     assert!(announced(&h, "2 suggestions"), "the count is not announced");
 
-    h.get_by_role_and_label(Role::EditableComboBox, "Project address").type_text("da/th");
+    h.get_by_role_and_label(Role::EditableComboBox, "Project").type_text("da/th");
     quiet(&mut h);
     let filtered = options(&h);
     assert_eq!(filtered.len(), 1, "typing did not filter: {filtered:?}");
@@ -88,9 +86,9 @@ fn down_and_enter_choose_a_project_and_its_branches_fill_the_list_with_the_defau
 
     key(&mut h, egui::Key::Enter);
     assert!(h.query_by_role(Role::ListBox).is_none(), "the list stayed open");
-    let field = h.get_by_role_and_label(Role::EditableComboBox, "Project address");
+    let field = h.get_by_role_and_label(Role::EditableComboBox, "Project");
     assert_eq!(field.accesskit_node().value().as_deref(), Some("https://github.com/ada/paper"));
-    assert!(h.query_by_label("Open from GitLab or GitHub").is_some(), "Enter on a suggestion opened the project");
+    assert!(h.query_by_label("Import from GitHub").is_some(), "Enter on a suggestion opened the project");
     // The branches, listed in a drop-down with the default one chosen.
     let branch = h.get_by_role_and_label(Role::ComboBox, "Branch");
     let shown = format!("{:?} {:?}", branch.accesskit_node().value(), branch.accesskit_node().label());
@@ -105,10 +103,10 @@ fn escape_closes_the_list_and_keeps_the_text_and_the_dialog() {
     assert!(h.query_by_role(Role::ListBox).is_some(), "no list to close");
     key(&mut h, egui::Key::Escape);
     assert!(h.query_by_role(Role::ListBox).is_none(), "Escape did not close the list");
-    let field = h.get_by_role_and_label(Role::EditableComboBox, "Project address");
+    let field = h.get_by_role_and_label(Role::EditableComboBox, "Project");
     assert_eq!(field.accesskit_node().value().as_deref(), Some("the"));
     assert_eq!(field.accesskit_node().data().is_expanded(), Some(false));
-    assert!(h.query_by_label("Open from GitLab or GitHub").is_some(), "Escape closed the dialog with the list");
+    assert!(h.query_by_label("Import from GitHub").is_some(), "Escape closed the dialog with the list");
     // Down opens it again.
     key(&mut h, egui::Key::ArrowDown);
     assert!(h.query_by_role(Role::ListBox).is_some(), "Down did not open the list again");
@@ -118,13 +116,11 @@ fn escape_closes_the_list_and_keeps_the_text_and_the_dialog() {
 fn without_a_sign_in_or_a_token_the_list_says_to_sign_in() {
     let fake = github();
     let mut h = harness(&fake);
-    ui_cmd::run(h.state_mut(), "forge.open");
+    ui_cmd::run_with(h.state_mut(), "project.import_dialog", &serde_json::json!({"source": "github"}));
     h.run();
-    h.get_by_role_and_label(Role::RadioButton, "GitHub: Service").click();
+    h.get_by_role_and_label(Role::EditableComboBox, "Project").click();
     h.run();
-    h.get_by_role_and_label(Role::EditableComboBox, "Project address").click();
-    h.run();
-    h.get_by_role_and_label(Role::EditableComboBox, "Project address").type_text("pap");
+    h.get_by_role_and_label(Role::EditableComboBox, "Project").type_text("pap");
     quiet(&mut h);
     assert!(h.query_by_label_contains("Sign in to see your repositories").is_some(), "the list does not say why it is empty");
     assert!(fake.requests().is_empty(), "GitHub was asked with no key");

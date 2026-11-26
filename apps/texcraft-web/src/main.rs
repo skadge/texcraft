@@ -40,8 +40,47 @@ mod web {
     type Refused = Rc<RefCell<Vec<(Change, String)>>>;
     /// What the browser last said of the room for the projects, for the next frame.
     type Room = Rc<RefCell<Option<BrowserStorage>>>;
+    /// The files of folders chosen with Import a Project's Folder, each by their path from it.
+    type Folders = Rc<RefCell<Vec<Vec<(String, Vec<u8>)>>>>;
     /// Templates fetched (their files, or why not), waiting for the next frame.
     type Fetched = Rc<RefCell<Vec<(String, Result<Vec<(String, Vec<u8>)>, String>)>>>;
+
+    /// Shows the browser's folder picker (a file input that takes a directory); once a folder is
+    /// chosen, its files, by their path from the folder's name, go to `folders`.
+    fn pick_folder(folders: Folders, ctx: egui::Context) -> Result<(), String> {
+        let document = web_sys::window().and_then(|w| w.document()).ok_or("no document")?;
+        let input: web_sys::HtmlInputElement =
+            document.create_element("input").map_err(|e| format!("{e:?}"))?.dyn_into().map_err(|_| "not an input")?;
+        input.set_type("file");
+        input.set_multiple(true);
+        input.set_attribute("webkitdirectory", "").map_err(|e| format!("{e:?}"))?;
+        let chosen = input.clone();
+        let on_change = wasm_bindgen::closure::Closure::once(move || {
+            let Some(list) = chosen.files() else { return };
+            let files: Vec<web_sys::File> = (0..list.length()).filter_map(|i| list.get(i)).collect();
+            wasm_bindgen_futures::spawn_local(async move {
+                let mut read = Vec::new();
+                for file in files {
+                    let path = js_sys::Reflect::get(&file, &"webkitRelativePath".into())
+                        .ok()
+                        .and_then(|v| v.as_string())
+                        .filter(|p| !p.is_empty())
+                        .unwrap_or_else(|| file.name());
+                    match wasm_bindgen_futures::JsFuture::from(file.array_buffer()).await {
+                        Ok(buffer) => read.push((path, js_sys::Uint8Array::new(&buffer).to_vec())),
+                        Err(e) => log::warn!("{path} could not be read: {e:?}"),
+                    }
+                }
+                folders.borrow_mut().push(read);
+                ctx.request_repaint();
+            });
+        });
+        input.set_onchange(Some(on_change.as_ref().unchecked_ref()));
+        // The input lives as long as its handler may run.
+        on_change.forget();
+        input.click();
+        Ok(())
+    }
 
     /// The bytes at `url`, relative to the page.
     async fn fetch(url: &str) -> Result<Vec<u8>, String> {
@@ -100,6 +139,10 @@ mod web {
         chosen: Chosen,
         /// Zip files chosen for Import a Zip File.
         zips: Chosen,
+        /// Import a Project's Zip File: zips to make a new project of.
+        project_zips: Chosen,
+        /// Import a Project's Folder: the files of the folder chosen, by their path from it.
+        folders: Folders,
         taken: Taken,
         started: bool,
         store: Option<Store>,
@@ -212,6 +255,26 @@ mod web {
                             ctx.request_repaint();
                         });
                     }
+                    Pick::ImportProjectZip => {
+                        let zips = self.project_zips.clone();
+                        let ctx = ctx.clone();
+                        wasm_bindgen_futures::spawn_local(async move {
+                            let dialog = rfd::AsyncFileDialog::new().set_title(&request.title).add_filter("zip", &["zip"]);
+                            let Some(handle) = dialog.pick_file().await else { return };
+                            let bytes = handle.read().await;
+                            zips.borrow_mut().push((handle.file_name(), bytes));
+                            ctx.request_repaint();
+                        });
+                    }
+                    Pick::ImportProjectFolder => {
+                        if let Err(e) = pick_folder(self.folders.clone(), ctx.clone()) {
+                            log::warn!("the folder picker could not be shown: {e}");
+                            self.app.pick_failed(
+                                texcraft_ui_egui::i18n::t("This browser does not let pages choose a folder: import a zip file of it instead.")
+                                    .to_owned(),
+                            );
+                        }
+                    }
                     _ => {
                         self.app.pick_failed(texcraft_ui_egui::i18n::t("Folders and paths on disk are not available in the browser yet.").to_owned())
                     }
@@ -244,6 +307,12 @@ mod web {
             }
             for (name, bytes) in std::mem::take(&mut *self.zips.borrow_mut()) {
                 self.app.unzip_file(name, bytes);
+            }
+            for (name, bytes) in std::mem::take(&mut *self.project_zips.borrow_mut()) {
+                self.app.import_zip_project(name, bytes);
+            }
+            for files in std::mem::take(&mut *self.folders.borrow_mut()) {
+                self.app.import_folder_project(files);
             }
             for id in self.app.take_template_requests() {
                 let fetched = self.fetched.clone();
@@ -669,6 +738,8 @@ mod web {
                 app,
                 chosen,
                 zips: Chosen::default(),
+                project_zips: Chosen::default(),
+                folders: Rc::default(),
                 taken,
                 started: false,
                 store,

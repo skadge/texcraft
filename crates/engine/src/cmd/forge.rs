@@ -90,7 +90,8 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         CommandSpec {
             id: "forge.open",
             label: "Open from GitLab or GitHub…",
-            menu: &["File"],
+            // In the window, Import a Project's GitLab and GitHub cards.
+            menu: &[],
             shortcut: None,
             params: open_schema,
             enabled: idle,

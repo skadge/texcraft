@@ -166,25 +166,26 @@ fn a_link_s_server_is_added_only_when_the_user_says_so() {
     h.get_by_role_and_label(Role::Button, "Add Server").click();
     h.run();
     assert_eq!(h.state().session().forge_client_id(SERVER, texcraft_engine::forge::Service::GitLab).as_deref(), Some("link-app"));
-    // Then the link's project, in the Open dialog, with the server's sign-in offered.
-    assert!(h.query_by_label("Open from GitLab or GitHub").is_some(), "the link's project is not offered");
+    // Then the link's project, on Import a Project's GitLab Server page, with the server's
+    // sign-in offered.
+    assert!(h.query_by_label("Import from a GitLab Server").is_some(), "the link's project is not offered");
     assert!(h.query_by_role_and_label(Role::Button, "Sign In with GitLab").is_some_and(|b| !b.accesskit_node().is_disabled()));
     assert!(!h.state_mut().forge_propose_server("code=1&state=2"), "a query that proposes nothing");
 }
 
 #[test]
-fn the_open_dialog_offers_to_add_an_unknown_server_and_comes_back_to_the_project() {
+fn the_gitlab_page_offers_to_add_an_unknown_server_and_comes_back_to_the_project() {
     let script = Script::default();
     let mut h = harness(&script);
     ui_cmd::run(h.state_mut(), "forge.open");
     h.run();
-    type_into(&mut h, "Project address", "https://git.example.org/lab/paper");
+    type_into(&mut h, "Project", "https://git.example.org/lab/paper");
     assert!(h.query_by_label("Personal access token").is_some(), "an unknown server needs the token until it is added");
     h.get_by_role_and_label(Role::Button, "Add git.example.org for Signing In…").click();
     h.run();
     assert!(h.query_by_label("Add a GitLab Server").is_some(), "the Add a Server dialog did not open");
     h.get_by_role_and_label(Role::Button, "Cancel").click();
     h.run();
-    assert!(h.query_by_label("Open from GitLab or GitHub").is_some(), "the Open dialog is not back");
+    assert!(h.query_by_label("Import from GitLab").is_some(), "the GitLab page is not back");
     assert!(h.query_by_role_and_label(Role::Button, "Add git.example.org for Signing In…").is_some(), "the address typed is not kept");
 }

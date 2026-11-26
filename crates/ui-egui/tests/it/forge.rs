@@ -1,5 +1,6 @@
 //! Opening a project from GitLab and committing to it through the window's dialogs, against the
-//! fake GitLab (no network).
+//! fake GitLab (no network). Import a Project's GitLab and GitHub pages bring the project in
+//! through the forge's API in the browser (on the desktop they clone it: `import.rs`'s tests).
 
 use egui::accesskit::Role;
 use egui_kittest::Harness;
@@ -14,7 +15,19 @@ use texcraft_ui_egui::{App, ui_cmd};
 const TOKEN: &str = "glpat-ui-test";
 
 pub(crate) fn harness(fake: &FakeGitLab) -> Harness<'static, App> {
+    harness_with(fake, false)
+}
+
+/// The window in the browser: projects in its library, forges reached through their API.
+pub(crate) fn browser(fake: &FakeGitLab) -> Harness<'static, App> {
+    harness_with(fake, true)
+}
+
+fn harness_with(fake: &FakeGitLab, browser: bool) -> Harness<'static, App> {
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    if browser {
+        s.use_library(texcraft_engine::library::Library::default());
+    }
     let fake = fake.clone();
     s.set_forge_transport(move || fake.transport());
     let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
@@ -72,14 +85,14 @@ pub(crate) fn settle(h: &mut Harness<'_, App>) -> bool {
 fn a_project_opened_from_gitlab_is_edited_and_committed_through_the_dialogs() {
     let fake =
         FakeGitLab::new("https://gitlab.example", "group/paper", TOKEN, &[("main.tex", b"\\documentclass{article}\n"), ("intro.tex", b"Intro\n")]);
-    let mut h = harness(&fake);
+    let mut h = browser(&fake);
     ui_cmd::run(h.state_mut(), "forge.open");
     h.run();
-    type_into(&mut h, "Project address", "https://gitlab.example/group/paper");
+    type_into(&mut h, "Project", "https://gitlab.example/group/paper");
     type_into(&mut h, "Personal access token", TOKEN);
     h.run();
-    assert!(h.query_by_label_contains("never written to disk").is_some(), "the dialog does not say the token is not kept");
-    h.get_by_role_and_label(Role::Button, "Open").click();
+    assert!(h.query_by_label_contains("it is never stored").is_some(), "the dialog does not say the token is not kept");
+    h.get_by_role_and_label(Role::Button, "Import").click();
     assert!(settle(&mut h), "the GitLab operation did not end");
     assert!(h.query_by_label_contains("Opened group/paper from GitLab").is_some(), "the status line does not say it opened");
     assert!(h.query_by_label_contains("group/paper · main · up to date").is_some(), "the top bar does not show the project and branch");
@@ -103,13 +116,13 @@ fn a_project_opened_from_gitlab_is_edited_and_committed_through_the_dialogs() {
 #[test]
 fn a_refused_token_is_said_on_the_status_line() {
     let fake = FakeGitLab::new("https://gitlab.example", "group/paper", TOKEN, &[("main.tex", b"x\n")]);
-    let mut h = harness(&fake);
+    let mut h = browser(&fake);
     ui_cmd::run(h.state_mut(), "forge.open");
     h.run();
-    type_into(&mut h, "Project address", "gitlab.example/group/paper");
+    type_into(&mut h, "Project", "gitlab.example/group/paper");
     type_into(&mut h, "Personal access token", "glpat-wrong");
     h.run();
-    h.get_by_role_and_label(Role::Button, "Open").click();
+    h.get_by_role_and_label(Role::Button, "Import").click();
     assert!(settle(&mut h), "the GitLab operation did not end");
     assert!(h.query_by_label_contains("did not accept the access token").is_some());
     assert!(h.state().session().forge().is_none());
@@ -201,17 +214,23 @@ fn the_branch_is_checked_when_the_window_comes_back() {
 fn a_github_repository_is_opened_and_its_pull_request_link_shown() {
     const GH_TOKEN: &str = "github_pat_ui_test";
     let fake = texcraft_engine::forge::fake::Fake::github("owner/paper", GH_TOKEN, &[("main.tex", PAPER), ("intro.tex", b"Intro\n")]);
-    let mut h = harness(&fake);
+    let mut h = browser(&fake);
     ui_cmd::run(h.state_mut(), "forge.open");
     h.run();
-    // The address on github.com chooses GitHub, whose token permissions the dialog explains.
-    type_into(&mut h, "Project address", "https://github.com/owner/paper");
-    // Signing in comes first on github.com; the token is the fallback.
-    h.get_by_label("Use a personal access token instead").click();
+    // An address on github.com on the GitLab page offers GitHub's, whose token permissions it
+    // explains.
+    type_into(&mut h, "Project", "https://github.com/owner/paper");
+    h.get_by_role_and_label(Role::Button, "Switch to GitHub").click();
     h.run();
+    assert!(h.query_by_label("Import from GitHub").is_some(), "the GitHub page did not open");
+    // In the browser GitHub takes a token (its sign-in does not answer web pages).
+    if h.query_by_label("Personal access token").is_none() {
+        h.get_by_label("Use a personal access token instead").click();
+        h.run();
+    }
     type_into(&mut h, "Personal access token", GH_TOKEN);
     assert!(h.query_by_label_contains("Contents read and write").is_some(), "the dialog does not say what a GitHub token needs");
-    h.get_by_role_and_label(Role::Button, "Open").click();
+    h.get_by_role_and_label(Role::Button, "Import").click();
     assert!(settle(&mut h), "the GitHub operation did not end");
     assert!(h.query_by_label_contains("Opened owner/paper from GitHub").is_some(), "the status line does not say it opened");
 

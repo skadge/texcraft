@@ -41,11 +41,11 @@ fn the_question_says_what_is_about_to_replace_the_project() {
     use egui_kittest::kittest::NodeT as _;
     let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), edited().unwrap());
     harness.run();
-    texcraft_ui_egui::ui_cmd::run(harness.state_mut(), "forge.open");
+    texcraft_ui_egui::ui_cmd::run(harness.state_mut(), "project.import_dialog");
     harness.run();
     harness.run();
     let said =
-        harness.root().children_recursive().filter_map(|n| n.accesskit_node().value()).any(|v| v.contains("GitLab or GitHub is about to open"));
+        harness.root().children_recursive().filter_map(|n| n.accesskit_node().value()).any(|v| v.contains("imported project is about to open"));
     assert!(said, "the question does not say why it is asked now");
 }
 
