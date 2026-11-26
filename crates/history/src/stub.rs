@@ -62,4 +62,8 @@ impl History {
     pub fn files_at(&self, _commit: &str) -> Result<Vec<(String, Vec<u8>)>> {
         Err(NOT_YET.to_owned())
     }
+
+    pub fn ids_at(&self, _commit: &str) -> Result<Vec<(String, String)>> {
+        Err(NOT_YET.to_owned())
+    }
 }

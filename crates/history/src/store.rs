@@ -193,6 +193,14 @@ impl Versioned for Versions {
         version.files.iter().filter(|(p, _)| !is_hidden(p)).map(|(p, b)| Ok((p.clone(), self.blob(b)?))).collect()
     }
 
+    fn ids_at(&self, commit: &str) -> Result<Vec<(String, String)>> {
+        Ok(self.find(commit)?.files.iter().filter(|(p, _)| !is_hidden(p)).cloned().collect())
+    }
+
+    fn latest(&self) -> Result<Option<String>> {
+        Ok(self.head().map(str::to_owned))
+    }
+
     fn parent_of(&self, commit: &str) -> Result<Option<String>> {
         Ok(self.find(commit)?.parent.clone())
     }
