@@ -41,6 +41,18 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.14.0" date="2026-11-26" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.14.0</url>
+      <description>
+        <p>TeXCraft on a phone, projects kept for good in the browser, and fixes from a review of the interface.</p>
+        <ul>
+          <li>Every dialog fits a phone's screen</li>
+          <li>Browser projects kept for good, and a zip to download</li>
+          <li>Fixes from an in-depth review of the interface</li>
+          <li>The translations brought up to date</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.13.0" date="2026-11-26" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.13.0</url>
       <description>

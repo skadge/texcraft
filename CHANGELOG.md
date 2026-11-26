@@ -5,6 +5,38 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.14.0 (2026-11-26)
+
+TeXCraft on a phone, projects kept for good in the browser, and what an in-depth review of the
+interface found.
+
+### On a phone
+
+- Every dialog fits the screen: it takes the whole window, with Close at the top and its buttons in
+  a bar at the bottom that stays visible. Settings is a list of its sections, the template gallery
+  one column of cards.
+- The start page fits, with New Project first; the status bar keeps to the build's state.
+
+### In the browser
+
+- TeXCraft asks the browser to keep your projects for good, and the start page says whether it
+  does and how much room is used and left.
+- A save the browser refuses (its storage is full) leaves the project unsaved and says what to do;
+  File › Download Project as Zip keeps a copy on your computer.
+
+### From the interface review
+
+- Export stays visible beside the PDF's page and zoom buttons in longer languages; the layout
+  switch and the toolbars use the commands' own names; "1 errors" and other counts read right.
+- Grammar no longer flags every indented line.
+- The export formats are named by their files (DOCX, PPTX).
+- The full review, and what it planned, is in docs/ux-review.md and the roadmap.
+
+### Languages
+
+- The six translations brought up to date, and the English made easier to translate (whole
+  sentences instead of pieces, words told apart where they have two meanings).
+
 ## 0.13.0 (2026-11-26)
 
 TeXCraft in six more languages, grammar checking, a user guide, and the formatted view as a real
