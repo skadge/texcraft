@@ -11,8 +11,11 @@ publish = false
 workspace = true
 
 [features]
-default = ["retex"]
+default = ["retex", "grammar"]
 retex = ["texcraft-compile/retex"]
+# Offline English grammar with Harper (docs/ROADMAP.md, E12): megabytes and many crates, so
+# the browser build leaves it out.
+grammar = ["dep:harper-core", "dep:getrandom03"]
 # Downloading templates from TeX Live (desktop and CLI).
 templates-download = ["texcraft-templates/download"]
 
@@ -43,7 +46,7 @@ craft-ai = { workspace = true }
 # Spelling (docs/ROADMAP.md, E11): the suite's proofing library.
 craft-proof = { workspace = true }
 # Grammar (docs/ROADMAP.md, E12): Harper's English rules, offline. Its thesaurus is not used.
-harper-core = { version = "3.2", default-features = false }
+harper-core = { version = "3.2", default-features = false, optional = true }
 # Zip files: an export with pictures downloaded in the browser, and zips dropped or imported
 # (`file.unzip`), read with its limits.
 craft-zip = { workspace = true }
@@ -62,7 +65,7 @@ craft-suite-account = { workspace = true }
 chrono = { workspace = true, features = ["wasmbind"] }
 getrandom = { workspace = true, features = ["wasm_js"] }
 # Harper's dependencies (burn's random numbers) use getrandom 0.3, which needs its browser backend.
-getrandom03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
+getrandom03 = { package = "getrandom", version = "0.3", features = ["wasm_js"], optional = true }
 
 [dev-dependencies]
 # A fake model behind the suite's provider trait: tests never reach a network.

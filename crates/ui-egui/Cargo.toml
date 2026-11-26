@@ -49,5 +49,5 @@ craft-zip = { workspace = true }
 craft-ai = { workspace = true }
 texcraft-compile = { workspace = true, default-features = false }
 # The formatted view's tests typeset formulas with retex, as the desktop app does.
-texcraft-engine = { workspace = true, features = ["retex"] }
+texcraft-engine = { workspace = true, features = ["retex", "grammar"] }
 egui = { workspace = true, features = ["default_fonts"] }

@@ -11,7 +11,7 @@ publish = false
 workspace = true
 
 [dependencies]
-texcraft-engine = { workspace = true, features = ["retex", "templates-download"] }
+texcraft-engine = { workspace = true, features = ["retex", "templates-download", "grammar"] }
 texcraft-mcp = { workspace = true }
 serde_json = { workspace = true }
 dirs = { workspace = true }

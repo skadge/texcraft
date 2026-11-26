@@ -286,9 +286,22 @@ fn grammar_group(id: &str) -> &'static str {
 
 /// Grammar checking: on, its groups of rules, and the rules turned off from the text's menu.
 fn grammar(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    // A build without Harper (the browser's) says so where the switch would be (AGENTS.md rule 15).
+    if !texcraft_engine::grammar::OFFLINE {
+        let help = if texcraft_engine::ai::available() {
+            tl!("Grammar checking is not in this build; Check Grammar with AI is available.")
+        } else {
+            tl!("Grammar checking is not in this build.")
+        };
+        setting(ui, t, tl!("Check grammar (English)"), help, |ui| {
+            let mut off = false;
+            Some(ui.add_enabled(false, egui::Checkbox::without_text(&mut off)))
+        });
+        return;
+    }
     let options = app.session.settings.grammar.clone();
     let help = match app.session.grammar_ready() {
-        Err(why) if options.on => why,
+        Err(why) if options.on => crate::i18n::msg(&why),
         _ => tl!("Grammar problems in English text are underlined with a double line, checked on this computer by Harper; spelling stays with the spell checker.").to_owned(),
     };
     setting(ui, t, tl!("Check grammar (English)"), &help, |ui| {

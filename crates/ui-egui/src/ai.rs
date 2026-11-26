@@ -262,7 +262,7 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
             app.view.status = Some((said, false));
         }
         Some(texcraft_engine::ai::Event::Grammar(Err(e))) => {
-            app.view.status = Some((tl!("No grammar check: {error}").replace("{error}", &e), true));
+            app.view.status = Some((tl!("No grammar check: {error}").replace("{error}", &crate::i18n::msg(&e)), true));
         }
         // The editor shows (and announces) the words when the caret is still where they go.
         Some(texcraft_engine::ai::Event::Completed(Ok(_))) | None => {}

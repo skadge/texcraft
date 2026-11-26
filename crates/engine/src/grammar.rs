@@ -15,20 +15,37 @@
 //! findings are kept by its text, so an edit rechecks only the passage it changed. Findings can be
 //! ignored for the session, and rules and groups of rules switched off (Settings › Editor,
 //! `grammar.rule`), which filters what was found without checking again.
+//!
+//! Harper is behind the `grammar` feature (on for the desktop app and the CLI, off for the
+//! browser, whose bundle it would grow by megabytes): without it offline grammar is absent and
+//! says so ([`NOT_IN_BUILD`]); the model's grammar check works either way.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
 use std::sync::Arc;
 
-use harper_core::linting::{LintGroup, LintKind, Suggestion};
-use harper_core::spell::FstDictionary;
-use harper_core::{Dialect, Document};
 use serde::{Deserialize, Serialize};
 use texcraft_latex::passage::Passage;
 use texcraft_project::ProjectPath;
 
 use crate::{Result, Session};
+
+/// Whether this build checks grammar offline (the `grammar` feature).
+pub const OFFLINE: bool = cfg!(feature = "grammar");
+
+/// Why there is no offline grammar, in a build without it.
+pub const NOT_IN_BUILD: &str = "Grammar checking is not in this build; Check Grammar with AI is available.";
+
+/// An English dialect, as Harper knows them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Dialect {
+    American,
+    British,
+    Australian,
+    Canadian,
+    Indian,
+}
 
 /// How long typing must pause before a changed passage is checked, in milliseconds.
 pub const PAUSE_MS: i64 = 500;
@@ -43,7 +60,7 @@ const MAX_KEPT: usize = 50_000;
 const IGNORE_CONTEXT: usize = 24;
 
 /// How long `grammar.check` waits for the checker, at most, in seconds.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "grammar", not(target_arch = "wasm32")))]
 const WAIT_S: u64 = 120;
 
 /// The groups of rules Settings shows, by id: their name, and the kinds of Harper's findings in
@@ -56,19 +73,6 @@ pub const GROUPS: [(&str, &str); 6] = [
     ("usage", "Word choice and usage"),
     ("style", "Style and readability"),
 ];
-
-/// The group a kind of finding is in; `None` for spelling, which is left to the spell checker.
-fn group_of(kind: LintKind) -> Option<&'static str> {
-    Some(match kind {
-        LintKind::Spelling => return None,
-        LintKind::Agreement => "agreement",
-        LintKind::Grammar | LintKind::WordOrder | LintKind::BoundaryError => "grammar",
-        LintKind::Punctuation | LintKind::Capitalization | LintKind::Formatting => "punctuation",
-        LintKind::Repetition | LintKind::Redundancy => "repetition",
-        LintKind::Style | LintKind::Enhancement | LintKind::Readability => "style",
-        _ => "usage",
-    })
-}
 
 /// The grammar settings (Settings › Editor), kept with the preferences.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,66 +127,111 @@ pub struct GrammarProblem {
     pub origin: Origin,
 }
 
-/// A change Harper proposes, on the characters of its finding.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Change {
-    Replace(String),
-    Remove,
-    InsertAfter(String),
-}
-
-/// A finding in a passage: its characters, rule, kind, message and changes.
+/// A finding in a passage: its characters, rule, group, message and replacements.
 #[derive(Debug, Clone)]
 struct Found {
     chars: Range<usize>,
     rule: String,
-    kind: LintKind,
+    /// Its group ([`GROUPS`]); `None` for spelling, which is left to the spell checker.
+    group: Option<&'static str>,
     message: String,
-    changes: Vec<Change>,
+    /// Texts to put in place of its characters, best first.
+    replacements: Vec<String>,
 }
 
-/// Harper with its rules, for one dialect.
-struct Harper {
-    dialect: Dialect,
-    group: LintGroup,
-}
+/// Harper itself, in builds with the `grammar` feature.
+#[cfg(feature = "grammar")]
+mod harper {
+    use harper_core::Document;
+    use harper_core::linting::{LintGroup, LintKind, Suggestion};
+    use harper_core::spell::FstDictionary;
 
-impl Harper {
-    fn new(dialect: Dialect) -> Self {
-        let mut group = LintGroup::new_curated(FstDictionary::curated(), dialect);
-        // TeXCraft's own spelling checks words; Harper's would say the same twice.
-        group.config.set_rule_enabled("SpellCheck", false);
-        Self { dialect, group }
+    use super::{Dialect, Found};
+
+    fn to_harper(d: Dialect) -> harper_core::Dialect {
+        match d {
+            Dialect::American => harper_core::Dialect::American,
+            Dialect::British => harper_core::Dialect::British,
+            Dialect::Australian => harper_core::Dialect::Australian,
+            Dialect::Canadian => harper_core::Dialect::Canadian,
+            Dialect::Indian => harper_core::Dialect::Indian,
+        }
     }
 
-    fn check(&mut self, text: &str, dialect: Dialect) -> Vec<Found> {
-        if self.dialect != dialect {
-            *self = Self::new(dialect);
+    /// The group a kind of finding is in; `None` for spelling, which is left to the spell checker.
+    fn group_of(kind: LintKind) -> Option<&'static str> {
+        Some(match kind {
+            LintKind::Spelling => return None,
+            LintKind::Agreement => "agreement",
+            LintKind::Grammar | LintKind::WordOrder | LintKind::BoundaryError => "grammar",
+            LintKind::Punctuation | LintKind::Capitalization | LintKind::Formatting => "punctuation",
+            LintKind::Repetition | LintKind::Redundancy => "repetition",
+            LintKind::Style | LintKind::Enhancement | LintKind::Readability => "style",
+            _ => "usage",
+        })
+    }
+
+    /// Harper with its rules, for one dialect.
+    pub(super) struct Harper {
+        dialect: Dialect,
+        group: LintGroup,
+    }
+
+    impl Harper {
+        pub(super) fn new(dialect: Dialect) -> Self {
+            let mut group = LintGroup::new_curated(FstDictionary::curated(), to_harper(dialect));
+            // TeXCraft's own spelling checks words; Harper's would say the same twice.
+            group.config.set_rule_enabled("SpellCheck", false);
+            Self { dialect, group }
         }
-        let doc = Document::new_plain_english_curated(text);
-        let mut out = Vec::new();
-        for (rule, lints) in self.group.organized_lints(&doc) {
-            for l in lints {
-                let changes = l
-                    .suggestions
-                    .iter()
-                    .map(|s| match s {
-                        Suggestion::ReplaceWith(c) => Change::Replace(c.iter().collect()),
-                        Suggestion::Remove => Change::Remove,
-                        Suggestion::InsertAfter(c) => Change::InsertAfter(c.iter().collect()),
-                    })
-                    .collect();
-                out.push(Found { chars: l.span.start..l.span.end, rule: rule.clone(), kind: l.lint_kind, message: l.message, changes });
+
+        pub(super) fn check(&mut self, text: &str, dialect: Dialect) -> Vec<Found> {
+            if self.dialect != dialect {
+                *self = Self::new(dialect);
             }
+            let doc = Document::new_plain_english_curated(text);
+            let mut out = Vec::new();
+            for (rule, lints) in self.group.organized_lints(&doc) {
+                for l in lints {
+                    let flagged: String = text.chars().skip(l.span.start).take(l.span.end.saturating_sub(l.span.start)).collect();
+                    let replacements = l
+                        .suggestions
+                        .iter()
+                        .map(|s| match s {
+                            Suggestion::ReplaceWith(c) => c.iter().collect(),
+                            Suggestion::Remove => String::new(),
+                            Suggestion::InsertAfter(c) => format!("{flagged}{}", c.iter().collect::<String>()),
+                        })
+                        .collect();
+                    out.push(Found {
+                        chars: l.span.start..l.span.end,
+                        rule: rule.clone(),
+                        group: group_of(l.lint_kind),
+                        message: l.message,
+                        replacements,
+                    });
+                }
+            }
+            out.sort_by_key(|f| f.chars.start);
+            out
         }
-        out.sort_by_key(|f| f.chars.start);
-        out
+    }
+
+    /// Whether `key` is one of Harper's rules.
+    pub(super) fn is_rule(key: &str) -> bool {
+        harper_core::linting::FlatConfig::new_curated().has_rule(key)
     }
 }
 
-/// Whether `key` is one of Harper's rules.
+/// Whether `key` is one of Harper's rules (none in a build without them).
 pub fn is_rule(key: &str) -> bool {
-    harper_core::linting::FlatConfig::new_curated().has_rule(key)
+    #[cfg(feature = "grammar")]
+    return harper::is_rule(key);
+    #[cfg(not(feature = "grammar"))]
+    {
+        let _ = key;
+        false
+    }
 }
 
 /// The dialect of an English language tag, `None` for another language.
@@ -199,6 +248,7 @@ pub fn dialect(tag: &str) -> Option<Dialect> {
 }
 
 /// A passage to check: the key of its findings, and its text.
+#[cfg(feature = "grammar")]
 struct Job {
     key: u64,
     text: String,
@@ -214,24 +264,37 @@ type Passages = (Arc<Vec<Passage>>, Arc<Vec<usize>>, i64);
 /// Where passages are checked: a thread on the desktop, this thread in the browser.
 #[derive(Default)]
 struct Runner {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "grammar", not(target_arch = "wasm32")))]
     thread: Option<(std::sync::mpsc::Sender<Job>, std::sync::mpsc::Receiver<Checked>)>,
-    #[cfg(target_arch = "wasm32")]
-    harper: Option<Harper>,
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(feature = "grammar", target_arch = "wasm32"))]
+    harper: Option<harper::Harper>,
+    #[cfg(all(feature = "grammar", target_arch = "wasm32"))]
     queue: std::collections::VecDeque<Job>,
 }
 
+#[cfg(not(feature = "grammar"))]
+impl Runner {
+    fn send(&mut self, _: u64, _: &str, _: Dialect) -> bool {
+        false
+    }
+
+    fn take(&mut self, _: bool) -> Vec<Checked> {
+        Vec::new()
+    }
+}
+
+#[cfg(feature = "grammar")]
 impl Runner {
     #[cfg(not(target_arch = "wasm32"))]
-    fn send(&mut self, job: Job) -> bool {
+    fn send(&mut self, key: u64, text: &str, dialect: Dialect) -> bool {
+        let job = Job { key, text: text.to_owned(), dialect };
         if self.thread.is_none() {
             let (jobs, rx) = std::sync::mpsc::channel::<Job>();
             let (tx, done) = std::sync::mpsc::channel();
             let spawned = std::thread::Builder::new().name("grammar".to_owned()).spawn(move || {
-                let mut harper: Option<Harper> = None;
+                let mut harper: Option<harper::Harper> = None;
                 while let Ok(job) = rx.recv() {
-                    let h = harper.get_or_insert_with(|| Harper::new(job.dialect));
+                    let h = harper.get_or_insert_with(|| harper::Harper::new(job.dialect));
                     let found = h.check(&job.text, job.dialect);
                     if tx.send((job.key, found)).is_err() {
                         break;
@@ -266,8 +329,8 @@ impl Runner {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn send(&mut self, job: Job) -> bool {
-        self.queue.push_back(job);
+    fn send(&mut self, key: u64, text: &str, dialect: Dialect) -> bool {
+        self.queue.push_back(Job { key, text: text.to_owned(), dialect });
         true
     }
 
@@ -276,7 +339,7 @@ impl Runner {
     fn take(&mut self, wait: bool) -> Vec<Checked> {
         let mut out = Vec::new();
         while let Some(job) = self.queue.pop_front() {
-            let h = self.harper.get_or_insert_with(|| Harper::new(job.dialect));
+            let h = self.harper.get_or_insert_with(|| harper::Harper::new(job.dialect));
             out.push((job.key, h.check(&job.text, job.dialect)));
             if !wait {
                 break;
@@ -357,6 +420,9 @@ impl Session {
     /// Why grammar is not checked now, if it is not: it is off, or the document is not in
     /// English. Gives the dialect checked.
     pub fn grammar_ready(&self) -> Result<Dialect> {
+        if !OFFLINE {
+            return Err(NOT_IN_BUILD.to_owned());
+        }
         if !self.settings.grammar.on {
             return Err("Grammar checking is off (Settings › Editor).".to_owned());
         }
@@ -444,7 +510,7 @@ impl Session {
         let mut sent = HashSet::new();
         for (_, key, p) in todo.into_iter().take(room) {
             // The same text twice in a file is checked once.
-            if sent.insert(key) && g.runner.send(Job { key, text: p.text.clone(), dialect }) {
+            if sent.insert(key) && g.runner.send(key, &p.text, dialect) {
                 g.out.insert(key);
             }
         }
@@ -520,7 +586,7 @@ impl Session {
             }
             let Some(found) = g.found.get(key) else { continue };
             for f in found.iter() {
-                let Some(group) = group_of(f.kind) else { continue };
+                let Some(group) = f.group else { continue };
                 if options.groups_off.contains(group) || options.rules_off.contains(&f.rule) {
                     continue;
                 }
@@ -534,19 +600,7 @@ impl Session {
                     continue;
                 }
                 let flagged = text.get(spot.range.clone()).unwrap_or_default();
-                let replacements = if spot.exact {
-                    f.changes
-                        .iter()
-                        .map(|c| match c {
-                            Change::Replace(s) => s.clone(),
-                            Change::Remove => String::new(),
-                            Change::InsertAfter(s) => format!("{flagged}{s}"),
-                        })
-                        .filter(|r| r != flagged)
-                        .collect()
-                } else {
-                    Vec::new()
-                };
+                let replacements = if spot.exact { f.replacements.iter().filter(|r| *r != flagged).cloned().collect() } else { Vec::new() };
                 let (line, column) = place(text, &starts, spot.range.start);
                 let (end_line, end_column) = place(text, &starts, spot.range.end);
                 out.push(GrammarProblem {
@@ -629,6 +683,9 @@ impl Session {
 
     /// Switches Harper's rule `rule` (its key) or the group `group` on or off.
     pub fn set_grammar_rule(&mut self, rule: Option<&str>, group: Option<&str>, on: bool) -> Result<()> {
+        if !OFFLINE {
+            return Err(NOT_IN_BUILD.to_owned());
+        }
         let o = &mut self.settings.grammar;
         match (rule, group) {
             (Some(rule), None) => {

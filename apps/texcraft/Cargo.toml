@@ -11,7 +11,7 @@ publish = false
 workspace = true
 
 [dependencies]
-texcraft-engine = { workspace = true, features = ["retex", "templates-download"] }
+texcraft-engine = { workspace = true, features = ["retex", "templates-download", "grammar"] }
 texcraft-compile = { workspace = true, features = ["retex"] }
 texcraft-ui-egui = { workspace = true }
 # `clipboard`: the system clipboard, and on X11 and Wayland the primary selection (selecting copies,

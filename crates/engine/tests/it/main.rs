@@ -17,6 +17,8 @@ mod forge_pick;
 mod forge_servers;
 mod forge_sign_in;
 mod git;
+// Offline grammar needs Harper (the `grammar` feature, on by default).
+#[cfg(feature = "grammar")]
 mod grammar;
 mod history;
 mod image;
