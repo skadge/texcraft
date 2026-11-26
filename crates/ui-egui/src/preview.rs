@@ -153,7 +153,9 @@ pub(crate) fn present(app: &mut App, ui: &mut egui::Ui) {
 
 fn toolbar(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
-    ui.allocate_ui_with_layout(vec2(ui.available_width(), t.toolbar_height), Layout::left_to_right(Align::Center), |ui| {
+    // Whether the pages and the zoom go on a second row: in a narrow window, or when the buttons
+    // before them leave no room (longer languages).
+    let second_row = ui.allocate_ui_with_layout(vec2(ui.available_width(), t.toolbar_height), Layout::left_to_right(Align::Center), |ui| {
         ui.painter().rect_filled(ui.max_rect(), 0.0, t.frame);
         ui.spacing_mut().item_spacing.x = 2.0;
         ui.add_space(t.unit * 2.0);
@@ -221,9 +223,10 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
                 ui.add(egui::Label::new(RichText::new(text).font(t.small()).color(t.text_muted)).truncate());
             }
         };
-        if app.view.logs || !app.pdf.has_pdf() || app.view.narrow {
+        let fits = widgets::fits_before_right(ui, "pdf-tools");
+        if app.view.logs || !app.pdf.has_pdf() || app.view.narrow || !fits {
             show_progress(ui);
-            return;
+            return !fits;
         }
         // The pages and the zoom at the bar's end, made in the order they read.
         let room = widgets::room_before_right(ui, "pdf-tools");
@@ -232,9 +235,10 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
             show_progress(ui);
         });
         widgets::right_aligned(ui, "pdf-tools", |ui| page_tools(app, ui));
+        false
     });
     // A narrow window has no room for them on the bar: they are a second row.
-    if app.view.narrow && !app.view.logs && app.pdf.has_pdf() {
+    if (app.view.narrow || second_row.inner) && !app.view.logs && app.pdf.has_pdf() {
         ui.allocate_ui_with_layout(vec2(ui.available_width(), t.toolbar_height), Layout::left_to_right(Align::Center), |ui| {
             ui.painter().rect_filled(ui.max_rect(), 0.0, t.frame);
             ui.spacing_mut().item_spacing.x = 2.0;
