@@ -69,8 +69,8 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | B8 | ✅ 0.6.0 | A better preview | Pages drawn in the background, zoom presets, links, text selection, presentation mode. Selection is on one page at a time; presentations fill the window, not the screen. ✅ 0.17.0: pages side by side (as many as fit, Two Pages), page thumbnails, a Fit button back to the last fit (#39, #41). |
 | B9 | ✅ 0.10.0 | The raw log and outputs | Search in the raw log (count of matches, previous and next, marked and scrolled to), and the build's files (PDF, PDF/X, SyncTeX, log) with Save As…, Download in the browser and Show in Folder on the desktop. |
 | B10 | 🚧 | Errors where they are | ✅ 0.15.0: an environment left open, or a `{` never closed, in an included file is reported at its `\begin` (or its `{`) in that file, read from TeX's log (the files it opened, the line it names) and the project's files; where TeX noticed it (`main.tex:59`) is linked under the message and marked in the editor too; the build log's button is named with its count ("Build log, 2 errors"). Still to do: messages written as sentences (retex) (UX review, findings 6, 20 and 27). |
-| B11 | ✅ | Hiding messages of a kind | Hide Like This on a warning or note hides its kind (its wording with what is quoted, file names and numbers left out) in this project (`.texcraft/hidden-messages.txt`; for the session in the browser) or in all projects; the log says how many it hides and shows them again, hidden warnings are not counted or marked, Settings › Building lists the kinds with Show Again; `build.hide_messages`, `build.show_messages`, `build.hidden_messages` for agents (issue #21). |
-| B12 | ✅ | The PDF in hand | Ctrl (Cmd) with the wheel, or a pinch, zooms around the pointer; the middle button drags pages larger than the pane; Save PDF As… (Download PDF in the browser) as a button in the PDF pane and the Export menu's first entry, working in the browser too (issues #18, #19, #22). |
+| B11 | ✅ 0.16.0 | Hiding messages of a kind | Hide Like This on a warning or note hides its kind (its wording with what is quoted, file names and numbers left out) in this project (`.texcraft/hidden-messages.txt`; for the session in the browser) or in all projects; the log says how many it hides and shows them again, hidden warnings are not counted or marked, Settings › Building lists the kinds with Show Again; `build.hide_messages`, `build.show_messages`, `build.hidden_messages` for agents (issue #21). |
+| B12 | ✅ 0.16.0 | The PDF in hand | Ctrl (Cmd) with the wheel, or a pinch, zooms around the pointer; the middle button drags pages larger than the pane; Save PDF As… (Download PDF in the browser) as a button in the PDF pane and the Export menu's first entry, working in the browser too (issues #18, #19, #22). |
 
 ## Comments and working together
 
@@ -106,6 +106,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | W11 | ⬜ | Cloud storage and embedding | Opening and saving to cloud storage; TeXCraft embedded in another page. |
 | W12 | ⬜ | Waiting for a file | A build that needs a file not fetched yet waits for it instead of stopping and starting again (JavaScript Promise Integration). |
 | W13 | 🚧 | Projects kept for good | ✅ 0.14.0: the first save asks the browser for persistent storage, and the start page says whether it was granted ("Kept until you delete them" or "may remove them when space runs low") and the room used and available; a write the browser refuses leaves the project unsaved and says why (for lack of room, what to do); File › Download Project as Zip (`project.download_zip`). Still to do: Download All Projects as one zip; a version whose write failed is not stored again with the next save (UX review, finding 10). |
+| W14 | ⬜ | TeX packages built in | retex's planned `retex-data` crate (retex `docs/design/bundles.md`: about 64 core TeX Live packages, under 10 MB, behind a `bundled` feature, searched after an installed TeX Live): the desktop typesets common documents with no TeX Live installed, and the browser's TeX tree comes from the same list instead of TeXCraft's own `tree.txt`. Waits for retex to publish it. |
 
 ## Output formats and print
 
@@ -126,7 +127,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | A5 | ✅ 0.2.2 | Linux packages | AppImage and Flatpak, built and published by CI. |
 | A6 | ✅ 0.4.0 | GitHub mirror and releases | Each push mirrored to GitHub, each release published there with its files. |
 | A7 | 🚧 | macOS and Windows | Experimental builds on the GitHub releases (a Windows zip, a macOS app for Apple Silicon, unsigned); still to do: signing, installers, Intel Macs. |
-| A8 | 🚧 | Updates and translations | ✅ 0.13.0: Translations: every interface string, command label and engine message goes through the catalogs (`i18n/<locale>.tsv`, craft-i18n's format, until the cutover to craft-i18n), Settings › Appearance › Interface language switches at once (System follows the system, or the browser), dates, times, sizes and units follow the region, and a pseudo locale checks longer languages' layouts; ✅ 0.13.0: German, Spanish, French, Italian, Dutch and Portuguese (Portugal), drafted with an AI model; ✅ 0.14.0: brought up to date, the English made easier to translate. Still to do: a review of each by a native speaker; in-app updates (craft-update). |
+| A8 | 🚧 | Updates and translations | ✅ 0.13.0: Translations: every interface string, command label and engine message goes through the catalogs (`i18n/<locale>.tsv`, craft-i18n's format, until the cutover to craft-i18n), Settings › Appearance › Interface language switches at once (System follows the system, or the browser), dates, times, sizes and units follow the region, and a pseudo locale checks longer languages' layouts; ✅ 0.13.0: German, Spanish, French, Italian, Dutch and Portuguese (Portugal), drafted with an AI model; ✅ 0.14.0: brought up to date, the English made easier to translate. Still to do: in-app updates (craft-update). |
 | A9 | 🚧 | More of the window | The PDF in its own window, a distraction-free mode (focus mode), Alt or F10 for the menus: ✅ 0.8.0. ✅ 0.9.0: the macOS menu bar (craft-menu, the in-window menus hidden there), not yet tried on a Mac. |
 | A10 | 🚧 | Accessibility pass | ✅ 0.10.0: keyboard-path tests for every region, panel and dialog (focus moves in the accessibility tree, reading order, no trap, Escape gives the keyboard back, roles and names), and the fixes they found. Still to do: a screen-reader pass by a person; the Keyboard Shortcuts table's focusable node without a role (craft-keymap); the review margin's controls reached only by F6 (the source editor keeps Tab). |
 | A11 | 🚧 | User guide | Help pages for people who use TeXCraft. ✅ 0.13.0: `docs/guide/`, static HTML pages for every area of the app (desktop and browser differences marked, unfinished features said), Help › User Guide (F1) and a link from Settings › AI, published beside the web editor, `cargo xtask guide-check`. Still to do: a copy in the packages for offline reading, screenshots for more pages, translations. |
@@ -151,9 +152,12 @@ Off until the user connects a model (any OpenAI-compatible endpoint, a local one
 
 - **Licence:** `MIT OR Apache-2.0`, the suite's; retex is CC0, so either works.
 - **Home of the repository:** on gitlab.com, mirrored to GitHub; joining the Craft suite means an RFC in craft-contrib.
-- **Grammar in the browser:** Harper 3.2 adds about 10 MB to the web page (it needs an ML framework); Harper 0.54 is light (about 3.5 MB) but misses agreement errors; a fork without the framework would need hosting under storytold (E12).
 - **Missing packages in the browser:** a TeX Live tree served with CORS, about 3–4 GB stripped of documentation and sources; GitLab and GitHub Pages are too small, an object store with CORS (Cloudflare R2, or a server of our own) fits (W8).
-- **Translations:** the six catalogues were drafted with an AI model; a native speaker's review before they move to craft-i18n, which waits for TeXCraft joining the suite (A8).
+
+## Decided
+
+- **Grammar in the browser** (2026-11-26): not in the web build; Harper with its machine-learning framework would add about 10 MB to the page. Check Grammar with AI works there once AI does (E12).
+- **Translations** (2026-11-26): the six catalogues, drafted with an AI model, ship as they are; people report what reads wrong (A8).
 
 ## Further reading
 
