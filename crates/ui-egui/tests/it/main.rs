@@ -66,5 +66,6 @@ mod tables;
 mod text_size;
 mod touch;
 mod unsaved;
+mod updates;
 mod vim;
 mod writing_aids;

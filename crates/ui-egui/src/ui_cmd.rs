@@ -181,6 +181,11 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("help.example", "Open the Example Project…", "Help", None),
     // Shows the one-line hint above the editor that points at the formatted view, or dismisses it.
     ui("help.first_steps", "First Steps", "Help", None),
+    // Opens What's New and checks at once (the daily check runs by itself when Settings allow).
+    ui("help.check_updates", "Check for Updates…", "Help", None),
+    // Once an update is in place (the AppImage): quit, unsaved changes asked about first, and
+    // start the new version; in the browser, reload the page.
+    ui("app.restart_to_update", "Restart to Update", "Help", None),
     ui("help.about", "About TeXCraft", "Help", None),
 ];
 
@@ -321,7 +326,20 @@ pub const MENU_BAR: &[(&str, &[Entry])] = &[
             C("edit.ai_reference"),
         ],
     ),
-    (tn!("Help"), &[C("help.guide"), C("help.shortcuts"), C("help.manual"), S, C("help.example"), C("help.first_steps"), S, C("help.about")]),
+    (
+        tn!("Help"),
+        &[
+            C("help.guide"),
+            C("help.shortcuts"),
+            C("help.manual"),
+            S,
+            C("help.example"),
+            C("help.first_steps"),
+            S,
+            C("help.check_updates"),
+            C("help.about"),
+        ],
+    ),
 ];
 
 /// The entries of the menu titled `title` (English).
@@ -567,6 +585,8 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             app.view.status = Some((tl!("Opening the retex user manual (PDF) in your browser.").to_owned(), false));
         }
         "help.about" => app.view.dialog = Some(Dialog::About),
+        "help.check_updates" => crate::updates::check_now(app),
+        "app.restart_to_update" => crate::updates::restart(app),
         // `{"tab": "editor"}` opens Settings on that tab (by its English name, in lower case).
         "app.settings" => {
             if let Some(tab) = params.get("tab").and_then(serde_json::Value::as_str) {

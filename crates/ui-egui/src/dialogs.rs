@@ -42,6 +42,10 @@ pub(crate) enum Next {
     /// Make a new project from a zip file or a folder's files (`project.import` with these
     /// parameters), to keep under this name.
     ImportProject(Value, String),
+    /// Quit, and start the new version once this one has exited (an update in place).
+    Restart,
+    /// Reload the page, which loads the new version (the browser).
+    Reload,
 }
 
 pub(crate) enum Dialog {
@@ -78,6 +82,8 @@ pub(crate) enum Dialog {
     AiInstruct(Box<crate::ai::InstructForm>),
     /// A dropped zip file, or files already in the project: what to do with them.
     Drop(Box<crate::drop::DropForm>),
+    /// What's New: the latest release, its notes and how to update.
+    Updates,
 }
 
 impl Dialog {
@@ -106,6 +112,7 @@ impl Dialog {
             Dialog::AiReference(_) => "ai_reference",
             Dialog::AiInstruct(_) => "ai_instruct",
             Dialog::Drop(_) => "drop",
+            Dialog::Updates => "updates",
         }
     }
 }
@@ -119,6 +126,7 @@ fn own_window(app: &mut App, ctx: &egui::Context) -> bool {
         Some(Dialog::AiReference(_)) => crate::ai_make::reference_dialog,
         Some(Dialog::AiInstruct(_)) => crate::ai::instruct_dialog,
         Some(Dialog::Drop(_)) => crate::drop::dialog,
+        Some(Dialog::Updates) => crate::updates::dialog,
         Some(Dialog::GoToFile(_)) => crate::goto_file::show,
         Some(Dialog::Commands(_)) => crate::commands::show,
         Some(Dialog::Choose(_)) => crate::insert_pick::show,
@@ -169,7 +177,8 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         | Dialog::AiMake(_)
         | Dialog::AiReference(_)
         | Dialog::AiInstruct(_)
-        | Dialog::Drop(_) => {}
+        | Dialog::Drop(_)
+        | Dialog::Updates => {}
         Dialog::Figure(f) => outcome = crate::figure_dialog::form(ui, &t, f),
         Dialog::About => outcome = about(ui, &t, &engine),
     });
@@ -288,6 +297,8 @@ fn why_now(next: &Next) -> &'static str {
         Next::OpenProject(_) | Next::PickProject => tl!("Another project is about to open in its place."),
         Next::Import(..) => tl!("An imported project is about to open in its place."),
         Next::ImportProject(..) => tl!("The imported project is about to open in its place."),
+        Next::Restart => tl!("TeXCraft is about to restart into the new version."),
+        Next::Reload => tl!("The page is about to reload with the new version."),
     }
 }
 

@@ -123,7 +123,7 @@ fn section(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
 
 /// A setting: its name and explanation on the left, its control on the right. The control's
 /// response, when it returns one, is named after the setting (AGENTS.md rule 21).
-fn setting(ui: &mut egui::Ui, t: &Tokens, name: &str, help: &str, control: impl FnOnce(&mut egui::Ui) -> Option<egui::Response>) {
+pub(crate) fn setting(ui: &mut egui::Ui, t: &Tokens, name: &str, help: &str, control: impl FnOnce(&mut egui::Ui) -> Option<egui::Response>) {
     // Too narrow for both side by side (a phone): the control goes under its explanation.
     if ui.available_width() < 480.0 {
         ui.vertical(|ui| {
@@ -182,6 +182,7 @@ fn appearance(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             },
         );
     }
+    crate::updates::setting(app, ui, t);
     setting(ui, t, tl!("Show tips at startup"), tl!("A tip of the day on the start page, about a feature that is easy to miss."), |ui| {
         let mut on = app.prefs.show_tips;
         let r = ui.checkbox(&mut on, "");

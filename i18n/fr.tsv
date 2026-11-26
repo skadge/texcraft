@@ -2466,3 +2466,76 @@ unit	{n} s	{n} s
 	{engine}: chosen in Settings › Building	{engine} : choisi dans Paramètres › Compilation
 @msg	The branch moved since TeXCraft's last version: a new version is made instead.	La branche a bougé depuis la dernière version de TeXCraft : une nouvelle version est créée à la place.
 @msg	The history moved since TeXCraft's last version: a new version is made instead.	L'historique a changé depuis la dernière version de TeXCraft : une nouvelle version est créée à la place.
+	A new version is ready	Une nouvelle version est prête
+	Asks gitlab.com once a day; nothing about you is sent.	Interroge gitlab.com une fois par jour ; rien sur vous n'est envoyé.
+	Asks this site for its version once a day; nothing about you is sent.	Demande sa version à ce site une fois par jour ; rien sur vous n'est envoyé.
+	Check Again	Vérifier à nouveau
+	Check for updates	Rechercher les mises à jour
+	Checking for updates…	Recherche des mises à jour…
+	Download and Install	Télécharger et installer
+	Download {file}	Télécharger {file}
+	Downloading: {done} of {total}…	Téléchargement : {done} sur {total}…
+	Downloading: {done}…	Téléchargement : {done}…
+	Downloading…	Téléchargement…
+	Last checked {when}.	Dernière vérification : {when}.
+	No update is ready to restart into.	Aucune mise à jour n'est prête pour redémarrer.
+	Open the Release Page	Ouvrir la page de la version
+	Release Page	Page de la version
+	Reload	Recharger
+	Reloading loads the new version. The project has unsaved changes: you are asked about them first.	Recharger charge la nouvelle version. Le projet a des modifications non enregistrées : elles vous sont d'abord demandées.
+	Reloading loads the new version. Your projects are kept in this browser.	Recharger charge la nouvelle version. Vos projets restent dans ce navigateur.
+	Restart Now	Redémarrer maintenant
+	Restart to update	Redémarrer pour mettre à jour
+	TeXCraft does not replace itself on Windows: the program is not signed. Download the new zip and unpack it in place of this folder.	TeXCraft ne se remplace pas lui-même sous Windows : le programme n'est pas signé. Téléchargez le nouveau zip et décompressez-le à la place de ce dossier.
+	TeXCraft does not replace itself on macOS: the app is not signed. Download the new one and put it in place of this one.	TeXCraft ne se remplace pas lui-même sous macOS : l'app n'est pas signée. Téléchargez la nouvelle et mettez-la à la place de celle-ci.
+	TeXCraft downloads the new AppImage, checks it against the release's checksums and puts it in place of this one.	TeXCraft télécharge la nouvelle AppImage, la vérifie avec les sommes de contrôle de la version et la met à la place de celle-ci.
+	TeXCraft is about to restart into the new version.	TeXCraft va redémarrer avec la nouvelle version.
+	TeXCraft is up to date	TeXCraft est à jour
+	TeXCraft {version} is available	TeXCraft {version} est disponible
+	TeXCraft {version} is in place: restart to use it.	TeXCraft {version} est en place : redémarrez pour l'utiliser.
+	The check for updates did not work	La recherche de mises à jour n'a pas fonctionné
+	The new version is in place. Restart TeXCraft to use it: the old one is kept beside it until the new one starts.	La nouvelle version est en place. Redémarrez TeXCraft pour l'utiliser : l'ancienne est gardée à côté jusqu'au démarrage de la nouvelle.
+	The page is about to reload with the new version.	La page va se recharger avec la nouvelle version.
+	This copy cannot replace itself (it was built from source, or the release has no file for it): get the new version from the release page.	Cette copie ne peut pas se remplacer elle-même (elle a été compilée depuis les sources, ou la version n'a pas de fichier pour elle) : obtenez la nouvelle version sur la page de la version.
+	Updates	Mises à jour
+	Updates come through Flatpak: update TeXCraft in your software centre, or install the release's bundle with: flatpak install --user {file}	Les mises à jour passent par Flatpak : mettez TeXCraft à jour dans votre logithèque, ou installez le paquet de la version avec : flatpak install --user {file}
+	What's New	Nouveautés
+	What's new, and how to update	Les nouveautés, et comment mettre à jour
+	You have version {version}, the latest.	Vous avez la version {version}, la plus récente.
+	You have version {version}.	Vous avez la version {version}.
+@id	app.check_updates	Rechercher les mises à jour
+@id	app.install_update	Installer la mise à jour
+@id	app.restart_to_update	Redémarrer pour mettre à jour
+@id	app.update_settings	Réglages des mises à jour
+@id	app.update_status	État des mises à jour
+@id	help.check_updates	Rechercher les mises à jour…
+@msg	GitHub's answer about the latest release is not text	La réponse de GitHub sur la dernière version n'est pas du texte
+@msg	GitHub's latest release has no version in its tag ({value})	La dernière version sur GitHub n'a pas de numéro dans son tag ({value})
+@msg	GitLab's answer about the latest release cannot be read: {e}	La réponse de GitLab sur la dernière version est illisible : {e}
+@msg	GitLab's latest release has no version in its tag ({value})	La dernière version sur GitLab n'a pas de numéro dans son tag ({value})
+@msg	LaTeX editor	Éditeur LaTeX
+@msg	No newer version is known: check for updates first.	Aucune version plus récente n'est connue : recherchez d'abord les mises à jour.
+@msg	Reload the page to use the new version.	Rechargez la page pour utiliser la nouvelle version.
+@msg	TeXCraft does not replace itself on this system: download the new version from the release page.	TeXCraft ne se remplace pas lui-même sur ce système : téléchargez la nouvelle version depuis la page de la version.
+@msg	The AppImage cannot be kept as {old}: {e}	L'AppImage ne peut pas être gardée sous le nom {old} : {e}
+@msg	The AppImage cannot be replaced: {e}	L'AppImage ne peut pas être remplacée : {e}
+@msg	The download does not match the release's checksum, so nothing was replaced.	Le téléchargement ne correspond pas à la somme de contrôle de la version : rien n'a été remplacé.
+@msg	The new AppImage cannot be made executable: {e}	La nouvelle AppImage ne peut pas être rendue exécutable : {e}
+@msg	The new version did not start: {e}	La nouvelle version n'a pas démarré : {e}
+@msg	The release publishes no checksum for its AppImage, so nothing was downloaded.	La version ne publie pas de somme de contrôle pour son AppImage : rien n'a été téléchargé.
+@msg	The release's checksums are missing	Les sommes de contrôle de la version manquent
+@msg	The site answered HTTP {status} for its version	Le site a répondu HTTP {status} pour sa version
+@msg	The site could not be reached: {e}	Le site est injoignable : {e}
+@msg	The site's version file has no version in it	Le fichier de version du site ne contient pas de version
+@msg	The update could not start: {e}	La mise à jour n'a pas pu démarrer : {e}
+@msg	The update is downloading.	La mise à jour est en cours de téléchargement.
+@msg	The update is in place: restart TeXCraft to use it.	La mise à jour est en place : redémarrez TeXCraft pour l'utiliser.
+@msg	The update stopped unexpectedly; nothing was replaced.	La mise à jour s'est arrêtée de façon inattendue ; rien n'a été remplacé.
+@msg	This copy cannot replace itself: get the new version from the release page.	Cette copie ne peut pas se remplacer elle-même : obtenez la nouvelle version sur la page de la version.
+@msg	This copy of TeXCraft does not check for updates.	Cette copie de TeXCraft ne recherche pas de mises à jour.
+@msg	Updates come through Flatpak: TeXCraft does not replace itself there.	Les mises à jour passent par Flatpak : TeXCraft ne s'y remplace pas lui-même.
+@msg	github.com answered HTTP {status}	github.com a répondu HTTP {status}
+@msg	github.com could not be reached: {e}	github.com est injoignable : {e}
+@msg	gitlab.com answered HTTP {status}	gitlab.com a répondu HTTP {status}
+@msg	gitlab.com could not be reached: {e}	gitlab.com est injoignable : {e}
+@msg	the parameter `check` (true or false) is missing	le paramètre `check` (true ou false) manque
