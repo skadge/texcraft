@@ -41,6 +41,18 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.13.0" date="2026-11-26" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.13.0</url>
+      <description>
+        <p>TeXCraft in six more languages, grammar checking, a user guide, and the formatted view as a real way to write.</p>
+        <ul>
+          <li>A formatting toolbar in the formatted view, with citation and cross-reference pickers</li>
+          <li>English grammar checked offline as you write</li>
+          <li>The interface in German, Spanish, French, Italian, Dutch and Portuguese</li>
+          <li>A user guide, from Help or F1</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.12.2" date="2026-11-26" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.12.2</url>
       <description>

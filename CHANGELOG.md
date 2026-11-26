@@ -5,6 +5,46 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.13.0 (2026-11-26)
+
+TeXCraft in six more languages, grammar checking, a user guide, and the formatted view as a real
+way to write.
+
+### Writing in the formatted view
+
+- Its own toolbar: paragraph style (body text, headings following the document's class), bold,
+  italic, code, bulleted and numbered lists with indent and outdent, link, footnote, citation
+  and cross-reference (pickers of the project's bibliography and labels), formulas, table and
+  figure; each with a shortcut, and the toolbar shows what is at the caret.
+- Typing across structure: Enter on an empty list item ends the list, Tab and Shift+Tab nest
+  items, Backspace at the start of a heading or an item makes it text again, pasted lists become
+  lists.
+- Spellings in the view's own menu; a citation shows its author and year, Ctrl+click on a
+  reference goes to its label.
+
+### Grammar (desktop)
+
+- English grammar checked as you write, offline, by Harper: a double underline (spelling stays
+  wavy), the explanation and replacements in the menu, Ignore and Turn Off This Rule, groups of
+  rules in Settings › Editor. F7 goes to the next spelling or grammar problem.
+- Check Grammar with AI, for any language, with the connected model.
+
+### Languages
+
+- The interface in German, Spanish, French, Italian, Dutch and Portuguese (Portugal), chosen in
+  Settings › Appearance or following the system. These first translations were drafted with an
+  AI model and have not been reviewed by native speakers yet: corrections are welcome.
+- Times ("3 days ago"), dates, sizes and numbers written the way the language does.
+
+### Help
+
+- A user guide, online at texcraft-893d51.gitlab.io/guide/ and from Help › User Guide (F1).
+
+Known limits:
+
+- Grammar checking is not in the browser build yet (it would add about 10 MB to the page).
+- The guide needs a connection; an offline copy comes with a later release.
+
 ## 0.12.2 (2026-11-26)
 
 0.12.1 with one fix for the web editor; 0.12.1 was not published (its release was stopped for
