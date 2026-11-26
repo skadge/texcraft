@@ -121,3 +121,4 @@ Interface catalogs (`i18n/<locale>.tsv`, until the cutover to storytold/craft-i1
 |---|---|---|---|
 | `i18n/de.tsv` | German | Drafted with an AI model (Claude, November 2026) from the English alone | Not yet |
 | `i18n/es.tsv` | Spanish (Spain) | Drafted with an AI model (Claude, November 2026) from the English alone | Not yet |
+| `i18n/fr.tsv` | French | Drafted with an AI model (Claude, November 2026) from the English alone | Not yet |
