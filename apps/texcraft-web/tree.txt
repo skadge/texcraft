@@ -64,6 +64,10 @@ package tabu ltablex threeparttablex outlines dirtree svg standalone
 package animate media9 multimedia beamerposter acronym nomencl
 package glossaries-extra datetime2 fmtcount xfrac
 
+# The colour profiles of a print build's PDF/X: FOGRA39L_coated.icc (the
+# default output intent) and sRGB.icc, which retex looks for in the tree (#20).
+dir tex/generic/colorprofiles
+
 # Bibliography styles: BibTeX reads them, and the documents above, typeset
 # without BibTeX, never record them (#4). The standard styles and the
 # publishers' (IEEE, Elsevier, ACM, Springer, APS/AIP, AMS, APA, Chicago,

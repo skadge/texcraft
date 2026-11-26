@@ -240,6 +240,7 @@
 	Download	Herunterladen
 	Downloaded from TeX Live when you create the project.	Beim Erstellen des Projekts aus TeX Live heruntergeladen.
 	Downloaded: available offline.	Heruntergeladen: offline verfügbar.
+	Downloading LaTeX packages: {done} of {files}…	LaTeX-Pakete werden heruntergeladen: {done} von {files}…
 	Downloading the template from TeX Live…	Vorlage wird aus TeX Live heruntergeladen…
 	Downloading {file}.	Lade {file} herunter.
 	Draft Another	Weitere entwerfen
@@ -653,6 +654,7 @@
 	Put the caret in a paragraph, or in a list of the other kind.	Setzen Sie den Cursor in einen Absatz oder in eine Liste der anderen Art.
 	Quick Fix	Schnellkorrektur
 	Raw log	Rohprotokoll
+	Reading the downloaded LaTeX packages…	Die heruntergeladenen LaTeX-Pakete werden gelesen…
 	Ready for print	Druckfertig
 	Recent	Zuletzt verwendet
 	Recent projects	Zuletzt verwendete Projekte

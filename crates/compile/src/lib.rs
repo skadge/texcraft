@@ -23,6 +23,7 @@ use texcraft_project::{Project, ProjectPath};
 #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
 pub mod formulas;
 pub mod places;
+pub mod prefetch;
 pub mod records;
 #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
 pub mod retex_backend;
@@ -387,6 +388,8 @@ pub enum Event {
     File { name: String },
     /// A step between passes, such as `running biber`.
     Step { what: String },
+    /// The browser's engine fetches the TeX files the build needs: `done` of `total` so far.
+    Fetching { done: u32, total: u32 },
     /// The PDF of a pass that is not the last (retex 2.3.0), to show while the next passes run;
     /// its references may be undefined.
     Draft {
@@ -417,6 +420,10 @@ pub struct Progress {
     /// The file being read before the first page, or the step between passes.
     pub reading: Option<String>,
     pub step: Option<String>,
+    /// The TeX files fetched so far and how many the build waits for, while the browser's
+    /// engine fetches them; until the build reads a file it has not read before.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fetching: Option<(u32, u32)>,
     /// The pass whose PDF is the build's draft, when one was written.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub draft: Option<u32>,
@@ -435,9 +442,14 @@ impl Progress {
                 self.expected = expected.or(self.expected);
                 self.reading = None;
                 self.step = None;
+                self.fetching = None;
             }
-            Event::File { name } => self.reading = Some(name),
+            Event::File { name } => {
+                self.reading = Some(name);
+                self.fetching = None;
+            }
             Event::Step { what } => self.step = Some(what),
+            Event::Fetching { done, total } => self.fetching = Some((done, total)),
             Event::Draft { pass, .. } => self.draft = Some(pass),
         }
     }

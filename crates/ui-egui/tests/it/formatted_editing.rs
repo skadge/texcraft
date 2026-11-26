@@ -81,3 +81,37 @@ fn special_characters_are_escaped_and_an_atom_deletes_in_two_presses() {
     h.run();
     assert_eq!(text(&mut h), "See 50\\% now.\n");
 }
+
+/// Clicks at `at` with the mouse, the button released in the next frame.
+fn click(h: &mut Harness<'_, App>, at: egui::Pos2) {
+    h.event(egui::Event::PointerMoved(at));
+    h.step();
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+        h.step();
+    }
+    h.run();
+}
+
+#[test]
+fn a_click_in_the_text_keeps_the_keyboard_for_typed_and_composed_text() {
+    // #24: the caret showed while the button was down and went away with the click, so the
+    // browser's text (its input's `Text` and IME events) went nowhere.
+    let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    assert!(s.execute("file.write", &json!({"path": "main.tex", "text": "First paragraph.\n\nSecond one.\n"})).is_ok());
+    let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
+    let mut h = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    h.run();
+    h.get_by_label("Formatted").click();
+    h.run();
+    let r = h.get_by_role_and_label(egui::accesskit::Role::Paragraph, "Second one.").rect();
+    click(&mut h, egui::pos2(r.max.x - 1.0, r.center().y));
+    h.event(egui::Event::Text("!".into()));
+    h.run();
+    assert_eq!(text(&mut h), "First paragraph.\n\nSecond one.!\n", "typed text after a click went nowhere");
+    for event in [egui::ImeEvent::Preedit { text: "e".into(), active_range_chars: None }, egui::ImeEvent::Commit("é".into())] {
+        h.event(egui::Event::Ime(event));
+        h.run();
+    }
+    assert_eq!(text(&mut h), "First paragraph.\n\nSecond one.!é\n", "composed text after a click went nowhere");
+}

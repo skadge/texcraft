@@ -121,7 +121,16 @@ fn state(app: &App) -> (Option<&'static str>, egui::Color32, String) {
 /// file being read, or the step between passes.
 pub(crate) fn progress_now(p: &texcraft_engine::Progress) -> String {
     let n = |v: u32| v.to_string();
-    if let Some(step) = &p.step {
+    if let Some((done, total)) = p.fetching {
+        // The browser's engine fetches the TeX files the document needs, then reads them again.
+        if done >= total {
+            tl!("Reading the downloaded LaTeX packages…").to_owned()
+        } else {
+            tl!("Downloading LaTeX packages: {done} of {files}…")
+                .replace("{done}", &n(done))
+                .replace("{files}", &trn(total as usize, "{n} file", "{n} files"))
+        }
+    } else if let Some(step) = &p.step {
         tl!("Compiling: {step}").replace("{step}", step)
     } else if p.pages > 0 {
         match p.expected {

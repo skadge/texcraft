@@ -9,7 +9,10 @@
 //! fetches the files a plain article reads (retex's read list), so that a first build mostly
 //! runs through; and before a project's first build in a visit, the files its earlier builds
 //! read (its read list, kept per project: [`Kept::read_list`]), so that a project using
-//! packages beyond a plain article's does not stop again for each of them.
+//! packages beyond a plain article's does not stop again for each of them. A project's first
+//! build ever fetches what its class and packages read, as the tree's lists say
+//! ([`crate::prefetch`], [`Engine::prefetch`]); and a run that stops for a package's file fetches
+//! what that package reads with it.
 //!
 //! What it fetched and what the engine made (its format, the indexes of the tree's files and
 //! fonts: `/cache`) is kept in the browser's Cache Storage, so a later visit neither fetches nor
@@ -27,6 +30,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 
+use crate::prefetch::{self, Reported};
 use js_sys::{Array, Object, Reflect, Uint8Array, WebAssembly};
 use texcraft_wasi::web::{Ended, Image, Instance};
 use texcraft_wasi::{FileSystem, Platform, Wasi};
@@ -158,6 +162,8 @@ struct Out {
     /// The PDF's path in the module's files.
     pdf: String,
     drafts: u32,
+    /// The progress lines passed on in this build, over its runs.
+    reported: Reported,
 }
 
 #[derive(Clone)]
@@ -235,7 +241,7 @@ impl Platform for Web {
         let mut lines: Vec<&str> = joined.split('\n').collect();
         out.partial = lines.pop().unwrap_or_default().to_owned();
         for line in lines {
-            if line.starts_with("{\"type\":\"progress\"") || line.starts_with("{\"type\":\"pass\"") {
+            if (line.starts_with("{\"type\":\"progress\"") || line.starts_with("{\"type\":\"pass\"")) && out.reported.fresh(line) {
                 post("line", out.job, &[("text", line.into())], &[]);
             }
             if line.starts_with("{\"type\":\"pass\"")
@@ -434,6 +440,11 @@ struct Engine {
     /// The read lists of the projects built in this visit, by project key: fetched before the
     /// project's first build, then updated after each.
     lists: HashMap<String, BTreeSet<String>>,
+    /// The tree's files by name (`natbib.sty`): where they are (a source, as [`locate`] reads
+    /// it) and their size. The first of a name, as the index lists them.
+    names: HashMap<String, (Rc<str>, u64)>,
+    /// The classes, packages and styles whose files were fetched ([`prefetch::loads`]'s entries).
+    expanded: HashSet<String>,
 }
 
 async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
@@ -472,6 +483,8 @@ impl Engine {
             folders: HashMap::new(),
             kept: Kept::default(),
             lists: HashMap::new(),
+            names: HashMap::new(),
+            expanded: HashSet::new(),
         }
     }
 
@@ -479,8 +492,9 @@ impl Engine {
     /// the browser's cache when they are kept there.
     async fn fetch_all(&mut self, id: f64, paths: Vec<String>) -> Result<(), String> {
         let mut todo = Vec::new();
+        let mut seen = HashSet::new();
         for p in paths {
-            if self.web.fetched.borrow().urls.contains_key(&p) {
+            if !seen.insert(p.clone()) || self.web.fetched.borrow().urls.contains_key(&p) {
                 continue;
             }
             match self.kept.file(&p).await {
@@ -493,12 +507,7 @@ impl Engine {
         }
         let total = todo.len();
         for (n, batch) in todo.chunks(FETCH_BATCH).enumerate() {
-            post(
-                "line",
-                id,
-                &[("text", format!("{{\"type\":\"progress\",\"note\":\"downloading TeX files ({} of {total})\"}}", n * FETCH_BATCH).into())],
-                &[],
-            );
+            post("line", id, &[("text", prefetch::fetching_record(n * FETCH_BATCH, total).into())], &[]);
             // The requests are all made before any is awaited, so they download together.
             let requests: Vec<js_sys::Promise> = batch.iter().map(|p| scope().fetch_with_str(&self.web.fetched.borrow().url(p))).collect();
             for (p, request) in batch.iter().zip(requests) {
@@ -506,6 +515,9 @@ impl Engine {
                 self.kept.keep_file(p, &bytes).await;
                 self.web.fetched.borrow_mut().urls.insert(p.clone(), Rc::new(bytes));
             }
+        }
+        if total > 0 {
+            post("line", id, &[("text", prefetch::fetching_record(total, total).into())], &[]);
         }
         Ok(())
     }
@@ -537,6 +549,9 @@ impl Engine {
                     format!("file:{site}").into()
                 }
             };
+            if let Some(name) = path.rsplit('/').next() {
+                self.names.entry(name.to_owned()).or_insert_with(|| (source.clone(), size));
+            }
             self.fs.add_lazy(path, size, source);
         }
         self.fs.mkdirs("/cache", now_ns());
@@ -589,6 +604,7 @@ impl Engine {
         let names: Array = get(msg, "names").unchecked_into();
         let contents: Array = get(msg, "contents").unchecked_into();
         let flags: Array = get(msg, "args").unchecked_into();
+        self.prefetch_sources(id, &names, &contents).await;
         // An export (`{type: "export", format}`): retex's `-output-format`, run once from the start
         // and apart from the preview's snapshot.
         let export = get(msg, "format").as_string().filter(|f| f != "pdf");
@@ -628,10 +644,11 @@ impl Engine {
         let mut stops = 0;
         let mut reruns = 0;
         self.web.fetched.borrow_mut().opened.clear();
+        let mut reported = Reported::default();
         // `whole`: whether the run that ended was started from the start (not resumed from the
         // preamble's snapshot), so it opened every file the build needs.
         let (code, whole) = loop {
-            *self.web.out.borrow_mut() = Out { job: id, pdf: pdf.clone(), ..Out::default() };
+            *self.web.out.borrow_mut() = Out { job: id, pdf: pdf.clone(), reported: std::mem::take(&mut reported), ..Out::default() };
             self.web.fetched.borrow_mut().run_started = js_sys::Date::now();
             let wasi = Wasi::new(self.fs.clone(), self.web.clone(), args.clone(), env.clone());
             let instance = Instance::new(&module, wasi, true).map_err(|e| format!("instantiating retex: {e:?}"))?;
@@ -641,6 +658,7 @@ impl Engine {
                 _ => instance.start(),
             };
             let image = instance.image();
+            reported = std::mem::take(&mut self.web.out.borrow_mut().reported);
             match ended {
                 Ended::Exit(STALE) if resumed => {
                     // The preamble's files changed: from the start, with a new snapshot.
@@ -658,19 +676,8 @@ impl Engine {
                     if stops > MAX_FETCH_STOPS {
                         return Err("the build needed more TeX files than it could fetch".into());
                     }
-                    let Some((path, _)) = locate(&source) else { return Err(format!("unknown source {source}")) };
-                    log::info!("build {id}: run {stops} stopped to fetch {path}");
-                    let mut paths = vec![path.clone()];
-                    if let Some((folder, _)) = path.rsplit_once('/') {
-                        let mut budget = SIBLINGS_BYTES;
-                        for (p, size) in self.folders.get(folder).into_iter().flatten() {
-                            if *p != path && *size <= budget && !self.web.fetched.borrow().urls.contains_key(p) {
-                                budget -= size;
-                                paths.push(p.clone());
-                            }
-                        }
-                    }
-                    self.fetch_all(id, paths).await?;
+                    log::info!("build {id}: run {stops} stopped to fetch {source}");
+                    self.fetch_stopped_for(id, &source).await?;
                 }
                 Ended::Crashed(why) => return Err(format!("the typesetting engine stopped: {why}")),
             }
@@ -759,6 +766,79 @@ impl Engine {
             }
         }
         post("exported", id, &[("names", names.into()), ("contents", contents.into())], &transfer);
+    }
+
+    /// What the project's sources (`names`, `contents`: the build message's) load, fetched
+    /// together before the first run that needs it.
+    async fn prefetch_sources(&mut self, id: f64, names: &Array, contents: &Array) {
+        let mut wanted = Vec::new();
+        for (name, bytes) in names.iter().zip(contents.iter()) {
+            let name = name.as_string().unwrap_or_default();
+            if [".tex", ".sty", ".cls", ".ltx"].iter().any(|e| name.ends_with(e)) {
+                wanted.extend(prefetch::loads(&String::from_utf8_lossy(&Uint8Array::new(&bytes).to_vec())));
+            }
+        }
+        let paths = self.expand(id, wanted).await;
+        if let Err(e) = self.fetch_all(id, paths).await {
+            log::warn!("fetching what the document loads: {e}");
+        }
+    }
+
+    /// After a run stopped for `source`: fetches its file, the others of its folder (up to
+    /// [`SIBLINGS_BYTES`]), and for a package's file what the package reads.
+    async fn fetch_stopped_for(&mut self, id: f64, source: &str) -> Result<(), String> {
+        let Some((path, _)) = locate(source) else { return Err(format!("unknown source {source}")) };
+        let mut paths = vec![path.clone()];
+        if let Some((folder, _)) = path.rsplit_once('/') {
+            let mut budget = SIBLINGS_BYTES;
+            for (p, size) in self.folders.get(folder).into_iter().flatten() {
+                if *p != path && *size <= budget && !self.web.fetched.borrow().urls.contains_key(p) {
+                    budget -= size;
+                    paths.push(p.clone());
+                }
+            }
+        }
+        // A package's file: what the package reads comes with it.
+        paths.extend(self.expand(id, prefetch::entry_of(&path).into_iter().collect()).await);
+        self.fetch_all(id, paths).await
+    }
+
+    /// The site's files the classes, packages and styles `wanted` ([`prefetch::loads`]'s
+    /// entries) read, for [`Self::fetch_all`] to fetch together: for each, the tree's list of what
+    /// a document loading it reads (`seed/reads/package/NAME.txt`, …) or, without one, its file
+    /// (fetched here) and what that file loads in turn. Entries expanded before are left out.
+    async fn expand(&mut self, id: f64, mut wanted: Vec<String>) -> Vec<String> {
+        let mut paths = Vec::new();
+        while !wanted.is_empty() {
+            wanted.retain(|e| self.expanded.insert(e.clone()));
+            // The lists of this round, requested together.
+            let requests: Vec<(String, js_sys::Promise)> =
+                wanted.iter().map(|e| (e.clone(), scope().fetch_with_str(&self.web.fetched.borrow().url(&format!("seed/reads/{e}.txt"))))).collect();
+            let mut next = Vec::new();
+            for (entry, request) in requests {
+                match response_bytes(&entry, request).await {
+                    Ok(list) => paths.extend(String::from_utf8_lossy(&list).lines().filter(|l| l.starts_with("tree/")).map(str::to_owned)),
+                    Err(_) => {
+                        // No list: the file itself, and what it loads.
+                        let Some((source, size)) = prefetch::file_name(&entry).and_then(|n| self.names.get(&n).cloned()) else { continue };
+                        let Some((path, offset)) = locate(&source) else { continue };
+                        if self.fetch_all(id, vec![path.clone()]).await.is_err() {
+                            continue;
+                        }
+                        let bytes = self.web.fetched.borrow().urls.get(&path).cloned();
+                        let start = offset.unwrap_or(0);
+                        let end = if offset.is_some() { start + size as usize } else { usize::MAX };
+                        if let Some(text) = bytes.as_ref().and_then(|b| b.get(start..end.min(b.len()))) {
+                            next.extend(prefetch::loads(&String::from_utf8_lossy(text)));
+                        }
+                    }
+                }
+            }
+            wanted = next;
+        }
+        paths.sort();
+        paths.dedup();
+        paths
     }
 
     /// Before `project`'s first build in this visit, fetches its read list. A file that cannot be

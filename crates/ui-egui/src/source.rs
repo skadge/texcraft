@@ -908,10 +908,12 @@ impl SourceEditor {
             ui.ctx().data_mut(|d| d.insert_temp(id.with("view"), (viewport.height(), viewport.min.y)));
             let origin = rect.min + vec2(gutter + margin.x, margin.y);
             let response = ui.interact(rect, id, Sense::click_and_drag());
-            if response.clicked() || response.drag_started() || response.secondary_clicked() {
+            // A finger's drag scrolls; its tap or long press takes the keyboard.
+            let finger = crate::touch::scroll(ui, &response);
+            if response.clicked() || (!finger && (response.drag_started() || response.secondary_clicked())) {
                 response.request_focus();
             }
-            self.mouse(&response, origin, &ctx);
+            self.mouse(&response, origin, &ctx, finger);
             let first = self.line_at_y(viewport.min.y - margin.y);
             let last = self.line_at_y(viewport.max.y - margin.y);
             self.view = (first, last.saturating_sub(first).max(1));
@@ -2132,7 +2134,7 @@ impl SourceEditor {
         vim.sync(&mut vctx);
     }
 
-    fn mouse(&mut self, response: &egui::Response, origin: Pos2, ctx: &egui::Context) {
+    fn mouse(&mut self, response: &egui::Response, origin: Pos2, ctx: &egui::Context, finger: bool) {
         // Ctrl+click (Cmd+click) goes to the definition of what is clicked.
         if response.clicked()
             && ctx.input(|i| i.modifiers.command)
@@ -2175,11 +2177,54 @@ impl SourceEditor {
                 self.doc.buffer.seal();
             }
         }
-        self.mouse_select(response, origin, ctx);
+        if finger {
+            // A tap places the caret; the drag scrolled.
+            if response.clicked()
+                && let Some(p) = response.interact_pointer_pos()
+            {
+                self.doc.selection = Selection::point(self.pos_at(p - origin));
+                self.doc.buffer.seal();
+                self.want_x = None;
+            }
+        } else if response.long_touched() || crate::touch::selecting(ctx) {
+            self.touch_select(response, origin, ctx);
+        } else {
+            self.mouse_select(response, origin, ctx);
+        }
         if self.doc.selection != before {
             self.completion = None;
             self.vim_sync();
         }
+    }
+
+    /// A finger's long press selects the word there; moving the finger, still down, extends the
+    /// selection from it.
+    fn touch_select(&mut self, response: &egui::Response, origin: Pos2, ctx: &egui::Context) {
+        let Some(p) = ctx.input(|i| i.pointer.latest_pos()) else { return };
+        let pos = self.pos_at(p - origin);
+        if response.long_touched() {
+            let (start, end) = self.word_at(pos);
+            self.doc.selection = Selection::single(start, end);
+            self.doc.buffer.seal();
+            self.drag = Some(start);
+            self.want_x = None;
+        } else if let Some(anchor) = self.drag {
+            self.doc.selection = Selection::single(anchor, pos);
+        }
+    }
+
+    /// The word around `pos`: its start and end.
+    fn word_at(&self, pos: usize) -> (usize, usize) {
+        let b = &self.doc.buffer;
+        let mut s = pos;
+        while s > 0 && b.char_at(s - 1).is_some_and(is_word) {
+            s -= 1;
+        }
+        let mut e = pos;
+        while b.char_at(e).is_some_and(is_word) {
+            e += 1;
+        }
+        (s, e)
     }
 
     fn mouse_select(&mut self, response: &egui::Response, origin: Pos2, ctx: &egui::Context) {
@@ -2196,17 +2241,7 @@ impl SourceEditor {
             self.clicks = (now, pos, count);
             let b = &self.doc.buffer;
             let (start, end) = match count {
-                2 => {
-                    let mut s = pos;
-                    while s > 0 && b.char_at(s - 1).is_some_and(is_word) {
-                        s -= 1;
-                    }
-                    let mut e = pos;
-                    while b.char_at(e).is_some_and(is_word) {
-                        e += 1;
-                    }
-                    (s, e)
-                }
+                2 => self.word_at(pos),
                 3 => {
                     let line = b.char_to_line(pos);
                     (b.line_to_char(line), (b.line_end(line) + 1).min(b.len_chars()))

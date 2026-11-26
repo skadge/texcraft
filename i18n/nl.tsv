@@ -240,6 +240,7 @@
 	Download	Downloaden
 	Downloaded from TeX Live when you create the project.	Gedownload van TeX Live wanneer u het project aanmaakt.
 	Downloaded: available offline.	Gedownload: offline beschikbaar.
+	Downloading LaTeX packages: {done} of {files}…	LaTeX-pakketten downloaden: {done} van {files}…
 	Downloading the template from TeX Live…	Het sjabloon wordt gedownload van TeX Live…
 	Downloading {file}.	{file} wordt gedownload.
 	Draft Another	Nog een ontwerpen
@@ -653,6 +654,7 @@
 	Put the caret in a paragraph, or in a list of the other kind.	Zet de cursor in een alinea, of in een lijst van de andere soort.
 	Quick Fix	Snelle oplossing
 	Raw log	Onbewerkt log
+	Reading the downloaded LaTeX packages…	De gedownloade LaTeX-pakketten worden gelezen…
 	Ready for print	Klaar voor drukwerk
 	Recent	Recent
 	Recent projects	Recente projecten

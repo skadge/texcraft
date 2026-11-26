@@ -347,16 +347,23 @@ fn stop_at(d: &DrawnLine, p: egui::Pos2) -> usize {
 
 fn pointer(app: &mut App, ctx: &egui::Context, f: &Frame<'_>) {
     let (pressed, down, shift) = ctx.input(|i| (i.pointer.primary_pressed(), i.pointer.primary_down(), i.modifiers.shift));
+    // A finger: its drag scrolled the view (`touch::scroll`); its tap places the caret, its long
+    // press selects the word, and the finger, still down, then extends the selection.
+    let finger = crate::touch::is_touch(ctx);
     for (i, d) in f.lines.iter().enumerate() {
-        if !(pressed && d.response.is_pointer_button_down_on()) {
+        let r = &d.response;
+        let starts = if finger { r.clicked() || r.long_touched() } else { pressed && r.is_pointer_button_down_on() };
+        if !starts {
             continue;
         }
-        let Some(p) = d.response.interact_pointer_pos() else { continue };
+        let Some(p) = r.interact_pointer_pos() else { continue };
         let head = Pos { line: i, at: stop_at(d, p) };
         let anchor = if shift { selection(app, f).map_or(head, |s| s.0) } else { head };
+        let (anchor, head) = if finger && r.long_touched() { word_at(f, head).unwrap_or((anchor, head)) } else { (anchor, head) };
         set_selection(app, f, anchor, head);
         let e = &mut app.editor.formatted.editing;
-        e.dragging = true;
+        // A tap only places the caret; a long press goes on selecting while the finger is down.
+        e.dragging = !finger || r.long_touched();
         e.want_x = None;
         e.focus = true;
         ctx.request_repaint();

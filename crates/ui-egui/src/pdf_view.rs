@@ -684,7 +684,28 @@ impl PdfView {
         let at = |p: egui::Pos2| ((p - page.min) / zoom).to_pos2();
         // The middle button pans instead ([`PdfView::show`]).
         let primary = !ui.input(|i| i.pointer.middle_down());
-        if r.drag_started()
+        // A finger's drag scrolls the pages (#26); its long press selects from there, and moving
+        // it, still down, extends the selection.
+        let finger = crate::touch::scroll(ui, r);
+        let pointer = ui.input(|input| input.pointer.latest_pos());
+        if r.long_touched()
+            && let Some(p) = pointer
+        {
+            let p = at(p);
+            self.selection = self.page_glyphs(i).and_then(|g| texcraft_preview::glyph_at(&g, p.x, p.y)).map(|g| (i, g, g));
+        } else if crate::touch::selecting(ui.ctx())
+            && let Some((page_selected, _, head)) = &mut self.selection
+            && *page_selected == i
+            && let Some(p) = pointer
+            && let Some(glyphs) = self.glyphs.get(&i)
+        {
+            let p = at(p);
+            *head = texcraft_preview::glyph_at(glyphs, p.x, p.y).unwrap_or(*head);
+        } else if finger {
+            if r.clicked() {
+                self.selection = None;
+            }
+        } else if r.drag_started()
             && primary
             && let Some(start) = ui.input(|input| input.pointer.press_origin())
         {
