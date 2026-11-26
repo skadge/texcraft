@@ -58,7 +58,11 @@ pub(crate) fn published(dir: &Path, url: &str, auth: Option<(&str, &str)>) -> Re
 
 /// The window, reaching git servers through `http`, its documents folder `documents`.
 pub(crate) fn window(session: Session, documents: &Path, size: egui::Vec2) -> Harness<'static, App> {
-    let mut app = App::with_prefs(session, Prefs { auto_compile: false, ..Prefs::default() });
+    window_with(session, documents, size, Prefs { auto_compile: false, ..Prefs::default() })
+}
+
+fn window_with(session: Session, documents: &Path, size: egui::Vec2, prefs: Prefs) -> Harness<'static, App> {
+    let mut app = App::with_prefs(session, prefs);
     app.set_documents_dir(Some(documents.to_path_buf()));
     let mut h = Harness::builder().with_size(size).with_step_dt(1.0 / 60.0).with_max_steps(60).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
     h.run();
@@ -471,4 +475,41 @@ fn on_a_phone_the_sources_are_a_list_inside_the_window() {
     let visible: Vec<_> = rows.iter().filter(|r| r.bottom() <= screen.bottom()).collect();
     assert!(visible.iter().all(|r| screen.contains_rect(**r)), "a row is past the window's sides: {rows:?}");
     assert!(rows.iter().all(|r| r.height() >= 55.0), "the rows are not a finger's height");
+}
+
+#[test]
+fn a_project_on_a_gitlab_server_added_is_chosen_there_and_cloned() {
+    const TOKEN: &str = "glpat-server-import";
+    const SERVER: &str = "https://git.example.org";
+    let dir = temp("server");
+    let fake = texcraft_engine::forge::fake::FakeGitLab::new(SERVER, "lab/paper", TOKEN, &[("main.tex", b"x\n")]);
+    let git = published(&dir, "https://git.example.org/lab/paper.git", Some(("oauth2", TOKEN))).unwrap();
+    let mut s = over(&git);
+    s.set_forge_transport(move || fake.transport());
+    let server = texcraft_engine::forge::servers::Server::new(SERVER, texcraft_engine::forge::Service::GitLab, "lab-app").unwrap();
+    let prefs = Prefs { auto_compile: false, forge_servers: vec![server], ..Prefs::default() };
+    let mut h = window_with(s, &dir, WIDE, prefs);
+    open(&mut h, None);
+    let card = h.get_by_role_and_label(Role::Button, "GitLab Server, git.example.org");
+    card.click();
+    h.run();
+    assert!(h.query_by_label("Import from a GitLab Server").is_some());
+    let chosen = h.get_by_role_and_label(Role::ComboBox, "Server");
+    assert!(chosen.accesskit_node().value().unwrap_or_default().starts_with("git.example.org"), "the server added is not chosen");
+    if h.query_by_label("Personal access token").is_none() {
+        h.get_by_label("Use a personal access token instead").click();
+        h.run();
+    }
+    type_into(&mut h, "Personal access token", TOKEN);
+    // A path alone is on the server chosen.
+    type_into(&mut h, "Project", "lab/paper");
+    crate::forge::quiet(&mut h);
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.get_by_role_and_label(Role::Button, "Import").click();
+    settle(&mut h);
+    assert!(said(&h, "Imported paper (main) into"), "not imported");
+    let remotes = h.state_mut().control("engine.execute", &json!({"command": "git.remotes", "params": {}}))["result"].clone();
+    assert_eq!(remotes["url"], "https://git.example.org/lab/paper.git", "{remotes}");
+    let _ = std::fs::remove_dir_all(&dir);
 }
