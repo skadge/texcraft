@@ -775,6 +775,7 @@
 	Show What Was Sent	Gesendetes anzeigen
 	Show in Folder	Im Ordner anzeigen
 	Show in PDF	Im PDF anzeigen
+	Show in Source	Im Quelltext zeigen
 	Show it on the page	Auf der Seite anzeigen
 	Show suggestions in the PDF	Vorschläge im PDF anzeigen
 	Show the PDF a page at a time, in the whole window.	Das PDF seitenweise im ganzen Fenster anzeigen.
@@ -1352,6 +1353,7 @@
 	Spelling is off.	Die Rechtschreibprüfung ist aus.
 	Spelling off	Rechtschreibung aus
 	spelling language	Sprache der Rechtschreibprüfung
+	The source is shown already: this goes from the formatted view to it.	Der Quelltext wird bereits gezeigt: Dies führt von der formatierten Ansicht zu ihm.
 button	Commit	Committen
 button	Pull	Pullen
 comment	, resolved	, erledigt
@@ -1603,6 +1605,7 @@ unit	{n} s	{n} s
 @id	view.present.previous	Vorherige Seite
 @id	view.previous_region	Vorheriger Bereich
 @id	view.show_in_pdf	Im PDF anzeigen
+@id	view.show_in_source	Im Quelltext zeigen
 @id	view.show_output	Build-Ausgabe im Ordner anzeigen
 @id	view.side.ask	KI fragen
 @id	view.side.files	Projektdateien

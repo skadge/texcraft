@@ -775,6 +775,7 @@
 	Show What Was Sent	Mostrar o que foi enviado
 	Show in Folder	Mostrar na pasta
 	Show in PDF	Mostrar no PDF
+	Show in Source	Mostrar no código-fonte
 	Show it on the page	Mostrar na página
 	Show suggestions in the PDF	Mostrar sugestões no PDF
 	Show the PDF a page at a time, in the whole window.	Mostrar o PDF uma página de cada vez, na janela inteira.
@@ -1352,6 +1353,7 @@
 	Spelling is off.	A verificação ortográfica está desativada.
 	Spelling off	Ortografia desativada
 	spelling language	idioma da verificação ortográfica
+	The source is shown already: this goes from the formatted view to it.	O código-fonte já está à vista: isto leva da vista formatada até ele.
 button	Commit	Fazer commit
 button	Pull	Receber
 comment	, resolved	, resolvido
@@ -1603,6 +1605,7 @@ unit	{n} s	{n} s
 @id	view.present.previous	Página anterior
 @id	view.previous_region	Região anterior
 @id	view.show_in_pdf	Mostrar no PDF
+@id	view.show_in_source	Mostrar no código-fonte
 @id	view.show_output	Mostrar resultado da compilação na pasta
 @id	view.side.ask	Perguntar à IA
 @id	view.side.files	Ficheiros do projeto

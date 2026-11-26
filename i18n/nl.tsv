@@ -775,6 +775,7 @@
 	Show What Was Sent	Tonen wat is verstuurd
 	Show in Folder	In map tonen
 	Show in PDF	In pdf tonen
+	Show in Source	Tonen in de broncode
 	Show it on the page	Op de pagina tonen
 	Show suggestions in the PDF	Voorstellen in de pdf tonen
 	Show the PDF a page at a time, in the whole window.	De pdf pagina voor pagina tonen, in het hele venster.
@@ -1352,6 +1353,7 @@
 	Spelling is off.	De spellingcontrole staat uit.
 	Spelling off	Spelling uit
 	spelling language	taal van de spellingcontrole
+	The source is shown already: this goes from the formatted view to it.	De broncode wordt al getoond: dit gaat van de opgemaakte weergave naar de broncode.
 button	Commit	Committen
 button	Pull	Pullen
 comment	, resolved	, opgelost
@@ -1603,6 +1605,7 @@ unit	{n} s	{n} s
 @id	view.present.previous	Vorige pagina
 @id	view.previous_region	Vorig gebied
 @id	view.show_in_pdf	In pdf tonen
+@id	view.show_in_source	Tonen in de broncode
 @id	view.show_output	Builduitvoer in map tonen
 @id	view.side.ask	AI vragen
 @id	view.side.files	Projectbestanden
