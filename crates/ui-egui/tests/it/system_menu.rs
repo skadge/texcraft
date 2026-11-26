@@ -14,7 +14,7 @@ use texcraft_compile::Unavailable;
 use texcraft_engine::{Session, cmd};
 use texcraft_ui_egui::App;
 use texcraft_ui_egui::prefs::Prefs;
-use texcraft_ui_egui::ui_cmd::{MENUS, UI_COMMANDS};
+use texcraft_ui_egui::ui_cmd::{self, MENUS, UI_COMMANDS};
 
 fn app(prefs: Prefs) -> Result<App, String> {
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
@@ -79,6 +79,11 @@ fn the_tree_has_the_window_menus_entries_shortcuts_and_enabled_states() {
 
     let session = app.session();
     for spec in cmd::all().iter().filter(|c| c.menu.first().is_some_and(|m| MENUS.contains(m))) {
+        // The browser's own entries (Download Project as Zip) are not a desktop window's.
+        if !ui_cmd::in_menus(&app, spec.id) {
+            assert!(tree.find(&spec.id.into()).is_none(), "{} is in the desktop's menus", spec.id);
+            continue;
+        }
         let item = tree.find(&spec.id.into()).unwrap_or_else(|| panic!("{} is missing", spec.id));
         assert_eq!(item.enabled, (spec.enabled)(session).is_ok(), "{} enabled", spec.id);
         assert_eq!(item.shortcut, default_chord(spec.shortcut), "{} shortcut", spec.id);

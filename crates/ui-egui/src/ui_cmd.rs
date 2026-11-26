@@ -271,6 +271,7 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "view.logs" => app.view.logs = !app.view.logs,
         "view.show_output" => show_output(app, params),
         "build.save_output" => save_output(app, params),
+        "project.download_zip" => download_zip(app, params),
         "view.theme" => {
             let next = if app.tokens.scheme == Scheme::Dark { ThemePref::Light } else { ThemePref::Dark };
             let ctx = app.ctx.clone();
@@ -410,6 +411,25 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             app.run(id, json!({}));
         }
     }
+}
+
+/// Whether the menus offer command `id` here: downloading the project as a zip is the browser's
+/// way to keep a copy elsewhere (a desktop project is a folder already).
+pub fn in_menus(app: &App, id: &str) -> bool {
+    id != "project.download_zip" || app.session.library().is_some()
+}
+
+/// Downloads the project as a zip file (in the browser; with a `path`, writes it there) and says
+/// so on the status line.
+fn download_zip(app: &mut App, params: &serde_json::Value) {
+    let Some(done) = app.run("project.download_zip", params.clone()) else { return };
+    let file = done["path"].as_str().unwrap_or_default();
+    let said = if done["download"].as_bool() == Some(true) {
+        tl!("Downloading {file}.").replace("{file}", file)
+    } else {
+        tl!("Saved to {path}.").replace("{path}", file)
+    };
+    app.view.status = Some((said, false));
 }
 
 /// Exports to `format`: asks where (a native picker, or a typed path), then runs `build.export`.
