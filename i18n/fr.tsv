@@ -134,7 +134,7 @@
 	Check spelling	Vérifier l'orthographe
 	Checking the server…	Vérification du serveur…
 	Checking {language}, as the document's babel or polyglossia sets it.	Vérification en {language}, comme le définit babel ou polyglossia dans le document.
-	Checking {language}, the interface's language: the document names none.	Vérification en {language}, la langue de l'interface : le document n'en indique aucune.
+	Checking {language}, from the interface's language and the system's region: the document names none.	Vérification en {language}, d'après la langue de l'interface et la région du système : le document n'en indique aucune.
 	Checking {language}.	Vérification en {language}.
 	Chinese	Chinois
 	Choose Where to Make the Project's Folder	Choisir où créer le dossier du projet
@@ -324,6 +324,7 @@
 	Free software under the MIT or Apache 2.0 licence. Icons from Lucide (ISC).	Logiciel libre sous licence MIT ou Apache 2.0. Icônes de Lucide (ISC).
 	French	Français
 	From the document	D'après le document
+	From the document ({language})	Selon le document ({language})
 	Gamma, capital	Gamma majuscule
 	German	Allemand
 	GitHub (github.com)	GitHub (github.com)
@@ -1348,6 +1349,10 @@
 	What is sent, and when: the user guide's AI page	Ce qui est envoyé, et quand : la page IA du guide de l'utilisateur
 	{files} was not loaded: a file larger than {limit} stays in the folder, unchanged, and is not part of the build.	{files} n'a pas été chargé : un fichier de plus de {limit} reste dans le dossier, inchangé, et ne fait pas partie de la compilation.
 	These files were not loaded: {files}. Files larger than {limit} stay in the folder, unchanged, and are not part of the build.	Ces fichiers n'ont pas été chargés : {files}. Les fichiers de plus de {limit} restent dans le dossier, inchangés, et ne font pas partie de la compilation.
+	Off	Désactivée
+	Spelling is off.	La vérification orthographique est désactivée.
+	Spelling off	Orthographe désactivée
+	spelling language	langue de la vérification orthographique
 button	Commit	Valider
 button	Pull	Tirer
 comment	, resolved	, résolu

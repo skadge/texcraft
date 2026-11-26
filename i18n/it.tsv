@@ -134,7 +134,7 @@
 	Check spelling	Controlla l'ortografia
 	Checking the server…	Verifica del server…
 	Checking {language}, as the document's babel or polyglossia sets it.	Controllo in {language}, come impostato da babel o polyglossia nel documento.
-	Checking {language}, the interface's language: the document names none.	Controllo in {language}, la lingua dell'interfaccia: il documento non ne indica nessuna.
+	Checking {language}, from the interface's language and the system's region: the document names none.	Controllo in {language}, secondo la lingua dell'interfaccia e la regione del sistema: il documento non ne indica nessuna.
 	Checking {language}.	Controllo in {language}.
 	Chinese	Cinese
 	Choose Where to Make the Project's Folder	Scegli dove creare la cartella del progetto
@@ -324,6 +324,7 @@
 	Free software under the MIT or Apache 2.0 licence. Icons from Lucide (ISC).	Software libero con licenza MIT o Apache 2.0. Icone da Lucide (ISC).
 	French	Francese
 	From the document	Dal documento
+	From the document ({language})	Dal documento ({language})
 	Gamma, capital	Gamma maiuscola
 	German	Tedesco
 	GitHub (github.com)	GitHub (github.com)
@@ -1348,6 +1349,10 @@
 	What is sent, and when: the user guide's AI page	Cosa viene inviato e quando: la pagina IA della guida utente
 	{files} was not loaded: a file larger than {limit} stays in the folder, unchanged, and is not part of the build.	{files} non è stato caricato: un file più grande di {limit} resta nella cartella, invariato, e non fa parte della compilazione.
 	These files were not loaded: {files}. Files larger than {limit} stay in the folder, unchanged, and are not part of the build.	Questi file non sono stati caricati: {files}. I file più grandi di {limit} restano nella cartella, invariati, e non fanno parte della compilazione.
+	Off	Disattivato
+	Spelling is off.	Il controllo ortografico è disattivato.
+	Spelling off	Ortografia disattivata
+	spelling language	lingua del controllo ortografico
 button	Commit	Commit
 button	Pull	Pull
 comment	, resolved	, risolto

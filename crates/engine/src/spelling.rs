@@ -250,6 +250,11 @@ impl Session {
         if !chosen.is_empty() && chosen != "auto" {
             return (chosen.to_owned(), LanguageFrom::Setting);
         }
+        self.automatic_spelling_language()
+    }
+
+    /// The language checked when none is chosen (`auto`): the document's, else the interface's.
+    pub fn automatic_spelling_language(&self) -> (String, LanguageFrom) {
         let main = self.project.main().and_then(|m| self.project.text(m).ok());
         match main.and_then(texcraft_latex::prose::document_language) {
             Some(tag) => (tag.to_owned(), LanguageFrom::Document),
@@ -266,6 +271,11 @@ impl Session {
         let (lang, _) = self.spelling_language();
         self.spelling.dictionary.available(&lang)?;
         Ok(lang)
+    }
+
+    /// Why words in `lang` (a BCP 47 tag) cannot be checked, if they cannot: no dictionary.
+    pub fn spelling_available(&self, lang: &str) -> Result<()> {
+        self.spelling.dictionary.available(lang)
     }
 
     /// The project's words: from `.texcraft/words.txt` in its folder (read once per folder), or

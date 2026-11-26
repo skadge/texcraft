@@ -134,7 +134,7 @@
 	Check spelling	Revisar ortografía
 	Checking the server…	Comprobando el servidor…
 	Checking {language}, as the document's babel or polyglossia sets it.	Revisando {language}, tal como lo indica babel o polyglossia en el documento.
-	Checking {language}, the interface's language: the document names none.	Revisando {language}, el idioma de la interfaz: el documento no indica ninguno.
+	Checking {language}, from the interface's language and the system's region: the document names none.	Se revisa en {language}, según el idioma de la interfaz y la región del sistema: el documento no indica ninguno.
 	Checking {language}.	Revisando {language}.
 	Chinese	Chino
 	Choose Where to Make the Project's Folder	Elegir dónde crear la carpeta del proyecto
@@ -324,6 +324,7 @@
 	Free software under the MIT or Apache 2.0 licence. Icons from Lucide (ISC).	Software libre bajo la licencia MIT o Apache 2.0. Iconos de Lucide (ISC).
 	French	Francés
 	From the document	Del documento
+	From the document ({language})	Del documento ({language})
 	Gamma, capital	Gamma mayúscula
 	German	Alemán
 	GitHub (github.com)	GitHub (github.com)
@@ -1348,6 +1349,10 @@
 	What is sent, and when: the user guide's AI page	Qué se envía y cuándo: la página de IA de la guía del usuario
 	{files} was not loaded: a file larger than {limit} stays in the folder, unchanged, and is not part of the build.	{files} no se ha cargado: un archivo de más de {limit} se queda en la carpeta, sin cambios, y no forma parte de la compilación.
 	These files were not loaded: {files}. Files larger than {limit} stay in the folder, unchanged, and are not part of the build.	Estos archivos no se han cargado: {files}. Los archivos de más de {limit} se quedan en la carpeta, sin cambios, y no forman parte de la compilación.
+	Off	Desactivada
+	Spelling is off.	La revisión ortográfica está desactivada.
+	Spelling off	Ortografía desactivada
+	spelling language	idioma de la revisión ortográfica
 button	Commit	Hacer commit
 button	Pull	Traer
 comment	, resolved	, resuelto

@@ -134,7 +134,7 @@
 	Check spelling	Spelling controleren
 	Checking the server…	De server wordt gecontroleerd…
 	Checking {language}, as the document's babel or polyglossia sets it.	{language} wordt gecontroleerd, zoals babel of polyglossia in het document dat instelt.
-	Checking {language}, the interface's language: the document names none.	{language} wordt gecontroleerd, de taal van de interface: het document noemt er geen.
+	Checking {language}, from the interface's language and the system's region: the document names none.	Controle in {language}, volgens de taal van de interface en de regio van het systeem: het document noemt er geen.
 	Checking {language}.	{language} wordt gecontroleerd.
 	Chinese	Chinees
 	Choose Where to Make the Project's Folder	Kies waar de map van het project komt
@@ -324,6 +324,7 @@
 	Free software under the MIT or Apache 2.0 licence. Icons from Lucide (ISC).	Vrije software onder de MIT- of Apache 2.0-licentie. Pictogrammen van Lucide (ISC).
 	French	Frans
 	From the document	Uit het document
+	From the document ({language})	Uit het document ({language})
 	Gamma, capital	Gamma, hoofdletter
 	German	Duits
 	GitHub (github.com)	GitHub (github.com)
@@ -1348,6 +1349,10 @@
 	What is sent, and when: the user guide's AI page	Wat er wordt verzonden en wanneer: de AI-pagina van de gebruikershandleiding
 	{files} was not loaded: a file larger than {limit} stays in the folder, unchanged, and is not part of the build.	{files} is niet geladen: een bestand groter dan {limit} blijft ongewijzigd in de map en hoort niet bij de build.
 	These files were not loaded: {files}. Files larger than {limit} stay in the folder, unchanged, and are not part of the build.	Deze bestanden zijn niet geladen: {files}. Bestanden groter dan {limit} blijven ongewijzigd in de map en horen niet bij de build.
+	Off	Uit
+	Spelling is off.	De spellingcontrole staat uit.
+	Spelling off	Spelling uit
+	spelling language	taal van de spellingcontrole
 button	Commit	Committen
 button	Pull	Pullen
 comment	, resolved	, opgelost
