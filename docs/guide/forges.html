@@ -103,10 +103,10 @@
       <p>When a project has a remote (its folder's git remote, or the branch it was opened from), <span class="ui">⇅ Sync</span> stands beside its name in the top bar, with what waits to go either way: <span class="ui">↑2</span> for two versions to send, <span class="ui">↓1</span> for one to receive (as last seen); hovering says it in words. One click:</p>
       <ol>
         <li>makes a version of your changes, if there are some (<a href="projects.html#history">History</a>);</li>
-        <li>takes in the remote's new commits, merging text files changed on both sides line by line;</li>
+        <li>takes in the remote's new commits, merging text files changed on both sides;</li>
         <li>sends your versions.</li>
       </ol>
-      <p>The status line says what came in and what went out. When the same lines changed on both sides, nothing is taken in yet: a dialog lists the files, and for each you choose <span class="ui">Keep mine</span> or <span class="ui">Take theirs</span>, then <span class="ui">Sync</span> again. When the server wants a token TeXCraft does not have, it asks for one; it keeps it only while it runs. Sync is also in the File menu.</p>
+      <p>Changes made on both sides merge by themselves when they touch different words: two people editing different sentences of one paragraph, even on the same line, a citation added in one place and a typo fixed in another, a formula edited and the prose after it. The status line says what came in and what went out. When both sides changed the same words differently (or words right next to each other), nothing is taken in yet: a dialog lists the files, and for each you choose <span class="ui">Keep mine</span> or <span class="ui">Take theirs</span>, then <span class="ui">Sync</span> again. When the server wants a token TeXCraft does not have, it asks for one; it keeps it only while it runs. Sync is also in the File menu.</p>
       <p>For a project opened from GitLab or GitHub, Sync commits your changes to its branch with a message that says what changed (or, with no changes, takes in the branch). <a href="#commit">Commit to GitLab…</a> stays there to write your own message.</p>
 
       <h3 id="overleaf">Projects on Overleaf <span class="tag">Desktop only</span></h3>
@@ -118,7 +118,7 @@
         <dt>Push</dt>
         <dd>Makes a version of your changes, then sends the commits of the branch you are on. If the remote's branch has commits you do not have, the push is refused before anything is sent: pull first (or Sync). A refusal by the server (a protected branch, for example) is shown with its reason.</dd>
         <dt>Pull</dt>
-        <dd>Makes a version of your changes, then takes in the remote's commits: a fast-forward when you have nothing new, or a merge when both sides have commits. Text files changed on both sides are merged line by line; when they cannot be, the pull is refused, naming the files, and nothing changes (Sync offers the choice of a side for each). A file changed on disk outside TeXCraft and not committed stops the pull too.</dd>
+        <dd>Makes a version of your changes, then takes in the remote's commits: a fast-forward when you have nothing new, or a merge when both sides have commits. Text files changed on both sides are merged where the changes touch different words (as Sync does); when they cannot be, the pull is refused, naming the files, and nothing changes (Sync offers the choice of a side for each). A file changed on disk outside TeXCraft and not committed stops the pull too.</dd>
       </dl>
       <p>TeXCraft uses your sign-in or token for the remote's server, and asks for a token when it has none. It speaks git over HTTPS; an SSH address (<code>git@gitlab.com:group/project.git</code>) is reached over HTTPS at the same path.</p>
       <p class="not-yet"><strong>Not yet:</strong> SSH itself, other branches than the one checked out, force pushes, and merging the two sides of a conflict inside a file (keep one side, or merge it with git). For those, use git alongside TeXCraft: the repository is an ordinary one.</p>

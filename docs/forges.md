@@ -78,9 +78,21 @@ What it does:
     diff of the base against each side, from the `similar` crate, put together as diff3 does).
     Changes to different lines merge; the same change on both sides is no conflict; lines are
     compared without their line ending, and the merged file keeps the local one (`\r\n` stays).
-  - changes to the same lines or to neighbouring lines (as git), a file deleted on one side and
-    changed on the other, a file added on both sides differently, and a binary file changed on
-    both sides are **conflicts**. Then nothing is taken in, the base stays, and `forge.status`
+  - lines both sides changed differently are merged again **word by word** (C12 step 1): the
+    passage is cut into tokens (words, runs of whitespace, line endings, punctuation, and LaTeX's
+    `\commands`, control symbols such as `\%`, braces, `$` and a `%` comment to the end of its
+    line, each whole) and merged as the lines are, with a Myers diff of its own that stops at 1000
+    token edits a side. So edits to different sentences or words of one paragraph line merge, a
+    `\cite{…}` added beside a typo fixed elsewhere merges, and an edit inside `$…$` merges with
+    prose edited elsewhere. Every change of both sides is in the result once; the same change on
+    both sides counts once; line endings are kept as above. Changes to neighbouring lines merge
+    too now (git makes them a conflict). `merge::merge_text` gives the passages still in conflict
+    (their byte ranges in base, mine and theirs, and their text) for the passage-by-passage view
+    of step 2 of C12.
+  - changes to the same words or right next to each other, a passage over 200 kB on a side or
+    with more than 1000 token edits (not merged by word, to keep the cost bounded), a file
+    deleted on one side and changed on the other, a file added on both sides differently, and a
+    binary file changed on both sides are **conflicts**. Then nothing is taken in, the base stays, and `forge.status`
     lists the files (`conflicts`, with why) until a pull or commit gets through.
 - **Conflicts** are settled per file with `resolve: {path: "mine" | "theirs"}` on a pull or a
   commit: keep mine commits the project's version over the branch's, take theirs drops the change
@@ -119,7 +131,8 @@ fake GitLab has protected branches, `start_sha` and merge requests. The engine k
 refusal with a way out (`Session::forge_problem`), reads and writes the review's thread files
 through the forge's paths, and the window's `forge::check` runs the periodic pull.
 
-Limits: merges are by line; on GitLab a change on the branch made between the check and the
+Limits: merges are by line, then by word where both sides changed the same lines; a word
+repeated next to an edit ("the the") can make the edit's place ambiguous and a conflict; on GitLab a change on the branch made between the check and the
 commit is written over by the commit's actions for the files it sends (GitLab's commit API has no
 compare-and-swap that was checked against gitlab.com; the commit's parent says it happened); the
 choice is per file, not per change.
@@ -469,8 +482,8 @@ What it does:
   - nothing new: "Up to date";
   - the project's branch is behind: a fast-forward, the files on disk and in the editor changed;
   - both have commits the other has not: a merge commit (two parents). A file changed on one side
-    takes that side's; a text file changed on both is merged line by line with the merge of step 2
-    (`texcraft_forge::merge::merge3`); anything else changed on both sides (the same lines, a file
+    takes that side's; a text file changed on both is merged by line, then by word, with the merge
+    of step 2 (`texcraft_forge::merge::merge3`); anything else changed on both sides (the same words, a file
     deleted on one side and changed on the other, binary files) refuses the pull, naming the files,
     with nothing changed.
   - A file changed on disk and not committed (outside TeXCraft), or one in the way of a file the
@@ -516,7 +529,7 @@ How it is built:
 
 Limits: HTTPS only (SSH addresses are reached over HTTPS); one branch at a time, the one checked
 out; no force push from the interface; packs without deltas, so a large history pushes more bytes
-than git would; a pull's merge is per file and per line as in step 2, with no conflict markers (a
+than git would; a pull's merge is per file, by line then by word, as in step 2, with no conflict markers (a
 file that does not merge is settled with git or by keeping one side); in the browser the history
 goes as one commit.
 
