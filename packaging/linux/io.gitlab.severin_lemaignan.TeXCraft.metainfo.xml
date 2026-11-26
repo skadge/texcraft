@@ -41,6 +41,19 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.19.0" date="2026-11-26" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.19.0</url>
+      <description>
+        <p>Merges that see words, a switch for AI, pdfLaTeX when a document needs it, and fixes from testing.</p>
+        <ul>
+          <li>Edits to different sentences of one paragraph merge by themselves</li>
+          <li>Tokens kept for later imports and syncs</li>
+          <li>pdfLaTeX chosen from the document</li>
+          <li>One switch to turn every AI feature off</li>
+          <li>Fixes to lists, front matter and accents in the formatted view</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.18.0" date="2026-11-26" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.18.0</url>
       <description>

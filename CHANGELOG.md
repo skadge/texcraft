@@ -5,6 +5,41 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.19.0 (2026-11-26)
+
+Merges that see words, a switch for AI, pdfLaTeX when a document needs it, and fixes from the
+third round of testing (#43–#52).
+
+### Working with others
+
+- Sync, Pull and the GitLab and GitHub updates merge lines both sides changed word by word: two
+  people editing different sentences, or different words, of one paragraph no longer conflict.
+- Tokens typed when importing are kept (the system's keychain; the tab in the browser) and used for
+  the next import, push, pull and Sync; Settings › Accounts lists them, with Replace… and Forget
+  (#51).
+- Importing shows a card on the start page with what is happening, and Cancel (#49); the
+  repository list says it is being fetched, then how many there are (#50).
+- Automatic versions in every repository, your own too, without filling its history: while not
+  yet sent anywhere, the next automatic version replaces the last one made in the same session.
+
+### Building
+
+- pdfLaTeX is chosen when the document asks for it (a `% !TEX program = pdflatex` line, or a
+  pdfTeX-only command such as `\pdfmapfile`), and the build log says why (#52).
+- retex 2.5.2: SVG images keep a sans-serif or monospaced font when theirs is missing (#5), and
+  fixes to the DOCX, ODT and HTML exports.
+
+### The formatted view
+
+- Deleting whole list items removes them (#48); the list buttons start a list on an empty line
+  (#47); the caret sits right in empty items (#46); three dots typed become an ellipsis (#45).
+- Elsevier's front matter (title, authors and affiliations, notes, abstract, keywords) as a title
+  block (#44); accented letters (`\'e`, `\"o`, `\c{c}`…) shown as letters; every author shown.
+
+### AI
+
+- Settings › AI › Use AI features: off hides every AI feature and nothing is sent (#43).
+
 ## 0.18.0 (2026-11-26)
 
 Import a Project: one dialog for every place a project can come from.
