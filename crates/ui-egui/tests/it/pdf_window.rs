@@ -63,3 +63,41 @@ fn choosing_a_layout_brings_the_pdf_back_into_the_main_window() {
     assert!(!detached(&mut h), "a layout chosen left the PDF in its own window");
     assert!(h.query_by_label("main.tex source").is_none(), "the PDF-only layout still shows the editor");
 }
+
+/// Issue #39: the PDF's own window has the page thumbnails: the page in view marked, a click
+/// going to another.
+#[test]
+fn the_pdf_window_shows_thumbnails_that_go_to_their_page() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::NodeT as _;
+    let s = Session::with_backend(Box::new(crate::pdf_preview::Sample));
+    let prefs = Prefs { auto_compile: false, layout: "split".to_owned(), ..Prefs::default() };
+    let mut h = Harness::builder().with_size(egui::vec2(WIDTH, 1000.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), App::with_prefs(s, prefs));
+    texcraft_ui_egui::ui_cmd::run(h.state_mut(), "build.compile");
+    for _ in 0..400 {
+        h.step();
+        if h.query_by_label_contains("1 / 2").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    h.get_by_label("Open the PDF in its own window").click();
+    for _ in 0..3 {
+        h.step();
+    }
+    assert!(h.query_by_label("Page 1").is_none(), "the thumbnails are shown before they are asked for");
+    h.get_by_role_and_label(Role::Button, "Page Thumbnails").click();
+    for _ in 0..3 {
+        h.step();
+    }
+    let selected = |h: &Harness<'_, App>, n: usize| h.get_by_role_and_label(Role::Button, &format!("Page {n}")).accesskit_node().is_selected();
+    assert_eq!(selected(&h, 1), Some(true), "the page in view is not marked");
+    assert_eq!(selected(&h, 2), Some(false));
+    h.get_by_role_and_label(Role::Button, "Page 2").click();
+    for _ in 0..4 {
+        h.step();
+    }
+    let page = h.state_mut().control("ui.inspect", &json!({}))["result"]["preview"]["page"].as_u64();
+    assert_eq!(page, Some(2), "the thumbnail did not go to its page");
+    assert_eq!(selected(&h, 2), Some(true), "the mark did not follow");
+}

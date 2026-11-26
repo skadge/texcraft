@@ -114,6 +114,10 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.side.history", "History", "View", None),
     ui("view.side.ask", "Ask AI", "View", None),
     ui("view.side.hide", "Hide Side Panel", "View", None),
+    // The outline's sections, folded to their first level or unfolded, in the outline shown;
+    // the folds are kept per document for the session.
+    ui("outline.collapse_all", "Collapse All", "View", None),
+    ui("outline.expand_all", "Expand All", "View", None),
     ui("view.comments", "Show or Hide the Comments Beside the Text", "View", None),
     ui("view.logs", "Build Log", "View", None),
     // The build log's output files: `{"output": "pdf"}` (`build.outputs` lists them). Desktop only,
@@ -126,6 +130,10 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.fit_width", "Fit Width", "View", None),
     ui("view.fit_page", "Fit Page", "View", None),
     ui("view.actual_size", "Actual Size", "View", Some("Cmd+0")),
+    // Two pages across at least, the fits making room for both (more go across as the zoom goes
+    // down, with it or not); and the pages' miniatures beside them. Both switch on and off.
+    ui("view.two_pages", "Two Pages", "View", None),
+    ui("view.thumbnails", "Page Thumbnails", "View", None),
     // `{"percent": 200}`: the zoom menu's fixed zooms, and any other from 25 to 400 %.
     ui("view.zoom", "Zoom To", "View", None),
     ui("view.present", "Present the PDF", "View", Some("F5")),
@@ -160,8 +168,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     // A short paper of TeXCraft's to explore (`templates/builtin/example`), made a project as a
     // template is: in a folder the user picks, or in the browser under a name.
     ui("help.example", "Open the Example Project…", "Help", None),
-    // Shows the hint above the editor that says where the formatted view, the build log and the
-    // guide are, or dismisses it.
+    // Shows the one-line hint above the editor that points at the formatted view, or dismisses it.
     ui("help.first_steps", "First Steps", "Help", None),
     ui("help.about", "About TeXCraft", "Help", None),
 ];
@@ -431,6 +438,8 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "view.side.ask" => app.view.side = Some(Side::Ask),
         "view.find_in_project" => crate::search::open(app),
         "view.side.hide" => app.view.side = None,
+        "outline.collapse_all" => crate::side::fold_all(app, true),
+        "outline.expand_all" => crate::side::fold_all(app, false),
         "view.comments" => crate::review::toggle_margin(app),
         "view.logs" => app.view.logs = !app.view.logs,
         "view.show_output" => show_output(app, params),
@@ -464,6 +473,14 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "view.fit_width" => app.pdf.set_fit(crate::pdf_view::Fit::Width),
         "view.fit_page" => app.pdf.set_fit(crate::pdf_view::Fit::Page),
         "view.actual_size" => app.pdf.set_fit(crate::pdf_view::Fit::Zoom(1.0)),
+        "view.two_pages" => {
+            let on = !app.pdf.two_pages();
+            app.pdf.set_two_pages(on);
+        }
+        "view.thumbnails" => {
+            let on = !app.pdf.thumbnails();
+            app.pdf.set_thumbnails(on);
+        }
         "edit.spelling.replace" | "edit.spelling.add" | "edit.spelling.ignore" | "edit.spelling.next" => crate::spell::run(app, id, params),
         "edit.grammar.replace" | "edit.grammar.ignore" | "edit.grammar.rule_off" => crate::grammar::run(app, id, params),
         "edit.symbols" => crate::symbols::toggle(app),

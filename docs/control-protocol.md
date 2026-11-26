@@ -43,7 +43,7 @@ Each reply carries the request's `id` and either `"ok": true` with a `result`, o
 | `document.inspect` | none | The project: folder, main document, files, open files, the shown file, unsaved changes, revision, and `build` with the last build's result and diagnostics. |
 | `document.revision` | none | `document` (the project's folder, or `untitled`) and its `revision`, which grows with every change. |
 | `ui.screenshot` | optional `path` | The window's next frame as a PNG: written to `path` (the result gives the path and the size), or returned inline as base64 in `data` with its `mime`, `width` and `height`. |
-| `ui.inspect` | none | What the window shows: `layout`, `side`, `log`, `focus_mode`, `pdf_window`, the open `dialog`, `theme`, the caret's `cursor`, the `status` line, the `preview` page, page count and zoom, and whether it is `building`. |
+| `ui.inspect` | none | What the window shows: `layout`, `side`, `log`, `focus_mode`, `pdf_window`, the open `dialog`, `theme`, the caret's `cursor`, the `status` line, the `preview` page, page count, zoom, scroll, `columns` (pages across) and whether `two_pages` and `thumbnails` are on, and whether it is `building`. |
 
 craft-control's own methods (`control.capabilities`, `control.running`, `control.cancel`) work as craft-control documents them.
 

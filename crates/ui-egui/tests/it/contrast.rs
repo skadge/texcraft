@@ -9,7 +9,14 @@ fn text_and_controls_keep_their_contrast_in_both_themes() {
         // Rows and buttons are drawn on hovered and selected backgrounds too.
         let surfaces = [t.frame, t.surface, t.raised, blend(t.frame, t.hover), blend(t.frame, t.accent_soft), blend(t.surface, t.current_line)];
         for surface in surfaces {
-            for (name, fg) in [("text", t.text), ("text_muted", t.text_muted), ("error", t.error), ("warning", t.warning), ("success", t.success)] {
+            for (name, fg) in [
+                ("text", t.text),
+                ("text_muted", t.text_muted),
+                ("accent_muted", t.accent_muted),
+                ("error", t.error),
+                ("warning", t.warning),
+                ("success", t.success),
+            ] {
                 assert!(contrast(fg, surface) >= 4.5, "{:?}: {name} on {surface:?} is {:.2}:1", t.scheme, contrast(fg, surface));
             }
             for (name, fg) in [("control_border", t.control_border), ("accent", t.accent), ("spelling", t.spelling), ("grammar", t.grammar)] {

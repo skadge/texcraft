@@ -48,7 +48,18 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         // While a build's later passes run, its draft; otherwise the last PDF a build wrote, so a
         // draft never outlives its build (finished, failed or stopped).
         sync(app);
-        app.pdf.show(ui, &t, building.as_ref());
+        if app.pdf.thumbnails() && app.pdf.has_pdf() {
+            // The miniatures in a strip of their own on the left, the pages beside them.
+            let width = t.thumbnail_width + 6.0 * t.unit + ui.spacing().scroll.bar_width;
+            egui::Panel::left("pdf-thumbnails")
+                .resizable(false)
+                .exact_size(width)
+                .frame(egui::Frame::new().fill(t.frame))
+                .show(ui, |ui| app.pdf.show_thumbnails(ui, &t));
+            egui::CentralPanel::default().frame(egui::Frame::new()).show(ui, |ui| app.pdf.show(ui, &t, building.as_ref()));
+        } else {
+            app.pdf.show(ui, &t, building.as_ref());
+        }
         if let Some((page, x, y)) = app.pdf.clicked.take() {
             go_to_source(app, page, x, y);
         }
@@ -161,13 +172,16 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(t.unit * 2.0);
         let building = app.session.is_building();
         let auto = app.session.settings.auto_compile;
-        // Compiling automatically, the pill says so; clicking it still compiles now.
+        // Compiling automatically, the pill says so in a neutral shade, with the turning arrows
+        // of the automatic build (a spinner while it runs): the accent is for the action to
+        // take, and here the build happens by itself. Clicking it still compiles now.
         let (label, name, tip) = match (building, auto) {
             (true, _) => (tl!("Compiling…"), tl!("Compiling…"), tl!("Compiling…")),
             (false, true) => (tl!("Auto-Compile"), tl!("Auto-Compile: compile now"), tl!("Compiles as you type; click to compile now")),
             (false, false) => (tl!("Compile"), tl!("Compile"), tl!("Compile")),
         };
-        let (main, menu) = widgets::primary_split(ui, &t, "play", label, name, building);
+        let (icon, tone) = if auto { ("refresh-cw", widgets::Tone::Neutral) } else { ("play", widgets::Tone::Accent) };
+        let (main, menu) = widgets::primary_split(ui, &t, icon, label, name, building, tone);
         app.region(crate::Region::Preview, main.id);
         if main.clicked() {
             app.run("build.compile", json!({}));
@@ -190,14 +204,6 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         widgets::badge(ui, &t, log.rect.right_top() + vec2(-4.0, 6.0), badge.0, badge.1);
         if log.clicked() {
             app.view.logs = !app.view.logs;
-        }
-        // The browser cannot open a second window of the app: no button there (the command
-        // says why).
-        if ui_cmd::enabled(app, "view.pdf_window").is_ok() {
-            let label = if app.view.pdf_window { tl!("Put the PDF back in the main window") } else { tl!("Open the PDF in its own window") };
-            if widgets::icon_toggle(ui, &t, "window-out", label, app.view.pdf_window).clicked() {
-                ui_cmd::run(app, "view.pdf_window");
-            }
         }
         ui.add_space(t.unit * 2.0);
         // The PDF a click away: downloaded in the browser, saved where the user chooses elsewhere.
@@ -240,19 +246,26 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
                 ui.add(egui::Label::new(RichText::new(text).font(t.small()).color(t.text_muted)).truncate());
             }
         };
+        // The pages and the zoom at the bar's end, made in the order they read, and after them,
+        // at the very end, the button that moves the PDF to its own window; that button alone
+        // when the pages are not shown here.
         let fits = widgets::fits_before_right(ui, "pdf-tools");
-        if app.view.logs || !app.pdf.has_pdf() || app.view.narrow || !fits {
-            show_progress(ui);
-            return !fits;
-        }
-        // The pages and the zoom at the bar's end, made in the order they read.
-        let room = widgets::room_before_right(ui, "pdf-tools");
+        let here = !app.view.logs && app.pdf.has_pdf() && !app.view.narrow && fits;
+        let key = if here { "pdf-tools" } else { "pdf-window" };
+        let room = widgets::room_before_right(ui, key);
         ui.allocate_ui_with_layout(vec2(room, ui.available_height()), Layout::left_to_right(Align::Center), |ui| {
             ui.set_width(room);
             show_progress(ui);
         });
-        widgets::right_aligned(ui, "pdf-tools", |ui| page_tools(app, ui));
-        false
+        widgets::right_aligned(ui, key, |ui| {
+            if here {
+                page_tools(app, ui);
+            }
+            window_button(app, ui);
+            // The margin at the bar's end, counted in the controls' width.
+            ui.allocate_space(vec2(t.unit * 2.0 - ui.spacing().item_spacing.x, 1.0));
+        });
+        !fits
     });
     // A narrow window has no room for them on the bar: they are a second row.
     if (app.view.narrow || second_row.inner) && !app.view.logs && app.pdf.has_pdf() {
@@ -265,9 +278,32 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
     }
 }
 
-/// The pages and the zoom of the PDF's toolbar.
+/// The button that opens the PDF in its own window, or puts it back. The browser cannot open a
+/// second window of the app: no button there (the command says why).
+fn window_button(app: &mut App, ui: &mut egui::Ui) {
+    if ui_cmd::enabled(app, "view.pdf_window").is_err() {
+        return;
+    }
+    let t = app.tokens;
+    ui.add_space(t.unit * 2.0);
+    let label = if app.view.pdf_window { tl!("Put the PDF back in the main window") } else { tl!("Open the PDF in its own window") };
+    if widgets::icon_toggle(ui, &t, "window-out", label, app.view.pdf_window).clicked() {
+        ui_cmd::run(app, "view.pdf_window");
+    }
+}
+
+/// The pages and the zoom of the PDF's toolbar. In the PDF's own window, the switches for the
+/// thumbnails and two pages across come first (in the pane, the zoom menu has them).
 fn page_tools(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
+    if app.view.pdf_window {
+        for (id, icon, on) in [("view.thumbnails", "thumbnails", app.pdf.thumbnails()), ("view.two_pages", "columns-2", app.pdf.two_pages())] {
+            if widgets::icon_toggle(ui, &t, icon, ui_cmd::menu_entry(app, id).0, on).clicked() {
+                ui_cmd::run(app, id);
+            }
+        }
+        ui.add_space(t.unit * 2.0);
+    }
     let (page, count) = (app.pdf.page, app.pdf.page_count());
     if widgets::icon_button(ui, &t, "chevron-left", tl!("Previous page"), page > 0).clicked() {
         app.pdf.go_to_page(page.saturating_sub(1));
@@ -284,8 +320,14 @@ fn page_tools(app: &mut App, ui: &mut egui::Ui) {
     if widgets::icon_button(ui, &t, "zoom-in", tl!("Zoom In"), true).clicked() {
         ui_cmd::run(app, "view.zoom_in");
     }
-    // The margin at the bar's end, counted in the controls' width.
-    ui.allocate_space(vec2(t.unit * 2.0 - ui.spacing().item_spacing.x, 1.0));
+    // Back to the last fit chosen, named after it; at that fit already, there is nothing to do.
+    let (label, id) = match app.pdf.last_fit() {
+        Fit::Page => (tl!("Back to Fit Page"), "view.fit_page"),
+        _ => (tl!("Back to Fit Width"), "view.fit_width"),
+    };
+    if widgets::icon_button(ui, &t, "fit-width", label, app.pdf.fit() != app.pdf.last_fit()).clicked() {
+        ui_cmd::run(app, id);
+    }
 }
 
 fn cmd_enabled(app: &App, id: &str) -> Result<(), String> {
@@ -407,6 +449,14 @@ fn zoom_menu(app: &mut App, ui: &mut egui::Ui) {
                 choose(ui, &text, Fit::Zoom(1.0), "view.actual_size", serde_json::Value::Null);
             } else {
                 choose(ui, &text, Fit::Zoom(z as f32 / 100.0), "view.zoom", json!({"percent": z}));
+            }
+        }
+        ui.separator();
+        // The page layout's switches, ticked when on.
+        for (id, on) in [("view.two_pages", app.pdf.two_pages()), ("view.thumbnails", app.pdf.thumbnails())] {
+            if ui.add(egui::Button::selectable(on, ui_cmd::menu_entry(app, id).0)).clicked() {
+                ui_cmd::run(app, id);
+                ui.close();
             }
         }
         ui.separator();
@@ -1054,6 +1104,17 @@ fn go_to_source(app: &mut App, page: usize, x: f32, y: f32) {
             }
         }
         None => app.view.status = Some((tl!("No source line is known for that place; compile the project first.").to_owned(), false)),
+    }
+}
+
+/// Scrolls the PDF to the place of `line` (from 1) of `path`, marked for a moment, when the last
+/// build put it there: an outline entry chosen shows its heading in the PDF as in the editor.
+/// Before a build, or for a line not in the PDF, the PDF stays where it is, without a word.
+pub(crate) fn follow_in_pdf(app: &mut App, path: &texcraft_engine::project::ProjectPath, line: u32) {
+    let rects = app.session.locate(path, line);
+    if !rects.is_empty() {
+        let now = app.ctx.input(|i| i.time);
+        app.pdf.show_place(rects, now);
     }
 }
 

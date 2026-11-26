@@ -34,6 +34,7 @@ Two themes, light and dark, following the system by default. Neutrals are slight
 | `text` | `#1B1E23` | `#E7E9EC` | Body text |
 | `text_muted` | `#5B626C` | `#A2A8B1` | Secondary text, inactive icons |
 | `accent` | `#2557D6` | `#7AA7FF` | Primary action, selection, focus |
+| `accent_muted` | `#4A5B8B` | `#8FA3CC` | The accent, quieter: marks that point without calling (the tip of the day) |
 | `on_accent` | `#FFFFFF` | `#0D1830` | Text on the accent |
 | `accent_soft` | accent at 10 % | accent at 16 % | Selected rows, active toggles |
 | `error` | `#B0261A` | `#FF8A80` | Errors |
@@ -75,6 +76,7 @@ Faces come from storytold/craft-fonts through the optional `CRAFT_FONTS_DIR`: In
   | Status bar | 24 px |
   | Rail | 48 px wide, 36 px buttons |
   | File rows | 26 px |
+  | Page thumbnails | 96 px wide |
 
 - Icons are 16 px in toolbars and rows and 18 px on the rail. All are from the Lucide set, drawn with a 1.75 px stroke and tinted with `text_muted`, or with `text` when active.
 - Menus and popovers float on `raised` with a 1 px `separator` border and a soft shadow (0 6 20 px, black at 14 % light, 40 % dark).
@@ -113,7 +115,7 @@ Faces come from storytold/craft-fonts through the optional `CRAFT_FONTS_DIR`: In
   - The editor has a gutter with line numbers and markers for errors and warnings.
   - The current line has a soft band.
 - **Preview pane.**
-  - A round Compile button with a menu segment: automatic build, build options, clearing build files.
+  - A round Compile button with a menu segment: automatic build, build options, clearing build files. With the automatic build on it is Auto-Compile, outlined in the neutral style with turning arrows (a spinner while it builds): the accent stays for an action to take.
   - The log button with its count, and Download.
   - Page navigation and zoom on the right.
   - Pages sit on `canvas` with a soft shadow.

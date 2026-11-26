@@ -11,7 +11,7 @@ use texcraft_ui_egui::prefs::Prefs;
 use texcraft_ui_egui::{App, ui_cmd};
 
 #[path = "../../../preview/tests/it/sample.rs"]
-mod sample;
+pub(crate) mod sample;
 
 /// Builds the sample PDF of two pages with links.
 pub(crate) struct Sample;
@@ -214,4 +214,66 @@ fn the_middle_button_drags_the_pages() {
     settle(&mut harness);
     let after = scroll(&mut harness);
     assert!(after.x > before.x + 60.0 && after.y > before.y + 60.0, "the pages did not follow the pointer: {before:?} to {after:?}");
+}
+
+/// Issue #41: the zoom's Fit button goes back to the last fit chosen, named after it, and has
+/// nothing to do at that fit already.
+#[test]
+fn the_fit_button_goes_back_to_the_last_fit_chosen() {
+    use egui_kittest::kittest::NodeT as _;
+    let mut harness = built();
+    let enabled = |h: &Harness<'_, App>, name: &str| !h.get_by_label(name).accesskit_node().is_disabled();
+    assert!(!enabled(&harness, "Back to Fit Width"), "at fit width already, the button can be clicked");
+    ui_cmd::run(harness.state_mut(), "view.fit_page");
+    ui_cmd::run(harness.state_mut(), "view.zoom_in");
+    settle(&mut harness);
+    assert!(harness.query_by_label("Fit page").is_none(), "the zoom is still at fit page");
+    assert!(enabled(&harness, "Back to Fit Page"), "the button does not go back to the fit chosen last");
+    harness.get_by_label("Back to Fit Page").click();
+    settle(&mut harness);
+    assert!(harness.query_by_label("Fit page").is_some(), "the button did not go back to fit page");
+}
+
+/// Issue #40: the button that moves the PDF to its own window ends the PDF's header, after the
+/// zoom.
+#[test]
+fn the_own_window_button_ends_the_header_after_the_zoom() {
+    let harness = built();
+    let rect = |label: &str| harness.get_by_label(label).rect();
+    let window = rect("Open the PDF in its own window");
+    for before in ["Zoom In", "Back to Fit Width", "Fit width", "Export"] {
+        let r = rect(before);
+        assert!(r.right() <= window.left(), "{before} is not before the window's button: {r:?} {window:?}");
+    }
+    let compile = rect("Compile");
+    assert!((window.center().y - compile.center().y).abs() < compile.height() / 2.0, "the window's button left the header");
+}
+
+fn preview(harness: &mut Harness<'_, App>) -> serde_json::Value {
+    harness.state_mut().control("ui.inspect", &json!({}))["result"]["preview"].clone()
+}
+
+/// Issue #39: Two Pages puts the pages side by side, and zooming out puts as many across as fit.
+#[test]
+fn two_pages_and_zooming_out_put_the_pages_side_by_side() {
+    let mut harness = built();
+    let page = |h: &Harness<'_, App>, n: usize| h.get_by_label(&format!("Page {n} of 2")).rect();
+    assert_eq!(preview(&mut harness)["columns"], 1, "at fit width the pages are not one under the other");
+    let (one, two) = (page(&harness, 1), page(&harness, 2));
+    assert!(two.top() > one.bottom(), "the second page is not under the first");
+
+    harness.get_by_label("Fit width").click();
+    settle(&mut harness);
+    harness.get_by_label("Two Pages").click();
+    settle(&mut harness);
+    assert_eq!(preview(&mut harness)["two_pages"], true);
+    let (one, two) = (page(&harness, 1), page(&harness, 2));
+    assert!(two.left() > one.right() && (two.top() - one.top()).abs() < 1.0, "two pages are not side by side: {one:?} {two:?}");
+    assert!(two.width() < one.width() * 1.01 && one.width() * 2.0 < 1200.0, "the fit did not make room for both");
+
+    ui_cmd::run(harness.state_mut(), "view.two_pages");
+    ui_cmd::run_with(harness.state_mut(), "view.zoom", &json!({"percent": 25}));
+    settle(&mut harness);
+    let (one, two) = (page(&harness, 1), page(&harness, 2));
+    assert!(two.left() > one.right() && (two.top() - one.top()).abs() < 1.0, "zoomed out, the pages stay one under the other");
 }

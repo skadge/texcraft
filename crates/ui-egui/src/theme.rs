@@ -32,6 +32,9 @@ pub struct Tokens {
     pub text: Color32,
     pub text_muted: Color32,
     pub accent: Color32,
+    /// The accent, quieter: what points at something without asking to be clicked (the tip of
+    /// the day's mark and title). Text in it keeps 4.5:1.
+    pub accent_muted: Color32,
     pub on_accent: Color32,
     /// Selected rows and active toggles.
     pub accent_soft: Color32,
@@ -101,6 +104,8 @@ pub struct Tokens {
     pub narrow_width: f32,
     /// The side panel's width as a drawer, at most (a narrower window leaves a strip beside it).
     pub drawer_width: f32,
+    /// The width of a page's miniature beside the PDF.
+    pub thumbnail_width: f32,
     /// The grid unit; gaps are multiples of it.
     pub unit: f32,
 }
@@ -128,6 +133,7 @@ impl Tokens {
             text,
             text_muted: rgb(0x5B626C),
             accent,
+            accent_muted: rgb(0x4A5B8B),
             on_accent: rgb(0xFFFFFF),
             accent_soft: alpha(accent, 26),
             selection: alpha(accent, 56),
@@ -172,6 +178,7 @@ impl Tokens {
             text,
             text_muted: rgb(0xA2A8B1),
             accent,
+            accent_muted: rgb(0x8FA3CC),
             on_accent: rgb(0x0D1830),
             accent_soft: alpha(accent, 41),
             selection: alpha(accent, 77),
@@ -220,6 +227,7 @@ impl Tokens {
             rail_icon_size: 18.0,
             narrow_width: 700.0,
             drawer_width: 300.0,
+            thumbnail_width: 96.0,
             unit: 4.0,
         }
     }

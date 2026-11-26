@@ -61,6 +61,16 @@ fn region_text(h: &Harness<'_, App>, name: &str) -> Option<String> {
         .max_by_key(String::len)
 }
 
+/// Where the region named `name` is: around what it holds (a region has no rect of its own).
+fn region_rect(h: &Harness<'_, App>, name: &str) -> egui::Rect {
+    let Some(region) = h.query_by_role_and_label(Role::Region, name) else { return egui::Rect::NOTHING };
+    region
+        .children_recursive()
+        .filter_map(|n| n.accesskit_node().bounding_box())
+        .map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+        .fold(egui::Rect::NOTHING, |a, b| a.union(b))
+}
+
 /// The tip shown.
 fn tip(h: &Harness<'_, App>) -> Option<String> {
     region_text(h, "Tip of the day")
@@ -136,14 +146,33 @@ fn the_tip_of_the_day_stays_all_day_changes_the_next_and_steps_with_next_and_pre
 #[test]
 fn turning_tips_off_hides_the_card_and_is_kept() {
     let mut h = start_page(desktop(), Prefs::default(), day(2026, 11, 26));
-    h.get_by_label("Show tips at startup").click();
-    run(&mut h);
+    click(&mut h, "Hide Tips");
     assert!(h.query_by_role_and_label(Role::Region, "Tip of the day").is_none(), "the card is still shown");
     assert!(status(&mut h).contains("Settings"), "where to turn them on again is not said");
     let prefs = h.state_mut().take_changed_prefs();
     assert!(prefs.as_ref().is_some_and(|p| !p.show_tips), "the choice is not kept");
     let next = start_page(desktop(), prefs.unwrap_or_default(), day(2026, 11, 26));
     assert!(next.query_by_role_and_label(Role::Region, "Tip of the day").is_none(), "the next start shows tips again");
+}
+
+#[test]
+fn the_tip_of_the_day_is_a_quiet_strip_its_buttons_in_reading_order() {
+    let h = start_page(desktop(), Prefs::default(), day(2026, 11, 26));
+    let card = region_rect(&h, "Tip of the day");
+    let button = h.get_by_role_and_label(Role::Button, "New Project").rect();
+    // Two lines: shorter than three of the header's buttons stacked.
+    assert!(card.height() < 3.0 * button.height(), "the card is {} high, a button {}", card.height(), button.height());
+    // Previous, Next and Hide on the title's line, in that order; the tip under them.
+    let at = |name: &str| h.get_by_role_and_label(Role::Button, name).rect();
+    let (previous, next, hide) = (at("Previous Tip"), at("Next Tip"), at("Hide Tips"));
+    assert!(previous.right() <= next.left() && next.right() <= hide.left(), "the buttons are not in reading order");
+    let region = h.get_by_role_and_label(Role::Region, "Tip of the day");
+    let title = region.children_recursive().find(|n| n.accesskit_node().value().as_deref() == Some("Tip of the day")).map(|n| n.rect());
+    assert!(card.height() > 0.0, "the card is not laid out");
+    assert!(title.is_some(), "the card has no title");
+    let title = title.unwrap_or(card);
+    assert!((title.center().y - next.center().y).abs() < next.height() / 2.0, "the buttons are not on the title's line");
+    assert!(tip(&h).is_some(), "the tip's text is missing");
 }
 
 /// Every tip shown on a whole round of Next Tip.
@@ -193,7 +222,13 @@ fn the_first_steps_hint_shows_with_a_project_and_stays_dismissed() {
     let hint = h.query_by_role_and_label(Role::Region, "First steps");
     assert!(hint.is_some(), "no first-steps hint");
     let text = region_text(&h, "First steps").unwrap_or_default();
-    assert!(text.contains("Build log") && text.contains("User Guide (F1)"), "{text}");
+    assert!(text.contains("Formatted"), "it does not point at the formatted view: {text}");
+    assert!(!text.contains("log") && !text.contains("Guide"), "it sends a newcomer to the log or the guide: {text}");
+    // One line, Dismiss at its end: no taller than the button with a little room.
+    let strip = region_rect(&h, "First steps");
+    let dismiss = h.get_by_role_and_label(Role::Button, "Dismiss").rect();
+    assert!(strip.height() < 1.5 * dismiss.height(), "the hint is {} high, Dismiss {}", strip.height(), dismiss.height());
+    assert!(h.query_by_role_and_label(Role::Button, "Open the Guide").is_none(), "it still offers the guide");
     click(&mut h, "Dismiss");
     assert!(h.query_by_role_and_label(Role::Region, "First steps").is_none(), "Dismiss did not hide it");
     assert!(status(&mut h).contains("First Steps"), "where to find it again is not said");

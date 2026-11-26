@@ -303,6 +303,8 @@
 	Fit	Passend
 	Fit page	Pagina passend
 	Fit width	Breedte passend
+	Back to Fit Page	Terug naar Pagina passend
+	Back to Fit Width	Terug naar Breedte passend
 	Fix Grammar and Spelling	Grammatica en spelling verbeteren
 	Fix all hints in this file	Alle hints in dit bestand verhelpen
 	Fix them before sending the {standard} to the printer: the Print filter lists them.	Verhelp ze voordat u de {standard} naar de drukker stuurt: het filter Drukwerk somt ze op.
@@ -2125,14 +2127,14 @@ unit	{n} s	{n} s
 	Insert › Symbols… opens a palette of mathematical symbols you can search by name, and says which package a symbol needs.	Invoegen › Symbolen… opent een palet met wiskundige symbolen dat u op naam kunt doorzoeken, en zegt welk pakket een symbool nodig heeft.
 	Licence: {licence}	Licentie: {licence}
 	New Project has journal and conference templates from publishers such as Elsevier, IEEE and ACM, kept for offline use once downloaded.	Nieuw project heeft sjablonen voor tijdschriften en conferenties van uitgevers zoals Elsevier, IEEE en ACM, die na het downloaden offline bewaard blijven.
-	New here? Formatted, above the text, shows your document as it reads, and you can edit it there. The PDF's Build log explains any error. Help › User Guide (F1) has the rest.	Nieuw hier? Opgemaakt, boven de tekst, toont uw document zoals het leest, en u kunt het daar bewerken. De Buildlog van de pdf legt elke fout uit. Help › Gebruikershandleiding (F1) vertelt de rest.
+	New here? Formatted, above the text, shows your document as it reads, and you can edit it there.	Nieuw hier? Opgemaakt, boven de tekst, toont uw document zoals het leest, en u kunt het daar bewerken.
 	Next Tip	Volgende tip
 	No projects in this browser yet.	Nog geen projecten in deze browser.
 	No projects yet.	Nog geen projecten.
 	Not needed for a server on this computer	Niet nodig voor een server op deze computer
 	On a phone or in a narrow window, the editor and the PDF become two tabs, and the side panel a drawer.	Op een telefoon of in een smal venster worden de editor en de pdf twee tabbladen, en het zijpaneel een uitschuifpaneel.
 	Open the Example Project	Voorbeeldproject openen
-	Open the Guide	Gebruikershandleiding openen
+	Hide Tips	Tips verbergen
 	Previous Tip	Vorige tip
 	Projects in the browser stay in this browser. File › Download Project as Zip keeps a copy elsewhere.	Projecten in de browser blijven in deze browser. Bestand › Project downloaden als zip bewaart elders een kopie.
 	Read More in the Guide	Meer lezen in de Gebruikershandleiding
@@ -2176,6 +2178,14 @@ unit	{n} s	{n} s
 @msg	For the Astrophysical Journal and other AAS journals.	Voor het Astrophysical Journal en andere AAS-tijdschriften.
 @msg	Numbered exercises with their points, for a course.	Genummerde opgaven met hun punten, voor een cursus.
 @msg	Slides for a talk, in widescreen.	Dia's voor een presentatie, in breedbeeld.
+# Outline folding, the PDF's pages side by side and its thumbnails
+	Outline options	Opties voor het overzicht
+@id	outline.collapse_all	Alles samenvouwen
+@id	outline.expand_all	Alles uitvouwen
+	Page thumbnails	Paginaminiaturen
+@id	view.thumbnails	Paginaminiaturen
+@id	view.two_pages	Twee pagina's
+
 # The formatted view for readers: numbers from the build, included files
 	Not built yet: the number shows after the document is built.	Nog niet gecompileerd: het nummer verschijnt zodra het document is gecompileerd.
 	No bibliography entry named {key} in the last build.	Geen bibliografie-item met de naam {key} in de laatste compilatie.

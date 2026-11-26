@@ -303,6 +303,8 @@
 	Fit	Ajuster
 	Fit page	Page entière
 	Fit width	Pleine largeur
+	Back to Fit Page	Revenir à Page entière
+	Back to Fit Width	Revenir à Pleine largeur
 	Fix Grammar and Spelling	Corriger la grammaire et l'orthographe
 	Fix all hints in this file	Corriger toutes les indications de ce fichier
 	Fix them before sending the {standard} to the printer: the Print filter lists them.	Corrigez-les avant d'envoyer le {standard} à l'imprimeur : le filtre Impression les liste.
@@ -2125,14 +2127,14 @@ unit	{n} s	{n} s
 	Insert › Symbols… opens a palette of mathematical symbols you can search by name, and says which package a symbol needs.	Insérer › Symboles… ouvre une palette de symboles mathématiques que vous pouvez rechercher par nom, et indique le paquet dont un symbole a besoin.
 	Licence: {licence}	Licence : {licence}
 	New Project has journal and conference templates from publishers such as Elsevier, IEEE and ACM, kept for offline use once downloaded.	Nouveau projet propose des modèles de revues et de conférences d'éditeurs comme Elsevier, IEEE et ACM, conservés pour un usage hors ligne une fois téléchargés.
-	New here? Formatted, above the text, shows your document as it reads, and you can edit it there. The PDF's Build log explains any error. Help › User Guide (F1) has the rest.	Nouveau ici ? Mis en forme, au-dessus du texte, montre votre document tel qu'il se lit, et vous pouvez le modifier là. Le Journal de compilation du PDF explique toute erreur. Aide › Guide de l'utilisateur (F1) explique le reste.
+	New here? Formatted, above the text, shows your document as it reads, and you can edit it there.	Nouveau ici ? Mis en forme, au-dessus du texte, montre votre document tel qu'il se lit, et vous pouvez le modifier là.
 	Next Tip	Astuce suivante
 	No projects in this browser yet.	Aucun projet dans ce navigateur pour l'instant.
 	No projects yet.	Aucun projet pour l'instant.
 	Not needed for a server on this computer	Inutile pour un serveur sur cet ordinateur
 	On a phone or in a narrow window, the editor and the PDF become two tabs, and the side panel a drawer.	Sur un téléphone ou dans une fenêtre étroite, l'éditeur et le PDF deviennent deux onglets, et le panneau latéral un tiroir.
 	Open the Example Project	Ouvrir le projet d'exemple
-	Open the Guide	Ouvrir le Guide de l'utilisateur
+	Hide Tips	Masquer les astuces
 	Previous Tip	Astuce précédente
 	Projects in the browser stay in this browser. File › Download Project as Zip keeps a copy elsewhere.	Les projets du navigateur restent dans ce navigateur. Fichier › Télécharger le projet en zip en garde une copie ailleurs.
 	Read More in the Guide	En savoir plus dans le Guide de l'utilisateur
@@ -2176,6 +2178,14 @@ unit	{n} s	{n} s
 @msg	For the Astrophysical Journal and other AAS journals.	Pour l'Astrophysical Journal et les autres revues AAS.
 @msg	Numbered exercises with their points, for a course.	Des exercices numérotés avec leur barème, pour un cours.
 @msg	Slides for a talk, in widescreen.	Des diapositives pour un exposé, en format large.
+# Outline folding, the PDF's pages side by side and its thumbnails
+	Outline options	Options du plan
+@id	outline.collapse_all	Tout replier
+@id	outline.expand_all	Tout déplier
+	Page thumbnails	Miniatures des pages
+@id	view.thumbnails	Miniatures des pages
+@id	view.two_pages	Deux pages
+
 # The formatted view for readers: numbers from the build, included files
 	Not built yet: the number shows after the document is built.	Pas encore compilé : le numéro apparaît une fois le document compilé.
 	No bibliography entry named {key} in the last build.	Aucune entrée bibliographique nommée {key} dans la dernière compilation.
