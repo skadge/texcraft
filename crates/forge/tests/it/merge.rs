@@ -1,4 +1,4 @@
-//! The three-way merge of a text file, line by line.
+//! The three-way merge of a text file, line by line (word by word in `word_merge`).
 
 use texcraft_forge::merge::{is_text, merge3};
 
@@ -40,10 +40,15 @@ fn the_same_change_on_both_sides_is_no_conflict() {
 }
 
 #[test]
+fn changes_to_neighbouring_lines_merge_word_by_word() {
+    // Git makes this a conflict; the merge by word sees two changes to different words.
+    let merged_lines = merged(BASE, "one\ntwo\nmine\nfour\nfive\nsix\n", "one\ntwo\nthree\ntheirs\nfive\nsix\n");
+    assert_eq!(merged_lines.as_deref(), Some("one\ntwo\nmine\ntheirs\nfive\nsix\n"));
+}
+
+#[test]
 fn overlapping_changes_are_a_conflict() {
     assert_eq!(merged(BASE, "one\ntwo\nmine\nfour\nfive\nsix\n", "one\ntwo\ntheirs\nfour\nfive\nsix\n"), None);
-    // Changes to neighbouring lines overlap too, as in git.
-    assert_eq!(merged(BASE, "one\ntwo\nmine\nfour\nfive\nsix\n", "one\ntwo\nthree\ntheirs\nfive\nsix\n"), None);
     // Different insertions at the same place.
     assert_eq!(merged(BASE, "one\nmine\ntwo\nthree\nfour\nfive\nsix\n", "one\ntheirs\ntwo\nthree\nfour\nfive\nsix\n"), None);
     // A deletion against an edit of the same line.

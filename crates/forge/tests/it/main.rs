@@ -11,6 +11,7 @@ mod oauth;
 mod open;
 mod pull;
 mod servers;
+mod word_merge;
 
 use texcraft_forge::fake::{Fake, FakeGitLab};
 use texcraft_forge::{Address, Client, GitLab, Service, Token};
