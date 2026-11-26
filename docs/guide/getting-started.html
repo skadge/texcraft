@@ -45,9 +45,13 @@
         <li><span class="ui">New Project</span> opens the template gallery (below).</li>
         <li><span class="ui">Open Folder…</span> opens a folder that holds a LaTeX project. <span class="tag">Desktop only</span></li>
         <li><span class="ui">Open from GitLab or GitHub…</span> opens a project straight from a repository; see <a href="forges.html">GitLab and GitHub</a>.</li>
-        <li><span class="ui">Start from a template</span> lists the templates as cards.</li>
-        <li><span class="ui">Recent projects</span> shows the projects you opened, each with the first page of its last PDF. In the browser this is <span class="ui">Projects in this browser</span>, with a <span class="ui">Delete</span> button for each.</li>
+        <li><span class="ui">Tip of the day</span> shows one tip about a feature that is easy to miss, a different one each day. <span class="ui">Previous Tip</span> and <span class="ui">Next Tip</span> show others, and a tip's own button does what it describes (opens Settings, or the guide's page about it). Untick <span class="ui">Show tips at startup</span> to hide it; <a href="settings.html#appearance">Settings › Appearance</a> turns it on again.</li>
+        <li><span class="ui">Recent projects</span> shows the projects you opened, each with the first page of its last PDF. In the browser this is <span class="ui">Projects in this browser</span>, with a <span class="ui">Delete</span> button for each. Before your first project it says what to do first, with <span class="ui">Try an Example</span>.</li>
+        <li><span class="ui">Start from a template</span> lists the templates as cards, after <span class="ui">Blank project</span> and <span class="ui">Example project</span>.</li>
       </ul>
+
+      <h3 id="example">The example project</h3>
+      <p><span class="ui">Try an Example</span> (or <span class="ui">Help › Open the Example Project…</span>) makes a short paper of ours into a project you can change and build: sections in two files, a list, a table, a figure drawn with TikZ, numbered equations, cross-references and a citation from a small bibliography. On the desktop TeXCraft asks for a new or empty folder to copy it to; in the browser it is kept under the name <span class="ui">Example paper</span>, which you can change. It needs no download.</p>
       <p>You can also drop a folder or a zip file on the start page: a folder opens as a project, and a zip becomes a new project (see <a href="projects.html#import">Adding files</a>). The start page comes back with the app mark at the top left (<span class="ui">Start Page</span>).</p>
 
       <figure>
@@ -62,7 +66,7 @@
         <li><strong>TeXCraft's own templates</strong>: an article, a thesis with a chapter per file, presentation slides (beamer, 16:9), a letter, a one-page CV and a homework sheet. They are built in, so they work offline and in the browser.</li>
         <li><strong>Publishers' templates</strong>: journal and conference classes from Elsevier, IEEE, ACM, APS, AAS, MNRAS, Nature, ACS, APA and ASME, two CV classes (moderncv, Europass) and a scientific poster (tikzposter). On the desktop, one is downloaded from TeX Live the first time you use it, checked against TeX Live's signed package database, and kept for offline use; in the browser it comes from TeXCraft's own site.</li>
       </ul>
-      <p>Choose a card to see where the template comes from and its licence, then <span class="ui">Create Project…</span>. On the desktop TeXCraft asks for a new or empty folder; in the browser, for a name.</p>
+      <p>Each card shows the template's title, what it is for, who it is from (<span class="ui">Built in</span> for TeXCraft's own), its licence in words, such as <span class="ui">Free to use (LPPL)</span> (hover for the licence's exact name), and whether it is <span class="ui">Ready offline</span> or <span class="ui">Downloads when used</span>. Choose a card to see where the template comes from, then <span class="ui">Create Project…</span>. On the desktop TeXCraft asks for a new or empty folder; in the browser, for a name.</p>
 
       <h2 id="window">The window</h2>
       <figure>
@@ -74,7 +78,7 @@
         <dt>The top bar</dt>
         <dd>The menus <span class="ui">File</span>, <span class="ui">Edit</span>, <span class="ui">Insert</span> and <span class="ui">Help</span>; the project's name in the middle (click it to rename the project) with the project menu beside it (open recent, save, save as, save the PDF); and the layout switch: <span class="ui">Editor and PDF</span>, <span class="ui">Editor Only</span> or <span class="ui">PDF Only</span>. On macOS the menus are in the system's menu bar.</dd>
         <dt>The rail</dt>
-        <dd>A column of buttons that open the side panel's sections: <span class="ui">Project Files</span>, <span class="ui">Outline</span>, <span class="ui">Search</span>, <span class="ui">History</span>, <span class="ui">Review</span> and <span class="ui">Ask AI</span>. Click the open one again to hide the panel. At the bottom: <span class="ui">Keyboard Shortcuts</span> and <span class="ui">Settings</span>.</dd>
+        <dd>A column of buttons that open the side panel's sections: <span class="ui">Project Files</span>, <span class="ui">Outline</span>, <span class="ui">Search</span>, <span class="ui">History</span>, <span class="ui">Review</span> and <span class="ui">Ask AI</span>. Click the open one again to hide the panel. At the bottom, two buttons that open dialogs: <span class="ui">Settings</span> and <span class="ui">Keyboard Shortcuts</span>.</dd>
         <dt>The side panel</dt>
         <dd>The project's files as a tree (the main document is marked), the outline of the file shown (click a heading to go there), project-wide search, the history, the comments, or the AI's answers.</dd>
         <dt>The editor</dt>
@@ -84,6 +88,7 @@
         <dt>The status bar</dt>
         <dd>The caret's line and column, the Vim mode when it is on, what the build is doing, and messages from the last action.</dd>
       </dl>
+      <p>With your first project, a strip above the editor and the PDF says where to start: the <span class="ui">Formatted</span> view, the <span class="ui">Build log</span> and <span class="ui">Help › User Guide</span> (<kbd>F1</kbd>). <span class="ui">Dismiss</span> hides it for good; <span class="ui">Help › First Steps</span> shows it again.</p>
       <p>Drag the borders between the panes to resize them. <span class="ui">Focus Mode</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd>) hides the menus, the rail and the side panel; <kbd>Escape</kbd> leaves it.</p>
 
       <h3 id="narrow">On a phone or in a narrow window</h3>
