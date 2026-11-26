@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use serde_json::json;
 use texcraft_compile::Unavailable;
 use texcraft_engine::Session;
@@ -44,10 +44,10 @@ fn the_history_lists_each_save_and_compares_a_file_with_the_version_before() {
     let mut harness = harness(saved_twice(&dir).unwrap());
     ui_cmd::run(harness.state_mut(), "view.side.history");
     harness.run();
-    let versions = harness.query_all_by_label_contains("Saved with TeXCraft").count();
-    assert_eq!(versions, 2, "each save is a version");
+    // Each save is a version, saying what it changed.
+    assert!(harness.query_by_label_contains("Added main.tex").is_some(), "the first version is missing");
     // The newest first: choosing it lists its file, choosing the file compares it.
-    harness.query_all_by_label_contains("Saved with TeXCraft").next().unwrap().click();
+    harness.query_all_by_label_contains("Edited main.tex").next().unwrap().click();
     harness.run();
     harness.get_by_role_and_label(egui::accesskit::Role::TreeItem, "main.tex").click();
     harness.run();
@@ -64,7 +64,7 @@ fn restoring_a_file_from_the_history_asks_first_and_leaves_it_unsaved() {
     ui_cmd::run(harness.state_mut(), "view.side.history");
     harness.run();
     // The older version.
-    harness.query_all_by_label_contains("Saved with TeXCraft").nth(1).unwrap().click();
+    harness.query_all_by_label_contains("Added main.tex").next().unwrap().click();
     harness.run();
     harness.get_by_role_and_label(egui::accesskit::Role::TreeItem, "main.tex").click();
     harness.run();
@@ -104,7 +104,34 @@ fn a_browser_project_lists_each_save_as_a_version() {
     let mut harness = harness(s);
     ui_cmd::run(harness.state_mut(), "view.side.history");
     harness.run();
-    assert_eq!(harness.query_all_by_label_contains("Saved with TeXCraft").count(), 2, "each save is a version");
+    assert!(
+        harness.query_by_label_contains("Added main.tex").is_some() && harness.query_by_label_contains("Edited main.tex").is_some(),
+        "each save is a version"
+    );
+}
+
+#[test]
+fn a_version_shows_what_it_changed_its_files_and_on_hover_each_file() {
+    let mut s = in_library();
+    let paper = "\\section{Introduction}\nWe begin.\n\\section{Results}\nIt works.\n";
+    s.execute("file.write", &json!({"path": "main.tex", "text": paper})).unwrap();
+    s.execute("project.save_as", &json!({"path": "Paper"})).unwrap();
+    s.execute("file.write", &json!({"path": "main.tex", "text": paper.replace("It works.", "It works well.")})).unwrap();
+    for name in ["a", "b", "c"] {
+        s.execute("file.new", &json!({"path": format!("figures/{name}.tex"), "text": name})).unwrap();
+    }
+    s.execute("project.save", &json!({})).unwrap();
+    let mut harness = harness(s);
+    ui_cmd::run(harness.state_mut(), "view.side.history");
+    harness.run();
+    let row = harness.get_by_label_contains("Edited main.tex; added figures/a.tex");
+    let name = row.accesskit_node().label().unwrap_or_default();
+    assert!(name.contains("a.tex, b.tex, and 2 others"), "the files it changed, by name: {name}");
+    let description = row.accesskit_node().data().description().unwrap_or_default().to_owned();
+    assert!(description.contains("Edited main.tex: Results") && description.contains("Added figures/c.tex"), "{description}");
+    row.hover();
+    harness.run();
+    assert!(harness.query_all_by_label_contains("Edited main.tex: Results").count() > 0, "hovering shows each file");
 }
 
 #[test]

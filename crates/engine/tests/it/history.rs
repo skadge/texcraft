@@ -75,6 +75,7 @@ fn a_new_folder_project_becomes_a_repository_and_each_save_that_changes_it_a_com
     assert_eq!(log.len(), 2, "{log:?}");
     assert_eq!(log[0].1, ["added intro.tex", "modified main.tex"], "newest first, with what changed");
     assert!(log[1].1.contains(&"added main.tex".to_owned()));
+    assert!(log[0].0.starts_with("Edited main.tex; added intro.tex"), "a save's commit says what it changed: {:?}", log[0].0);
 
     // Opened again, the folder is still our repository.
     let mut t = session();

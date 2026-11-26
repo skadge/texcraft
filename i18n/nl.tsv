@@ -2084,3 +2084,7 @@ unit	{n} s	{n} s
 @plural	Build log, {n} warning|Build log, {n} warnings	Buildlog, {n} waarschuwing|Buildlog, {n} waarschuwingen
 	TeX noticed it at {place}	TeX merkte het op bij {place}
 	{message} (it starts at {place})	{message} (begint bij {place})
+
+# History: what a version changed
+	no files	geen bestanden
+@plural	and {n} other|and {n} others	en {n} andere|en {n} andere

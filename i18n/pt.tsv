@@ -2084,3 +2084,7 @@ unit	{n} s	{n} s
 @plural	Build log, {n} warning|Build log, {n} warnings	Registo de compilação, {n} aviso|Registo de compilação, {n} avisos
 	TeX noticed it at {place}	O TeX detetou-o em {place}
 	{message} (it starts at {place})	{message} (começa em {place})
+
+# History: what a version changed
+	no files	nenhum ficheiro
+@plural	and {n} other|and {n} others	e {n} outro|e {n} outros

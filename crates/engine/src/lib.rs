@@ -7,6 +7,7 @@
 
 pub mod ai;
 pub mod cmd;
+pub mod describe;
 mod edits;
 pub mod file_access;
 pub mod find;
