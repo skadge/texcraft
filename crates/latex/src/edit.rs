@@ -257,6 +257,115 @@ impl Doc {
         }
         merge(out)
     }
+
+    /// The source deleting the selection from `a` to `b` removes: [`Self::pieces`], and across
+    /// lines the structure of the lists it spans ([`deletion`]).
+    pub fn deleted(&self, text: &str, a: Pos, b: Pos) -> Vec<Range<usize>> {
+        let (a, b) = (a.min(b), a.max(b));
+        let pieces = self.pieces(text, a, b);
+        if a.line == b.line {
+            return pieces;
+        }
+        match (self.source(a), self.source(b)) {
+            (Some(sa), Some(sb)) if sa < sb => deletion(text, pieces, sa..sb),
+            _ => pieces,
+        }
+    }
+}
+
+/// The source a deletion of the view's selection removes, from the `pieces` of what it shows
+/// ([`Doc::pieces`]) and the source `sel` from its start to its end, when it spans lines: the
+/// `\item`s of the items it holds whole go with their text (the list's environment too when it
+/// holds them all), and when it starts and ends in two items of one list the source between goes,
+/// so what is left of the second item joins the first. Sorted and merged.
+pub fn deletion(text: &str, pieces: Vec<Range<usize>>, sel: Range<usize>) -> Vec<Range<usize>> {
+    let tree = tree::parse(text);
+    let mut out = pieces;
+    whole_items(text, &tree, &sel, &mut out);
+    // From one item to another of the same list, with nothing but the list around both ends: what
+    // is between them goes, balanced as it is.
+    let (mut fa, mut fb) = (Vec::new(), Vec::new());
+    path(&tree, sel.start, &mut fa);
+    path(&tree, sel.end, &mut fb);
+    let innermost = |frames: &[Frame<'_>]| match frames.last() {
+        Some(Frame::Environment { node, name, .. }) if is_list(name) => Some(node.range.clone()),
+        _ => None,
+    };
+    if let (Some(la), Some(lb)) = (list_at(&fa, sel.start), list_at(&fb, sel.end))
+        && innermost(&fa) == Some(la.node.range.clone())
+        && innermost(&fb) == Some(lb.node.range.clone())
+        && la.node.range == lb.node.range
+        && la.k < lb.k
+        && !la.covers(text, la.k, &sel)
+        && !lb.covers(text, lb.k, &sel)
+    {
+        out.push(sel.clone());
+    }
+    merge(out)
+}
+
+/// The source of the list items (at any depth in `nodes`) that `sel` holds whole: each run of them
+/// with its `\item`s, on whole lines; a list whose items it all holds, the whole environment.
+fn whole_items(text: &str, nodes: &[Node], sel: &Range<usize>, out: &mut Vec<Range<usize>>) {
+    for n in nodes {
+        if n.range.end < sel.start || n.range.start > sel.end {
+            continue;
+        }
+        match &n.kind {
+            Kind::Environment { name, body, .. } => {
+                if is_list(name) {
+                    list_items(text, n, name, body, sel, out);
+                }
+                whole_items(text, body, sel, out);
+            }
+            Kind::Group { body, .. } => whole_items(text, body, sel, out),
+            Kind::Command { args, .. } => args.iter().for_each(|a| whole_items(text, &a.body, sel, out)),
+            _ => {}
+        }
+    }
+}
+
+fn list_items<'a>(text: &str, node: &'a Node, name: &'a str, body: &'a [Node], sel: &Range<usize>, out: &mut Vec<Range<usize>>) {
+    let is_item = |n: &Node| matches!(&n.kind, Kind::Command { name, .. } if name == "item");
+    let items: Vec<usize> = body.iter().enumerate().filter(|(_, n)| is_item(n)).map(|(i, _)| i).collect();
+    if items.is_empty() {
+        return;
+    }
+    let list = ListAt { node, name, body, items, k: 0, outer: false };
+    let covered: Vec<bool> = (0..list.items.len()).map(|k| list.covers(text, k, sel)).collect();
+    if covered.iter().all(|c| *c)
+        && let (Some(begin), Some(end)) = (list.begin(), list.end())
+    {
+        out.push(line_start(text, begin.start)..line_end(text, end.end));
+        return;
+    }
+    let mut k = 0;
+    while k < covered.len() {
+        if !covered.get(k).copied().unwrap_or(false) {
+            k += 1;
+            continue;
+        }
+        let first = k;
+        while covered.get(k + 1).copied().unwrap_or(false) {
+            k += 1;
+        }
+        if let (Some(head), Some(next)) = (list.item(first), list.after(k)) {
+            out.push(line_start(text, head.range.start)..line_start(text, next));
+        }
+        k += 1;
+    }
+}
+
+/// The start of `pos`'s line when only white space is before it there, else `pos`.
+fn line_start(text: &str, pos: usize) -> usize {
+    pos - indent_at(text, pos).len()
+}
+
+/// After the line end that follows `pos` when only white space is after it there, else `pos`.
+fn line_end(text: &str, pos: usize) -> usize {
+    let after = text.get(pos..).unwrap_or_default();
+    let line = after.find('\n').map_or(after.len(), |n| n + 1);
+    if after.get(..line).is_some_and(|l| l.trim().is_empty()) { pos + line } else { pos }
 }
 
 /// Ranges sorted, with those that touch or overlap made one.
@@ -716,9 +825,48 @@ pub fn set_heading(text: &str, at: usize, name: &str) -> Option<Vec<Change>> {
 }
 
 /// A list environment (`itemize`, `enumerate`) at source offset `at`: a list of another kind there
-/// is renamed; a paragraph there becomes the list's one item. `None` in a list of that kind already
-/// or outside a paragraph.
-pub fn set_list(text: &str, at: usize, name: &str) -> Option<Vec<Change>> {
+/// is renamed; a paragraph there becomes the list's one item; on an empty line between paragraphs
+/// (an empty paragraph only the caret shows), a new list with one empty item, the caret in it.
+/// `None` in a list of that kind already or outside a paragraph.
+pub fn set_list(text: &str, at: usize, name: &str) -> Option<SourceEdit> {
+    let changes = list_changes(text, at, name);
+    match changes {
+        Some(changes) => {
+            let caret = map_offset(&changes, at);
+            Some(SourceEdit { changes, caret })
+        }
+        None => new_list(text, at, name),
+    }
+}
+
+/// A new list on the empty line at `at`, in body text (not in a style, a heading, a list, math).
+fn new_list(text: &str, at: usize, name: &str) -> Option<SourceEdit> {
+    let tree = tree::parse(text);
+    let mut frames = Vec::new();
+    path(&tree, at, &mut frames);
+    if !matches!(context(text, &frames), Some((Context::Paragraph, styles)) if styles.is_empty()) {
+        return None;
+    }
+    // Not where the view shows a paragraph.
+    if paragraph_at(&view::build(text, &tree), at).is_some() {
+        return None;
+    }
+    let line_start = text.get(..at)?.rfind('\n').map_or(0, |n| n + 1);
+    let line_end = text.get(at..)?.find('\n').map_or(text.len(), |n| at + n);
+    if !text.get(line_start..line_end)?.trim().is_empty() {
+        return None;
+    }
+    // The list on lines of its own, a blank line from the text around it.
+    let before = text.get(..line_start)?;
+    let after = text.get(line_end..)?;
+    let lead = if before.trim().is_empty() || before.ends_with("\n\n") { "" } else { "\n" };
+    let trail = if after.trim().is_empty() || after.starts_with("\n\n") { "" } else { "\n" };
+    let open = format!("{lead}\\begin{{{name}}}\n  \\item ");
+    let inserted = format!("{open}\n\\end{{{name}}}{trail}");
+    Some(SourceEdit { changes: vec![change(line_start..line_end, inserted)], caret: line_start + open.len() })
+}
+
+fn list_changes(text: &str, at: usize, name: &str) -> Option<Vec<Change>> {
     let tree = tree::parse(text);
     let mut frames = Vec::new();
     path(&tree, at, &mut frames);
@@ -991,6 +1139,17 @@ impl ListAt<'_> {
             })
             .unwrap_or(head.range.end);
         Some(start.min(end.max(head.range.end))..end.max(head.range.end))
+    }
+
+    /// Whether `sel` holds item `k` whole: its text, or for an empty item where its caret stands
+    /// (after `\item `).
+    fn covers(&self, text: &str, k: usize, sel: &Range<usize>) -> bool {
+        let Some(c) = self.content(text, k) else { return false };
+        if c.is_empty() {
+            let at = c.start + usize::from(text.get(c.start..c.start + 1) == Some(" "));
+            return sel.start <= at && at <= sel.end;
+        }
+        sel.start <= c.start && c.end <= sel.end
     }
 
     /// Where the next item, or the list's `\end`, starts.

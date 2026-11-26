@@ -1337,6 +1337,12 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
     for i in inlines {
         b.inline(i, Style::default());
     }
+    if b.job.is_empty() {
+        // An empty line (an empty list item) is laid out a line tall at the text's size, so its
+        // caret and selection stand in that line, not half a line above it.
+        let format = b.format(Style::default(), para.color);
+        b.job.append("", 0.0, format);
+    }
     let (mut job, pieces, plain_text) = (b.job, b.pieces, b.plain);
     job.wrap.max_width = width;
     job.halign = cx.align;

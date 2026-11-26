@@ -187,3 +187,31 @@ fn show_in_source_takes_the_selection_to_the_source_editor() {
     h.run_steps(2);
     assert_eq!(text(&mut h), "X\n", "the selection did not come along to the source");
 }
+
+fn keys(h: &mut Harness<'_, App>, modifiers: egui::Modifiers, k: egui::Key, times: usize) {
+    for _ in 0..times {
+        key(h, modifiers, k);
+    }
+}
+
+#[test]
+fn deleting_selected_items_removes_them_and_typing_over_two_joins_them() {
+    // #48: the items' text went, their empty items stayed.
+    let start = "Before.\n\n\\begin{itemize}\n  \\item one\n  \\item two\n\\end{itemize}\n\nAfter.\n";
+    let mut h = formatted(start);
+    // To the start of "one", then to the end of "two".
+    keys(&mut h, egui::Modifiers::NONE, egui::Key::ArrowRight, 8);
+    keys(&mut h, egui::Modifiers::SHIFT, egui::Key::ArrowRight, 7);
+    key(&mut h, egui::Modifiers::NONE, egui::Key::Backspace);
+    let out = text(&mut h);
+    assert!(!out.contains("itemize") && !out.contains("\\item"), "the list or its items stayed: {out:?}");
+    assert!(out.starts_with("Before.\n\n") && out.ends_with("\n\nAfter.\n"), "{out:?}");
+
+    // From inside "one" to inside "two", typed over: one item, the selection's text replaced.
+    let mut h = formatted(start);
+    keys(&mut h, egui::Modifiers::NONE, egui::Key::ArrowRight, 9);
+    keys(&mut h, egui::Modifiers::SHIFT, egui::Key::ArrowRight, 5);
+    h.event(egui::Event::Text("X".into()));
+    h.run();
+    assert_eq!(text(&mut h), start.replace("one\n  \\item two", "oXo"));
+}
