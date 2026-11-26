@@ -41,6 +41,16 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.18.0" date="2026-11-26" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.18.0</url>
+      <description>
+        <p>Import a Project: one dialog for every place a project can come from.</p>
+        <ul>
+          <li>Import from GitLab, GitHub, Overleaf, your own server, any git address, a folder or a zip</li>
+          <li>Git projects cloned with their history, ready to sync</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.17.0" date="2026-11-26" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.17.0</url>
       <description>

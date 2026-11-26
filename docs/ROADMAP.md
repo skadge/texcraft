@@ -1,6 +1,6 @@
 # TeXCraft roadmap
 
-**Last updated:** 2026-11-26 · **Current release:** 0.17.0
+**Last updated:** 2026-11-26 · **Current release:** 0.18.0
 
 TeXCraft is a LaTeX editor for the desktop and the browser: a project of files, a source editor and
 the PDF side by side, rebuilt as you type by [retex](https://gitlab.com/severin-lemaignan/retex).

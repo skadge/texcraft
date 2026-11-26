@@ -5,6 +5,26 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.18.0 (2026-11-26)
+
+Import a Project: one dialog for every place a project can come from.
+
+- File › Import a Project… (Ctrl+Shift+O) and Import… on the start page: cards for GitLab, GitHub,
+  Overleaf, your own GitLab server, any git address over HTTPS, a folder and a zip file.
+- On the desktop a project from GitLab, GitHub, Overleaf or a git address is cloned into a folder
+  of yours, with its whole history and its remote set, so Sync works at once. It goes into your
+  Documents folder, or the one you chose last.
+- Overleaf: paste the project's git clone address (or the whole `git clone` line) and an Overleaf
+  git token; Remember on this computer keeps the token in the system's keychain (Settings ›
+  Accounts › Git servers to forget it).
+- A git address is checked as you type: public or needing a sign-in, its branches, an SSH address
+  offered over HTTPS.
+- In the browser, GitLab and GitHub come in through their web APIs; Overleaf and other git servers
+  do not answer web pages, and their cards say so and offer the desktop app or a zip.
+- The cards show GitLab's, GitHub's and Overleaf's marks, their owners' trademarks, to name the
+  service each connects to.
+- The phone's Back button reads right in every language.
+
 ## 0.17.0 (2026-11-26)
 
 Saving by itself and one-click Sync, and fixes from the second round of testing (#27–#42).
