@@ -923,7 +923,7 @@ fn grid(ui: &mut egui::Ui, t: &Tokens, info: &Info, focus: Option<Source>) -> Op
                             cells.push((*source, resp, row_base + r, c));
                         }
                     });
-                    ui.add_space(GAP);
+                    ui.add_space(GAP - ui.spacing().item_spacing.y);
                 }
                 row_base += sources.len().div_ceil(columns);
             }
@@ -1335,6 +1335,11 @@ fn into_row(ui: &mut egui::Ui, t: &Tokens, into: &mut Into, info: &Info, acts: &
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         if into.path.trim().is_empty() || info.parent.is_none() && !into.edited {
             hint(ui, t, tl!("Choose where to put the project: Change…"), Tone::Plain);
+            return false;
+        }
+        if into.path.trim_end().ends_with(['/', '\\']) {
+            // No project chosen yet: its name comes with it.
+            hint(ui, t, tl!("The new folder takes the project's name."), Tone::Plain);
             return false;
         }
         if name.is_empty() || !path.is_absolute() {
