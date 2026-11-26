@@ -114,3 +114,9 @@ Spell checking (docs/ROADMAP.md, E11) uses craft-proof from storytold/craft-libs
 | English supplement (`crates/proof/data/en-extra.txt`), WordCraft contributors | MIT OR Apache-2.0 | craft-proof, in every build | Modern words the Moby list lacks |
 | SCOWL `rel-2026.02.25` Hunspell dictionaries (en-US, en-GB, en-CA, en-AU) from craft-i18n's `language-data/` | SCOWL's licence (MIT-like), the Ispell BSD licence of the affix files | craft-proof, only when the build sets `CRAFT_I18N_DIR` | Their notice is in the build: `craft_proof::scowl::notice()` |
 | Hunspell dictionaries for other languages | Each dictionary's own | Not embedded: read from the user's system or dictionaries folder at run time (desktop only) | TeXCraft ships none |
+
+Interface catalogs (`i18n/<locale>.tsv`, until the cutover to storytold/craft-i18n) are the TeXCraft contributors' own work under the repository's licence (MIT OR Apache-2.0), written from the plain meaning of the English strings without consulting any other product's localisation (the catalogs' `# Clean room:` header):
+
+| Catalog | Language | How it was made | Reviewed by a native speaker |
+|---|---|---|---|
+| `i18n/de.tsv` | German | Drafted with an AI model (Claude, November 2026) from the English alone | Not yet |
