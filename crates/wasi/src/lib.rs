@@ -37,6 +37,7 @@ pub mod errno {
     pub const EXIST: Errno = 20;
     pub const FAULT: Errno = 21;
     pub const INVAL: Errno = 28;
+    pub const IO: Errno = 29;
     pub const ISDIR: Errno = 31;
     pub const NOENT: Errno = 44;
     pub const NOTDIR: Errno = 54;
@@ -122,6 +123,25 @@ pub trait Platform {
     /// [`FileSystem::add_lazy`], loaded or not), so the host can list what a
     /// run reads.
     fn opened(&mut self, _source: &str) {}
+    /// The module opens `path` (absolute) to read it, and the file system has nothing there: a
+    /// host that serves a directory by fetching its files on demand (retex's package repository,
+    /// `RETEX_REPOSITORY`) says what it has.
+    fn missing(&mut self, _path: &str) -> Missing {
+        Missing::Absent
+    }
+}
+
+/// What the host has at a path the file system lacks ([`Platform::missing`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Missing {
+    /// Nothing: the open fails with `ENOENT`, as for any missing file.
+    Absent,
+    /// The file is the host's, but it cannot have it now (its server refused or did not
+    /// answer): the open fails with `EIO`.
+    Unavailable,
+    /// The host fetches it first: the run stops ([`Stop::Fetch`] with this source), and the run
+    /// made after it finds the file the host added.
+    Fetch(Rc<str>),
 }
 
 /// A path argument: a string in memory, relative to directory `fd`.
@@ -587,7 +607,13 @@ impl<P: Platform> Wasi<P> {
         let node = match self.fs.lookup(&path) {
             Some(_) if oflags & OFLAGS_CREAT != 0 && oflags & OFLAGS_EXCL != 0 => return Ok(errno::EXIST),
             Some(n) => n,
-            None if oflags & OFLAGS_CREAT == 0 => return Ok(errno::NOENT),
+            None if oflags & OFLAGS_CREAT == 0 => {
+                return match self.platform.missing(&path) {
+                    Missing::Absent => Ok(errno::NOENT),
+                    Missing::Unavailable => Ok(errno::IO),
+                    Missing::Fetch(source) => Err(Stop::Fetch(source)),
+                };
+            }
             None => {
                 let parts = split(&path);
                 let Some((name, parents)) = parts.split_last() else { return Ok(errno::EXIST) };
