@@ -9,7 +9,10 @@
 //! shallow fetch), the branch is checked out, `origin` is set to the HTTPS address and the branch
 //! follows it, so that Sync (`project.sync`) works at once. The credential used is kept for the
 //! session, and in the store (the system's keychain) when asked to (`remember`), for the remote's
-//! server (`texcraft.git.<host>`). Then the project opens. The history may be up to
+//! server (`texcraft.git.<host>`), where push, pull, Sync and the next import find it; the forges'
+//! personal access tokens are kept so too (`forge.open`'s `remember` in the browser), listed by
+//! `git.credentials`, replaced by `git.keep_credential`, removed by `git.forget_credential`. Then
+//! the project opens (unless `open` is false: the window opens it itself). The history may be up to
 //! [`texcraft_forge::MAX_PROJECT`] (200 MB), as a project opened from a forge.
 //!
 //! On the desktop only: in the browser no git protocol reaches the forges from a page, and the
@@ -118,6 +121,26 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "git.credentials",
+            label: "Tokens Kept on This Computer",
+            menu: &[],
+            shortcut: None,
+            params: super::no_params,
+            enabled: always,
+            run: credentials,
+            changes: false,
+        },
+        CommandSpec {
+            id: "git.keep_credential",
+            label: "Keep a Token for a Server",
+            menu: &[],
+            shortcut: None,
+            params: keep_schema,
+            enabled: always,
+            run: keep,
+            changes: true,
+        },
+        CommandSpec {
             id: "git.forget_credential",
             label: "Forget a Git Server's Credential",
             menu: &[],
@@ -137,7 +160,7 @@ fn check_schema() -> Value {
     json!({"type": "object", "properties": {
         "url": {"type": "string", "description": "The repository's address: https://host/owner/name.git (a whole `git clone …` command is read too; an SSH address is answered with its HTTPS form)."},
         "username": {"type": "string", "description": "The user name, for a server that needs signing in."},
-        "token": {"type": "string", "description": "A password or an access token for the server; kept for this session only. Without it, a token given earlier, one remembered or a sign-in to the server is used, else none."},
+        "token": {"type": "string", "description": "A password or an access token for the server; kept for this session only (project.clone's remember keeps it longer). Without it, a token given earlier, one kept or a sign-in to the server is used, else none."},
         "background": {"type": "boolean", "description": BACKGROUND}
     }, "required": ["url"], "additionalProperties": false})
 }
@@ -151,15 +174,23 @@ fn clone_schema() -> Value {
         "instance": {"type": "string", "description": "The forge's server (https://host), with service."},
         "username": {"type": "string", "description": "The user name for the server, when it needs one (Overleaf: git, which is the default there)."},
         "token": {"type": "string", "description": "A password or an access token for the server (Overleaf: a git authentication token; GitLab: read_repository; GitHub: Contents read-only). Without it, a token given earlier, one remembered or a sign-in to the server is used, else none (a public repository)."},
-        "remember": {"type": "boolean", "description": "Keep the token for the server in the system's keychain, so that Sync works in later sessions too (default: this session only)."},
+        "remember": {"type": "boolean", "description": "Keep the token for the server in the system's keychain, so that Sync, push, pull and later imports from it need none in later sessions too (default: this session only). git.credentials lists the tokens kept, git.forget_credential removes one."},
+        "open": {"type": "boolean", "description": "Open the project once it is cloned (default: true). The window opens it itself, unless another project was opened meanwhile."},
         "background": {"type": "boolean", "description": BACKGROUND}
     }, "required": ["url", "folder"], "additionalProperties": false})
 }
 
 fn forget_schema() -> Value {
     json!({"type": "object", "properties": {
-        "host": {"type": "string", "description": "The server whose credential to forget, as `git.credentials`… lists it (import.sources' `git_servers`)."}
+        "host": {"type": "string", "description": "The server whose token to forget, as git.credentials lists it (gitlab.com, github.com, git.overleaf.com…)."}
     }, "required": ["host"], "additionalProperties": false})
+}
+
+fn keep_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "host": {"type": "string", "description": "The server the token is for, as git.credentials lists it (gitlab.com, github.com, git.overleaf.com, git.example.org)."},
+        "token": {"type": "string", "description": "The token, in place of any kept for the server: a personal access token (GitLab, GitHub) or a git authentication token (Overleaf). Kept in the system's keychain (the browser: the tab's session storage); never in a result, a log or the preferences."}
+    }, "required": ["host", "token"], "additionalProperties": false})
 }
 
 fn idle(s: &Session) -> Result<()> {
@@ -302,9 +333,46 @@ fn cancel(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn forget(s: &mut Session, p: &Value) -> Result<Value> {
     let host = super::string(p, "host")?.trim().to_ascii_lowercase();
-    let known = s.forget_git_token(&host).map_err(|e| format!("The credential for {host} could not be removed from the keychain: {e}"))?;
+    let known = s.forget_git_token(&host).map_err(|e| format!("The token for {host} could not be removed from where it is kept: {e}"))?;
     s.forge_tokens.remove(&format!("https://{host}"));
     Ok(json!({"host": host, "forgotten": known}))
+}
+
+/// What kind of server `host` is, as Settings › Accounts names it: `gitlab`, `github`,
+/// `overleaf`, or `git` (any other).
+fn host_service(s: &Session, host: &str) -> &'static str {
+    if super::git::hosting(&format!("https://{host}/")).is_some() {
+        return "overleaf";
+    }
+    match host {
+        "gitlab.com" => "gitlab",
+        "github.com" => "github",
+        _ => match s.forge_servers().into_iter().find(|v| v.host().eq_ignore_ascii_case(host)).map(|v| v.service) {
+            Some(Service::GitLab) => "gitlab",
+            Some(Service::GitHub) => "github",
+            None => "git",
+        },
+    }
+}
+
+/// The tokens kept (Remember on this computer): by host, with the kind of server. Never a token.
+fn credentials(s: &mut Session, _: &Value) -> Result<Value> {
+    let hosts = s.git_hosts_saved().0.to_vec();
+    let listed: Vec<Value> = hosts.iter().map(|h| json!({"host": h, "service": host_service(s, h)})).collect();
+    Ok(json!({"credentials": listed, "kept": s.git_token_kept()}))
+}
+
+/// Keeps a token for a server, in place of the one kept: Settings › Accounts' Replace….
+fn keep(s: &mut Session, p: &Value) -> Result<Value> {
+    let host = super::string(p, "host")?.trim().to_ascii_lowercase();
+    let token = texcraft_forge::Token::new(super::string(p, "token")?).map_err(|e| e.to_string())?;
+    s.keep_git_token(&host, &token).map_err(|e| format!("The token for {host} could not be kept: {e}"))?;
+    // The session's copy follows, so that what runs next uses the new one.
+    let instance = format!("https://{host}");
+    if s.forge_tokens.contains_key(&instance) {
+        s.forge_tokens.insert(instance, token);
+    }
+    Ok(json!({"host": host, "kept": s.git_token_kept()}))
 }
 
 impl Session {

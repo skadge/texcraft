@@ -241,6 +241,73 @@ fn an_overleaf_project_clones_with_its_git_token_remembered_for_later_sessions()
     Ok(())
 }
 
+#[test]
+fn a_github_token_remembered_serves_the_next_import_a_push_and_the_suggestions_until_forgotten() -> R {
+    const PAT: &str = "github_pat_kept0engine0test";
+    let dir = temp("kept-github")?;
+    let server = Server::new(&bare(&dir.join("server.git"))?).with_auth("x-access-token", PAT);
+    let url = "https://github.com/ada/paper.git";
+    published(&dir, &server, url, PAT)?;
+    let keychain = Keychain::default();
+    let fake = texcraft_engine::forge::fake::Fake::github("ada/paper", PAT, &[("main.tex", b"x\n")]);
+    let with_fake = |s: &mut Session| {
+        let fake = fake.clone();
+        s.set_forge_transport(move || fake.transport());
+    };
+    let mut results = Vec::new();
+
+    let mut b = over(&server);
+    b.set_forge_secrets(Arc::new(keychain.clone()));
+    let first = dir.join("first");
+    let done =
+        b.execute("project.clone", &json!({"url": url, "folder": first.display().to_string(), "service": "github", "token": PAT, "remember": true}))?;
+    assert_eq!(done["kept"], "keychain", "{done}");
+    results.push(done);
+
+    // A later session, the hosts as the preferences kept them: nothing asks for the token.
+    let mut c = over(&server);
+    with_fake(&mut c);
+    c.set_forge_secrets(Arc::new(keychain.clone()));
+    c.restore_git_hosts(vec!["github.com".to_owned()]);
+    assert!(c.forge_reaches("https://github.com", texcraft_engine::forge::Service::GitHub), "the kept token is not known");
+    let found = c.execute("forge.projects", &json!({"service": "github", "query": "pap"}))?;
+    assert!(found["projects"].as_array().is_some_and(|p| !p.is_empty()), "the suggestions need the token again: {found}");
+    results.push(found);
+    let second = dir.join("second");
+    results.push(c.execute("project.clone", &json!({"url": url, "folder": second.display().to_string(), "service": "github"}))?);
+    write(&mut c, "main.tex", "\\documentclass{article}\n\\begin{document}\nFour\n\\end{document}\n")?;
+    c.execute("project.save", &json!({}))?;
+    results.push(c.execute("git.push", &json!({}))?);
+    assert_eq!(server.get("refs/heads/main").map(|id| id.to_string()), Some(head(&mut c)?), "the push did not go");
+    let listed = c.execute("git.credentials", &json!({}))?;
+    assert_eq!(listed["credentials"], json!([{"host": "github.com", "service": "github"}]), "{listed}");
+    results.push(listed);
+
+    // Replaced: the new token is the one kept.
+    results.push(c.execute("git.keep_credential", &json!({"host": "github.com", "token": "github_pat_replaced0token"}))?);
+    assert!(keychain.0.lock().map_err(|e| e.to_string())?.values().any(|v| v == "github_pat_replaced0token"));
+    assert!(!keychain.0.lock().map_err(|e| e.to_string())?.values().any(|v| v == PAT), "the old token is still kept");
+
+    // Forgotten: gone from the keychain and the list, and the next import asks again.
+    results.push(c.execute("git.forget_credential", &json!({"host": "github.com"}))?);
+    assert!(c.git_hosts_saved().0.is_empty() && keychain.0.lock().map_err(|e| e.to_string())?.is_empty());
+    let mut d = over(&server);
+    d.set_forge_secrets(Arc::new(keychain.clone()));
+    d.restore_git_hosts(vec!["github.com".to_owned()]);
+    assert!(d.git_hosts_saved().0.is_empty(), "a host whose token is gone is still listed");
+    let third = dir.join("third");
+    let refused = d.execute("project.clone", &json!({"url": url, "folder": third.display().to_string(), "service": "github"}));
+    assert!(refused.is_err(), "cloned with a token forgotten");
+
+    // No token in any result.
+    for r in &results {
+        let text = r.to_string();
+        assert!(!text.contains(PAT) && !text.contains("github_pat_replaced"), "a token in a result: {text}");
+    }
+    std::fs::remove_dir_all(&dir)?;
+    Ok(())
+}
+
 /// A server that answers every request with `status`, or (none) cannot be reached.
 struct Answer(Option<u16>);
 

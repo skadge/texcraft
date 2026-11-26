@@ -115,6 +115,12 @@ Common to the git sources on the desktop:
   "Writing 184 files", with **Cancel**. Cancel stops it and removes the folder TeXCraft made
   (only that folder, and only if it made it). The line is a live region, said at each phase, not
   each byte.
+- **Feedback (operator, #49):** Import closes the dialog at once and a card for the project
+  appears at the head of the start page's recent projects: a spinner, "Importing…" and the
+  phase (a live region), Cancel. A failure stays on the card in words, with Try Again (the page
+  as it was) and Dismiss. If another project was opened meanwhile, the import does not replace
+  it: it joins the recent projects. The footer's progress stays for the dialog opened again
+  while a clone runs.
 - **After:** the dialog closes; the project is open with its main document; the status line says
   "Imported paper (main) into ~/Documents/paper"; the top bar shows the branch and **Sync**. If no
   main document is obvious (several files with `\documentclass`), the file tree marks none and the
@@ -287,10 +293,12 @@ Everything the dialog does is a command, so agents and the command line can impo
 | `forge.projects`, `forge.branches`, `forge.sign_in`, `forge.check_server`, `forge.add_server` | as now | as now | The GitLab, GitHub and Server pages. |
 | UI: `project.import_dialog` | `{source?, address?}` | — | Opens the dialog, at a source if given (File › Import a Project…). |
 
-Credentials for hosts other than the known forges (Overleaf's git host, any git server) are kept
-per host in the keychain (`texcraft.git.<host>`), listed in Settings › Accounts under "Git
-servers" with **Forget**, and used by Push, Pull and Sync for that remote. Never in a result, a
-log or the preferences.
+Tokens remembered (Remember on this computer, ticked by default; in the browser Remember in this
+tab, the tab's session storage) are kept per host (`texcraft.git.<host>`), the forges' personal
+access tokens as Overleaf's and any git server's, listed in Settings › Accounts under "Tokens
+kept on this computer" by service and host with **Replace…** and **Forget** (`git.credentials`,
+`git.keep_credential`, `git.forget_credential`), and used by the next import, the suggestions,
+Push, Pull and Sync for that host. Never in a result, a log or the preferences.
 
 ## Words
 

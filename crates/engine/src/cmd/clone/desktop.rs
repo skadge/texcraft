@@ -57,6 +57,7 @@ struct Target {
     instance: String,
     key: Option<Key>,
     remember: bool,
+    open: bool,
 }
 
 /// The server's answer to a check: its refs (or why there are none).
@@ -271,6 +272,7 @@ pub(super) fn clone(s: &mut Session, p: &Value) -> Result<Value> {
         _ => https.clone(),
     };
     let remember = p.get("remember").and_then(Value::as_bool).unwrap_or(false);
+    let open = p.get("open").and_then(Value::as_bool).unwrap_or(true);
     let (stop, phase) = (Arc::new(AtomicBool::new(false)), Arc::new(Mutex::new(ClonePhase::Connecting)));
     let (connect, clients, slot, http) = (s.forge_transport.clone(), s.forge_auth_clients(), Renewed::default(), s.git_http.clone());
     let (filled, url, sent_key, at) = (slot.clone(), https.clone(), key.clone(), folder.clone());
@@ -297,7 +299,7 @@ pub(super) fn clone(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let started = start(p, make);
     s.keep_renewed(&slot);
-    let target = Target { folder, made, https, instance, key, remember };
+    let target = Target { folder, made, https, instance, key, remember, open };
     match started {
         Ok(Ok(pending)) => {
             s.import.task = Some(Task::Clone(Box::new(Cloning { pending, renewed: slot, stop, phase, target })));
@@ -441,7 +443,7 @@ fn run(
 /// A clone's end: on success the credential kept (for the session, and in the keychain when
 /// asked) and the project opened; on failure the folder cleared, and why said.
 fn cloned(s: &mut Session, done: std::result::Result<Cloned, Failed>, target: Target) -> Result<Value> {
-    let Target { folder, made, https, instance, key, remember } = target;
+    let Target { folder, made, https, instance, key, remember, open } = target;
     let cloned = match done {
         Ok(c) => c,
         Err(failed) => {
@@ -461,11 +463,16 @@ fn cloned(s: &mut Session, done: std::result::Result<Cloned, Failed>, target: Ta
         }
         s.keep_key(&instance, key);
     }
-    let opened = super::super::project::open(s, &json!({"path": folder.display().to_string()}))?;
     result["folder"] = json!(folder.display().to_string());
+    result["name"] = json!(folder.file_name().map(|n| n.to_string_lossy().into_owned()));
+    if !open {
+        result["opened"] = json!(false);
+        return Ok(result);
+    }
+    let opened = super::super::project::open(s, &json!({"path": folder.display().to_string()}))?;
+    result["opened"] = json!(true);
     result["files"] = opened["files"].clone();
     result["main"] = opened["main"].clone();
-    result["name"] = json!(folder.file_name().map(|n| n.to_string_lossy().into_owned()));
     result["skipped"] = opened.get("not_loaded").cloned().unwrap_or_else(|| json!([]));
     if let Some(note) = opened.get("note") {
         result["note"] = note.clone();

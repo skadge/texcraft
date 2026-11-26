@@ -69,6 +69,24 @@ pub(crate) enum Projects {
     Failed(String),
 }
 
+/// The first list of the account's projects, which the field's line says (#50): fetching, how many
+/// there are, or why it failed.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) enum Fetch {
+    /// Nothing asked yet, or nothing can be (no sign-in, no token).
+    #[default]
+    Idle,
+    Fetching,
+    Listed {
+        /// How many the account reaches, when the forge said (and whether there are more).
+        total: Option<(usize, bool)>,
+        /// How many came, and whether the forge cut the list.
+        shown: usize,
+        truncated: bool,
+    },
+    Failed(String),
+}
+
 /// The branch list.
 #[derive(Debug, Default)]
 pub(crate) enum Branches {
@@ -92,6 +110,9 @@ pub(crate) struct Picker {
     pub projects: Projects,
     /// A lookup is on its way.
     pub loading: bool,
+    /// The first list for the account (the server and the key it is asked with).
+    pub fetch: Fetch,
+    fetched_for: Option<(String, Option<u64>)>,
     /// What the suggestions shown are for.
     shown_for: Option<Asked>,
     /// The lookup of projects last sent.
@@ -160,14 +181,12 @@ fn target(text: &str, server: &str, service: Service) -> (String, String) {
     (instance, path.to_owned())
 }
 
-/// The key a lookup goes with: the token typed (by its hash), or the session's (sign-in, or a
-/// token given earlier); none when there is neither.
+/// The key a lookup goes with: the token typed (by its hash), or the session's (sign-in, a token
+/// given earlier or one kept); none when there is neither.
 fn key(app: &App, form: &OpenForm, instance: &str) -> Option<Option<u64>> {
     let token = form.token.trim();
-    if form.use_token {
-        if token.is_empty() {
-            return None;
-        }
+    // An empty token field: the session's key (a token kept for the server among them).
+    if form.use_token && !token.is_empty() {
         let mut h = std::collections::hash_map::DefaultHasher::new();
         token.hash(&mut h);
         return Some(Some(h.finish()));
@@ -218,6 +237,8 @@ fn look_up_projects(app: &mut App) {
             form.picker.due = None;
             form.picker.projects = Projects::NeedsKey;
             form.picker.shown_for = None;
+            form.picker.fetch = Fetch::Idle;
+            form.picker.fetched_for = None;
         }
         return;
     };
@@ -230,12 +251,22 @@ fn look_up_projects(app: &mut App) {
     form.picker.due = None;
     if outcome.is_some() {
         form.picker.asked = Some(asked.clone());
+        // Another account or server: its list is fetched anew, and the field says so.
+        let account = Some((asked.instance.clone(), asked.key));
+        if form.picker.fetched_for != account {
+            form.picker.fetched_for = account;
+            form.picker.fetch = Fetch::Fetching;
+        }
     }
     match outcome {
         None => {}
         Some(Ok(v)) if v["started"] == true => form.picker.loading = true,
-        Some(Ok(v)) => show_projects(form, &v),
+        Some(Ok(v)) => {
+            fetched(&mut form.picker, Ok(&v));
+            show_projects(form, &v);
+        }
         Some(Err(e)) => {
+            fetched(&mut form.picker, Err(&e));
             form.picker.projects = Projects::Failed(e);
             form.picker.shown_for = Some(asked);
         }
@@ -297,10 +328,12 @@ pub(crate) fn poll(app: &mut App) {
         match (kind, outcome) {
             (ForgeLookup::Projects, Ok(v)) => {
                 form.picker.loading = false;
+                fetched(&mut form.picker, Ok(&v));
                 show_projects(form, &v);
             }
             (ForgeLookup::Projects, Err(e)) => {
                 form.picker.loading = false;
+                fetched(&mut form.picker, Err(&e));
                 form.picker.projects = Projects::Failed(e);
             }
             (ForgeLookup::Branches, Ok(v)) => {
@@ -311,6 +344,58 @@ pub(crate) fn poll(app: &mut App) {
                 }
             }
             (ForgeLookup::Branches, Err(e)) => form.picker.branches = Branches::Failed(e),
+        }
+    }
+}
+
+/// The first list for the account came (or did not): how many, or why.
+fn fetched(picker: &mut Picker, outcome: Result<&Value, &String>) {
+    if picker.fetch != Fetch::Fetching {
+        return;
+    }
+    picker.fetch = match outcome {
+        Ok(v) => Fetch::Listed {
+            total: v["total"].as_u64().map(|n| (usize::try_from(n).unwrap_or(usize::MAX), v["total_more"] == true)),
+            shown: v["projects"].as_array().map_or(0, Vec::len),
+            truncated: v["truncated"] == true,
+        },
+        Err(e) => Fetch::Failed(e.clone()),
+    };
+}
+
+/// The line under the project field: the account's list being fetched (a spinner), how many
+/// projects it has once it came, or why it could not be had; said in a live region as it changes.
+fn fetch_line(ui: &mut egui::Ui, t: &Tokens, fetch: &Fetch, service: Service) {
+    use crate::import::{Tone, hint};
+    match fetch {
+        Fetch::Idle => {}
+        Fetch::Fetching => {
+            let text = match service {
+                Service::GitLab => tl!("Fetching your projects…"),
+                Service::GitHub => tl!("Fetching your repositories…"),
+            };
+            hint(ui, t, text, Tone::Busy);
+        }
+        Fetch::Listed { total, shown, truncated } => {
+            let text = match (service, total) {
+                (Service::GitHub, Some((n, true))) => {
+                    trn(*n, "More than {n} repository: type to find the others", "More than {n} repositories: type to find the others")
+                }
+                (Service::GitHub, Some((n, false))) => trn(*n, "{n} repository", "{n} repositories"),
+                (Service::GitLab, Some((n, _))) => trn(*n, "{n} project", "{n} projects"),
+                (Service::GitLab, None) if *truncated => trn(
+                    *shown,
+                    "Your {n} most recently active project is listed: type to find the others",
+                    "Your {n} most recently active projects are listed: type to find the others",
+                ),
+                (Service::GitLab, None) => trn(*shown, "{n} project found", "{n} projects found"),
+                (Service::GitHub, None) => trn(*shown, "{n} repository found", "{n} repositories found"),
+            };
+            hint(ui, t, &text, Tone::Good);
+        }
+        Fetch::Failed(e) => {
+            let text = format!("{} {}", tl!("Your list could not be fetched:"), crate::i18n::msg(e));
+            hint(ui, t, &text, Tone::Bad);
         }
     }
 }
@@ -498,7 +583,9 @@ pub(crate) fn project_field(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm, 
     if field.lost_focus() {
         form.picker.left = true;
     }
-    let showing = form.picker.open && !matches!(form.picker.projects, Projects::Idle);
+    let fetching = form.picker.fetch == Fetch::Fetching;
+    // While the account's list is on its way, the list opens to say so.
+    let showing = form.picker.open && (!matches!(form.picker.projects, Projects::Idle) || fetching);
     let mut chosen: Option<Suggestion> = None;
     // A popup under the field, so that what follows does not move as suggestions come and go.
     let mut menu_open = showing;
@@ -573,12 +660,19 @@ pub(crate) fn project_field(ui: &mut egui::Ui, t: &Tokens, form: &mut OpenForm, 
         choose(form, &s);
         field.request_focus();
     }
+    fetch_line(ui, t, &form.picker.fetch, form.service);
     field
 }
 
 /// What the line above the suggestions says, and the live region announces: how many there are
 /// and which one is chosen, or why there are none.
 fn summary(picker: &Picker, service: Service) -> String {
+    if picker.fetch == Fetch::Fetching {
+        return match service {
+            Service::GitLab => tl!("Still fetching your projects…").to_owned(),
+            Service::GitHub => tl!("Still fetching your repositories…").to_owned(),
+        };
+    }
     match &picker.projects {
         Projects::Idle => String::new(),
         Projects::NeedsKey => match service {

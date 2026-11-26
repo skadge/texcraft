@@ -275,17 +275,24 @@ fn recent(app: &mut App, ui: &mut egui::Ui, t: &Tokens, width: f32) {
         storage(app, ui, t);
     }
     let recent = library.clone().unwrap_or_else(|| app.prefs.recent.clone());
-    if recent.is_empty() {
+    let importing = app.importing.is_some();
+    if recent.is_empty() && !importing {
         first_visit(app, ui, t, library.is_some());
         return;
     }
     let columns = ((width + 16.0) / (CARD.x + 16.0)).floor().max(1.0) as usize;
     let mut open = None;
     let mut forget = None;
-    for row in recent.chunks(columns) {
+    // The import under way first, as a card of its own (none: the import's).
+    let entries: Vec<Option<String>> = importing.then_some(None).into_iter().chain(recent.into_iter().map(Some)).collect();
+    for row in entries.chunks(columns) {
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = 16.0;
-            for path in row {
+            for entry in row {
+                let Some(path) = entry else {
+                    crate::import::card_of_import(app, ui, t, CARD);
+                    continue;
+                };
                 match card(app, ui, t, path) {
                     Some(CardAction::Open) => open = Some(path.clone()),
                     Some(CardAction::Forget) => forget = Some(path.clone()),

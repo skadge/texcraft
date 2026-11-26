@@ -341,7 +341,12 @@ fn save_form(
         }
         responses.push(token);
         ui.add_space(t.unit);
-        token_note(ui, t, browser, form.service);
+        let kept = if browser {
+            tl!("Kept while this page is open; a token kept for this server (Settings › Accounts) is replaced by it.")
+        } else {
+            tl!("Kept while TeXCraft runs; a token kept for this server (Settings › Accounts) is replaced by it.")
+        };
+        token_note(ui, t, kept, form.service);
     }
     // Why the last try did not work, or what is going on: a live region says it as it changes.
     let (text, color) = match (&form.error, form.running) {

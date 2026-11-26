@@ -326,8 +326,14 @@ fn a_history_too_large_is_said_with_the_limit_and_leaves_no_folder() {
     h.get_by_role_and_label(Role::Button, "Import").click();
     settle(&mut h);
     assert!(said(&h, "TeXCraft imports up to"), "the limit is not said");
-    assert!(h.query_by_label("Import from a Git Address").is_some(), "the page is not kept to try another");
+    assert!(h.query_by_role_and_label(Role::Group, "notes, Import failed").is_some(), "the card does not say it failed");
     assert!(!dir.join("notes").exists(), "the folder made is left behind");
+    // Try Again: the page as it was, to try another.
+    h.get_by_role_and_label(Role::Button, "Try Again: notes").click();
+    h.run();
+    assert!(h.query_by_label("Import from a Git Address").is_some(), "the page is not back to try another");
+    assert_eq!(h.get_by_label("Address").accesskit_node().value().as_deref(), Some(NOTES), "what was typed is lost");
+    assert!(h.query_by_role_and_label(Role::Group, "notes, Import failed").is_none(), "the failed card stayed");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -357,10 +363,15 @@ fn cancel_stops_the_clone_and_removes_the_folder_it_made() {
         h.step();
     }
     assert_eq!(h.state().session().import_busy(), Some("clone"));
+    // The dialog closed and the project's card is on the start page at once, with its phase.
+    assert!(h.query_by_label("Import from a Git Address").is_none(), "the dialog stayed over the start page");
+    assert!(h.query_by_role_and_label(Role::Group, "notes, Importing…").is_some(), "no card for the import");
+    let phase = h.query_all_by_label_contains("Importing… ").any(|n| n.accesskit_node().live() != egui::accesskit::Live::Off);
+    assert!(phase, "the card's phase is not a live region");
     assert!(said(&h, "Receiving the history…") || said(&h, "Asking the server for the project…"), "the progress is not said");
     assert!(dir.join("notes").exists(), "no folder made");
     // A click as a person makes it: the press and the release in frames of their own.
-    let at = h.get_by_role_and_label(Role::Button, "Cancel").rect().center();
+    let at = h.get_by_role_and_label(Role::Button, "Cancel: notes").rect().center();
     h.event(egui::Event::PointerMoved(at));
     h.step();
     h.step();
@@ -373,6 +384,7 @@ fn cancel_stops_the_clone_and_removes_the_folder_it_made() {
         h.step();
     }
     assert!(said(&h, "Import stopped: the folder it made is removed."), "{:?}", h.state().session().import_busy());
+    assert!(h.query_by_role_and_label(Role::Group, "notes, Importing…").is_none(), "the card stayed");
     assert!(!dir.join("notes").exists(), "the folder is still there");
     // The clone's thread ends by itself and leaves nothing either.
     std::thread::sleep(std::time::Duration::from_millis(900));
@@ -511,5 +523,129 @@ fn a_project_on_a_gitlab_server_added_is_chosen_there_and_cloned() {
     assert!(said(&h, "Imported paper (main) into"), "not imported");
     let remotes = h.state_mut().control("engine.execute", &json!({"command": "git.remotes", "params": {}}))["result"].clone();
     assert_eq!(remotes["url"], "https://git.example.org/lab/paper.git", "{remotes}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_import_finished_after_another_project_was_opened_joins_the_recent_projects() {
+    let dir = temp("elsewhere");
+    let server = published(&dir, NOTES, None).unwrap();
+    let other = dir.join("other");
+    let _ = std::fs::create_dir_all(&other);
+    let _ = std::fs::write(other.join("main.tex"), "\\documentclass{article}\n");
+    let mut h = window(session(move || Box::new(Slow(server.clone()))), &dir, WIDE);
+    open(&mut h, Some("git"));
+    type_into(&mut h, "Address", NOTES);
+    settle(&mut h);
+    h.get_by_role_and_label(Role::Button, "Import").click();
+    for _ in 0..4 {
+        h.step();
+    }
+    assert!(h.query_by_role_and_label(Role::Group, "notes, Importing…").is_some(), "no card for the import");
+    // Meanwhile the user opens another project: the import does not take its place.
+    h.state_mut().open_project(&other.display().to_string());
+    settle(&mut h);
+    assert_eq!(h.state().session().dir(), Some(&other), "the import replaced the project opened meanwhile");
+    assert!(dir.join("notes/.git").is_dir(), "not cloned");
+    assert!(said(&h, "it is in the recent projects"), "the status line does not say where it went");
+    let prefs = h.state_mut().take_changed_prefs().expect("the preferences changed");
+    assert!(prefs.recent.iter().any(|p| std::path::Path::new(p) == dir.join("notes")), "not among the recent projects: {:?}", prefs.recent);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn in_the_browser_an_import_has_its_card_and_cancel_stops_it() {
+    let fake = texcraft_engine::forge::fake::Fake::github("ada/paper", "github_pat_card", &[("main.tex", b"x\n")]);
+    let open = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut h = crate::forge_pick::gated(&fake, &open, true);
+    ui_cmd::run_with(h.state_mut(), "project.import_dialog", &json!({"source": "github", "address": "https://github.com/ada/paper"}));
+    h.run();
+    if h.query_by_label("Personal access token").is_none() {
+        h.get_by_label("Use a personal access token instead").click();
+        h.run();
+    }
+    h.get_by_label("Personal access token").click();
+    h.step();
+    h.get_by_label("Personal access token").type_text("github_pat_card");
+    for _ in 0..5 {
+        h.step();
+    }
+    h.get_by_role_and_label(Role::Button, "Import").click();
+    for _ in 0..4 {
+        h.step();
+    }
+    assert!(h.query_by_role_and_label(Role::Group, "paper, Importing…").is_some(), "no card for the import");
+    assert!(said(&h, "Receiving the files…"), "the card does not say what it is doing");
+    h.get_by_role_and_label(Role::Button, "Cancel: paper").click();
+    for _ in 0..4 {
+        h.step();
+    }
+    assert!(said(&h, "Import stopped."), "stopping is not said");
+    assert!(h.query_by_role_and_label(Role::Group, "paper, Importing…").is_none(), "the card stayed");
+    open.store(true, std::sync::atomic::Ordering::Relaxed);
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    for _ in 0..10 {
+        h.step();
+    }
+    assert!(h.state().session().forge().is_none(), "the project stopped was opened all the same");
+}
+
+#[test]
+fn a_github_token_remembered_serves_the_next_import_and_is_listed_to_replace_and_forget() {
+    const TOKEN: &str = "github_pat_remember_test";
+    let dir = temp("remember");
+    let fake = texcraft_engine::forge::fake::Fake::github("ada/paper", TOKEN, &[("main.tex", b"x\n")]);
+    let server = published(&dir, "https://github.com/ada/paper.git", Some(("x-access-token", TOKEN))).unwrap();
+    let mut s = over(&server);
+    s.set_forge_transport(move || fake.transport());
+    let mut h = window(s, &dir, WIDE);
+    open(&mut h, Some("github"));
+    if h.query_by_label("Personal access token").is_none() {
+        h.get_by_label("Use a personal access token instead").click();
+        h.run();
+    }
+    type_into(&mut h, "Personal access token", TOKEN);
+    let remember = h.get_by_role_and_label(Role::CheckBox, "Remember on this computer");
+    assert_eq!(remember.accesskit_node().data().toggled(), Some(egui::accesskit::Toggled::True), "Remember is not ticked by default");
+    type_into(&mut h, "Project", "https://github.com/ada/paper");
+    crate::forge::quiet(&mut h);
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.get_by_role_and_label(Role::Button, "Import").click();
+    settle(&mut h);
+    assert!(said(&h, "Imported paper (main) into"), "not imported");
+
+    // The next import from GitHub asks for no token: the one kept is used.
+    open(&mut h, Some("github"));
+    assert!(said(&h, "A token for github.com is kept on this computer"), "the page does not say a token is kept");
+    type_into(&mut h, "Project", "pap");
+    crate::forge::quiet(&mut h);
+    assert!(h.query_all_by_role(Role::ListBoxOption).count() > 0, "the suggestions need the token again");
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.key_press(egui::Key::Escape);
+    h.run();
+
+    // Settings › Accounts lists it by service and host, with Replace… and Forget.
+    ui_cmd::run(h.state_mut(), "app.settings");
+    h.run();
+    h.get_by_label("Accounts").click();
+    h.run();
+    assert!(h.query_by_role_and_label(Role::Button, "Forget: github.com").is_some(), "the token kept is not listed");
+    h.get_by_role_and_label(Role::Button, "Replace…: github.com").click();
+    h.run();
+    type_into(&mut h, "New token for github.com", "github_pat_new_one");
+    h.get_by_role_and_label(Role::Button, "Keep").click();
+    h.run();
+    assert!(said(&h, "Replaced the token kept for github.com."));
+    h.get_by_role_and_label(Role::Button, "Forget: github.com").click();
+    h.run();
+    assert!(said(&h, "Forgot the token kept for github.com."));
+    assert!(h.query_by_role_and_label(Role::Button, "Forget: github.com").is_none(), "still listed once forgotten");
+    // The preferences have the host at most, never a token.
+    let prefs = h.state_mut().take_changed_prefs().expect("the preferences changed");
+    let text = format!("{prefs:?}");
+    assert!(!text.contains(TOKEN) && !text.contains("github_pat_new_one"), "a token in the preferences");
+    assert!(prefs.git_hosts.is_empty(), "the host is still in the preferences");
     let _ = std::fs::remove_dir_all(&dir);
 }

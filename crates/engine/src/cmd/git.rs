@@ -220,7 +220,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
 }
 
 const BACKGROUND: &str = "Return at once; the outcome arrives later, in the window's status line. Default: wait for it (not in the browser).";
-const TOKEN: &str = "A personal access token for the server (GitLab: the api scope to push, read_api or read_repository to pull; GitHub: Contents read and write); may be left out when one was given or a sign-in made for the server in this session. Kept for this session only.";
+const TOKEN: &str = "A personal access token for the server (GitLab: the api scope to push, read_api or read_repository to pull; GitHub: Contents read and write); may be left out when one was given, kept (git.credentials) or a sign-in made for the server. Kept for this session only.";
 
 fn set_remote_schema() -> Value {
     json!({"type": "object", "properties": {
@@ -240,7 +240,7 @@ fn transfer_schema() -> Value {
 
 fn sync_schema() -> Value {
     json!({"type": "object", "properties": {
-        "token": {"type": "string", "description": "A token for the remote's server, kept for this session only: a personal access token (GitLab, GitHub) or a git authentication token (Overleaf); may be left out when one was given or a sign-in made for the server in this session."},
+        "token": {"type": "string", "description": "A token for the remote's server, kept for this session (and in place of the one kept for it, if one is): a personal access token (GitLab, GitHub) or a git authentication token (Overleaf); may be left out when one was given, kept (git.credentials) or a sign-in made for the server."},
         "resolve": {"type": "object", "additionalProperties": {"enum": ["mine", "theirs"]}, "description": "For files in conflict (forge.status lists them after a refused Sync): \"mine\" keeps the project's version, \"theirs\" takes the remote's, by path."},
         "background": {"type": "boolean", "description": BACKGROUND}
     }, "additionalProperties": false})

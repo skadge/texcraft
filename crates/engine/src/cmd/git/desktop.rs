@@ -249,10 +249,7 @@ fn git_key(s: &mut Session, p: &Value, target: &Target, write: bool) -> Result<O
             return Ok(Some(Key::Token(token)));
         }
         needs(s);
-        return Err(format!(
-            "Give your {} git authentication token for this project (token): TeXCraft keeps it only while it runs, never on disk.",
-            h.name()
-        ));
+        return Err(format!("Give your {} git authentication token for this project (token); git.keep_credential keeps it for next time.", h.name()));
     }
     let host = texcraft_forge::servers::host_of(&target.instance).to_owned();
     if write {

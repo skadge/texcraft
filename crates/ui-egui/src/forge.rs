@@ -396,9 +396,12 @@ pub(crate) fn set_opening(app: &mut App, service: Service) {
     app.forge_check.opening = service;
 }
 
-/// Offers the token first only where signing in is not offered (the form's instance).
+/// Offers the token first where signing in is not offered (the form's instance), or where a
+/// token is kept for it and no sign-in is.
 pub(crate) fn refresh_use_token(app: &App, form: &mut OpenForm) {
-    form.use_token = app.session.forge_sign_in_unavailable_at(form.service, &instance_of_form(form)).is_some();
+    let instance = instance_of_form(form);
+    let kept = app.session.has_kept_token(&instance) && app.session.forge_signed_in_at(&instance).is_none();
+    form.use_token = kept || app.session.forge_sign_in_unavailable_at(form.service, &instance).is_some();
 }
 
 /// The instance the form's project is on: the address's, else the page's server.
@@ -578,13 +581,8 @@ pub(crate) fn token_hint(service: Service) -> &'static str {
     say(service, "glpat-…", "github_pat_…")
 }
 
-/// What the token is for, which permissions it needs on `service`, and that it is not kept.
-pub(crate) fn token_note(ui: &mut egui::Ui, t: &Tokens, browser: bool, service: Service) {
-    let kept = if browser {
-        tl!("TeXCraft keeps the token only while this page is open: it is never stored.")
-    } else {
-        tl!("TeXCraft keeps the token only while it runs: it is never written to disk.")
-    };
+/// What the token is for and which permissions it needs on `service`; `kept`, where it is kept.
+pub(crate) fn token_note(ui: &mut egui::Ui, t: &Tokens, kept: &str, service: Service) {
     let how = say(
         service,
         tl!("Make one in GitLab under Preferences › Access tokens. The read_api scope opens projects; committing needs the api scope."),
@@ -593,7 +591,7 @@ pub(crate) fn token_note(ui: &mut egui::Ui, t: &Tokens, browser: bool, service: 
         ),
     );
     let text = format!("{how} {kept}");
-    ui.label(RichText::new(text).font(t.small()).color(t.text_muted));
+    ui.label(RichText::new(text.trim_end()).font(t.small()).color(t.text_muted));
 }
 
 /// The sign-in part and its fallback ("Use a personal access token instead"); whether the session
@@ -704,7 +702,12 @@ fn commit_form(ui: &mut egui::Ui, t: &Tokens, form: &mut CommitForm, browser: bo
     if let Some(token) = form.token.as_mut().filter(|_| form.use_token) {
         responses.push(field(ui, t, tl!("Personal access token"), token, token_hint(form.service), true));
         ui.add_space(t.unit);
-        token_note(ui, t, browser, form.service);
+        let kept = if browser {
+            tl!("Kept while this page is open; a token kept for this server (Settings › Accounts) is replaced by it.")
+        } else {
+            tl!("Kept while TeXCraft runs; a token kept for this server (Settings › Accounts) is replaced by it.")
+        };
+        token_note(ui, t, kept, form.service);
     }
     let enter = responses.iter().any(|r| r.lost_focus()) && ui.input(|i| i.key_pressed(egui::Key::Enter));
     let decided = if form.to_new_branch { !form.new_branch.trim().is_empty() } else { form.conflicts.iter().all(|c| c.choice.is_some()) };
@@ -963,7 +966,9 @@ fn names(list: &Value) -> Vec<String> {
     list.as_array().into_iter().flatten().filter_map(|v| v.as_str().or_else(|| v["path"].as_str()).map(str::to_owned)).collect()
 }
 
-fn opened(app: &mut App, done: &Value) {
+/// A project opened from a forge (the browser's import): it is open, its import card goes.
+pub(crate) fn opened(app: &mut App, done: &Value) {
+    app.importing = None;
     app.start = false;
     app.pdf = crate::pdf_view::PdfView::default();
     app.view.last_edit = Some(0.0);
@@ -1080,6 +1085,7 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     let mut remove = None;
     let mut add = None;
     let mut forget: Option<String> = None;
+    let mut replace: Option<(String, String)> = None;
     let servers = app.session.forge_servers();
     let browser = app.session.library().is_some();
     egui::ScrollArea::vertical().id_salt("forge-accounts").max_height(440.0).auto_shrink([false, true]).show(ui, |ui| {
@@ -1116,24 +1122,12 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
                 }
             });
         }
-        // Git servers whose token Import a Project remembered (Overleaf's, any git server's).
-        let (hosts, _) = app.session.git_hosts_saved();
-        if !hosts.is_empty() {
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = t.unit * 2.0;
-                ui.label(RichText::new(tl!("Git servers")).font(t.strong()));
-                for host in hosts {
-                    ui.horizontal(|ui| {
-                        ui.label(tl!("{host}: a token is kept in the keychain.").replace("{host}", host));
-                        let r = ui.button(tl!("Forget"));
-                        let name = format!("{}: {host}", tl!("Forget"));
-                        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
-                        if r.clicked() {
-                            forget = Some(host.clone());
-                        }
-                    });
-                }
-            });
+        // The tokens kept (Remember on this computer): the forges' and the git servers'.
+        if let Some(kept) = kept_tokens(app, ui, t) {
+            match kept {
+                Kept::Forget(host) => forget = Some(host),
+                Kept::Replace(host, token) => replace = Some((host, token)),
+            }
         }
         for problem in app.session.forge_server_problems() {
             let text = tl!("Your organisation's list of servers has an entry TeXCraft left out: {problem}").replace("{problem}", &crate::i18n::msg(problem));
@@ -1168,7 +1162,14 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     if let Some(host) = forget
         && app.run("git.forget_credential", json!({"host": host})).is_some()
     {
+        app.token_replace = None;
         app.view.status = Some((tl!("Forgot the token kept for {host}.").replace("{host}", &host), false));
+    }
+    if let Some((host, token)) = replace
+        && app.run("git.keep_credential", json!({"host": host, "token": token.trim()})).is_some()
+    {
+        app.token_replace = None;
+        app.view.status = Some((tl!("Replaced the token kept for {host}.").replace("{host}", &host), false));
     }
     if let Some(instance) = remove
         && let Some(done) = app.run("forge.remove_server", json!({"address": instance}))
@@ -1183,4 +1184,85 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     if let Some(service) = add {
         crate::forge_server::ask_add(app, service, "", crate::forge_server::Back::Settings);
     }
+}
+
+/// What was chosen in the list of tokens kept.
+enum Kept {
+    Forget(String),
+    /// Replace…'s new token typed, and Keep pressed.
+    Replace(String, String),
+}
+
+/// Settings › Accounts' tokens kept on this computer (in the browser, in this tab), each by its
+/// service and host, with Replace… (a field for the new one in place) and Forget. Nothing when none
+/// is kept.
+fn kept_tokens(app: &mut App, ui: &mut egui::Ui, t: &Tokens) -> Option<Kept> {
+    let listed = app.session.execute("git.credentials", &json!({})).ok()?;
+    let rows: Vec<(String, String)> = listed["credentials"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|c| Some((c["host"].as_str()?.to_owned(), c["service"].as_str().unwrap_or("git").to_owned())))
+        .collect();
+    if rows.is_empty() {
+        return None;
+    }
+    let (heading, place) = match listed["kept"].as_str() {
+        Some("tab") => (tl!("Tokens kept in this tab"), tl!("Kept in this tab's session storage until the tab is closed; never in the preferences.")),
+        Some("keychain") => (tl!("Tokens kept on this computer"), tl!("Kept in the system's keychain; never in the preferences.")),
+        _ => (tl!("Tokens kept while TeXCraft runs"), tl!("This computer has no keychain TeXCraft can use: tokens are kept while it runs only.")),
+    };
+    let mut chosen = None;
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = t.unit * 2.0;
+        ui.label(RichText::new(heading).font(t.strong()));
+        ui.label(
+            RichText::new(tl!("Push, pull, Sync and the next import from these servers use them without asking. {place}").replace("{place}", place))
+                .font(t.small())
+                .color(t.text_muted),
+        );
+        for (host, service) in &rows {
+            let what = match service.as_str() {
+                "gitlab" => format!("GitLab ({host})"),
+                "github" => format!("GitHub ({host})"),
+                "overleaf" => format!("Overleaf ({host})"),
+                _ => host.clone(),
+            };
+            ui.horizontal_wrapped(|ui| {
+                ui.label(what);
+                let r = ui.button(tl!("Replace…"));
+                let name = format!("{}: {host}", tl!("Replace…"));
+                r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+                if r.clicked() {
+                    app.token_replace = Some(crate::TokenReplace { host: host.clone(), token: String::new(), focus: true });
+                }
+                let r = ui.button(tl!("Forget"));
+                let name = format!("{}: {host}", tl!("Forget"));
+                r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+                if r.clicked() {
+                    chosen = Some(Kept::Forget(host.clone()));
+                }
+            });
+            if let Some(form) = app.token_replace.as_mut().filter(|f| f.host == *host) {
+                let label = tl!("New token for {host}").replace("{host}", host);
+                let field = field(ui, t, &label, &mut form.token, "", true);
+                if std::mem::take(&mut form.focus) {
+                    field.request_focus();
+                }
+                let ready = !form.token.trim().is_empty();
+                let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                let mut cancel = false;
+                ui.horizontal(|ui| {
+                    if ui.add_enabled(ready, egui::Button::new(tl!("Keep"))).clicked() || (enter && ready) {
+                        chosen = Some(Kept::Replace(host.clone(), form.token.clone()));
+                    }
+                    cancel = ui.button(tl!("Cancel")).clicked();
+                });
+                if cancel {
+                    app.token_replace = None;
+                }
+            }
+        }
+    });
+    chosen
 }

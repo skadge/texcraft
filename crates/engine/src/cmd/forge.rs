@@ -29,7 +29,7 @@ use crate::{Result, Session};
 /// A forge operation running in the background, with the key it was given and the slot its
 /// sign-in, renewed on the way, is put in.
 pub(crate) enum Task {
-    Open { pending: Pending<Loaded>, key: Key, renewed: Renewed },
+    Open { pending: Pending<Loaded>, key: Key, renewed: Renewed, remember: bool },
     Commit { pending: Pending<Committed>, key: Key, renewed: Renewed, files: Vec<(String, Vec<u8>)> },
     Pull { pending: Pending<Pulled>, key: Key, renewed: Renewed, files: Vec<(String, Vec<u8>)> },
 }
@@ -99,6 +99,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "forge.cancel_open",
+            label: "Stop Opening from GitLab or GitHub",
+            menu: &[],
+            shortcut: None,
+            params: no_params,
+            enabled: always,
+            run: cancel_open,
+            changes: false,
+        },
+        CommandSpec {
             id: "forge.commit",
             label: "Commit to GitLab or GitHub…",
             menu: &["File"],
@@ -135,7 +145,8 @@ fn open_schema() -> Value {
     json!({"type": "object", "properties": {
         "url": {"type": "string", "description": "The project's address: https://gitlab.com/group/project or https://github.com/owner/repository, a page under it, its clone address, or group/project (on gitlab.com, or github.com with service github)."},
         "service": {"enum": ["gitlab", "github"], "description": "The forge's kind, for an address that does not say it (github.com's are GitHub's, gitlab.com's GitLab's): a bare owner/repository, or a GitHub Enterprise Server. Default: gitlab."},
-        "token": {"type": "string", "description": "A personal access token. GitLab: the read_api scope (api to commit). GitHub: a fine-grained token with Contents read-only (read and write to commit) and Pull requests read and write for new_branch, or a classic token with the repo scope. Kept for this session only. May be left out when one was given for the same instance in this session."},
+        "token": {"type": "string", "description": "A personal access token. GitLab: the read_api scope (api to commit). GitHub: a fine-grained token with Contents read-only (read and write to commit) and Pull requests read and write for new_branch, or a classic token with the repo scope. Kept for this session, and in the store with remember. May be left out when one was given or kept for the same instance, or when signed in to it."},
+        "remember": {"type": "boolean", "description": "Keep the token for the instance's host once the project is open, so that later imports, pulls and commits need none: the system's keychain on the desktop, the tab's session storage in the browser. Listed by git.credentials, removed by git.forget_credential. Default: false (this session only)."},
         "ref": {"type": "string", "description": "The branch; the project's default branch if left out."},
         "background": {"type": "boolean", "description": "Return at once; the outcome arrives later, in the window's status line. Default: wait for it (not in the browser, which always works so)."}
     }, "required": ["url"], "additionalProperties": false})
@@ -147,7 +158,7 @@ const RESOLVE: &str =
 fn commit_schema() -> Value {
     json!({"type": "object", "properties": {
         "message": {"type": "string", "description": "The commit's message."},
-        "token": {"type": "string", "description": "A personal access token that can commit (GitLab: the api scope; GitHub: Contents read and write); may be left out when one was given for the project's instance in this session."},
+        "token": {"type": "string", "description": "A personal access token that can commit (GitLab: the api scope; GitHub: Contents read and write); may be left out when one was given or kept for the project's instance."},
         "resolve": {"type": "object", "additionalProperties": {"enum": ["mine", "theirs"]}, "description": RESOLVE},
         "new_branch": {"type": "string", "description": "Commit to this new branch, from the base (no merge needed), and open a merge request (GitHub: a pull request) of it into the project's branch; the project then follows the new branch. For a protected branch, one the user cannot push to, or conflicts left to the forge."},
         "background": {"type": "boolean", "description": "Return at once; the outcome arrives later, in the window's status line. Default: wait for it (not in the browser)."}
@@ -156,7 +167,7 @@ fn commit_schema() -> Value {
 
 fn pull_schema() -> Value {
     json!({"type": "object", "properties": {
-        "token": {"type": "string", "description": "A personal access token that can read the project (GitLab: read_api; GitHub: Contents read-only); may be left out when one was given for the project's instance in this session."},
+        "token": {"type": "string", "description": "A personal access token that can read the project (GitLab: read_api; GitHub: Contents read-only); may be left out when one was given or kept for the project's instance."},
         "resolve": {"type": "object", "additionalProperties": {"enum": ["mine", "theirs"]}, "description": RESOLVE},
         "background": {"type": "boolean", "description": "Return at once; the outcome arrives later, in the window's status line. Default: wait for it (not in the browser)."}
     }, "additionalProperties": false})
@@ -198,7 +209,8 @@ fn key_for(s: &Session, p: &Value, address: &Address) -> Result<Key> {
     key_at(s, p, &address.instance, address.service)
 }
 
-/// The token given, the one given earlier in this session for `instance`, or the sign-in to it.
+/// The token given, the one given earlier in this session for `instance`, the one kept for its
+/// host (Remember on this computer), or the sign-in to it.
 pub(super) fn key_at(s: &Session, p: &Value, instance: &str, service: Service) -> Result<Key> {
     if let Some(t) = p.get("token").and_then(Value::as_str).filter(|t| !t.trim().is_empty()) {
         return Token::new(t).map(Key::Token).map_err(|e| e.to_string());
@@ -206,18 +218,21 @@ pub(super) fn key_at(s: &Session, p: &Value, instance: &str, service: Service) -
     if let Some(token) = s.forge_tokens.get(instance) {
         return Ok(Key::Token(token.clone()));
     }
+    if let Some(token) = s.kept_git_token(texcraft_forge::servers::host_of(instance)) {
+        return Ok(Key::Token(token));
+    }
     if let Some(grant) = s.forge_grant(instance, service) {
         return Ok(Key::Grant(Box::new(grant.clone())));
     }
     let name = service.name();
     Err(match s.forge_sign_in_unavailable_at(service, instance) {
-        None if instance == oauth::instance(service) => format!(
-            "Sign in to {name} (forge.sign_in), or give a personal access token for {instance}: TeXCraft keeps a token only while it runs, never on disk."
-        ),
+        None if instance == oauth::instance(service) => {
+            format!("Sign in to {name} (forge.sign_in), or give a personal access token for {instance} (remember keeps it for next time).")
+        }
         None => format!(
-            "Sign in to {instance} (forge.sign_in with its instance), or give a personal access token for it: TeXCraft keeps a token only while it runs, never on disk."
+            "Sign in to {instance} (forge.sign_in with its instance), or give a personal access token for it (remember keeps it for next time)."
         ),
-        _ => format!("Give a personal access token for {instance}: TeXCraft keeps it only while it runs, never on disk."),
+        _ => format!("Give a personal access token for {instance} (remember keeps it for next time)."),
     })
 }
 
@@ -239,6 +254,17 @@ where
     spawn(make)
 }
 
+/// Stops opening a project from a forge: its outcome, when it comes, is dropped.
+fn cancel_open(s: &mut Session, _: &Value) -> Result<Value> {
+    match s.forge_task {
+        Some(Task::Open { .. }) => {
+            s.forge_task = None;
+            Ok(json!({"operation": "open", "cancelled": true}))
+        }
+        _ => Ok(json!({"operation": "open", "cancelled": false})),
+    }
+}
+
 fn open(s: &mut Session, p: &Value) -> Result<Value> {
     let service = match p.get("service").and_then(Value::as_str) {
         Some(s) => Some(Service::parse(s).ok_or_else(|| format!("service: say \"gitlab\" or \"github\", not {s:?}."))?),
@@ -246,6 +272,7 @@ fn open(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let address = Address::parse_as(string(p, "url")?, service).map_err(|e| e.to_string())?;
     let key = key_for(s, p, &address)?;
+    let remember = p.get("remember").and_then(Value::as_bool).unwrap_or(false);
     let branch = p.get("ref").and_then(Value::as_str).map(str::trim).filter(|b| !b.is_empty()).map(str::to_owned);
     let (connect, path, sent, service_id) = (s.forge_transport.clone(), address.path.clone(), key.clone(), address.service.id());
     let (clients, slot) = (s.forge_auth_clients(), Renewed::default());
@@ -259,10 +286,10 @@ fn open(s: &mut Session, p: &Value) -> Result<Value> {
     s.keep_renewed(&slot);
     match started.map_err(|e| e.to_string())? {
         Ok(pending) => {
-            s.forge_task = Some(Task::Open { pending, key, renewed: slot });
+            s.forge_task = Some(Task::Open { pending, key, renewed: slot, remember });
             Ok(json!({"operation": "open", "started": true, "project": path, "service": service_id}))
         }
-        Err(loaded) => opened(s, loaded, key),
+        Err(loaded) => opened(s, loaded, key, remember),
     }
 }
 
@@ -285,7 +312,7 @@ fn unused_name(library: &crate::library::Library, name: &str, service: Service) 
 }
 
 /// The project loaded: it becomes the session's, linked to its branch.
-fn opened(s: &mut Session, loaded: Loaded, key: Key) -> Result<Value> {
+fn opened(s: &mut Session, loaded: Loaded, key: Key, remember: bool) -> Result<Value> {
     let Loaded { mut link, files } = loaded;
     let mut project = Project::new();
     let (review, files): (Vec<_>, Vec<_>) = files.into_iter().partition(|(path, _)| texcraft_forge::is_review(path));
@@ -304,8 +331,9 @@ fn opened(s: &mut Session, loaded: Loaded, key: Key) -> Result<Value> {
     let name = s.library.as_ref().map(|library| unused_name(library, link.address.name(), link.address.service));
     s.replace_project(project, name.as_ref().map(PathBuf::from));
     s.load_forge_review(review);
+    let kept = if remember { s.remember_key(&link.address.instance, &key) } else { None };
     s.keep_key(&link.address.instance, key);
-    let result = json!({
+    let mut result = json!({
         "operation": "open",
         "service": link.address.service.id(),
         "project": link.address.path,
@@ -316,6 +344,11 @@ fn opened(s: &mut Session, loaded: Loaded, key: Key) -> Result<Value> {
         "skipped": skipped_json(&link.skipped),
         "name": name,
     });
+    match kept {
+        Some(Ok(())) => result["kept"] = json!(s.git_token_kept()),
+        Some(Err(warning)) => result["warning"] = json!(warning),
+        None => {}
+    }
     s.set_forge(Some(link));
     if let Some(name) = name {
         // Kept in the browser at once, with its link.
@@ -650,15 +683,18 @@ impl Session {
     /// Whether a token for the linked project's instance was given in this session, or the
     /// session is signed in to it.
     pub fn has_forge_token(&self) -> bool {
-        self.forge.as_ref().is_some_and(|l| {
-            self.forge_tokens.contains_key(&l.address.instance) || self.forge_grant(&l.address.instance, l.address.service).is_some()
-        })
+        self.forge.as_ref().is_some_and(|l| self.forge_reaches(&l.address.instance, l.address.service))
     }
 
     /// Whether the session reaches `instance` of `service` with no token typed: one given earlier
-    /// in this session, or a sign-in to it.
+    /// in this session, one kept for its host, or a sign-in to it.
     pub fn forge_reaches(&self, instance: &str, service: Service) -> bool {
-        self.forge_tokens.contains_key(instance) || self.forge_grant(instance, service).is_some()
+        self.forge_tokens.contains_key(instance) || self.has_kept_token(instance) || self.forge_grant(instance, service).is_some()
+    }
+
+    /// Whether a token is kept in the store for `instance`'s host (Remember on this computer).
+    pub fn has_kept_token(&self, instance: &str) -> bool {
+        self.git_hosts_saved().0.iter().any(|h| h.eq_ignore_ascii_case(texcraft_forge::servers::host_of(instance)))
     }
 
     /// Whether the session reaches the linked project with a sign-in that can only read (GitLab's
@@ -666,6 +702,7 @@ impl Session {
     pub fn forge_needs_write(&self) -> bool {
         self.forge.as_ref().is_some_and(|l| {
             !self.forge_tokens.contains_key(&l.address.instance)
+                && !self.has_kept_token(&l.address.instance)
                 && self.forge_grant(&l.address.instance, l.address.service).is_some_and(|g| !g.can_commit())
         })
     }
@@ -675,11 +712,29 @@ impl Session {
         self.forge_auth_clients_ref().clone()
     }
 
-    /// A personal access token given is kept for the session; a sign-in is kept already.
+    /// A personal access token given is kept for the session, and in place of the one kept for
+    /// its host when one is (a new token given after the old one was refused or replaced); a
+    /// sign-in is kept already.
     pub(super) fn keep_key(&mut self, instance: &str, key: Key) {
         if let Key::Token(token) = key {
+            let host = texcraft_forge::servers::host_of(instance).to_owned();
+            if self.forge_tokens.get(instance) != Some(&token)
+                && self.has_kept_token(instance)
+                && self.kept_git_token(&host).as_ref() != Some(&token)
+                && let Err(e) = self.keep_git_token(&host, &token)
+            {
+                log::warn!("the token kept for {host} could not be replaced: {e}");
+            }
             self.forge_tokens.insert(instance.to_owned(), token);
         }
+    }
+
+    /// Keeps `key`'s token for `instance`'s host in the store (Remember on this computer): `None`
+    /// for a sign-in (kept already), else whether the store kept it, and why not in words.
+    pub(super) fn remember_key(&mut self, instance: &str, key: &Key) -> Option<std::result::Result<(), String>> {
+        let Key::Token(token) = key else { return None };
+        let host = texcraft_forge::servers::host_of(instance).to_owned();
+        Some(self.keep_git_token(&host, token).map_err(|e| format!("The token is kept for this session only: the store could not keep it ({e}).")))
     }
 
     /// Keeps the sign-in an operation renewed, if it did.
@@ -732,7 +787,7 @@ impl Session {
         let renewed = renewed.clone();
         self.keep_renewed(&renewed);
         Some(match (outcome, task) {
-            (Ok(Ended::Opened(loaded)), Task::Open { key, .. }) => opened(self, loaded, key),
+            (Ok(Ended::Opened(loaded)), Task::Open { key, remember, .. }) => opened(self, loaded, key, remember),
             (Ok(Ended::Committed(done)), Task::Commit { key, files, .. }) => committed(self, done, key, &files),
             (Ok(Ended::Pulled(done)), Task::Pull { key, files, .. }) => pulled(self, done, key, &files),
             (Err(e), _) => Err(self.forge_failed(e)),

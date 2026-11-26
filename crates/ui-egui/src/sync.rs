@@ -198,7 +198,8 @@ pub(crate) fn after_failure(app: &mut App, command: &'static str) {
     app.sync.running = false;
     match app.session.forge_problem().cloned() {
         Some(ForgeProblem::NeedsToken { instance, hosting }) => {
-            app.view.dialog = Some(Dialog::GitToken(Box::new(TokenForm { command, instance, hosting, token: String::new(), focus: true })));
+            app.view.dialog =
+                Some(Dialog::GitToken(Box::new(TokenForm { command, instance, hosting, token: String::new(), focus: true, remember: true })));
         }
         Some(ForgeProblem::Conflicts(_)) if command == "project.sync" => crate::forge::ask_resolve_sync(app),
         // A forge branch that does not take this user's commits: the commit dialog offers a new
@@ -237,6 +238,8 @@ pub(crate) struct TokenForm {
     pub hosting: Option<texcraft_engine::GitHosting>,
     pub token: String,
     pub focus: bool,
+    /// Remember on this computer: the token is kept for the server (`git.keep_credential`).
+    pub remember: bool,
 }
 
 /// The token dialog, while it is open.
@@ -257,6 +260,11 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
         Outcome::Cancel => app.view.dialog = None,
         Outcome::Run => {
             let Some(Dialog::GitToken(form)) = app.view.dialog.take() else { return };
+            if form.remember {
+                let host = texcraft_engine::forge::servers::host_of(&form.instance).to_owned();
+                // Said if it could not be kept; the operation goes on with the token all the same.
+                let _ = app.run("git.keep_credential", json!({"host": host, "token": form.token.trim()}));
+            }
             let token = json!({"token": form.token.trim()});
             match form.command {
                 "git.push" => crate::history::push_with(app, token),
@@ -282,16 +290,21 @@ fn token_form(ui: &mut egui::Ui, t: &Tokens, form: &mut TokenForm, browser: bool
         .replace("{host}", &host),
     };
     ui.label(how);
-    let kept = if browser {
-        tl!("TeXCraft keeps the token only while this page is open: it is never stored.")
-    } else {
-        tl!("TeXCraft keeps the token only while it runs: it is never written to disk.")
-    };
-    ui.label(RichText::new(kept).font(t.small()).color(t.text_muted));
     let field = crate::forge::field(ui, t, tl!("Token"), &mut form.token, "", true);
     if std::mem::take(&mut form.focus) {
         field.request_focus();
     }
+    ui.add_space(t.unit * 2.0);
+    ui.checkbox(&mut form.remember, if browser { tl!("Remember in this tab") } else { tl!("Remember on this computer") });
+    let kept = match (form.remember, browser) {
+        (true, false) => {
+            tl!("Kept in the system's keychain, so that Sync, push and pull ask no more. Settings › Accounts lists it, with Replace… and Forget.")
+        }
+        (true, true) => tl!("Kept in this tab's session storage until the tab is closed. Settings › Accounts lists it, with Replace… and Forget."),
+        (false, false) => tl!("Kept while TeXCraft runs, then forgotten."),
+        (false, true) => tl!("Kept while this page is open, then forgotten."),
+    };
+    ui.label(RichText::new(kept).font(t.small()).color(t.text_muted));
     let ready = !form.token.trim().is_empty();
     let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
     let action = match form.command {
