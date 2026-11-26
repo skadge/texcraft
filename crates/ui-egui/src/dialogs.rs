@@ -136,7 +136,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let shown = crate::sheet::show(ctx, &t, "texcraft-dialog", 400.0, crate::sheet::Leave::Close, |ui| match dialog {
         Dialog::Prompt(p) => outcome = prompt(ui, &t, p),
         Dialog::Confirm(c) => outcome = confirm(ui, &t, c),
-        Dialog::Unsaved(_) => outcome = unsaved(ui, &t, &project),
+        Dialog::Unsaved(next) => outcome = unsaved(ui, &t, &project, next),
         Dialog::Shortcuts
         | Dialog::Settings
         | Dialog::GoToFile(_)
@@ -240,9 +240,20 @@ pub(crate) enum Outcome {
     Discard,
 }
 
-fn unsaved(ui: &mut egui::Ui, t: &Tokens, project: &str) -> Outcome {
+/// Why the question is asked now: what is about to replace the project.
+fn why(next: &Next) -> &'static str {
+    match next {
+        Next::Quit => tl!("TeXCraft is about to close."),
+        Next::NewProject => tl!("A new project is about to replace this one."),
+        Next::OpenProject(_) | Next::PickProject => tl!("Another project is about to open in its place."),
+        Next::OpenFromForge => tl!("A project from GitLab or GitHub is about to open in its place."),
+        Next::ImportProject(..) => tl!("The imported project is about to open in its place."),
+    }
+}
+
+fn unsaved(ui: &mut egui::Ui, t: &Tokens, project: &str, next: &Next) -> Outcome {
     title(ui, t, &tl!("Save the changes to {project}?").replace("{project}", project));
-    ui.label(tl!("Changes that are not saved are lost."));
+    ui.horizontal_wrapped(|ui| ui.label(format!("{} {}", why(next), tl!("Changes that are not saved are lost."))));
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
     actions(ui, |ui| {
