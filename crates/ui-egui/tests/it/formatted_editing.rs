@@ -187,3 +187,70 @@ fn show_in_source_takes_the_selection_to_the_source_editor() {
     h.run_steps(2);
     assert_eq!(text(&mut h), "X\n", "the selection did not come along to the source");
 }
+
+fn keys(h: &mut Harness<'_, App>, modifiers: egui::Modifiers, k: egui::Key, times: usize) {
+    for _ in 0..times {
+        key(h, modifiers, k);
+    }
+}
+
+#[test]
+fn deleting_selected_items_removes_them_and_typing_over_two_joins_them() {
+    // #48: the items' text went, their empty items stayed.
+    let start = "Before.\n\n\\begin{itemize}\n  \\item one\n  \\item two\n\\end{itemize}\n\nAfter.\n";
+    let mut h = formatted(start);
+    // To the start of "one", then to the end of "two".
+    keys(&mut h, egui::Modifiers::NONE, egui::Key::ArrowRight, 8);
+    keys(&mut h, egui::Modifiers::SHIFT, egui::Key::ArrowRight, 7);
+    key(&mut h, egui::Modifiers::NONE, egui::Key::Backspace);
+    let out = text(&mut h);
+    assert!(!out.contains("itemize") && !out.contains("\\item"), "the list or its items stayed: {out:?}");
+    assert!(out.starts_with("Before.\n\n") && out.ends_with("\n\nAfter.\n"), "{out:?}");
+
+    // From inside "one" to inside "two", typed over: one item, the selection's text replaced.
+    let mut h = formatted(start);
+    keys(&mut h, egui::Modifiers::NONE, egui::Key::ArrowRight, 9);
+    keys(&mut h, egui::Modifiers::SHIFT, egui::Key::ArrowRight, 5);
+    h.event(egui::Event::Text("X".into()));
+    h.run();
+    assert_eq!(text(&mut h), start.replace("one\n  \\item two", "oXo"));
+}
+
+#[test]
+fn three_dots_typed_become_an_ellipsis_that_undo_takes_back() {
+    // #45.
+    let mut h = formatted("Wait\n");
+    key(&mut h, egui::Modifiers::NONE, egui::Key::End);
+    for _ in 0..3 {
+        h.event(egui::Event::Text(".".into()));
+        h.run();
+    }
+    assert_eq!(text(&mut h), "Wait\\dots\n");
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Paragraph, "Wait…").is_some(), "the view does not show an ellipsis");
+    // A word typed after it stays a word, not part of the command's name.
+    h.event(egui::Event::Text("x".into()));
+    h.run();
+    assert_eq!(text(&mut h), "Wait\\dots{}x\n");
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Paragraph, "Wait…x").is_some());
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::Z);
+    assert_eq!(text(&mut h), "Wait\\dots\n", "undo took back more than the word");
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::Z);
+    assert_eq!(text(&mut h), "Wait...\n", "undo did not bring the dots back");
+}
+
+#[test]
+fn an_elsarticle_front_matter_is_a_title_block_whose_text_is_edited_in_place() {
+    // #44: the front matter was shown as its source.
+    let fixture = include_str!("../../../latex/tests/fixtures/frontmatter.tex");
+    let mut h = formatted(fixture);
+    let title = "Scheduling Lighthouse Shifts by the Tides\u{2020}";
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Heading, title).is_some(), "the title is not a heading with its note's mark");
+    assert!(h.query_by_label_contains("\\author").is_none(), "the front matter shows as its source");
+    for shown in ["Ada Quill", "Harbour Institute, Port Example, Nowhere", "Corresponding author", "We plan the keepers", "lighthouses · tides"] {
+        assert!(h.query_by_label_contains(shown).is_some(), "{shown:?} is not shown");
+    }
+    // The caret starts in the title, whose text is edited as text.
+    h.event(egui::Event::Text("Re".into()));
+    h.run();
+    assert!(text(&mut h).contains("\\title{ReScheduling Lighthouse Shifts by the Tides\\tnoteref{t1}}"), "{}", text(&mut h));
+}

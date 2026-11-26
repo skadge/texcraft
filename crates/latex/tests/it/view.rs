@@ -148,3 +148,45 @@ fn a_theorem_shows_its_name_title_and_label_and_its_body_as_text() {
     );
     assert!(!theorems[2].0.numbered, "a proof has no number");
 }
+
+#[test]
+fn an_elsarticle_front_matter_is_a_title_block_with_its_abstract_and_keywords() {
+    // #44: it was shown as its source.
+    let text = include_str!("../fixtures/frontmatter.tex");
+    let blocks = view(text);
+    let Some(fm) = blocks.iter().find_map(|b| if let BlockKind::FrontMatter(fm) = &b.kind { Some(fm) } else { None }) else {
+        panic!("no front matter in {blocks:?}")
+    };
+    let words = |inlines: &[Inline]| texts(&inlines.iter().collect::<Vec<_>>()).into_iter().map(|(t, _)| t).collect::<String>();
+    assert_eq!(words(&fm.title), "Scheduling Lighthouse Shifts by the Tides", "the note's mark is not the title's text");
+    assert_eq!(fm.title_notes, ["t1"]);
+    let names: Vec<String> = fm.authors.iter().map(|a| words(&a.name)).collect();
+    assert_eq!(names, ["Ada Quill", "Bram Ostrander", "Cleo Marsh"]);
+    assert_eq!(
+        fm.authors.get(1).map(|a| (a.affiliations.clone(), a.notes.clone())),
+        Some((vec!["harbour".into(), "tide".into()], vec!["fn1".into()]))
+    );
+    assert!(fm.authors.iter().all(|a| a.emails.len() == 1), "each author's e-mail is theirs");
+    let places: Vec<String> = fm.affiliations.iter().map(|a| words(&a.text)).collect();
+    assert_eq!(places, ["Harbour Institute, Port Example, Nowhere", "Tide Research Group, Example University"]);
+    assert_eq!(fm.notes.len(), 3);
+    // The text stands for its source: the title's words are where they are written.
+    for i in &fm.title {
+        if let InlineKind::Text { text: shown, .. } = &i.kind {
+            assert_eq!(&text[i.range.clone()], shown.as_str());
+        }
+    }
+    let containers: Vec<&str> =
+        fm.blocks.iter().filter_map(|b| if let BlockKind::Container { name, .. } = &b.kind { Some(name.as_str()) } else { None }).collect();
+    assert_eq!(containers, ["abstract", "keyword"]);
+    assert!(!fm.blocks.iter().any(|b| matches!(b.kind, BlockKind::Source)), "something in it is still shown as source");
+    let keywords = fm.blocks.iter().find_map(|b| match &b.kind {
+        BlockKind::Container { name, blocks } if name == "keyword" => Some(shown_blocks(blocks)),
+        _ => None,
+    });
+    assert_eq!(keywords.as_deref(), Some("lighthouses · tides · scheduling"));
+}
+
+fn shown_blocks(blocks: &[Block]) -> String {
+    texts(&inlines(blocks)).into_iter().map(|(t, _)| t).collect()
+}

@@ -283,6 +283,15 @@ fn find_block(file: &ProjectPath, text: &str, block: &Block, out: &mut Vec<Found
             }
         }
         BlockKind::Container { blocks, .. } => blocks.iter().for_each(|b| find_block(file, text, b, out)),
+        BlockKind::FrontMatter(fm) => {
+            find_inlines(file, text, &fm.title, out);
+            for a in &fm.authors {
+                find_inlines(file, text, &a.name, out);
+            }
+            fm.affiliations.iter().for_each(|a| find_inlines(file, text, &a.text, out));
+            fm.notes.iter().for_each(|n| find_inlines(file, text, &n.text, out));
+            fm.blocks.iter().for_each(|b| find_block(file, text, b, out));
+        }
         BlockKind::Theorem { title, blocks, .. } => {
             find_inlines(file, text, title, out);
             blocks.iter().for_each(|b| find_block(file, text, b, out));

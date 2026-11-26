@@ -40,6 +40,7 @@
 	AI features are turned off: they are hidden everywhere, and nothing is sent. Turn this on to use them again.	As funções de IA estão desligadas: ficam ocultas em todo o lado e nada é enviado. Ligue isto para voltar a usá-las.
 	AI is off until you connect a model: any OpenAI-compatible endpoint, a server on this computer (llama.cpp, Ollama, vLLM) included. Every change it proposes arrives as a suggested change.	A IA está desligada até ligar um modelo: qualquer endpoint compatível com OpenAI, incluindo um servidor neste computador (llama.cpp, Ollama, vLLM). Cada alteração que propõe chega como sugestão de alteração.
 	Abstract	Resumo
+	Keywords	Palavras-chave
 	Accents	Acentos
 	Accept	Aceitar
 	Accept All	Aceitar tudo

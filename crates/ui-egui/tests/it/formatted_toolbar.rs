@@ -143,6 +143,40 @@ fn tab_shift_tab_and_enter_shape_a_list() {
 }
 
 #[test]
+fn a_list_button_on_an_empty_line_starts_a_list_with_the_caret_in_its_item() {
+    // #47: on the empty paragraph Enter makes, Numbered List did nothing.
+    let mut h = formatted("First paragraph.\n", &[]);
+    key(&mut h, egui::Modifiers::NONE, egui::Key::End);
+    key(&mut h, egui::Modifiers::NONE, egui::Key::Enter);
+    h.get_by_role_and_label(Role::Button, "Numbered List").click();
+    h.run();
+    h.run();
+    h.get_by_label("main.tex formatted").type_text("Item");
+    h.run();
+    let after = text(&mut h);
+    assert!(after.starts_with("First paragraph.\n\n\\begin{enumerate}\n  \\item Item\n\\end{enumerate}"), "{after}");
+    assert!(pressed(&h, "Numbered List"), "the caret is not in the new list");
+}
+
+/// The bounds of the formatted view's text runs whose value is `value`.
+fn runs(h: &Harness<'_, App>, value: &str) -> Vec<egui::Rect> {
+    h.query_all_by_role(Role::TextRun).filter(|n| n.value().as_deref() == Some(value)).map(|n| n.rect()).collect()
+}
+
+#[test]
+fn an_empty_item_is_a_line_tall_where_its_marker_is() {
+    // #46: the caret of an empty item stood half a line above it, between it and the item before.
+    let mut h = formatted("\\begin{enumerate}\n  \\item One\n  \\item \n\\end{enumerate}\n", &[]);
+    key(&mut h, egui::Modifiers::NONE, egui::Key::ArrowDown);
+    let (Some(one), Some(empty)) = (runs(&h, "One").first().copied(), runs(&h, "").first().copied()) else {
+        panic!("the items' text runs are not in the tree");
+    };
+    assert!(empty.height() > one.height() * 0.8, "the empty item's line ({empty:?}) is not as tall as a written one's ({one:?})");
+    assert!(empty.top() >= one.bottom(), "the empty item's line ({empty:?}) overlaps the item before ({one:?})");
+    assert!((empty.left() - one.left()).abs() < 1.0, "the empty item's text does not start where the other's does");
+}
+
+#[test]
 fn a_citation_and_a_reference_come_from_pickers_of_the_project() {
     let bib = "@book{knuth84, author = {Knuth, Donald}, title = {The TeXbook}, year = 1984}\n";
     let original = "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\\label{sec:intro}\nAs shown\n\\end{document}\n";

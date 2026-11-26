@@ -241,10 +241,10 @@ fn headings_and_lists_change_by_their_command_alone() {
     let p = edit::apply(text, &edit::set_heading(text, 22, "section").unwrap_or_default());
     assert_eq!(p, "\\subsection{Title}\n\n\\section{A paragraph.}");
     let list = "\\begin{itemize}\n  \\item one\n\\end{itemize}";
-    let n = edit::apply(list, &edit::set_list(list, 26, "enumerate").unwrap_or_default());
+    let n = edit::apply(list, &edit::set_list(list, 26, "enumerate").map(|e| e.changes).unwrap_or_default());
     assert_eq!(n, "\\begin{enumerate}\n  \\item one\n\\end{enumerate}");
     assert!(edit::set_list(list, 26, "itemize").is_none());
-    let made = edit::apply("One.", &edit::set_list("One.", 1, "itemize").unwrap_or_default());
+    let made = edit::apply("One.", &edit::set_list("One.", 1, "itemize").map(|e| e.changes).unwrap_or_default());
     assert_eq!(made, "\\begin{itemize}\n  \\item One.\n\\end{itemize}");
 }
 
@@ -269,12 +269,15 @@ fn hostile_input_never_breaks_the_edits() {
             let mut all: Vec<Vec<Change>> = Vec::new();
             all.extend(edit::enter(sample, at).map(|e| e.changes));
             all.extend(edit::set_heading(sample, at, "section"));
-            all.extend(edit::set_list(sample, at, "enumerate"));
+            all.extend(edit::set_list(sample, at, "enumerate").map(|e| e.changes));
             all.push(vec![Change { range: at..at, text: edit::paste(sample, at, "a\n\nb%\n- c\n- d") }]);
             all.extend(edit::indent(sample, at).map(|e| e.changes));
             all.extend(edit::outdent(sample, at).map(|e| e.changes));
             all.extend(edit::backspace_at_start(sample, at).map(|e| e.changes));
             all.extend(edit::set_body(sample, at));
+            for end in [at, at + 1, at + 9, sample.len()].into_iter().filter(|e| *e >= at && sample.is_char_boundary(*e)) {
+                all.push(edit::deletion(sample, Vec::new(), at..end).into_iter().map(|range| Change { range, text: String::new() }).collect());
+            }
             let _ = edit::here(sample, at);
             for changes in all {
                 assert!(changes.windows(2).all(|w| w[0].range.end <= w[1].range.start), "overlapping changes at {at}");
@@ -374,6 +377,53 @@ fn enter_on_an_empty_item_ends_the_list() {
     assert_eq!(lists(&insert(&out, caret, "x")), [vec!["one", "x"], vec!["two"]]);
 }
 
+/// `text` once the view's selection from `a` to `b` (line, position) is deleted.
+fn delete(text: &str, a: (usize, usize), b: (usize, usize)) -> String {
+    let doc = Doc { lines: lines(text) };
+    let ranges = doc.deleted(text, Pos { line: a.0, at: a.1 }, Pos { line: b.0, at: b.1 });
+    edit::apply(text, &ranges.into_iter().map(|range| Change { range, text: String::new() }).collect::<Vec<_>>())
+}
+
+#[test]
+fn deleting_whole_items_removes_them_and_their_list_when_it_holds_them_all() {
+    // #48: the items' text went and their `\item`s stayed, empty.
+    assert_eq!(delete(THREE, (0, 0), (1, 3)), "\\begin{itemize}\n  \\item three\n\\end{itemize}\n");
+    assert_eq!(delete(THREE, (1, 0), (2, 5)), "\\begin{itemize}\n  \\item one\n\\end{itemize}\n");
+    assert_eq!(delete(THREE, (0, 0), (2, 5)), "", "the whole list selected leaves its environment");
+    // From inside one item to inside another: what is left of the second joins the first.
+    let joined = delete(THREE, (0, 1), (2, 2));
+    assert_eq!(lists(&joined), [vec!["oree"]]);
+    assert_eq!(joined, "\\begin{itemize}\n  \\item oree\n\\end{itemize}\n", "more than the selection's source went");
+    // From inside an item to the list's end: the items after it go, its start stays.
+    assert_eq!(lists(&delete(THREE, (0, 1), (2, 5))), [vec!["o"]]);
+    // Two lists and the paragraph between them, all selected from the paragraph before.
+    let two =
+        "Intro.\n\n\\begin{enumerate}\n  \\item a\n  \\item b\n\\end{enumerate}\n\nMiddle.\n\n\\begin{itemize}\n  \\item c\n\\end{itemize}\n\nEnd.";
+    let out = delete(two, (0, 6), (4, 1));
+    assert!(lists(&out).is_empty(), "{out:?}");
+    assert_eq!(paragraphs(&out), ["Intro.", "End."]);
+    // A selection inside one item's text leaves the item.
+    assert_eq!(lists(&delete(THREE, (1, 0), (1, 3))), [vec!["one", "", "three"]]);
+    // Nested: the inner list's items all selected go with their environment; the outer item stays.
+    let nested = "\\begin{itemize}\n  \\item a\n  \\begin{itemize}\n    \\item b\n    \\item c\n  \\end{itemize}\n  \\item d\n\\end{itemize}";
+    let out = delete(nested, (1, 0), (2, 1));
+    assert_eq!(lists(&out), [vec!["a", "d"]], "{out:?}");
+}
+
+#[test]
+fn a_list_made_on_an_empty_line_has_one_empty_item_holding_the_caret() {
+    // #47: on the empty paragraph Enter makes (between paragraphs, or at the end) the list buttons
+    // did nothing.
+    for text in ["First.\n\n\n\nLast.", "First.\n\n"] {
+        let (out, caret) = made(edit::set_list(text, "First.\n\n".len(), "enumerate"), text);
+        assert_eq!(lists(&insert(&out, caret, "x")), [vec!["x"]], "{out:?}");
+        assert!(paragraphs(&out).iter().all(|p| text.contains(p.as_str())), "the paragraphs around changed: {out:?}");
+        assert!(out.contains("\n\n\\begin{enumerate}"), "the list is not a block of its own: {out:?}");
+    }
+    // In a paragraph's text the paragraph becomes the item, as before.
+    assert!(edit::set_list("First.\n\nLast.", 1, "itemize").is_some_and(|e| e.changes.len() == 2));
+}
+
 #[test]
 fn backspace_at_a_line_start_lifts_a_heading_or_an_item() {
     let text = "\\section{Methods}\n\nText.";
@@ -452,4 +502,33 @@ fn pasted_lines_with_bullets_or_numbers_become_lists() {
     assert!(pasted.contains("50\\%"), "an item's text is escaped: {pasted}");
     // One line is text as typed, even with a dash in front.
     assert_eq!(edit::paste("Text.", 5, "- 5 degrees"), "- 5 degrees");
+}
+
+#[test]
+fn three_dots_typed_in_text_become_dots_and_nowhere_else() {
+    // #45. `at` is just after the third dot.
+    let made = |text: &str| edit::ellipsis(text, text.rfind("...").map_or(0, |i| i + 3)).map(|c| edit::apply(text, &[c]));
+    assert_eq!(made("Wait... then").as_deref(), Some("Wait\\dots then"));
+    assert_eq!(made("\\section{So...}").as_deref(), Some("\\section{So\\dots}"));
+    assert_eq!(made("A note\\footnote{and...}").as_deref(), Some("A note\\footnote{and\\dots}"));
+    for kept in [
+        "$a, ..., z$",
+        "\\(1...\\)",
+        "\\texttt{x...}",
+        "{\\ttfamily x...}",
+        "\\verb|...|",
+        "\\label{a...}",
+        "\\url{a...}",
+        "a....",
+        "\\...",
+        "\\begin{verbatim}\n...\n\\end{verbatim}",
+    ] {
+        assert!(made(kept).is_none(), "{kept:?} was changed");
+    }
+    // The view shows the ellipsis as a character of its own.
+    assert_eq!(paragraphs("Wait\\dots then"), ["Wait… then"]);
+    // A letter typed after it would lengthen the command's name.
+    assert!(edit::after_control_word("Wait\\dots", 9));
+    assert!(!edit::after_control_word("Wait\\\\dots", 10), "after a line break `\\\\`, letters are text");
+    assert!(!edit::after_control_word("Wait...", 7));
 }
