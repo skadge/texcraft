@@ -1326,7 +1326,7 @@
 	{name} (needed): {means}	{name} (nécessaire) : {means}
 	{name} accepted a suggestion	{name} a accepté une suggestion
 	{name} cannot be shown: {e}	Impossible d'afficher {name} : {e}
-	{name} is not a text file ({size} bytes); it cannot be edited here.	{name} n'est pas un fichier texte ({size} octets) ; il ne peut pas être modifié ici.
+	{name} is not a text file ({size}); it cannot be edited here.	{name} n'est pas un fichier texte ({size}) ; il ne peut pas être modifié ici.
 	{name} is not among the project's files.	{name} ne fait pas partie des fichiers du projet.
 	{name} rejected a suggestion	{name} a refusé une suggestion
 	{name} replied: {text}	{name} a répondu : {text}

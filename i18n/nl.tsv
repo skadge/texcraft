@@ -1326,7 +1326,7 @@
 	{name} (needed): {means}	{name} (nodig): {means}
 	{name} accepted a suggestion	{name} heeft een voorstel geaccepteerd
 	{name} cannot be shown: {e}	{name} kan niet worden getoond: {e}
-	{name} is not a text file ({size} bytes); it cannot be edited here.	{name} is geen tekstbestand ({size} bytes); het kan hier niet worden bewerkt.
+	{name} is not a text file ({size}); it cannot be edited here.	{name} is geen tekstbestand ({size}); het kan hier niet worden bewerkt.
 	{name} is not among the project's files.	{name} hoort niet bij de bestanden van het project.
 	{name} rejected a suggestion	{name} heeft een voorstel afgewezen
 	{name} replied: {text}	{name} antwoordde: {text}

@@ -286,9 +286,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             Some(path) if !is_text && crate::figure_view::is_figure(&path) => crate::figure_view::show(app, ui, &path),
             Some(path) if !is_text => {
                 let bytes = app.session.project().get(&path).map_or(0, Contents::len);
-                let detail = tl!("{name} is not a text file ({size} bytes); it cannot be edited here.")
+                let detail = tl!("{name} is not a text file ({size}); it cannot be edited here.")
                     .replace("{name}", path.file_name())
-                    .replace("{size}", &bytes.to_string());
+                    .replace("{size}", &crate::i18n::file_size(bytes as u64));
                 empty(ui, &t, "image", tl!("Binary file"), &detail);
             }
             Some(path) => {
