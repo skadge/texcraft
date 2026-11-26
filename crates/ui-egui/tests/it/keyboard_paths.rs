@@ -332,7 +332,7 @@ fn search_and_the_symbols_are_reached_from_their_fields() {
 #[test]
 fn the_editor_s_toolbar_menus_open_and_close_from_the_keyboard() {
     let mut h = blank();
-    for (menu, first) in [("More formatting", "Inline formula"), ("Heading", "Section"), ("Compile options", "Compile automatically")] {
+    for (menu, first) in [("More formatting", "Inline Formula"), ("Heading", "Section"), ("Compile options", "Compile automatically")] {
         focus(&mut h, Role::Button, menu);
         let item = key(&mut h, egui::Key::Enter);
         assert_eq!(item.name, first, "Enter opens {menu} with the keyboard on its first entry");

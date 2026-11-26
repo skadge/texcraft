@@ -452,7 +452,7 @@ fn outline(app: &mut App, ui: &mut egui::Ui) {
     };
     let headings = texcraft_latex::outline(text);
     if headings.is_empty() {
-        empty(ui, &t, tl!("Sections of the shown file appear here."));
+        empty(ui, &t, tl!("No headings in this file yet."));
         return;
     }
     // The section the caret is in: the last heading at or before its line.

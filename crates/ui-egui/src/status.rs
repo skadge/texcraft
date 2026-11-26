@@ -24,13 +24,17 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, room: egui::Rect) {
     ui.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = t.unit * 1.5;
         let (icon, color, text) = state(app);
-        let (rect, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
-        match icon {
-            None => widgets::spinner(ui, rect.center(), 5.5, t.accent),
-            Some(name) => icons::paint(ui, rect, name, 14.0, color),
+        // The start page has no build to speak of (nor the last project's): only messages.
+        let build_state = app.view.status.is_none() && icon.is_some();
+        if !(app.start && build_state) {
+            let (rect, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
+            match icon {
+                None => widgets::spinner(ui, rect.center(), 5.5, t.accent),
+                Some(name) => icons::paint(ui, rect, name, 14.0, color),
+            }
+            let label = ui.label(egui::RichText::new(&text).font(t.small()).color(if icon.is_some() { color } else { t.text_muted }));
+            announce(ui, &label, &text);
         }
-        let label = ui.label(egui::RichText::new(&text).font(t.small()).color(if icon.is_some() { color } else { t.text_muted }));
-        announce(ui, &label, &text);
         // At the bar's end, made in the order they read: the caret, the language, the comments,
         // the engine, and focus mode's way out.
         widgets::right_aligned(ui, "status-end", |ui| {

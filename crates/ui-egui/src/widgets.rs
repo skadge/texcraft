@@ -388,6 +388,13 @@ pub fn room_before_right(ui: &Ui, key: &str) -> f32 {
     (ui.available_width() - width - ui.spacing().item_spacing.x).max(0.0)
 }
 
+/// Whether the controls `right_aligned` last laid out under `key` fit in what is left of `ui`'s
+/// row (true until they have been measured once).
+pub fn fits_before_right(ui: &Ui, key: &str) -> bool {
+    let width: Option<f32> = ui.data(|d| d.get_temp(ui.scope_id().with(key)));
+    width.is_none_or(|w| ui.available_width() >= w + ui.spacing().item_spacing.x)
+}
+
 /// Lays out `add` left to right at the end of `ui`'s row, where a right-to-left layout would put
 /// it, so the keyboard visits its controls in the order they read (a right-to-left layout makes
 /// them in reverse). Its width is last pass's: a new one has egui lay the frame out again before

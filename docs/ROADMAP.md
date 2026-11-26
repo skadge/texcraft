@@ -1,6 +1,6 @@
 # TeXCraft roadmap
 
-**Last updated:** 2026-11-25 · **Current release:** 0.13.0
+**Last updated:** 2026-11-26 · **Current release:** 0.13.0
 
 TeXCraft is a LaTeX editor for the desktop and the browser: a project of files, a source editor and
 the PDF side by side, rebuilt as you type by [retex](https://gitlab.com/severin-lemaignan/retex).
@@ -42,6 +42,8 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | E10 | ✅ 0.5.0 | Project-wide search | Search and replace across files, results grouped by file. |
 | E11 | 🚧 | Writing aids | A symbol palette, and spell checking that skips commands, math and verbatim. |
 | E12 | 🚧 | Grammar | English grammar checked offline by Harper on the prose (desktop and CLI) (commands, math and keys skipped), underlined apart from spelling, with replacements that keep the LaTeX, Ignore, rules and groups switched off; any language checked by the connected model on request. |
+| E13 | ⬜ | A toolbar that fits the split | At the default split the source toolbar shows only Heading, Bold and Italic: smaller groups that give way one at a time, formulas and references as single drop-downs; the pickers of labels and bibliography entries the formatted view has, in the source too (UX review, findings 13 and b). |
+| E14 | ⬜ | The whole document's outline | The Outline through `\input` and `\include`, the shown file's part marked, so a project whose sections are in other files has one outline (UX review, finding 14). |
 
 ## Formatted view
 
@@ -51,6 +53,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | F2 | ✅ 0.6.0 | Typeset formulas | Formulas drawn by retex with the document's preamble, cached, in the colour of the text; errors underlined with retex's message. Desktop only: the browser still shows their source. |
 | F3 | 🚧 | Editing in the formatted view | Typing, styles and lists in the view, each edit a minimal change of the source. Done: caret and selection in text runs, typing and paste escaped (bulleted and numbered lines pasted as lists), Enter (paragraphs, items, an empty item ending the list), Tab and Shift+Tab nesting list items, Backspace lifting a heading or an item, atoms as single stops with a two-press delete, a toolbar showing the caret's state (paragraph style as the document's heading levels, Bold, Italic, Code, lists, indent, link, footnote, citation and cross-reference pickers, formulas, table, figure), the spelling menu, citations' author and year on hover, Ctrl+click to a reference's label, undo shared with the source, an editable text node. Still to come: formulas and fallback spans edited in place, a live formula preview, pasted HTML, IME marked text, Suggest mode. |
 | F4 | 🚧 | Tables and figures | A grid editor for `tabular`, and a dialog for figures. Done: `tabular` read as a grid (or kept as source with the reason), cells edited in place, Tab and arrows between cells, a toolbar for rows, columns, alignment and borders (none, all, booktabs, the package said not added), the figure dialog (image, width, placement, caption, label), `table.*` and `figure.*` commands, an image file dropped on the view (desktop) made a figure. Still to come: merging and splitting cells, the caption's position, `tabularx` and `longtable`, the drop in the browser. |
+| F5 | ⬜ | The formatted view for readers | What a reader who does not know LaTeX expects: cross-references as the numbers the last build gave them (the key on hover), an included file's text shown in place under its name, environments named in words (UX review, finding 5). |
 
 ## Building, preview and navigation
 
@@ -65,6 +68,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | B7 | ✅ 0.5.0 | Progress beside the PDF | The page being built also in the PDF pane's header. |
 | B8 | ✅ 0.6.0 | A better preview | Pages drawn in the background, zoom presets, links, text selection, presentation mode. Selection is on one page at a time; presentations fill the window, not the screen. |
 | B9 | ✅ 0.10.0 | The raw log and outputs | Search in the raw log (count of matches, previous and next, marked and scrolled to), and the build's files (PDF, PDF/X, SyncTeX, log) with Save As…, Download in the browser and Show in Folder on the desktop. |
+| B10 | ⬜ | Errors where they are | An unclosed environment reported at its `\begin` as well as where TeX noticed (the example: `sections/intro.tex:3`, not `main.tex:59`), both linked and marked in the editor; messages written as sentences; the build log's button named with its count (retex; UX review, findings 6, 20 and 27). |
 
 ## Comments and working together
 
@@ -78,6 +82,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | C6 | ⬜ | Cloud projects and sharing | Projects in cloud storage, shared with others. |
 | C7 | ⬜ | Real-time editing together | Waits for the suite's shared-text layer; one participant commits for the session (retex's collaboration notes). |
 | C8 | ✅ 0.7.0 | Every project a git repository | As Overleaf does: a project's history is a git repository, whether or not it is ever pushed anywhere. A folder that is not in one becomes one on its first save, and each save is a commit; a folder already in a repository is used as it is, and commits only when asked. Browser projects keep the same history in the browser, as versions whose files have git's blob ids. A folder's history goes to GitHub or GitLab with Push and Pull, or Save Project to GitHub or GitLab (C5, step 5). |
+| C9 | ⬜ | A history that says what changed | Automatic versions described by what they changed (files, sections), naming a version on save, unsaved changes as the first row, so the version before a change is found without opening each (UX review, finding 7). |
 
 ## In the browser
 
@@ -95,12 +100,13 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | W10 | ✅ 0.5.0 | Safe updates | The engine's files are named after their contents at each build (the page names the worker's), and the TeX tree's files carry its index's version, so a browser never keeps an old engine or mixes trees after an update. |
 | W12 | ⬜ | Waiting for a file | A build that needs a file not fetched yet waits for it instead of stopping and starting again (JavaScript Promise Integration). |
 | W11 | ⬜ | Cloud storage and embedding | Opening and saving to cloud storage; TeXCraft embedded in another page. |
+| W13 | ⬜ | Projects kept for good | Ask the browser for persistent storage when the first project is saved and say whether it was granted; a save refused for lack of space said as such; Download All Projects as a zip (UX review, finding 10). |
 
 ## Output formats and print
 
 | Code | | Feature | Description |
 |---|---|---|---|
-| O1 | ✅ 0.5.0 | Export | The PDF pane's Export menu: PDF, Word, OpenDocument text, PowerPoint and OpenDocument presentations (first for beamer), HTML, Markdown, SVG; on the desktop and in the browser (as downloads). The pane always shows the PDF: HTML and Markdown are exports only (operator's decision, 2026-11-25). |
+| O1 | ✅ 0.5.0 | Export | The PDF pane's Export menu: PDF, DOCX, OpenDocument text, PPTX and OpenDocument presentations (first for beamer), HTML, Markdown, SVG; on the desktop and in the browser (as downloads). The pane always shows the PDF: HTML and Markdown are exports only (operator's decision, 2026-11-25). |
 | O2 | ✅ 0.6.0 | Accessible PDF | PDF/UA output, with retex's accessibility findings linked to the source. |
 | O3 | ✅ 0.6.0 | Print | PDF/X with bleed and crop marks, and preflight checks placed on the page and in the source. |
 
@@ -119,6 +125,10 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | A9 | 🚧 | More of the window | The PDF in its own window, a distraction-free mode (focus mode), Alt or F10 for the menus: done. The macOS menu bar (craft-menu, the in-window menus hidden there): built, not tried on a Mac. |
 | A10 | 🚧 | Accessibility pass | ✅ 0.10.0: keyboard-path tests for every region, panel and dialog (focus moves in the accessibility tree, reading order, no trap, Escape gives the keyboard back, roles and names), and the fixes they found. Still to do: a screen-reader pass by a person; the Keyboard Shortcuts table's focusable node without a role (craft-keymap); the review margin's controls reached only by F6 (the source editor keeps Tab). |
 | A11 | 🚧 | User guide | Help pages for people who use TeXCraft. Done: `docs/guide/`, static HTML pages for every area of the app (desktop and browser differences marked, unfinished features said), Help › User Guide (F1) and a link from Settings › AI, published beside the web editor, `cargo xtask guide-check`. Still to do: a copy in the packages for offline reading, screenshots for more pages, translations. |
+| A12 | 🚧 | Dialogs and bars on a phone | ✅ the start page at a phone's width (its buttons under the title, the main one first). Still to do: dialogs no wider than the window (Settings as a list of categories that opens a page, the gallery without its category column, Open from GitLab or GitHub), the status bar's overlap, no "PDF in its own window" there (issue #12; UX review, findings 1, 2, 19 and 23). |
+| A13 | 🚧 | Reading order and roles | ✅ the start page's buttons in the order they are shown. Still to do: the top bar's end (layout switch, window buttons) and the panel headers (Files: New File…, New Folder…, Add Files…) in reading order with `widgets::right_aligned`; the rail's Keyboard Shortcuts and Settings as buttons, not tabs (UX review, findings 8 and 9). |
+| A14 | ⬜ | First steps | An example project on the start page (the article in `examples/`), template cards titled by their kind with the licence in words and the offline mark explained, a first-run hint for the Formatted view and the build log (UX review, findings 11 and 12). |
+| A15 | 🚧 | Polish from the UX review | docs/ux-review.md, 2026-11-26. ✅ labels named as their commands (layout switch, source toolbar), plurals, export formats by file name, the PDF toolbar's second row in longer languages, grammar not flagging indentation, the start page's status bar, the outline's empty text, stale guide notes. Still to do: Settings as tall as the window, the side panel's width kept between sections, the AI token's placeholder, the unsaved-changes question saying why it asks, a dimmed PDF page in the dark theme, one capitalisation for names and tooltips. |
 
 ## AI assistance
 

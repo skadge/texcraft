@@ -139,7 +139,7 @@ It refuses to start without both. The open window's control channel is described
 - The PDF rebuilt as you type, a draft first while later passes run, and source ↔ PDF navigation
   both ways.
 - A build log with search, plain explanations of the messages, and the build's files to save.
-- Export to Word, OpenDocument, PowerPoint (first choice for beamer slides), HTML, Markdown and SVG,
+- Export to DOCX, OpenDocument, PPTX (first choice for beamer slides), HTML, Markdown and SVG,
   plus accessible and print-ready PDFs.
 
 **Projects, history and git forges**

@@ -27,18 +27,23 @@ impl Backend for Sample {
 
 /// The app in a window, the sample PDF shown beside the editor.
 fn built() -> Harness<'static, App> {
+    built_in("en")
+}
+
+/// The same, the interface in `language`.
+fn built_in(language: &str) -> Harness<'static, App> {
     let s = Session::with_backend(Box::new(Sample));
-    let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
+    let app = App::with_prefs(s, Prefs { auto_compile: false, language: language.to_owned(), ..Prefs::default() });
     let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
     ui_cmd::run(harness.state_mut(), "build.compile");
     for _ in 0..400 {
         harness.step();
-        if harness.query_by_label("1 / 2").is_some() {
+        if harness.query_by_label_contains("1 / 2").is_some() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
-    assert!(harness.query_by_label("1 / 2").is_some(), "the PDF is not shown");
+    assert!(harness.query_by_label_contains("1 / 2").is_some(), "the PDF is not shown");
     harness
 }
 
@@ -135,4 +140,15 @@ fn a_presentation_goes_through_the_pages_and_escape_leaves_it_where_it_was() {
     harness.key_press(egui::Key::Escape);
     settle(&mut harness);
     assert!(harness.query_by_label("2 / 2").is_some(), "the preview is not at the page presented last");
+}
+
+#[test]
+fn longer_labels_send_the_pages_and_the_zoom_to_a_row_of_their_own_rather_than_over_export() {
+    // The pseudo locale makes every label 40 % longer, as German does.
+    let mut harness = built_in("pseudo");
+    settle(&mut harness);
+    let rect = |h: &Harness<'_, App>, label: &str| h.get_by_label_contains(label).rect();
+    let (export, zoom_out, pages) = (rect(&harness, "Export"), rect(&harness, "Zoom Out"), rect(&harness, "Previous page"));
+    assert!(!export.intersects(zoom_out) && !export.intersects(pages), "the page tools are drawn over Export: {export:?} {zoom_out:?}");
+    assert!(zoom_out.top() >= export.bottom(), "the page tools did not move under the buttons");
 }
