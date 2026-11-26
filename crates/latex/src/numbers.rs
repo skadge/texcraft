@@ -407,6 +407,7 @@ impl Counting<'_> {
                 }
             }
             BlockKind::Container { blocks, .. } => self.blocks(path, text, blocks),
+            BlockKind::FrontMatter(fm) => self.blocks(path, text, &fm.blocks),
             BlockKind::Paragraph(inlines) => {
                 if inlines.iter().any(|i| matches!(i.kind, InlineKind::Source) && text.get(i.range.clone()).is_some_and(|s| s.trim() == "\\appendix"))
                 {

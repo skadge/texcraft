@@ -22,7 +22,7 @@ use texcraft_engine::{FormulaBox, FormulaState};
 use texcraft_latex::auxfile::{Aux, CiteStyle, Missing};
 use texcraft_latex::edit::{self, Line, Part};
 use texcraft_latex::numbers::Number;
-use texcraft_latex::view::{Block, BlockKind, ChipKind, Inline, InlineKind, Item, ListKind, Style, TheoremKind};
+use texcraft_latex::view::{Block, BlockKind, ChipKind, FrontMatter, Inline, InlineKind, Item, ListKind, NoteKind, Style, TheoremKind};
 use texcraft_preview::figure;
 
 use crate::App;
@@ -916,6 +916,7 @@ fn gap_before(t: &Tokens, kind: &BlockKind) -> f32 {
         | BlockKind::Formula { .. }
         | BlockKind::Source
         | BlockKind::Container { .. }
+        | BlockKind::FrontMatter(_)
         | BlockKind::Theorem { .. }
         | BlockKind::Include { .. }
         | BlockKind::Table(_)
@@ -942,6 +943,7 @@ fn draw_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, block: &Block, depth: usize) {
         }
         BlockKind::List { kind, items } => list(ui, cx, *kind, items, depth),
         BlockKind::Container { name, blocks } => container(ui, cx, name, blocks, depth),
+        BlockKind::FrontMatter(fm) => front_matter(ui, cx, fm, depth),
         BlockKind::Theorem { kind, title, blocks, .. } => theorem(ui, cx, range, kind, title, blocks, depth),
         BlockKind::Include { name, .. } => include(ui, cx, range, name, depth),
         BlockKind::Formula { source, env, closed } => formula(ui, cx, range, source, env.as_deref(), *closed),
@@ -1026,7 +1028,11 @@ impl Builder<'_> {
 
     fn format(&self, style: Style, color: Color32) -> TextFormat {
         let bold = style.bold || self.bold;
-        let size = if style.small_caps { self.size * 0.82 } else { self.size };
+        let size = match (style.sup, style.small_caps) {
+            (true, _) => self.size * 0.65,
+            (false, true) => self.size * 0.82,
+            (false, false) => self.size,
+        };
         let font = if style.mono {
             FontId::new(size * 0.88, FontFamily::Monospace)
         } else if style.sans {
@@ -1040,7 +1046,7 @@ impl Builder<'_> {
             line_height: Some(self.line_height()),
             italics: style.italic && bold,
             underline: if style.underline { Stroke::new(1.0, color) } else { Stroke::NONE },
-            valign: Align::Center,
+            valign: if style.sup { Align::TOP } else { Align::Center },
             ..TextFormat::default()
         }
     }
@@ -1185,6 +1191,7 @@ fn merge(outer: Style, inner: Style) -> Style {
         mono: outer.mono || inner.mono,
         sans: outer.sans || inner.sans,
         small_caps: outer.small_caps || inner.small_caps,
+        sup: outer.sup || inner.sup,
     }
 }
 
@@ -1723,6 +1730,108 @@ fn title_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, [title,
     cx.align = align;
 }
 
+/// A raised mark the view adds at source offset `at` (it stands for no source: no caret stop).
+fn mark(text: String, at: usize) -> Inline {
+    Inline { kind: InlineKind::Text { text, style: Style { sup: true, ..Style::default() } }, range: at..at }
+}
+
+/// The source the inlines span.
+fn span_of(inlines: &[Inline], or: usize) -> Range<usize> {
+    let start = inlines.iter().map(|i| i.range.start).min().unwrap_or(or);
+    start..inlines.iter().map(|i| i.range.end).max().unwrap_or(or).max(start)
+}
+
+/// The signs of the notes with keys `keys`, by their kind and their order among those of that
+/// kind (`*`, `**`; `†`; `‡`); a key no note has, as written.
+fn note_signs(fm: &FrontMatter, keys: &[String]) -> Vec<String> {
+    keys.iter()
+        .map(|k| {
+            let Some(note) = fm.notes.iter().find(|n| &n.key == k) else { return k.clone() };
+            let n = fm.notes.iter().filter(|o| o.kind == note.kind).position(|o| o.key == note.key).unwrap_or(0) + 1;
+            let sign = match note.kind {
+                NoteKind::Corresponding => "*",
+                NoteKind::Title => "†",
+                NoteKind::Author => "‡",
+            };
+            sign.repeat(n)
+        })
+        .collect()
+}
+
+/// elsarticle's front matter as the PDF sets its title block: the title, each author with the
+/// numbers of their affiliations and the signs of their notes (and their e-mail), the
+/// affiliations and the notes; then its abstract and keywords. The title, names, e-mails,
+/// affiliations and notes are edited as text; the marks are the view's.
+fn front_matter(ui: &mut egui::Ui, cx: &mut Cx<'_>, fm: &FrontMatter, depth: usize) {
+    let t = cx.t;
+    let align = std::mem::replace(&mut cx.align, Align::Center);
+    let para =
+        |size: f32, color: Color32, role: egui::Role| Para { size, bold: role == egui::Role::Heading, color, role, empty_at: None, cell: None };
+    ui.add_space(t.reading_size);
+    if !fm.title.is_empty() {
+        let range = span_of(&fm.title, 0);
+        let mut inlines = fm.title.clone();
+        let signs = note_signs(fm, &fm.title_notes);
+        if !signs.is_empty() {
+            inlines.push(mark(signs.join(","), range.end));
+        }
+        let r = paragraph(ui, cx, &inlines, &range, &para(t.heading_sizes[0], t.text, egui::Role::Heading));
+        ui.ctx().accesskit_node_builder(r.id, |node| node.set_level(1));
+        ui.add_space(t.reading_size * 0.75);
+    }
+    for author in &fm.authors {
+        let range = span_of(&author.name, 0);
+        let mut inlines = author.name.clone();
+        let numbers =
+            author.affiliations.iter().map(|k| fm.affiliations.iter().position(|a| &a.key == k).map_or_else(|| k.clone(), |i| (i + 1).to_string()));
+        let signs: Vec<String> = numbers.chain(note_signs(fm, &author.notes)).collect();
+        if !signs.is_empty() {
+            inlines.push(mark(signs.join(","), range.end));
+        }
+        for email in &author.emails {
+            let at = span_of(email, range.end).start;
+            inlines.push(Inline { kind: InlineKind::Text { text: "\u{2003}".into(), style: Style::default() }, range: at..at });
+            inlines.extend(email.iter().cloned().map(|mut i| {
+                if let InlineKind::Text { style, .. } = &mut i.kind {
+                    style.mono = true;
+                }
+                i
+            }));
+        }
+        let _ = paragraph(ui, cx, &inlines, &range, &para(t.reading_size * 1.1, t.text, egui::Role::Paragraph));
+        ui.add_space(t.reading_size * 0.2);
+    }
+    if !fm.affiliations.is_empty() {
+        ui.add_space(t.reading_size * 0.5);
+    }
+    let numbered = fm.affiliations.len() > 1 || fm.affiliations.iter().any(|a| !a.key.is_empty());
+    for (i, a) in fm.affiliations.iter().enumerate() {
+        let range = span_of(&a.text, 0);
+        let mut inlines = Vec::new();
+        if numbered {
+            inlines.push(mark(format!("{}\u{2009}", i + 1), range.start));
+        }
+        inlines.extend(a.text.iter().cloned());
+        let _ = paragraph(ui, cx, &inlines, &range, &para(t.reading_size * 0.85, t.text_muted, egui::Role::Paragraph));
+    }
+    if !fm.notes.is_empty() {
+        ui.add_space(t.reading_size * 0.5);
+    }
+    for note in &fm.notes {
+        let range = span_of(&note.text, 0);
+        let sign = note_signs(fm, std::slice::from_ref(&note.key)).concat();
+        let mut inlines = vec![mark(format!("{sign}\u{2009}"), range.start)];
+        inlines.extend(note.text.iter().cloned());
+        let _ = paragraph(ui, cx, &inlines, &range, &para(t.reading_size * 0.85, t.text_muted, egui::Role::Paragraph));
+    }
+    cx.align = align;
+    if !fm.blocks.is_empty() {
+        ui.add_space(t.reading_size);
+        draw_blocks(ui, cx, &fm.blocks, depth);
+    }
+    ui.add_space(t.reading_size * 0.5);
+}
+
 fn heading(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, level: u8, content: &[Inline], label: Option<&Inline>) {
     let t = cx.t;
     let size = t.heading_sizes.get(usize::from(level)).copied().unwrap_or(t.reading_size);
@@ -1858,8 +1967,9 @@ fn list(ui: &mut egui::Ui, cx: &mut Cx<'_>, kind: ListKind, items: &[Item], dept
 fn container(ui: &mut egui::Ui, cx: &mut Cx<'_>, name: &str, blocks: &[Block], depth: usize) {
     let t = cx.t;
     match name {
-        "abstract" => {
-            let title = egui::RichText::new(tl!("Abstract").to_uppercase())
+        "abstract" | "keyword" => {
+            let name = if name == "abstract" { tl!("Abstract") } else { tl!("Keywords") };
+            let title = egui::RichText::new(name.to_uppercase())
                 .font(FontId::new(t.small_size, crate::fonts::semibold()))
                 .extra_letter_spacing(1.2)
                 .color(t.text_muted);

@@ -107,6 +107,9 @@ pub fn signature(name: &str) -> &'static [Spec] {
         "cite" | "citep" | "citet" | "parencite" | "textcite" | "autocite" | "footcite" | "nocite" | "citeauthor" | "citeyear" => &[O, O, R],
         "footnote" | "thanks" | "caption" | "title" | "author" | "date" | "documentclass" | "usepackage" | "includegraphics" => &[O, R],
         "href" => &[R, R],
+        // elsarticle's front matter.
+        "ead" | "affiliation" | "address" | "tnotetext" | "cortext" | "fntext" => &[O, R],
+        "tnoteref" | "corref" | "fnref" => &[R],
         "item" => &[O],
         "newcommand" | "renewcommand" | "providecommand" => &[R, O, O, R],
         // Environments.

@@ -20,6 +20,8 @@ pub struct Style {
     pub mono: bool,
     pub sans: bool,
     pub small_caps: bool,
+    /// Raised and smaller: a mark the view adds (an affiliation's number, a note's sign).
+    pub sup: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,6 +99,9 @@ pub enum BlockKind {
         kind: ListKind,
         items: Vec<Item>,
     },
+    /// A title block of elsarticle's `frontmatter`: its title, authors, affiliations and notes, and
+    /// the blocks in it (the abstract, the keywords).
+    FrontMatter(Box<FrontMatter>),
     /// A text environment shown as its formatted body under its name: `abstract`, `quote`, `center`…
     Container {
         name: String,
@@ -136,6 +141,60 @@ pub enum BlockKind {
     UnsupportedTable(Unsupported),
     /// Shown as the source of its range, in the code font.
     Source,
+}
+
+/// elsarticle's `frontmatter`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FrontMatter {
+    pub title: Vec<Inline>,
+    /// The keys of the notes on the title (`\tnoteref`).
+    pub title_notes: Vec<String>,
+    pub authors: Vec<Author>,
+    /// `\affiliation` and `\address`, in order: the authors' marks number them so.
+    pub affiliations: Vec<Affiliation>,
+    /// `\tnotetext`, `\cortext`, `\fntext`, in order.
+    pub notes: Vec<Note>,
+    /// What else it holds: the abstract, the keywords, and what the view shows as its source.
+    pub blocks: Vec<Block>,
+}
+
+/// An `\author` of a front matter.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Author {
+    pub name: Vec<Inline>,
+    /// The keys of its affiliations (`\author[a,b]`).
+    pub affiliations: Vec<String>,
+    /// The keys of its notes (`\corref`, `\fnref`).
+    pub notes: Vec<String>,
+    /// Its `\ead`s, each as its text.
+    pub emails: Vec<Vec<Inline>>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Affiliation {
+    /// As written in its optional argument; empty without one.
+    pub key: String,
+    /// Its text; for elsarticle's `organization={…}, city={…}` form, the values, `, ` between
+    /// them (text standing for no source).
+    pub text: Vec<Inline>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Note {
+    pub key: String,
+    pub kind: NoteKind,
+    pub text: Vec<Inline>,
+}
+
+/// What a front matter's note is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NoteKind {
+    /// `\tnotetext`: the title.
+    Title,
+    /// `\cortext`: the corresponding author.
+    Corresponding,
+    /// `\fntext`: an author.
+    Author,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -181,7 +240,7 @@ pub struct Item {
 }
 
 /// Text environments shown formatted, under their name.
-pub(crate) const CONTAINERS: &[&str] = &["abstract", "quote", "quotation", "verse", "center", "flushleft", "flushright"];
+pub(crate) const CONTAINERS: &[&str] = &["abstract", "keyword", "quote", "quotation", "verse", "center", "flushleft", "flushright"];
 
 /// A theorem-like environment: how the document prints its name and numbers it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -354,6 +413,7 @@ pub fn walk<'b>(blocks: &'b [Block], f: &mut dyn FnMut(&'b Block)) {
         match &b.kind {
             BlockKind::List { items, .. } => items.iter().for_each(|i| walk(&i.blocks, f)),
             BlockKind::Container { blocks, .. } | BlockKind::Theorem { blocks, .. } => walk(blocks, f),
+            BlockKind::FrontMatter(fm) => walk(&fm.blocks, f),
             _ => {}
         }
     }
@@ -378,6 +438,15 @@ pub fn inlines_of(b: &Block) -> Vec<&Inline> {
             out.extend(label.iter());
         }
         BlockKind::Paragraph(inlines) => add(inlines, &mut out),
+        BlockKind::FrontMatter(fm) => {
+            add(&fm.title, &mut out);
+            for a in &fm.authors {
+                add(&a.name, &mut out);
+                a.emails.iter().for_each(|e| add(e, &mut out));
+            }
+            fm.affiliations.iter().for_each(|a| add(&a.text, &mut out));
+            fm.notes.iter().for_each(|n| add(&n.text, &mut out));
+        }
         BlockKind::List { items, .. } => items.iter().filter_map(|i| i.label.as_ref()).for_each(|l| add(l, &mut out)),
         BlockKind::Theorem { title, .. } => add(title, &mut out),
         BlockKind::Figure { caption, label, .. } => {
@@ -462,6 +531,8 @@ pub(crate) fn logo(name: &str) -> Option<&'static str> {
         "TeX" => "TeX",
         "LaTeXe" => "LaTeX2ε",
         "ldots" | "dots" | "textellipsis" => "…",
+        // elsarticle's keyword separator.
+        "sep" => "·",
         "textbackslash" => "\\",
         "textasciitilde" => "~",
         "textasciicircum" => "^",
@@ -771,10 +842,93 @@ impl<'a> View<'a> {
             "description" => self.list(ListKind::Descriptions, body),
             "figure" | "figure*" if closed => self.figure(body),
             "table" | "table*" if closed => self.table_float(body),
+            "frontmatter" if closed => Some(BlockKind::FrontMatter(Box::new(self.front_matter(body)))),
             _ if CONTAINERS.contains(&name) => Some(BlockKind::Container { name: name.to_owned(), blocks: self.flow(body) }),
             _ => None,
         };
         shown.unwrap_or(BlockKind::Source)
+    }
+
+    /// elsarticle's front matter: its commands gathered, the rest (the abstract, the keywords) as
+    /// blocks.
+    fn front_matter(&self, body: &[Node]) -> FrontMatter {
+        let mut fm = FrontMatter::default();
+        let mut rest = Vec::new();
+        let key = |args: &[Arg]| args.iter().find(|a| a.optional).map(|a| self.src(&a.inner).trim().to_owned()).unwrap_or_default();
+        for n in body {
+            let Kind::Command { name, args, .. } = &n.kind else {
+                rest.push(n.clone());
+                continue;
+            };
+            let Some(arg) = required(args) else {
+                rest.push(n.clone());
+                continue;
+            };
+            match name.as_str() {
+                "title" => (fm.title, fm.title_notes) = self.marked(&arg.body),
+                "author" => {
+                    let (name, notes) = self.marked(&arg.body);
+                    let affiliations = key(args).split(',').map(|k| k.trim().to_owned()).filter(|k| !k.is_empty()).collect();
+                    fm.authors.push(Author { name, affiliations, notes, emails: Vec::new() });
+                }
+                "ead" => match fm.authors.last_mut() {
+                    Some(a) => a.emails.push(self.inlines(&arg.body, Style::default())),
+                    None => rest.push(n.clone()),
+                },
+                "affiliation" | "address" => fm.affiliations.push(Affiliation { key: key(args), text: self.affiliation(arg) }),
+                "tnotetext" | "cortext" | "fntext" => {
+                    let kind = match name.as_str() {
+                        "tnotetext" => NoteKind::Title,
+                        "cortext" => NoteKind::Corresponding,
+                        _ => NoteKind::Author,
+                    };
+                    fm.notes.push(Note { key: key(args), kind, text: self.inlines(&arg.body, Style::default()) });
+                }
+                _ => rest.push(n.clone()),
+            }
+        }
+        fm.blocks = self.flow(&rest);
+        fm
+    }
+
+    /// The inlines of an argument without the note marks in it (`\tnoteref`, `\corref`,
+    /// `\fnref`), and those marks' keys.
+    fn marked(&self, nodes: &[Node]) -> (Vec<Inline>, Vec<String>) {
+        let mut keys = Vec::new();
+        let mut kept = Vec::new();
+        for n in nodes {
+            match &n.kind {
+                Kind::Command { name, args, .. } if matches!(name.as_str(), "tnoteref" | "corref" | "fnref") => {
+                    if let Some(a) = required(args) {
+                        keys.extend(self.src(&a.inner).split(',').map(|k| k.trim().to_owned()).filter(|k| !k.is_empty()));
+                    }
+                }
+                _ => kept.push(n.clone()),
+            }
+        }
+        (self.inlines(&kept, Style::default()), keys)
+    }
+
+    /// An affiliation's text: elsarticle's `organization={…}, city={…}` as its values, `, `
+    /// between them; otherwise its argument.
+    fn affiliation(&self, arg: &Arg) -> Vec<Inline> {
+        let keyed = arg.body.iter().any(|n| n.kind == Kind::Text && self.src(&n.range).contains('='));
+        if !keyed {
+            return self.inlines(&arg.body, Style::default());
+        }
+        let mut out = Vec::new();
+        for n in &arg.body {
+            let Kind::Group { body, .. } = &n.kind else { continue };
+            let value = self.inlines(body, Style::default());
+            if value.is_empty() {
+                continue;
+            }
+            if !out.is_empty() {
+                out.push(text_inline(", ", Style::default(), n.range.start..n.range.start));
+            }
+            out.extend(value);
+        }
+        out
     }
 
     /// A list, or `None` when something shows before its first `\item`.

@@ -237,3 +237,20 @@ fn three_dots_typed_become_an_ellipsis_that_undo_takes_back() {
     key(&mut h, egui::Modifiers::COMMAND, egui::Key::Z);
     assert_eq!(text(&mut h), "Wait...\n", "undo did not bring the dots back");
 }
+
+#[test]
+fn an_elsarticle_front_matter_is_a_title_block_whose_text_is_edited_in_place() {
+    // #44: the front matter was shown as its source.
+    let fixture = include_str!("../../../latex/tests/fixtures/frontmatter.tex");
+    let mut h = formatted(fixture);
+    let title = "Scheduling Lighthouse Shifts by the Tides\u{2020}";
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Heading, title).is_some(), "the title is not a heading with its note's mark");
+    assert!(h.query_by_label_contains("\\author").is_none(), "the front matter shows as its source");
+    for shown in ["Ada Quill", "Harbour Institute, Port Example, Nowhere", "Corresponding author", "We plan the keepers", "lighthouses · tides"] {
+        assert!(h.query_by_label_contains(shown).is_some(), "{shown:?} is not shown");
+    }
+    // The caret starts in the title, whose text is edited as text.
+    h.event(egui::Event::Text("Re".into()));
+    h.run();
+    assert!(text(&mut h).contains("\\title{ReScheduling Lighthouse Shifts by the Tides\\tnoteref{t1}}"), "{}", text(&mut h));
+}

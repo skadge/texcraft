@@ -44,6 +44,7 @@
 	AI	IA
 	AI is off until you connect a model: any OpenAI-compatible endpoint, a server on this computer (llama.cpp, Ollama, vLLM) included. Every change it proposes arrives as a suggested change.	L'IA est désactivée tant que vous ne connectez pas de modèle : tout point d'accès compatible OpenAI, y compris un serveur sur cet ordinateur (llama.cpp, Ollama, vLLM). Chaque modification qu'elle propose arrive sous forme de modification suggérée.
 	Abstract	Résumé
+	Keywords	Mots-clés
 	Accents	Accents
 	Accept	Accepter
 	Accept All	Tout accepter
