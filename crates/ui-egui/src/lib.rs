@@ -166,6 +166,9 @@ pub(crate) struct View {
     pub log_search: preview::LogSearch,
     /// Folders folded in the file tree.
     pub collapsed: std::collections::HashSet<String>,
+    /// Entries folded in the outline, for the session: by document (its main file, or the file
+    /// shown for one the document does not include), the entries' keys (`side::fold_key`).
+    pub outline_folded: std::collections::HashMap<String, std::collections::HashSet<String>>,
     /// The caret's line and column (from 1) in the editor, for the status bar.
     pub cursor: Option<(u32, u32)>,
     /// The latest message for the status line, also announced to screen readers.
@@ -325,6 +328,7 @@ impl App {
                 focus_into_modal: false,
                 focus_fallback: None,
                 collapsed: std::collections::HashSet::new(),
+                outline_folded: std::collections::HashMap::new(),
                 status: None,
                 last_edit: Some(0.0),
                 goto: None,

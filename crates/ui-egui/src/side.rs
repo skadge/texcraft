@@ -454,7 +454,23 @@ fn drag_label(ui: &egui::Ui, t: &Tokens, icon: &str, name: &str) {
 fn outline(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     widgets::hairline(ui, &t);
-    header(ui, &t, tl!("Outline"), |_| {});
+    let mut chosen = None;
+    header(ui, &t, tl!("Outline"), |ui| {
+        let more = widgets::icon_button(ui, &t, "ellipsis", tl!("Outline options"), true);
+        widgets::keyboard_menu(ui, &more);
+        egui::Popup::menu(&more).show(|ui| {
+            ui.set_min_width(180.0);
+            for id in ["outline.collapse_all", "outline.expand_all"] {
+                let (label, enabled) = ui_cmd::menu_entry(app, id);
+                if crate::top_bar::item(ui, &t, None, label, None, enabled) {
+                    chosen = Some(id);
+                }
+            }
+        });
+    });
+    if let Some(id) = chosen {
+        ui_cmd::run(app, id);
+    }
     let Some(path) = app.session.current().cloned() else { return };
     let Ok(text) = app.session.project().text(&path) else {
         empty(ui, &t, tl!("This file has no outline."));
@@ -478,29 +494,43 @@ fn file_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, text: &str
         empty(ui, &t, tl!("No headings in this file yet."));
         return;
     }
-    // The section the caret is in: the last heading at or before its line.
+    let keys: Vec<FoldKey> = headings.iter().map(|h| Some((fold_key(path.as_str(), h.level, &h.title), h.level))).collect();
+    let fold = Folding::new(app, path.as_str(), &keys);
+    // The section the caret is in: the last heading at or before its line, or the folded one
+    // that holds it.
     let caret = app.view.cursor.map(|(line, _)| line.saturating_sub(1));
-    let current = caret.and_then(|c| headings.iter().rposition(|h| h.line <= c));
+    let current = fold.shown(caret.and_then(|c| headings.iter().rposition(|h| h.line <= c)));
     let top = headings.iter().map(|h| h.level).min().unwrap_or(0);
     let mut goto = None;
+    let mut toggle = None;
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 1.0;
         for (i, h) in headings.iter().enumerate() {
+            if fold.hidden[i] {
+                continue;
+            }
+            let depth = usize::from(h.level.saturating_sub(top));
             let row = Row {
-                depth: usize::from(h.level.saturating_sub(top)),
+                depth,
                 icon: if h.level <= top { "heading-1" } else { "list" },
                 label: &h.title,
                 selected: current == Some(i),
-                disclosure: None,
+                disclosure: fold.disclosure(i),
                 tag: None,
                 icon_color: None,
                 muted: false,
             };
-            if widgets::row(ui, &t, &row).clicked() {
-                goto = Some(h.line + 1);
+            let r = widgets::row(ui, &t, &row);
+            match fold.react(ui, &t, &r, i, depth) {
+                Some(Reaction::Toggle) => toggle = Some(i),
+                Some(Reaction::Open) => goto = Some(h.line + 1),
+                None => {}
             }
         }
     });
+    if let Some(i) = toggle {
+        fold.toggle(app, path.as_str(), &keys, i);
+    }
     if let Some(line) = goto {
         app.view.goto = Some((path.clone(), line));
         crate::preview::follow_in_pdf(app, path, line);
@@ -525,20 +555,31 @@ fn document_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, entrie
         }
         return;
     };
-    // The section the caret is in: the shown file's last heading at or before its line.
+    let keys = document_keys(entries);
+    let doc = document_key(app);
+    let fold = Folding::new(app, &doc, &keys);
+    // The section the caret is in: the shown file's last heading at or before its line, or the
+    // folded one that holds it.
     let caret = app.view.cursor.map(|(line, _)| line.saturating_sub(1));
-    let current = caret.and_then(|c| entries.iter().rposition(|e| e.file == shown && e.line <= c && matches!(e.kind, EntryKind::Heading { .. })));
+    let current =
+        fold.shown(caret.and_then(|c| entries.iter().rposition(|e| e.file == shown && e.line <= c && matches!(e.kind, EntryKind::Heading { .. }))));
     let several = texcraft_latex::document::files(entries).len() > 1;
     let mut goto: Option<(String, u32)> = None;
+    let mut toggle = None;
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 1.0;
         let mut depth = 0;
         let mut file_before: Option<&str> = None;
         for (i, e) in entries.iter().enumerate() {
             let EntryKind::Heading { level, title, number } = &e.kind else {
-                problem(ui, &t, e, depth + 1);
+                if !fold.hidden[i] {
+                    problem(ui, &t, e, depth + 1);
+                }
                 continue;
             };
+            if fold.hidden[i] {
+                continue;
+            }
             depth = usize::from(level.saturating_sub(top));
             let ours = e.file == shown;
             let label = match number {
@@ -558,7 +599,7 @@ fn document_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, entrie
                 icon,
                 label: &label,
                 selected: current == Some(i),
-                disclosure: None,
+                disclosure: fold.disclosure(i),
                 tag: starts.then_some(name),
                 icon_color: None,
                 muted: !ours,
@@ -568,11 +609,16 @@ fn document_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, entrie
             // start, and whether it is in the shown file.
             let place = if ours { tf!("in {file}, the file shown", file = name) } else { tf!("in {file}", file = name) };
             ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(place));
-            if r.clicked() {
-                goto = Some((e.file.clone(), e.line + 1));
+            match fold.react(ui, &t, &r, i, depth) {
+                Some(Reaction::Toggle) => toggle = Some(i),
+                Some(Reaction::Open) => goto = Some((e.file.clone(), e.line + 1)),
+                None => {}
             }
         }
     });
+    if let Some(i) = toggle {
+        fold.toggle(app, &doc, &keys, i);
+    }
     if let Some((file, line)) = goto
         && let Ok(file) = ProjectPath::new(&file)
     {
@@ -584,6 +630,148 @@ fn document_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, entrie
         if file == *path || app.run("file.open", json!({"path": file.as_str()})).is_some() {
             crate::preview::follow_in_pdf(app, &file, line);
             app.view.goto = Some((file, line));
+        }
+    }
+}
+
+/// An outline entry's key and level ([`fold_key`]); `None` for an include not read.
+type FoldKey = Option<(String, u8)>;
+
+/// What tells an outline entry apart across edits: its file, level and title (lines move as
+/// the text changes).
+fn fold_key(file: &str, level: u8, title: &str) -> String {
+    format!("{file}\u{1f}{level}\u{1f}{title}")
+}
+
+/// The keys and levels of the document outline's entries; `None` for an include not read.
+fn document_keys(entries: &[texcraft_latex::document::Entry]) -> Vec<FoldKey> {
+    use texcraft_latex::document::EntryKind;
+    entries
+        .iter()
+        .map(|e| match &e.kind {
+            EntryKind::Heading { level, title, .. } => Some((fold_key(&e.file, *level, title), *level)),
+            EntryKind::Include { .. } => None,
+        })
+        .collect()
+}
+
+/// The document the folded entries are kept for: the main file's.
+fn document_key(app: &App) -> String {
+    app.session.project().main().map(|m| m.as_str().to_owned()).unwrap_or_default()
+}
+
+/// The outline shown now: the document whose folds it keeps and its entries' keys and levels,
+/// as [`outline`] lists them.
+fn shown_outline(app: &mut App) -> Option<(String, Vec<FoldKey>)> {
+    let path = app.session.current().cloned()?;
+    let document = app.session.document_outline();
+    if document.iter().any(|e| e.file == path.as_str()) {
+        return Some((document_key(app), document_keys(&document)));
+    }
+    let text = app.session.project().text(&path).ok()?;
+    let keys = texcraft_latex::outline(text).iter().map(|h| Some((fold_key(path.as_str(), h.level, &h.title), h.level))).collect();
+    Some((path.as_str().to_owned(), keys))
+}
+
+/// `outline.collapse_all` and `outline.expand_all`: folds every entry that has entries under it,
+/// or unfolds them all, in the outline shown.
+pub(crate) fn fold_all(app: &mut App, folded: bool) {
+    let Some((doc, keys)) = shown_outline(app) else { return };
+    let parents = parents(&keys);
+    let set = app.view.outline_folded.entry(doc).or_default();
+    set.clear();
+    if folded {
+        set.extend(keys.into_iter().zip(parents).filter(|(_, p)| *p).filter_map(|(k, _)| k.map(|(k, _)| k)));
+    }
+}
+
+/// Whether each entry has entries under it: the next one is deeper, or an include not read.
+fn parents(keys: &[FoldKey]) -> Vec<bool> {
+    keys.iter()
+        .enumerate()
+        .map(|(i, k)| match (k, keys.get(i + 1)) {
+            (Some((_, level)), Some(Some((_, next)))) => next > level,
+            (Some(_), Some(None)) => true,
+            _ => false,
+        })
+        .collect()
+}
+
+/// What a row of the outline asks for.
+enum Reaction {
+    /// Fold or unfold it: its chevron clicked, or Left or Right.
+    Toggle,
+    /// Open its file at its line: clicked elsewhere, or Enter.
+    Open,
+}
+
+/// The outline's folds this frame: which entries have entries under them, which are folded, and
+/// which a fold above hides.
+struct Folding {
+    parent: Vec<bool>,
+    folded: Vec<bool>,
+    hidden: Vec<bool>,
+}
+
+impl Folding {
+    fn new(app: &App, doc: &str, keys: &[FoldKey]) -> Self {
+        let parent = parents(keys);
+        let set = app.view.outline_folded.get(doc);
+        let folded: Vec<bool> =
+            keys.iter().zip(&parent).map(|(k, p)| *p && k.as_ref().is_some_and(|(k, _)| set.is_some_and(|s| s.contains(k)))).collect();
+        // Under a folded entry: everything deeper than it, up to the next entry at its level.
+        let mut hidden = Vec::with_capacity(keys.len());
+        let mut under: Option<u8> = None;
+        for (i, k) in keys.iter().enumerate() {
+            match k {
+                Some((_, level)) if under.is_some_and(|f| *level > f) => hidden.push(true),
+                Some((_, level)) => {
+                    hidden.push(false);
+                    under = folded[i].then_some(*level);
+                }
+                None => hidden.push(under.is_some()),
+            }
+        }
+        Self { parent, folded, hidden }
+    }
+
+    /// The chevron of entry `i`: open or folded, for an entry with entries under it.
+    fn disclosure(&self, i: usize) -> Option<bool> {
+        self.parent[i].then_some(!self.folded[i])
+    }
+
+    /// Entry `i`, or the folded entry that hides it.
+    fn shown(&self, i: Option<usize>) -> Option<usize> {
+        let i = i?;
+        (0..=i).rev().find(|j| !self.hidden[*j])
+    }
+
+    /// What row `r` of entry `i`, at `depth`, asks for: its chevron clicked or Left and Right
+    /// with the keyboard fold and unfold it; elsewhere a click opens it.
+    fn react(&self, ui: &egui::Ui, t: &Tokens, r: &egui::Response, i: usize, depth: usize) -> Option<Reaction> {
+        if self.parent[i] && r.has_focus() {
+            // Left and Right reach the row instead of moving the keyboard to its neighbours.
+            ui.memory_mut(|m| m.set_focus_lock_filter(r.id, egui::EventFilter { horizontal_arrows: true, ..Default::default() }));
+            let (left, right) = ui.input_mut(|input| {
+                (input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft), input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight))
+            });
+            if (left && !self.folded[i]) || (right && self.folded[i]) {
+                return Some(Reaction::Toggle);
+            }
+        }
+        if !r.clicked() {
+            return None;
+        }
+        let on_chevron = r.interact_pointer_pos().is_some_and(|p| widgets::disclosure_rect(t, r.rect, depth).contains(p));
+        Some(if self.parent[i] && on_chevron { Reaction::Toggle } else { Reaction::Open })
+    }
+
+    /// Folds or unfolds entry `i`, for the rest of the session.
+    fn toggle(&self, app: &mut App, doc: &str, keys: &[FoldKey], i: usize) {
+        let Some(Some((key, _))) = keys.get(i) else { return };
+        let set = app.view.outline_folded.entry(doc.to_owned()).or_default();
+        if !set.remove(key) {
+            set.insert(key.clone());
         }
     }
 }

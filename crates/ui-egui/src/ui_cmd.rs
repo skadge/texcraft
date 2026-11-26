@@ -114,6 +114,10 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.side.history", "History", "View", None),
     ui("view.side.ask", "Ask AI", "View", None),
     ui("view.side.hide", "Hide Side Panel", "View", None),
+    // The outline's sections, folded to their first level or unfolded, in the outline shown;
+    // the folds are kept per document for the session.
+    ui("outline.collapse_all", "Collapse All", "View", None),
+    ui("outline.expand_all", "Expand All", "View", None),
     ui("view.comments", "Show or Hide the Comments Beside the Text", "View", None),
     ui("view.logs", "Build Log", "View", None),
     // The build log's output files: `{"output": "pdf"}` (`build.outputs` lists them). Desktop only,
@@ -430,6 +434,8 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "view.side.ask" => app.view.side = Some(Side::Ask),
         "view.find_in_project" => crate::search::open(app),
         "view.side.hide" => app.view.side = None,
+        "outline.collapse_all" => crate::side::fold_all(app, true),
+        "outline.expand_all" => crate::side::fold_all(app, false),
         "view.comments" => crate::review::toggle_margin(app),
         "view.logs" => app.view.logs = !app.view.logs,
         "view.show_output" => show_output(app, params),

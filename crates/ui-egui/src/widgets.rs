@@ -327,6 +327,13 @@ pub struct Row<'a> {
     pub muted: bool,
 }
 
+/// Where a [`row`] at `depth`, drawn in `rect`, has its disclosure chevron: a click there folds
+/// or unfolds rather than choosing the row.
+pub fn disclosure_rect(t: &Tokens, rect: Rect, depth: usize) -> Rect {
+    let x = rect.left() + 2.0 * t.unit + depth as f32 * 4.0 * t.unit;
+    Rect::from_min_size(egui::pos2(x, rect.top()), vec2(t.icon_size, t.row_height))
+}
+
 pub fn row(ui: &mut Ui, t: &Tokens, row: &Row<'_>) -> Response {
     row_sensing(ui, t, row, Sense::click())
 }
@@ -348,8 +355,8 @@ pub fn row_sensing(ui: &mut Ui, t: &Tokens, row: &Row<'_>, sense: Sense) -> Resp
     if fill != t.frame {
         ui.painter().rect_filled(rect.shrink2(vec2(t.unit, 0.0)), t.corner(), fill);
     }
-    let mut x = rect.left() + 2.0 * t.unit + row.depth as f32 * 4.0 * t.unit;
-    let chevron = Rect::from_min_size(egui::pos2(x, rect.top()), vec2(t.icon_size, t.row_height));
+    let chevron = disclosure_rect(t, rect, row.depth);
+    let mut x = chevron.left();
     if let Some(open) = row.disclosure {
         icons::paint(ui, chevron, if open { "chevron-down" } else { "chevron-right" }, t.icon_size - 2.0, t.text_muted);
     }

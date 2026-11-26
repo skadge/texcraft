@@ -181,3 +181,76 @@ fn choosing_an_entry_scrolls_the_pdf_to_its_heading_too() {
     assert_eq!(caret_line(&mut h), 6, "the editor did not go to the heading");
     assert!(pdf_scroll(&mut h) > before + 100.0, "the PDF did not scroll to the heading: {before} then {}", pdf_scroll(&mut h));
 }
+
+/// A click at `pos`, as the pointer makes one.
+fn click_at(h: &mut Harness<'_, App>, pos: egui::Pos2) {
+    h.hover_at(pos);
+    h.run();
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+    }
+    for _ in 0..3 {
+        h.run();
+    }
+}
+
+fn row_named(h: &Harness<'_, App>, title: &str) -> Option<String> {
+    rows(h).into_iter().map(|(l, _)| l).find(|l| l.ends_with(title))
+}
+
+fn expanded(h: &Harness<'_, App>, title: &str) -> Option<bool> {
+    let name = row_named(h, title)?;
+    h.get_by_role_and_label(Role::TreeItem, &name).accesskit_node().data().is_expanded()
+}
+
+/// Issue #31: an entry with entries under it folds from its chevron and from the keyboard (Left
+/// folds, Right unfolds), and stays folded for the document while other files are shown.
+#[test]
+fn a_section_folds_from_its_chevron_and_the_keyboard_and_stays_folded() {
+    let mut h = harness();
+    assert_eq!(expanded(&h, "Method"), Some(true), "a section with a subsection has no open chevron");
+    assert_eq!(expanded(&h, "End"), None, "a section with nothing under it has a chevron");
+    let method = h.get_by_role_and_label(Role::TreeItem, &row_named(&h, "Method").unwrap_or_default()).rect();
+    // The chevron is at the row's start, before its icon.
+    click_at(&mut h, egui::pos2(method.left() + 16.0, method.center().y));
+    assert!(row_named(&h, "Detail").is_none(), "the subsection is still listed under its folded section");
+    assert_eq!(expanded(&h, "Method"), Some(false));
+    assert_eq!(shown_file(&mut h).as_deref(), Some("main.tex"), "the chevron opened the section's file");
+
+    // Kept while another file is shown, and back.
+    for path in ["chapters/one.tex", "main.tex"] {
+        let r = h.state_mut().control("engine.execute", &json!({"command": "file.open", "params": {"path": path}}));
+        assert_eq!(r["ok"], true, "{r}");
+        h.run();
+    }
+    assert!(row_named(&h, "Detail").is_none(), "the fold was not kept");
+
+    let name = row_named(&h, "Method").unwrap_or_default();
+    h.get_by_role_and_label(Role::TreeItem, &name).focus();
+    h.run();
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    assert!(row_named(&h, "Detail").is_some(), "Right did not unfold the section");
+    h.key_press(egui::Key::ArrowLeft);
+    h.run();
+    assert!(row_named(&h, "Detail").is_none(), "Left did not fold the section");
+    let focused = h.query_all_by_role(Role::TreeItem).find(|n| n.accesskit_node().is_focused()).and_then(|n| n.accesskit_node().label());
+    assert_eq!(focused, Some(name), "the keyboard left the section it folded");
+}
+
+/// Issue #31: Collapse All and Expand All, in the outline's menu.
+#[test]
+fn collapse_all_and_expand_all_fold_and_unfold_every_section() {
+    let mut h = harness();
+    let all = rows(&h).len();
+    for (entry, folded) in [("Collapse All", true), ("Expand All", false)] {
+        h.get_by_role_and_label(Role::Button, "Outline options").click();
+        h.run();
+        h.get_by_role_and_label(Role::Button, entry).click();
+        for _ in 0..2 {
+            h.run();
+        }
+        assert_eq!(row_named(&h, "Detail").is_none(), folded, "{entry}: {:?}", rows(&h));
+        assert_eq!(rows(&h).len() < all, folded, "{entry}: {:?}", rows(&h));
+    }
+}

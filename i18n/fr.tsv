@@ -2178,6 +2178,11 @@ unit	{n} s	{n} s
 @msg	For the Astrophysical Journal and other AAS journals.	Pour l'Astrophysical Journal et les autres revues AAS.
 @msg	Numbered exercises with their points, for a course.	Des exercices numérotés avec leur barème, pour un cours.
 @msg	Slides for a talk, in widescreen.	Des diapositives pour un exposé, en format large.
+# Outline folding, the PDF's pages side by side and its thumbnails
+	Outline options	Options du plan
+@id	outline.collapse_all	Tout replier
+@id	outline.expand_all	Tout déplier
+
 # The formatted view for readers: numbers from the build, included files
 	Not built yet: the number shows after the document is built.	Pas encore compilé : le numéro apparaît une fois le document compilé.
 	No bibliography entry named {key} in the last build.	Aucune entrée bibliographique nommée {key} dans la dernière compilation.
