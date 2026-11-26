@@ -29,6 +29,7 @@ mod project;
 mod review;
 mod search;
 mod template;
+pub(crate) mod update;
 
 pub type Run = fn(&mut Session, &Value) -> Result<Value>;
 pub type Enabled = fn(&Session) -> Result<()>;
@@ -98,6 +99,7 @@ pub fn all() -> &'static [CommandSpec] {
         v.extend(git::specs());
         v.extend(clone::specs());
         v.extend(ai::specs());
+        v.extend(update::specs());
         v
     })
 }

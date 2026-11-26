@@ -353,6 +353,13 @@ mod web {
             }
             self.app.frame(ui);
             self.unsaved.set(self.app.session().is_dirty());
+            // Reload for a new version: unsaved changes were saved or let go in the window first.
+            if self.app.take_reload() {
+                self.unsaved.set(false);
+                if let Some(Err(e)) = web_sys::window().map(|w| w.location().reload()) {
+                    log::warn!("the page did not reload: {e:?}");
+                }
+            }
             let ctx = ui.ctx().clone();
             self.picks(&ctx);
             self.keep(&ctx);
@@ -683,6 +690,8 @@ mod web {
                 return;
             };
             let mut session = texcraft_engine::Session::in_browser(&worker_url());
+            // A new version of the site: its version.txt, once a day (docs/ROADMAP.md, A8).
+            session.enable_updates(texcraft_engine::update::Install::Browser);
             let (page, returned) = sign_in_return();
             let link = if returned.is_none() { server_link() } else { None };
             session.set_forge_secrets(std::sync::Arc::new(TabStorage));

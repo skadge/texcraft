@@ -67,6 +67,7 @@ mod tips;
 mod top_bar;
 mod touch;
 pub mod ui_cmd;
+mod updates;
 pub mod widgets;
 mod window;
 
@@ -254,6 +255,12 @@ pub struct App {
     after_save: Option<dialogs::Next>,
     /// The user chose to quit; the shell closes the window.
     quit: bool,
+    /// The user chose Restart Now: the shell starts the new version as it exits.
+    restart: bool,
+    /// The user chose Reload for a new version of the page: the browser's shell reloads it.
+    reload: bool,
+    /// When the daily update check is due, and the What's New dialog's focus.
+    updates: updates::UpdateView,
     /// Closing was confirmed: the next close request is let through.
     close_confirmed: bool,
     /// The context of the last frame, for commands run outside one.
@@ -329,6 +336,7 @@ impl App {
         session.settings.spelling = prefs.spelling.clone();
         session.settings.grammar = prefs.grammar.clone();
         session.settings.hidden_messages = prefs.hidden_messages.clone();
+        session.settings.updates = prefs.updates.clone();
         session.set_user_words(&prefs.words);
         let (layout, side) = (prefs.layout(), prefs.side());
         let keys = keys::Keys::new(prefs.shortcuts.clone());
@@ -398,6 +406,9 @@ impl App {
             picks: Vec::new(),
             after_save: None,
             quit: false,
+            restart: false,
+            reload: false,
+            updates: updates::UpdateView::default(),
             close_confirmed: false,
             native_pickers: false,
             browser_storage: None,
@@ -453,6 +464,7 @@ impl App {
         current.spelling = self.session.settings.spelling.clone();
         current.grammar = self.session.settings.grammar.clone();
         current.hidden_messages = self.session.settings.hidden_messages.clone();
+        current.updates = self.session.settings.updates.clone();
         current.words = self.session.user_words();
         if current != self.prefs {
             self.prefs = current;
@@ -532,6 +544,12 @@ impl App {
                 self.close_confirmed = true;
                 self.quit = true;
             }
+            dialogs::Next::Restart => {
+                self.close_confirmed = true;
+                self.quit = true;
+                self.restart = true;
+            }
+            dialogs::Next::Reload => self.reload = true,
             dialogs::Next::NewProject => {
                 self.start = false;
                 if self.run("project.new", json!({})).is_some() {
@@ -572,6 +590,18 @@ impl App {
     /// Whether the user chose to quit since the last call; the shell then closes the window.
     pub fn take_quit(&mut self) -> bool {
         std::mem::take(&mut self.quit)
+    }
+
+    /// The program to start once the window has closed, when the user chose to restart into an
+    /// update put in place (Restart Now): the shell starts it as it exits.
+    pub fn restart_program(&self) -> Option<&std::path::Path> {
+        if self.restart { self.session.updates().restart_program() } else { None }
+    }
+
+    /// Whether the user chose to reload the page to use a new version since the last call; the
+    /// browser's shell then reloads it.
+    pub fn take_reload(&mut self) -> bool {
+        std::mem::take(&mut self.reload)
     }
 
     /// The system's documents folder, where Import a Project makes new folders until another is
@@ -899,6 +929,7 @@ impl App {
         forge::poll(self, ctx);
         autosave::tick(self, ctx);
         ai::poll(self, ctx);
+        updates::tick(self, ctx);
         if self.session.exporting() {
             // Look again until it ends.
             ctx.request_repaint_after(std::time::Duration::from_millis(200));

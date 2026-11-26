@@ -1,0 +1,19 @@
+{
+  "url": "https://api.github.com/repos/skadge/texcraft/releases/1001",
+  "html_url": "https://github.com/skadge/texcraft/releases/tag/v0.20.0",
+  "id": 1001,
+  "tag_name": "v0.20.0",
+  "target_commitish": "main",
+  "name": "TeXCraft 0.20.0",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2026-12-01T09:50:00Z",
+  "published_at": "2026-12-01T10:05:00Z",
+  "assets": [
+    {"name": "TeXCraft-0.20.0-x86_64.AppImage", "size": 41, "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "content_type": "application/octet-stream", "state": "uploaded", "browser_download_url": "https://github.com/skadge/texcraft/releases/download/v0.20.0/TeXCraft-0.20.0-x86_64.AppImage"},
+    {"name": "TeXCraft-0.20.0-x86_64-windows.zip", "size": 52, "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "content_type": "application/zip", "state": "uploaded", "browser_download_url": "https://github.com/skadge/texcraft/releases/download/v0.20.0/TeXCraft-0.20.0-x86_64-windows.zip"},
+    {"name": "SHA256SUMS", "size": 300, "content_type": "text/plain", "state": "uploaded", "browser_download_url": "https://github.com/skadge/texcraft/releases/download/v0.20.0/SHA256SUMS"},
+    {"name": "TeXCraft-0.20.0-aarch64-macos.zip", "size": 60, "content_type": "application/zip", "state": "uploaded", "browser_download_url": "https://github.com/someone-else/texcraft/releases/download/v0.20.0/TeXCraft-0.20.0-aarch64-macos.zip"}
+  ],
+  "body": "## 0.20.0\n\n- Updates.\n\nBuilt and published on GitLab: https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.20.0"
+}

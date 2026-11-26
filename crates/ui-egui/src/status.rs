@@ -41,6 +41,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, room: egui::Rect) {
         // language, the comments, the engine, and focus mode's way out.
         widgets::right_aligned(ui, "status-end", |ui| {
             ui.spacing_mut().item_spacing.x = t.unit * 4.0;
+            if !app.view.narrow {
+                crate::updates::status_item(app, ui);
+            }
             let small = |s: String| egui::RichText::new(s).font(t.small()).color(t.text_muted);
             // The file's language, the comments and the caret belong to the editor, not the start
             // page; a phone has no room for them (nor for the engine's name).

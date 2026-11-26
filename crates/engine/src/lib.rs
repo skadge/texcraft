@@ -17,6 +17,7 @@ pub mod hidden;
 mod language;
 pub mod numbering;
 pub mod spelling;
+pub mod update;
 pub use grammar::{GrammarOptions, GrammarProblem};
 pub use spelling::{Misspelling, SpellingOptions};
 mod sync;
@@ -47,6 +48,8 @@ pub use cmd::forge_auth::{Progress as SignInProgress, Unavailable as SignInUnava
 pub use cmd::forge_pick::Lookup as ForgeLookup;
 /// A git hosting service recognised by a remote's address (`git.remotes`' `hosting`).
 pub use cmd::git::{Hosting as GitHosting, hosting as git_hosting};
+/// What the end of an update check or installation was ([`Session::poll_update`]).
+pub use cmd::update::{Event as UpdateEvent, State as Updates};
 pub use texcraft_compile::engine_choice;
 pub use texcraft_compile::{
     Diagnostic, Draft, Engine, Export, MAX_BLEED_MM, Options as BuildOptions, Outcome, Output, PdfX, Progress, Severity, Status,
@@ -85,6 +88,9 @@ pub struct Settings {
     /// (`project.autosave`); the session only keeps the setting, the window does the timing.
     #[serde(default = "yes")]
     pub autosave: bool,
+    /// The daily update check, and when it last answered (`app.update_settings`).
+    #[serde(default)]
+    pub updates: update::Saved,
 }
 
 fn yes() -> bool {
@@ -102,6 +108,7 @@ impl Default for Settings {
             grammar: GrammarOptions::default(),
             hidden_messages: Vec::new(),
             autosave: true,
+            updates: update::Saved::default(),
         }
     }
 }
@@ -247,6 +254,8 @@ pub struct Session {
     grammar: grammar::State,
     /// Where each kind of build output was last saved (`build.save_output`).
     saved_outputs: std::collections::BTreeMap<&'static str, PathBuf>,
+    /// The latest release and what this copy can do about it (docs/ROADMAP.md, A8).
+    update: cmd::update::State,
 }
 
 impl Session {
@@ -319,6 +328,7 @@ impl Session {
             hidden: hidden::State::default(),
             grammar: grammar::State::default(),
             saved_outputs: std::collections::BTreeMap::new(),
+            update: cmd::update::State::default(),
         }
     }
 
