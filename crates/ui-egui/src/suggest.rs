@@ -208,13 +208,24 @@ pub(crate) fn passages(app: &App, path: &ProjectPath, selected: Option<Id>) -> V
         .collect()
 }
 
-/// The toolbar's Suggest switch: a button that stays pressed while suggesting.
-pub(crate) fn switch(app: &mut App, ui: &mut egui::Ui) -> bool {
+/// The toolbar's Suggest switch: a button that stays pressed while suggesting. With less than
+/// `room` for it and its label (a narrow pane, a language's longer word), the pencil alone, named
+/// and explained the same.
+pub(crate) fn switch(app: &mut App, ui: &mut egui::Ui, room: f32) -> bool {
     let t = app.tokens;
     let on = app.editor.suggest;
     let colour = if on { t.accent } else { t.text_muted };
-    let text = RichText::new(tl!("Suggest")).font(t.small()).color(if on { t.text } else { t.text_muted });
-    let r = ui.add(egui::Button::selectable(on, egui::Atoms::new((icons::image("pencil", 14.0, colour), text))));
+    let label = tl!("Suggest");
+    // The label, the icon and the button's padding.
+    let wanted = ui.fonts_mut(|f| f.layout_no_wrap(label.to_owned(), t.small(), t.text).size().x) + 14.0 + 4.0 * t.unit + 8.0;
+    let compact = room < wanted;
+    let icon = icons::image("pencil", 14.0, colour);
+    let r = if compact {
+        ui.add(egui::Button::selectable(on, egui::Atoms::new(icon)))
+    } else {
+        let text = RichText::new(label).font(t.small()).color(if on { t.text } else { t.text_muted });
+        ui.add(egui::Button::selectable(on, egui::Atoms::new((icon, text))))
+    };
     let tip = if on {
         tl!("Suggesting: edits become suggestions (Cmd+Shift+E to edit the file)")
     } else {

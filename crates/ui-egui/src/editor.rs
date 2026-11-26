@@ -680,9 +680,14 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
                 app.editor.focus = true;
             }
         }
+        // What the right end needs: Find and the More menu.
+        let right_end = 2.0 * t.toolbar_height + 4.0 * t.unit;
         if !on {
             ui.add_space(t.unit);
-            if crate::suggest::switch(app, ui) {
+            // Its label only where it fits with the right end: long words (German, French) leave
+            // the pencil, still named and explained on hover.
+            let room = ui.max_rect().right() - ui.cursor().left() - right_end;
+            if crate::suggest::switch(app, ui, room) {
                 chosen = Some("edit.suggest_mode");
             }
         }
@@ -694,7 +699,7 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
             return;
         }
         // Room for Find and the More menu on the right.
-        let mut room = ui.max_rect().right() - ui.cursor().left() - 80.0;
+        let mut room = ui.max_rect().right() - ui.cursor().left() - right_end;
         let mut hidden: Vec<usize> = Vec::new();
         for (i, (width, _)) in GROUPS.iter().enumerate() {
             if hidden.is_empty() && *width <= room {
