@@ -20,12 +20,6 @@
 	 · edited	 · editado
 	 · pass {n}	 · pasada {n}
 	 · recording @{r}	 · grabando @{r}
-	, accepted	, aceptada
-	, outdated	, obsoleta
-	, rejected	, rechazada
-	, resolved	, resuelta
-	1 package	1 paquete
-	1 problem	1 problema
 	A formula. Double-click to edit its source.	Una fórmula. Haga doble clic para editar su código fuente.
 	A label cannot hold braces, backslashes, % or #.	Una etiqueta no puede contener llaves, barras invertidas, % ni #.
 	A name for the project, kept in this browser	Un nombre para el proyecto, guardado en este navegador
@@ -54,6 +48,7 @@
 	Add	Añadir
 	Add Files to the Project	Añadir archivos al proyecto
 	Add Files…	Añadir archivos…
+	Add Footnote	Añadir nota al pie
 	Add Server	Añadir servidor
 	Add a Comment	Añadir un comentario
 	Add a File	Añadir un archivo
@@ -68,7 +63,6 @@
 	Add the Zip as a File	Añadir el zip como archivo
 	Add to Dictionary	Añadir al diccionario
 	Add {host} for Signing In…	Añadir {host} para iniciar sesión…
-	Added	Añadido
 	Added {host}: sign in to it with its Sign In button.	Se ha añadido {host}: inicie sesión con su botón Iniciar sesión.
 	Added “{word}” to the project's words (.texcraft/words.txt).	Se ha añadido «{word}» a las palabras del proyecto (.texcraft/words.txt).
 	Added “{word}” to the project's words for this session: the project has no folder yet.	Se ha añadido «{word}» a las palabras del proyecto para esta sesión: el proyecto aún no tiene carpeta.
@@ -76,6 +70,7 @@
 	After a pause in typing at the end of a line, the paragraph up to the caret is sent and the model's next words are shown in grey after it: Tab takes them, typing on or Escape dismisses them.	Tras una pausa al escribir al final de una línea, se envía el párrafo hasta el cursor y las palabras siguientes del modelo se muestran en gris a continuación: Tab las acepta; seguir escribiendo o Escape las descarta.
 	Agree to Send	Aceptar el envío
 	Agreed: the kinds switched on are sent to {destination} without asking again.	Aceptado: los tipos activados se envían a {destination} sin volver a preguntar.
+	Agreement	Concordancia
 	All	Todo
 	All borders	Todos los bordes
 	Allow Commits on GitLab	Permitir commits en GitLab
@@ -102,9 +97,11 @@
 	Auto-Compile: compile now	Compilación automática: compilar ahora
 	Back to PDF	Volver al PDF
 	Back to the menu bar, the sections and the side panel. Escape does it too when no field has the keyboard.	Volver a la barra de menús, las secciones y el panel lateral. Escape también lo hace cuando ningún campo tiene el teclado.
+	Bibliography entries	Entradas bibliográficas
 	Binary file	Archivo binario
 	Blank project	Proyecto en blanco
 	Bleed	Sangrado
+	Body Text	Texto normal
 	Bold	Negrita
 	Booktabs rules	Filetes booktabs
 	Booktabs rules need the booktabs package: add \\usepackage{booktabs} to the preamble of {main}.	Los filetes booktabs necesitan el paquete booktabs: añada \\usepackage{booktabs} al preámbulo de {main}.
@@ -117,7 +114,7 @@
 	Build with the open suggestions applied; the files do not change	Compilar con las sugerencias abiertas aplicadas; los archivos no cambian
 	Building	Compilando
 	Building the PDF	Generando el PDF
-	Bulleted list	Lista con viñetas
+	Bulleted List	Lista con viñetas
 	CVs	Currículums
 	Cancel	Cancelar
 	Cancel Signing In	Cancelar el inicio de sesión
@@ -130,8 +127,11 @@
 	Change to “{text}”	Cambiar a «{text}»
 	Changed on the branch but kept as you edited them: {files}.	Cambiados en la rama pero conservados tal como usted los editó: {files}.
 	Changes that are not saved are lost.	Los cambios no guardados se perderán.
+	Check Grammar with AI	Revisar gramática con IA
 	Check Server	Comprobar servidor
 	Check comments	Revisar comentarios
+	Check grammar	Revisar gramática
+	Check grammar (English)	Revisar gramática (inglés)
 	Check spelling	Revisar ortografía
 	Checking the server…	Comprobando el servidor…
 	Checking {language}, as the document's babel or polyglossia sets it.	Revisando {language}, tal como lo indica babel o polyglossia en el documento.
@@ -171,7 +171,6 @@
 	Comments	Comentarios
 	Comments are shown beside the text.	Los comentarios se muestran junto al texto.
 	Comments beside the text are hidden; the Review panel lists them.	Los comentarios junto al texto están ocultos; el panel Revisión los muestra.
-	Commit	Hacer commit
 	Commit and Open Merge Request	Hacer commit y abrir merge request
 	Commit and Open Pull Request	Hacer commit y abrir pull request
 	Commit the Project	Hacer commit del proyecto
@@ -213,10 +212,12 @@
 	Create Project…	Crear proyecto…
 	Croatian	Croata
 	Crop marks	Marcas de corte
-	Cross-reference	Referencia cruzada
+	Cross-Reference	Referencia cruzada
 	Ctrl+Enter in the question	Ctrl+Enter en la pregunta
+	Ctrl+click to go to it.	Ctrl+clic para ir allí.
 	Cut	Cortar
 	Czech	Checo
+	DOCX Document (.docx)	Documento DOCX (.docx)
 	Danish	Danés
 	Dark	Oscuro
 	Delete	Eliminar
@@ -229,13 +230,12 @@
 	Delete {file}?	¿Eliminar {file}?
 	Delete {project}?	¿Eliminar {project}?
 	Delete “{old}”	Eliminar «{old}»
-	Deleted	Eliminado
 	Delete…	Eliminar…
 	Delimiters	Delimitadores
 	Delta, capital	Delta mayúscula
 	Describe it	Descríbalo
 	Description (optional)	Descripción (opcional)
-	Displayed formula	Fórmula destacada
+	Displayed Formula	Fórmula destacada
 	Don't Save	No guardar
 	Done	Hecho
 	Download	Descargar
@@ -264,9 +264,9 @@
 	Edit comment	Editar comentario
 	Editing: your edits change the file.	Editando: sus cambios modifican el archivo.
 	Editor	Editor
+	Editor Only	Solo editor
 	Editor and PDF	Editor y PDF
 	Editor key bindings	Combinaciones de teclas del editor
-	Editor only	Solo editor
 	Endpoint	Endpoint
 	Engine	Motor
 	English	Inglés
@@ -313,11 +313,14 @@
 	Folded lines {from}–{to}, {what}	Líneas {from}–{to} plegadas, {what}
 	Folder not found	Carpeta no encontrada
 	Font size	Tamaño de letra
+	Footnote	Nota al pie
 	Footnote: {text}	Nota al pie: {text}
 	For reading on a screen; accessible (tagged, PDF/UA, checked for screen readers); or for print (a PDF/X, checked as printers check it).	Para leer en pantalla; accesible (etiquetado, PDF/UA, comprobado para lectores de pantalla); o para imprenta (un PDF/X, comprobado como lo comprueban las imprentas).
 	Forget	Olvidar
 	Formatted	Formateado
+	Formula	Fórmula
 	Formula: {text}	Fórmula: {text}
+	Found by AI ({model}).	Encontrado por IA ({model}).
 	Free software under the MIT or Apache 2.0 licence. Icons from Lucide (ISC).	Software libre bajo la licencia MIT o Apache 2.0. Iconos de Lucide (ISC).
 	French	Francés
 	From the document	Del documento
@@ -333,8 +336,15 @@
 	Go to Line	Ir a la línea
 	Go to this line	Ir a esta línea
 	Going to GitLab to sign in…	Yendo a GitLab para iniciar sesión…
+	Grammar and word order	Gramática y orden de las palabras
+	Grammar checking is not in this build.	La revisión gramatical no está incluida en esta versión.
+	Grammar checking is not in this build; Check Grammar with AI is available.	La revisión gramatical no está incluida en esta versión; Revisar gramática con IA está disponible.
+	Grammar problems in English text are underlined with a double line, checked on this computer by Harper; spelling stays with the spell checker.	Los problemas gramaticales del texto en inglés se subrayan con una línea doble y se revisan en este equipo con Harper; la ortografía sigue a cargo del corrector ortográfico.
 	Greek	Griego
 	Heading	Encabezado
+	Heading 1	Encabezado 1
+	Heading 2	Encabezado 2
+	Heading 3	Encabezado 3
 	Help	Ayuda
 	Here, if it fits	Aquí, si cabe
 	Hide	Ocultar
@@ -343,7 +353,6 @@
 	Hide the comments beside the text	Ocultar los comentarios junto al texto
 	Hide the comments beside the text (the Review panel still lists them)	Ocultar los comentarios junto al texto (el panel Revisión sigue mostrándolos)
 	Hide the token	Ocultar el token
-	Hint	Indicación
 	History	Historial
 	Homepage URL	URL de la página principal
 	How far the art may run past the page's edges, to be trimmed off; printers often ask for 3 mm.	Cuánto puede sobrepasar el contenido los bordes de la página, para recortarlo después; las imprentas suelen pedir 3 mm.
@@ -353,6 +362,7 @@
 	Ignore	Ignorar
 	Image	Imagen
 	Image {name}	Imagen {name}
+	Images	Imágenes
 	Images go into the file itself: stop suggesting to insert one.	Las imágenes van en el propio archivo: dejar de sugerir insertar una.
 	Import a Zip File	Importar un archivo zip
 	In Selection	En la selección
@@ -361,10 +371,14 @@
 	In the browser, GitHub needs a personal access token: GitHub's sign-in does not answer web pages.	En el navegador, GitHub necesita un token de acceso personal: el inicio de sesión de GitHub no responde a páginas web.
 	In the browser, paste with Ctrl+V (Cmd+V on a Mac): a menu cannot read the clipboard there.	En el navegador, pegue con Ctrl+V (Cmd+V en un Mac): allí un menú no puede leer el portapapeles.
 	In this browser	En este navegador
+	Indent Item	Aumentar sangría del elemento
 	Indonesian	Indonesio
-	Inline formula	Fórmula en línea
+	Inline Formula	Fórmula en línea
 	Insert	Insertar
 	Insert Anyway	Insertar de todos modos
+	Insert a Citation	Insertar una cita
+	Insert a Cross-Reference	Insertar una referencia cruzada
+	Insert a Figure	Insertar una figura
 	Insert in Document	Insertar en el documento
 	Insert “{new}”	Insertar «{new}»
 	Inserted as a suggested change: accept or reject it beside the text or in the Review panel.	Insertado como cambio sugerido: acéptelo o recházelo junto al texto o en el panel Revisión.
@@ -393,7 +407,6 @@
 	Japanese	Japonés
 	Journals	Revistas
 	Keep Both	Conservar ambos
-	Keep mine	Conservar el mío
 	Keep the New Project	Conservar el proyecto nuevo
 	Kept beside a file of the same name: {n}.	Guardados junto a un archivo del mismo nombre: {n}.
 	Keyboard	Teclado
@@ -402,6 +415,7 @@
 	Korean	Coreano
 	Label	Etiqueta
 	Label {key}	Etiqueta {key}
+	Labels	Etiquetas
 	Lambda, capital	Lambda mayúscula
 	Leave Confidential unticked: TeXCraft keeps no secret. Tick the scopes api, read_api and read_user.	Deje Confidential sin marcar: TeXCraft no guarda ningún secreto. Marque los ámbitos api, read_api y read_user.
 	Leave Focus Mode	Salir del modo concentración
@@ -431,6 +445,7 @@
 	Make Again	Crear de nuevo
 	Make Key	Crear clave
 	Make LaTeX	Crear LaTeX
+	Make Link	Crear enlace
 	Make a fine-grained one on GitHub under Settings › Developer settings › Personal access tokens, for this repository. Contents read-only opens it; committing needs Contents read and write, and opening a pull request Pull requests read and write. A classic token needs the repo scope.	Cree uno de grano fino en GitHub en Settings › Developer settings › Personal access tokens, para este repositorio. Contents de solo lectura permite abrirlo; hacer commit requiere Contents de lectura y escritura, y abrir una pull request requiere Pull requests de lectura y escritura. Un token clásico necesita el ámbito repo.
 	Make one in GitLab under Preferences › Access tokens. The read_api scope opens projects; committing needs the api scope.	Cree uno en GitLab en Preferences › Access tokens. El ámbito read_api permite abrir proyectos; hacer commit requiere el ámbito api.
 	Make this change in the file (one undoable edit)	Hacer este cambio en el archivo (una sola edición que se puede deshacer)
@@ -440,7 +455,6 @@
 	Markdown (.md)	Markdown (.md)
 	Marks outside the bleed that show where to trim.	Marcas fuera del sangrado que indican dónde cortar.
 	Match Case	Distinguir mayúsculas
-	Math	Matemáticas
 	Maximize	Maximizar
 	Menu	Menú
 	Menu bar	Barra de menús
@@ -449,7 +463,6 @@
 	Merged with your changes: {files}.	Fusionado con sus cambios: {files}.
 	Merged {remote} into the project: {files}.	{remote} fusionado en el proyecto: {files}.
 	Message deleted	Mensaje eliminado
-	Mine	Míos
 	Minimize	Minimizar
 	Miscellaneous	Varios
 	Misspelled words in the text are underlined; commands, math and verbatim text are skipped.	Las palabras mal escritas del texto se subrayan; se omiten los comandos, las matemáticas y el texto literal.
@@ -481,11 +494,17 @@
 	No answer: {error}	Sin respuesta: {error}
 	No borders	Sin bordes
 	No comments or suggestions	No hay comentarios ni sugerencias
+	No entry matches. The project's .bib files have the entries to cite.	Ninguna entrada coincide. Los archivos .bib del proyecto contienen las entradas que se pueden citar.
 	No explanation: {error}	Sin explicación: {error}
 	No file is open	No hay ningún archivo abierto
 	No file matches.	Ningún archivo coincide.
+	No grammar check: {error}	Sin revisión gramatical: {error}
+	No headings in this file yet.	Este archivo aún no tiene encabezados.
 	No image	Sin imagen
-	No misspelled words in this file.	No hay palabras mal escritas en este archivo.
+	No image matches.	Ninguna imagen coincide.
+	No label matches.	Ninguna etiqueta coincide.
+	No label {key} in the project's files.	No hay ninguna etiqueta {key} en los archivos del proyecto.
+	No misspelled words or grammar problems in this file.	No hay palabras mal escritas ni problemas gramaticales en este archivo.
 	No project matches: type its whole address to open it.	Ningún proyecto coincide: escriba su dirección completa para abrirlo.
 	No recent projects	No hay proyectos recientes
 	No reference was drafted: {error}	No se redactó ninguna referencia: {error}
@@ -520,8 +539,8 @@
 	Nothing was made: {error}	No se creó nada: {error}
 	Nothing was taken in from the branch {branch} yet: choose for each file below first.	Aún no se ha traído nada de la rama {branch}: elija primero para cada archivo de abajo.
 	Now {width}: kept unless you move the slider.	Ahora {width}: se mantiene salvo que mueva el control deslizante.
-	Numbered equation	Ecuación numerada
-	Numbered list	Lista numerada
+	Numbered Equation	Ecuación numerada
+	Numbered List	Lista numerada
 	Omega, capital	Omega mayúscula
 	On a page of floats	En una página de flotantes
 	On this computer: nothing leaves it, and no token is needed.	En este ordenador: nada sale de él y no hace falta ningún token.
@@ -562,27 +581,31 @@
 	Opening the retex user manual (PDF) in your browser.	Abriendo el manual de usuario de retex (PDF) en su navegador.
 	Opening {address} in your browser.	Abriendo {address} en su navegador.
 	Operators	Operadores
+	Other Heading	Otro encabezado
 	Otherwise the build goes on and reports every error.	Si no, la compilación continúa e informa de todos los errores.
 	Outdated: the passage changed since. Reject it, or suggest again.	Obsoleta: el pasaje ha cambiado desde entonces. Recházela o vuelva a sugerir.
+	Outdent Item	Reducir sangría del elemento
 	Outline	Esquema
 	Output files	Archivos de salida
 	Owner (you, or a group)	Propietario (usted o un grupo)
 	Owner (you, or an organisation)	Propietario (usted o una organización)
 	PDF	PDF
+	PDF Only	Solo PDF
 	PDF and build log	PDF y registro de compilación
 	PDF documents	Documentos PDF
 	PDF for	PDF para
 	PDF for print	PDF para imprenta
 	PDF for print (PDF/X)	PDF para imprenta (PDF/X)
 	PDF for the screen	PDF para pantalla
-	PDF only	Solo PDF
 	PDF/X standard	Estándar PDF/X
 	PDF/X-4 keeps colour profiles and transparency; PDF/X-1a is CMYK only, for older print workflows.	PDF/X-4 conserva los perfiles de color y la transparencia; PDF/X-1a es solo CMYK, para flujos de impresión más antiguos.
+	PPTX Presentation (.pptx)	Presentación PPTX (.pptx)
 	Page {n}	Página {n}
 	Page {n} of {count}	Página {n} de {count}
 	Page {n} of {count}. Escape leaves the presentation.	Página {n} de {count}. Escape sale de la presentación.
 	Page {n} of {total}	Página {n} de {total}
-	Paragraph	Párrafo
+	Paragraph Heading	Encabezado de párrafo
+	Paragraph style	Estilo de párrafo
 	Paste	Pegar
 	Pause before building	Pausa antes de compilar
 	Personal access token	Token de acceso personal
@@ -592,13 +615,11 @@
 	Portuguese	Portugués
 	Portuguese (Brazil)	Portugués (Brasil)
 	Posters	Pósteres
-	PowerPoint Presentation (.pptx)	Presentación de PowerPoint (.pptx)
 	Preamble	Preámbulo
 	Present	Presentar
 	Previous Match	Coincidencia anterior
 	Previous Page	Página anterior
 	Previous page	Página anterior
-	Print	Imprimir
 	Private	Privado
 	Project Files	Archivos del proyecto
 	Project address	Dirección del proyecto
@@ -620,17 +641,19 @@
 	Pulled {remote}: no file of the project changed.	Traído {remote}: no ha cambiado ningún archivo del proyecto.
 	Pulled {remote}: {files}.	Traído {remote}: {files}.
 	Pulling…	Trayendo…
+	Punctuation and capitals	Puntuación y mayúsculas
 	Push	Enviar
 	Pushed to {remote}.	Enviado a {remote}.
 	Pushing…	Enviando…
 	Put each redirect URI on a line of its own. Leave Confidential unticked: TeXCraft keeps no secret. Tick the scopes api, read_api and read_user.	Ponga cada URI de redirección en una línea propia. Deje Confidential sin marcar: TeXCraft no guarda ningún secreto. Marque los ámbitos api, read_api y read_user.
 	Put the PDF back in the main window	Devolver el PDF a la ventana principal
 	Put the caret in a cell first.	Ponga primero el cursor en una celda.
+	Put the caret in a list item after the first to indent it.	Ponga el cursor en un elemento de lista posterior al primero para aumentar su sangría.
+	Put the caret in a list item to outdent it.	Ponga el cursor en un elemento de lista para reducir su sangría.
 	Put the caret in a paragraph or a heading to make it a heading.	Ponga el cursor en un párrafo o en un encabezado para convertirlo en encabezado.
 	Put the caret in a paragraph, or in a list of the other kind.	Ponga el cursor en un párrafo o en una lista del otro tipo.
 	Quick Fix	Corrección rápida
 	Raw log	Registro sin procesar
-	Read-only for now: double-click any part to edit its source.	Solo lectura por ahora: haga doble clic en cualquier parte para editar su código fuente.
 	Ready for print	Listo para imprenta
 	Recent	Recientes
 	Recent projects	Proyectos recientes
@@ -651,14 +674,13 @@
 	Remove from recent projects:	Quitar de los proyectos recientes:
 	Remove it	Quitarlo
 	Remove the connection, its token and the agreements given	Quitar la conexión, su token y los consentimientos dados
-	Removed	Quitado
 	Removed {host}.	Se ha quitado {host}.
 	Rename	Cambiar nombre
 	Rename File	Cambiar nombre del archivo
 	Rename Project	Cambiar nombre del proyecto
 	Rename…	Cambiar nombre…
-	Reopen	Reabrir
 	Reopened	Reabierto
+	Repeated and redundant words	Palabras repetidas y redundantes
 	Replace	Reemplazar
 	Replace All	Reemplazar todo
 	Replace them with the new ones, keep both (the new ones get another name), or skip the new ones?	¿Reemplazarlos por los nuevos, conservar ambos (los nuevos reciben otro nombre) u omitir los nuevos?
@@ -695,6 +717,7 @@
 	Right	Derecha
 	Row above	Fila arriba
 	Row below	Fila abajo
+	Rules of this kind are checked.	Se comprueban las reglas de este tipo.
 	Russian	Ruso
 	SVG Image (.svg)	Imagen SVG (.svg)
 	Save	Guardar
@@ -730,11 +753,11 @@
 	Search the raw log	Buscar en el registro sin procesar
 	Section	Sección
 	Sections	Secciones
-	Sections of the shown file appear here.	Las secciones del archivo mostrado aparecen aquí.
 	See and change the shortcut of every command.	Ver y cambiar el atajo de cada comando.
 	Select All	Seleccionar todo
 	Select some text first.	Seleccione primero algo de texto.
 	Select text and choose Edit › Comment, or turn on Suggest to propose changes.	Seleccione texto y elija Editar › Comentario, o active Sugerir para proponer cambios.
+	Select text in one paragraph and one style to make it a link.	Seleccione texto de un solo párrafo y un solo estilo para convertirlo en enlace.
 	Select the text to rewrite first.	Seleccione primero el texto que desea reescribir.
 	Send	Enviar
 	Send the section at the caret for review; the remarks arrive as comments	Enviar a revisión la sección del cursor; las observaciones llegan como comentarios
@@ -784,7 +807,6 @@
 	Source: {text}	Código fuente: {text}
 	Spanish	Español
 	Spelling language	Idioma de la ortografía
-	Standard	Estándar
 	Standard editing keys, or Vim's modes and commands.	Teclas de edición estándar, o los modos y comandos de Vim.
 	Start Page	Página de inicio
 	Start from a template	Empezar desde una plantilla
@@ -793,6 +815,7 @@
 	Stop Suggesting	Dejar de sugerir
 	Stop at the first error	Detenerse en el primer error
 	Stopped: nothing was made.	Detenido: no se ha generado nada.
+	Style and readability	Estilo y legibilidad
 	Subsection	Subsección
 	Subsubsection	Subsubsección
 	Suggest	Sugerir
@@ -804,7 +827,8 @@
 	Suggesting. Choose the name your suggestions carry in Settings › Review first.	Sugiriendo. Elija primero en Ajustes › Revisión el nombre que llevarán sus sugerencias.
 	Suggesting: edits are proposed, not made. The PDF shows the text as it is; suggestions are not applied.	Sugiriendo: las ediciones se proponen, no se aplican. El PDF muestra el texto tal como está; las sugerencias no se aplican.
 	Suggesting: edits are proposed, not made. The PDF shows the text with the open suggestions applied.	Sugiriendo: las ediciones se proponen, no se aplican. El PDF muestra el texto con las sugerencias abiertas aplicadas.
-	Suggesting: edits become suggestions (Cmd+Shift+E to edit the file)	Sugiriendo: las ediciones se convierten en sugerencias (Cmd+Shift+E para editar el archivo)
+	Suggesting: edits become suggestions	Sugiriendo: las ediciones se convierten en sugerencias
+	Suggesting: edits become suggestions ({keys} to edit the file)	Sugiriendo: las ediciones se convierten en sugerencias ({keys} para editar el archivo)
 	Suggesting: your edits become suggestions; the file does not change until one is accepted.	Sugiriendo: sus ediciones se convierten en sugerencias; el archivo no cambia hasta que se acepte una.
 	Suggestion accepted	Sugerencia aceptada
 	Suggestion by {name}: {change}{state}	Sugerencia de {name}: {change}{state}
@@ -814,6 +838,7 @@
 	Suggestions in this file	Sugerencias en este archivo
 	Swedish	Sueco
 	Symbols	Símbolos
+	Symbols…	Símbolos…
 	SyncTeX data	Datos de SyncTeX
 	System	Sistema
 	System title bar	Barra de título del sistema
@@ -822,7 +847,6 @@
 	Table, shown as source	Tabla, mostrada como código fuente
 	Table, shown as source: {reason}	Tabla, mostrada como código fuente: {reason}
 	Table.	Tabla.
-	Take theirs	Tomar la suya
 	TeXCraft can open and commit.	TeXCraft puede abrir y hacer commit.
 	TeXCraft can open; committing asks again.	TeXCraft puede abrir; para hacer commit vuelve a preguntar.
 	TeXCraft cannot sign in to {host} yet: add the server once, and sign in to it as to gitlab.com. Until then, use a personal access token.	TeXCraft aún no puede iniciar sesión en {host}: añada el servidor una vez e inicie sesión en él como en gitlab.com. Hasta entonces, use un token de acceso personal.
@@ -848,6 +872,7 @@
 	The PDF of an earlier pass, shown while the build goes on: its references may not be resolved yet.	El PDF de una pasada anterior, mostrado mientras continúa la compilación: puede que sus referencias aún no estén resueltas.
 	The PDF will show the open suggestions applied.	El PDF mostrará las sugerencias abiertas aplicadas.
 	The PDF will show the text as it is, without suggestions.	El PDF mostrará el texto tal como está, sin sugerencias.
+	The address the text links to	La dirección a la que enlaza el texto
 	The address, the model or a withdrawal changed what was agreed: the kinds marked are not sent until you agree again.	La dirección, el modelo o una retirada cambiaron lo acordado: los tipos marcados no se envían hasta que vuelva a aceptar.
 	The answer is in the Ask panel.	La respuesta está en el panel Preguntar.
 	The bibliography file it goes in	El archivo de bibliografía donde va
@@ -857,6 +882,8 @@
 	The branch {branch} of {project} does not take your commits: it is protected, or your role cannot push to it. Your changes go to a new branch instead, with a merge request into {branch}.	La rama {branch} de {project} no acepta sus commits: está protegida, o su rol no permite enviar a ella. Sus cambios van en su lugar a una rama nueva, con una merge request hacia {branch}.
 	The branches could not be listed: type the branch, or leave it empty for the default one.	No se pudieron listar las ramas: escriba la rama, o déjela vacía para la predeterminada.
 	The build message, its help and the source lines around it (and the preamble when the message is in it).	El mensaje de compilación, su ayuda y las líneas de código fuente que lo rodean (y el preámbulo cuando el mensaje está en él).
+	The caret is in body text already.	El cursor ya está en texto normal.
+	The caret is not on a grammar problem.	El cursor no está sobre un problema gramatical.
 	The caret is not on a misspelled word.	El cursor no está sobre una palabra mal escrita.
 	The change comes back as a suggested change. It may add text, but it is not offered if it drops or alters a label, reference, citation or formula.	El cambio vuelve como cambio sugerido. Puede añadir texto, pero no se ofrece si elimina o altera una etiqueta, referencia, cita o fórmula.
 	The comparison is too long: only its start is shown.	La comparación es demasiado larga: solo se muestra su inicio.
@@ -878,19 +905,23 @@
 	The folder that holds the project's files	La carpeta que contiene los archivos del proyecto
 	The folder to move it to (empty for the top level)	La carpeta a la que moverlo (vacío para el nivel superior)
 	The folder to write the project's files to	La carpeta donde escribir los archivos del proyecto
+	The footnote's text	El texto de la nota al pie
 	The formatted view cannot show this faithfully yet, so it shows its source.	La vista formateada aún no puede mostrar esto fielmente, así que muestra su código fuente.
+	The formula in LaTeX, such as x^2 + \\alpha	La fórmula en LaTeX, como x^2 + \\alpha
 	The formula's source, while it is typeset. Double-click to edit it.	El código fuente de la fórmula, mientras se compone. Haga doble clic para editarlo.
 	The formula's source: this version typesets formulas in the desktop app only. Double-click to edit it.	El código fuente de la fórmula: esta versión solo compone fórmulas en la aplicación de escritorio. Haga doble clic para editarlo.
 	The key's secret half is kept in the preferences file. There are no accounts: the name and key are all a comment carries.	La mitad secreta de la clave se guarda en el archivo de preferencias. No hay cuentas: el nombre y la clave son todo lo que lleva un comentario.
 	The language of menus and messages.	El idioma de los menús y mensajes.
 	The last build made no file of this kind: compile the project first.	La última compilación no generó ningún archivo de este tipo: compile primero el proyecto.
 	The last build reported no messages of this kind.	La última compilación no informó de mensajes de este tipo.
-	The menus are in the menu bar at the top of the screen; Control+F2 reaches it from the keyboard.	Los menús están en la barra de menús de la parte superior de la pantalla; Control+F2 llega a ella desde el teclado.
+	The menus are in the menu bar at the top of the screen; Ctrl+F2 reaches it from the keyboard.	Los menús están en la barra de menús de la parte superior de la pantalla; Ctrl+F2 llega a ella desde el teclado.
 	The merge request could not be opened: {why}	No se pudo abrir la merge request: {why}
 	The message is copied.	Mensaje copiado.
 	The messages are copied.	Mensajes copiados.
+	The model found no grammar problems.	El modelo no encontró problemas gramaticales.
 	The model is answering…	El modelo está respondiendo…
 	The model is changing the selection…	El modelo está cambiando la selección…
+	The model is checking the grammar…	El modelo está revisando la gramática…
 	The model is drafting the entry…	El modelo está redactando la entrada…
 	The model is explaining it…	El modelo lo está explicando…
 	The model is reviewing the section…	El modelo está revisando la sección…
@@ -905,7 +936,8 @@
 	The project and its files are removed from this browser. This cannot be undone.	El proyecto y sus archivos se quitan de este navegador. Esto no se puede deshacer.
 	The project has no history yet: save it in a folder to start one.	El proyecto aún no tiene historial: guárdelo en una carpeta para empezar uno.
 	The project has no history yet: save it to start one.	El proyecto aún no tiene historial: guárdelo para empezar uno.
-	The project has no images: add one with File › Add Files.	El proyecto no tiene imágenes: añada una con Archivo › Añadir archivos.
+	The project has no images yet: drop an image file on the view, or add one with Add Files, to make a figure of it.	El proyecto aún no tiene imágenes: suelte un archivo de imagen en la vista, o añada uno con Añadir archivos, para hacer una figura con él.
+	The project has no images: add one with {menu} › {command}.	El proyecto no tiene imágenes: añada una con {menu} › {command}.
 	The project is in {project}: its remote, origin, from now on. Push and Pull are in the History panel.	El proyecto está en {project}: a partir de ahora, su remoto, origin. Enviar y Traer están en el panel Historial.
 	The project is renamed {name}.	El proyecto se ha renombrado como {name}.
 	The project is saved as {name}.	El proyecto se ha guardado como {name}.
@@ -915,9 +947,11 @@
 	The push did not work: {why}	El envío no funcionó: {why}
 	The raw log is copied.	Registro sin procesar copiado.
 	The rewrite is a suggested change: accept or reject it beside the text or in the Review panel.	La reescritura es un cambio sugerido: acéptela o recházela junto al texto o en el panel Revisión.
+	The rule {rule} is off: turn it on again in Settings › Editor.	La regla {rule} está desactivada: vuelva a activarla en Ajustes › Editor.
 	The section at the caret.	La sección del cursor.
 	The selected part of the PDF has no text to copy: its font does not say which characters it draws.	La parte seleccionada del PDF no tiene texto que copiar: su fuente no indica qué caracteres dibuja.
 	The selected text and a few lines around it.	El texto seleccionado y unas líneas a su alrededor.
+	The selected text, or the paragraph at the caret, and the document's language.	El texto seleccionado, o el párrafo del cursor, y el idioma del documento.
 	The size of the source text, in points.	El tamaño del texto fuente, en puntos.
 	The system's title bar above the window, in place of the window's buttons in the top bar.	La barra de título del sistema sobre la ventana, en lugar de los botones de la ventana en la barra superior.
 	The table editor shows a table float holding one tabular with its caption and label; this one holds more, so it is shown as its source.	El editor de tablas muestra un flotante table con un único tabular, su pie y su etiqueta; este contiene más, así que se muestra como código fuente.
@@ -940,6 +974,7 @@
 	There is no fold at the caret.	No hay ningún pliegue en el cursor.
 	There is no other occurrence.	No hay ninguna otra aparición.
 	There is no problem on this line.	No hay ningún problema en esta línea.
+	There is no such replacement for this problem.	Este problema no tiene ese reemplazo.
 	There is nothing to fold at the caret.	No hay nada que plegar en el cursor.
 	There is nothing to fold in this file.	No hay nada que plegar en este archivo.
 	Theses	Tesis
@@ -957,6 +992,7 @@
 	This folder is in a git repository of its own: saving does not commit, Commit does.	Esta carpeta está en un repositorio git propio: guardar no hace commit; Hacer commit sí.
 	This folder no longer exists.	Esta carpeta ya no existe.
 	This formula has an error: {message}	Esta fórmula tiene un error: {message}
+	This grammar problem is ignored until TeXCraft closes.	Este problema gramatical se ignora hasta que se cierre TeXCraft.
 	This image cannot be shown: {e}	Esta imagen no se puede mostrar: {e}
 	This is already the main document.	Este ya es el documento principal.
 	This is the table's first cell.	Esta es la primera celda de la tabla.
@@ -966,6 +1002,7 @@
 	This link proposes another application for {host}, which your organisation provides: its own is kept.	Este enlace propone otra aplicación para {host}, que proporciona su organización: se conserva la suya.
 	This link proposes to add the GitHub Enterprise Server {host}, with TeXCraft's application there ({id}), so that you can sign in to it.	Este enlace propone añadir el GitHub Enterprise Server {host}, con la aplicación de TeXCraft allí ({id}), para que pueda iniciar sesión en él.
 	This link proposes to add the GitLab server {host}, with TeXCraft's application there ({id}), so that you can sign in to it.	Este enlace propone añadir el servidor GitLab {host}, con la aplicación de TeXCraft allí ({id}), para que pueda iniciar sesión en él.
+	This problem was found by AI, not by a rule: ignore it instead.	Este problema lo encontró la IA, no una regla: ignórelo en su lugar.
 	This project was not opened from GitLab or GitHub: use Open from GitLab or GitHub… first.	Este proyecto no se abrió desde GitLab ni GitHub: ábralo primero con «Abrir desde GitLab o GitHub…».
 	This typesetting engine exports only the PDF.	Este motor de composición solo exporta el PDF.
 	This window cannot open the system's file manager.	Esta ventana no puede abrir el gestor de archivos del sistema.
@@ -978,12 +1015,19 @@
 	Translate to…	Traducir a…
 	Try Again	Reintentar
 	Turkish	Turco
+	Turn Off This Rule	Desactivar esta regla
+	Turn On	Activar
+	Turned off from the text's menu (Turn Off This Rule).	Desactivada desde el menú del texto (Desactivar esta regla).
 	Turned off, the project's sources are never sent; the choice is kept in its .texcraft folder.	Si se desactiva, el código fuente del proyecto nunca se envía; la elección se guarda en su carpeta .texcraft.
 	Type a line number, from 1.	Escriba un número de línea, desde 1.
 	Type part of a file's path	Escriba parte de la ruta de un archivo
+	Type part of a key, an author or a title	Escriba parte de una clave, un autor o un título
+	Type part of a label or of what it labels	Escriba parte de una etiqueta o de lo que etiqueta
+	Type part of the image's path	Escriba parte de la ruta de la imagen
 	Type to find a project, or paste its address	Escriba para buscar un proyecto, o pegue su dirección
 	Type to find a repository, or paste its address	Escriba para buscar un repositorio, o pegue su dirección
 	Typesetting engine: {engine}	Motor de composición: {engine}
+	Typing an opening bracket, parenthesis or brace adds the closing one, and \\begin{…} adds its \\end{…}.	Al escribir un corchete, paréntesis o llave de apertura se añade el de cierre, y \\begin{…} añade su \\end{…}.
 	Unchanged	Sin cambios
 	Unchanged lines left out	Líneas sin cambios omitidas
 	Unfold lines {from}–{to}, {what}	Desplegar líneas {from}–{to}, {what}
@@ -1025,7 +1069,7 @@
 	Whole Word	Palabra completa
 	Width, as a share of the line	Ancho, como fracción de la línea
 	Withdraw Suggestion	Retirar sugerencia
-	Word Document (.docx)	Documento de Word (.docx)
+	Word choice and usage	Elección y uso de las palabras
 	Write LaTeX, see the PDF as you type.	Escriba LaTeX y vea el PDF mientras escribe.
 	Xi, capital	Xi mayúscula
 	You signed in to GitLab to read only. To commit, GitLab asks you to let TeXCraft write too (the api scope); your message is kept.	Ha iniciado sesión en GitLab solo para lectura. Para hacer commit, GitLab le pide que permita también escribir a TeXCraft (el ámbito api); su mensaje se conserva.
@@ -1058,13 +1102,11 @@
 	a table of the three methods' accuracy and speed	una tabla de la precisión y la velocidad de los tres métodos
 	active {when}	activo {when}
 	acute	agudo
-	added	añadido
 	added here and on the branch, differently	añadido aquí y en la rama, de forma distinta
 	aleph	álef
 	alpha	alfa
 	and {n} more	y {n} más
 	angle	ángulo
-	answered	respondido
 	approximately	aproximadamente
 	asterisk	asterisco
 	bar	barra
@@ -1076,10 +1118,8 @@
 	breve	breve
 	bullet	viñeta
 	calligraphic	caligráfica
-	cancelled	cancelado
 	centred dot	punto centrado
 	centred dots	puntos centrados
-	changed	cambiado
 	changed here, deleted on the branch	cambiado aquí, eliminado en la rama
 	changed on the same lines here and on the branch	cambiado en las mismas líneas aquí y en la rama
 	check	carón
@@ -1087,7 +1127,6 @@
 	circled plus	más en círculo
 	circled times	por en círculo
 	compiled	compilado
-	compiling	compilando
 	composition	composición
 	congruent	congruente
 	contains as member	contiene como elemento
@@ -1098,7 +1137,6 @@
 	default branch {branch}	rama predeterminada {branch}
 	defined as	definido como
 	degree	grado
-	deleted	eliminado
 	deleted here, changed on the branch	eliminado aquí, cambiado en la rama
 	delta	delta
 	diagonal dots	puntos diagonales
@@ -1119,7 +1157,6 @@
 	equilibrium	equilibrio
 	equivalent	equivalente
 	eta	eta
-	failed	fallido
 	filled square	cuadrado relleno
 	folder not found	carpeta no encontrada
 	for all	para todo
@@ -1170,8 +1207,6 @@
 	maps to	se aplica en
 	minus or plus	menos o más
 	models	modela
-	modified	modificado
-	moved	movido
 	mu	mu
 	much greater than	mucho mayor que
 	much less than	mucho menor que
@@ -1183,6 +1218,7 @@
 	not an element of	no pertenece a
 	not closed	sin cerrar
 	not equal	distinto de
+	not in the project yet	aún no está en el proyecto
 	not text, and changed here and on the branch	no es texto, y cambiado aquí y en la rama
 	nu	nu
 	omega	omega
@@ -1261,7 +1297,6 @@
 	upsilon	ípsilon
 	vector	vector
 	vertical dots	puntos verticales
-	waiting	esperando
 	wide hat	circunflejo ancho
 	wide tilde	tilde ancha
 	xi	xi
@@ -1270,8 +1305,6 @@
 	{a}, {b} and {n} more	{a}, {b} y {n} más
 	{bib} is new: name it in the document's \\bibliography or \\addbibresource to use it.	{bib} es nuevo: nómbrelo en \\bibliography o \\addbibresource del documento para usarlo.
 	{change}; not a text file, so its lines are not compared.	{change}; no es un archivo de texto, así que sus líneas no se comparan.
-	{count} errors	{count} errores
-	{count} warnings	{count} advertencias
 	{files} brought in.	{files} traídos.
 	{file} formatted	{file} formateado
 	{host} (GitHub Enterprise Server)	{host} (GitHub Enterprise Server)
@@ -1283,6 +1316,7 @@
 	{image} is in a new figure: give it a caption with Edit Figure….	{image} está en una figura nueva: póngale un pie con «Editar figura…».
 	{i} of {n}	{i} de {n}
 	{i} of {n}+	{i} de {n}+
+	{key}, {n} of {total}	{key}, {n} de {total}
 	{kind} (changed)	{kind} (cambiado)
 	{kind} is not agreed to for this connection and model: agree in Settings › AI.	{kind} no está aceptado para esta conexión y modelo: acéptelo en Ajustes › IA.
 	{kind} is switched off: switch it on in Settings › AI.	{kind} está desactivado: actívelo en Ajustes › IA.
@@ -1296,8 +1330,6 @@
 	{name} replied: {text}	{name} respondió: {text}
 	{name} resolved a comment	{name} resolvió un comentario
 	{name}: {means}	{name}: {means}
-	{n} packages	{n} paquetes
-	{n} problems	{n} problemas
 	{n}+ matches	{n}+ coincidencias
 	{path}, {n} of {total}	{path}, {n} de {total}
 	{project} was made and set as the folder's remote (origin), but the push did not work: {why} Push again from the History panel.	{project} se creó y se estableció como remoto de la carpeta (origin), pero el envío no funcionó: {why} Vuelva a enviar desde el panel Historial.
@@ -1305,6 +1337,7 @@
 	{publisher} · from the {source} · licence {licence}	{publisher} · de {source} · licencia {licence}
 	{remote} has these commits already.	{remote} ya tiene estos commits.
 	{source} · licence {licence}	{source} · licencia {licence}
+	{style}, paragraph style	{style}, estilo de párrafo
 	{time} · {size} to {destination} · {model} · {outcome}	{time} · {size} a {destination} · {model} · {outcome}
 	{w} × {h} pixels	{w} × {h} píxeles
 	{w} × {h} pt	{w} × {h} pt
@@ -1312,6 +1345,35 @@
 	“{word}” is not in the dictionary	«{word}» no está en el diccionario
 	Opening the user guide in your browser.	Abriendo la guía del usuario en el navegador.
 	What is sent, and when: the user guide's AI page	Qué se envía y cuándo: la página de IA de la guía del usuario
+button	Commit	Hacer commit
+button	Pull	Traer
+comment	, resolved	, resuelto
+comment	Deleted	Eliminado
+comment	Reopen	Reabrir
+comments	Mine	Míos
+file	Keep mine	Conservar el mío
+file	Take theirs	Tomar el de la rama
+file	added	añadido
+file	changed	cambiado
+file	deleted	eliminado
+file	modified	modificado
+file	moved	movido
+keys	Standard	Estándar
+line	Added	Añadida
+line	Removed	Quitada
+messages	Print	Impresión
+noun	Comment	Comentario
+pdf	Print	Impresión
+pdf	compiling	compilando
+request	answered	respondida
+request	cancelled	cancelada
+request	failed	fallida
+request	waiting	en espera
+severity	Hint	Indicación
+suggestion	, accepted	, aceptada
+suggestion	, outdated	, obsoleta
+suggestion	, rejected	, rechazada
+suggestion	Reopen	Reabrir
 
 # Counts
 @plural	; {n} overlapped another and is outdated|; {n} overlapped others and are outdated	; {n} se solapó con otra y está obsoleta|; {n} se solaparon con otras y están obsoletas
@@ -1321,6 +1383,7 @@
 @plural	Failed with {n} error|Failed with {n} errors	Falló con {n} error|Falló con {n} errores
 @plural	Folded {n} region|Folded {n} regions	{n} región plegada|{n} regiones plegadas
 @plural	Replaced {n} match|Replaced {n} matches	{n} coincidencia reemplazada|{n} coincidencias reemplazadas
+@plural	The model found {n} grammar problem: it is underlined.|The model found {n} grammar problems: they are underlined.	El modelo encontró {n} problema gramatical: está subrayado.|El modelo encontró {n} problemas gramaticales: están subrayados.
 @plural	The review left {n} comment.|The review left {n} comments.	La revisión dejó {n} comentario.|La revisión dejó {n} comentarios.
 @plural	Unfolded {n} region|Unfolded {n} regions	{n} región desplegada|{n} regiones desplegadas
 @plural	{n} already in the project|{n} already in the project	{n} ya en el proyecto|{n} ya en el proyecto
@@ -1332,6 +1395,7 @@
 @plural	{n} commit to push|{n} commits to push	{n} commit por enviar|{n} commits por enviar
 @plural	{n} completion|{n} completions	{n} compleción|{n} compleciones
 @plural	{n} day ago|{n} days ago	hace {n} día|hace {n} días
+@plural	{n} error|{n} errors	{n} error|{n} errores
 @plural	{n} file in conflict with the branch|{n} files in conflict with the branch	{n} archivo en conflicto con la rama|{n} archivos en conflicto con la rama
 @plural	{n} file in conflict|{n} files in conflict	{n} archivo en conflicto|{n} archivos en conflicto
 @plural	{n} file is already in the project|{n} files are already in the project	{n} archivo ya está en el proyecto|{n} archivos ya están en el proyecto
@@ -1345,7 +1409,9 @@
 @plural	{n} match|{n} matches	{n} coincidencia|{n} coincidencias
 @plural	{n} minute ago|{n} minutes ago	hace {n} minuto|hace {n} minutos
 @plural	{n} open comment|{n} open comments	{n} comentario abierto|{n} comentarios abiertos
+@plural	{n} package|{n} packages	{n} paquete|{n} paquetes
 @plural	{n} past the limit of 5,000 files or 500 MB|{n} past the limit of 5,000 files or 500 MB	{n} por encima del límite de 5000 archivos o 500 MB|{n} por encima del límite de 5000 archivos o 500 MB
+@plural	{n} problem|{n} problems	{n} problema|{n} problemas
 @plural	{n} remark was dropped: the words it quoted are not in the text.|{n} remarks were dropped: the words they quoted are not in the text.	Se descartó {n} observación: las palabras que citaba no están en el texto.|Se descartaron {n} observaciones: las palabras que citaban no están en el texto.
 @plural	{n} request sent|{n} requests sent	{n} petición enviada|{n} peticiones enviadas
 @plural	{n} result|{n} results	{n} resultado|{n} resultados
@@ -1355,6 +1421,8 @@
 @plural	{n} suggestion|{n} suggestions	{n} sugerencia|{n} sugerencias
 @plural	{n} that could not be read or added|{n} that could not be read or added	{n} que no se pudo leer ni añadir|{n} que no se pudieron leer ni añadir
 @plural	{n} unsafe name|{n} unsafe names	{n} nombre no seguro|{n} nombres no seguros
+@plural	{n} warning|{n} warnings	{n} advertencia|{n} advertencias
+@plural	{n} was dropped: the words it quoted are not in the text.|{n} were dropped: the words they quoted are not in the text.	Se descartó {n}: las palabras que citaba no están en el texto.|Se descartaron {n}: las palabras que citaban no están en el texto.
 
 # Units
 unit	{n} ms	{n} ms
@@ -1376,10 +1444,13 @@ unit	{n} s	{n} s
 @id	build.stop	Detener la compilación
 @id	build.suggestions	Mostrar las sugerencias en el PDF
 @id	edit.accept_all	Aceptar todas las sugerencias
+@id	edit.ai_grammar	Revisar gramática con IA
 @id	edit.ai_make	Crear con IA…
 @id	edit.ai_reference	Añadir una referencia con IA…
 @id	edit.ai_review	Revisar esta sección con IA
+@id	edit.body	Texto normal
 @id	edit.bold	Negrita
+@id	edit.chapter	Capítulo
 @id	edit.cite	Cita
 @id	edit.comment	Comentario
 @id	edit.copy	Copiar
@@ -1390,7 +1461,15 @@ unit	{n} s	{n} s
 @id	edit.find	Buscar
 @id	edit.fold	Plegar
 @id	edit.fold_all	Plegar todo
+@id	edit.footnote	Nota al pie
 @id	edit.goto_line	Ir a la línea…
+@id	edit.grammar.ignore	Ignorar problema gramatical
+@id	edit.grammar.replace	Aplicar el reemplazo gramatical
+@id	edit.grammar.rule_off	Desactivar esta regla
+@id	edit.heading_1	Encabezado 1
+@id	edit.heading_2	Encabezado 2
+@id	edit.heading_3	Encabezado 3
+@id	edit.indent	Aumentar sangría del elemento
 @id	edit.insert_symbol	Insertar símbolo
 @id	edit.instruct	Pedir a la IA que cambie esto…
 @id	edit.italic	Cursiva
@@ -1399,6 +1478,7 @@ unit	{n} s	{n} s
 @id	edit.math_display	Fórmula destacada
 @id	edit.math_inline	Fórmula en línea
 @id	edit.next_comment	Comentario siguiente
+@id	edit.outdent	Reducir sangría del elemento
 @id	edit.paragraph	Encabezado de párrafo
 @id	edit.paste	Pegar
 @id	edit.previous_comment	Comentario anterior
@@ -1536,7 +1616,7 @@ unit	{n} s	{n} s
 @msg	A file of the project's history is missing ({id}).	Falta un archivo del historial del proyecto ({id}).
 @msg	A file's id cannot be computed: {e}	No se puede calcular el id de un archivo: {e}
 @msg	A folder's git repository cannot be reached in the browser.	En el navegador no se puede acceder al repositorio git de una carpeta.
-@msg	A project's name cannot be a dot or two.	El nombre de un proyecto no puede ser uno o dos puntos.
+@msg	A project's name cannot be “.” or “..”.	El nombre de un proyecto no puede ser «.» ni «..».
 @msg	A project's name cannot have a slash or a line break.	El nombre de un proyecto no puede contener una barra ni un salto de línea.
 @msg	A project's name has at most {MAX_NAME} characters.	El nombre de un proyecto tiene como máximo {MAX_NAME} caracteres.
 @msg	A prompt is at most {MAX_PROMPT_CHARS} characters.	Una instrucción tiene como máximo {MAX_PROMPT_CHARS} caracteres.
@@ -1571,20 +1651,24 @@ unit	{n} s	{n} s
 @msg	Export to {value} failed: {e}	La exportación a {value} falló: {e}
 @msg	Folders on disk are not available in the browser.	Las carpetas del disco no están disponibles en el navegador.
 @msg	Git's remotes, push and pull are for project folders on the desktop: in the browser, use Save Project to GitLab or GitHub.	Los remotos de Git, el envío y la traída son para carpetas de proyecto en el escritorio: en el navegador, use Guardar proyecto en GitLab o GitHub.
-@msg	GitHub has no {what}, or the access token cannot see it (a fine-grained token sees only the repositories it was given): check the address.	GitHub no tiene {what}, o el token de acceso no puede verlo (un token de grano fino solo ve los repositorios que se le asignaron): compruebe la dirección.
+@msg	GitHub cannot find what was asked for ({what}), or the access token cannot see it (a fine-grained token sees only the repositories it was given): check the address.	GitHub no encuentra lo solicitado ({what}), o el token de acceso no puede verlo (un token de grano fino solo ve los repositorios que se le asignaron): compruebe la dirección.
 @msg	GitHub lets only the application's server revoke its tokens, and TeXCraft has none: remove TeXCraft's access on GitHub, under Settings › Applications › Authorized OAuth Apps.	GitHub solo permite que el servidor de la aplicación revoque sus tokens, y TeXCraft no tiene ninguno: retire el acceso de TeXCraft en GitHub, en Settings › Applications › Authorized OAuth Apps.
-@msg	GitHub refused {what}: a fine-grained access token needs access to this repository with the Contents permission (read-only to open it, read and write to commit) and Pull requests (read and write) to open a pull request; a classic token needs the repo scope. Your access to the repository must allow it too.	GitHub rechazó {what}: un token de acceso de grano fino necesita acceso a este repositorio con el permiso Contents (solo lectura para abrirlo, lectura y escritura para hacer commit) y Pull requests (lectura y escritura) para abrir una pull request; un token clásico necesita el ámbito repo. Su acceso al repositorio también debe permitirlo.
+@msg	GitHub refused a request ({what}): a fine-grained access token needs access to this repository with the Contents permission (read-only to open it, read and write to commit) and Pull requests (read and write) to open a pull request; a classic token needs the repo scope. Your access to the repository must allow it too.	GitHub rechazó una petición ({what}): un token de acceso de grano fino necesita acceso a este repositorio con el permiso Contents (solo lectura para abrirlo, lectura y escritura para hacer commit) y Pull requests (lectura y escritura) para abrir una pull request; un token clásico necesita el ámbito repo. Su acceso al repositorio también debe permitirlo.
 @msg	GitHub's device code has no {k}	Al código de dispositivo de GitHub le falta {k}
 @msg	GitHub's verification page is not on HTTPS	La página de verificación de GitHub no usa HTTPS
 @msg	GitLab came back with no code: sign in again.	GitLab volvió sin código: inicie sesión de nuevo.
 @msg	GitLab did not let TeXCraft in: {why}	GitLab no dejó entrar a TeXCraft: {why}
-@msg	GitLab refused {what}: the access token needs the read_api scope to open a project and the api scope to commit, and your role in the project must allow it.	GitLab rechazó {what}: el token de acceso necesita el ámbito read_api para abrir un proyecto y el ámbito api para hacer commit, y su rol en el proyecto debe permitirlo.
+@msg	GitLab refused a request ({what}): the access token needs the read_api scope to open a project and the api scope to commit, and your role in the project must allow it.	GitLab rechazó una petición ({what}): el token de acceso necesita el ámbito read_api para abrir un proyecto y el ámbito api para hacer commit, y su rol en el proyecto debe permitirlo.
 @msg	GitLab's answer is not for the sign-in this page started: sign in again.	La respuesta de GitLab no corresponde al inicio de sesión que empezó esta página: inicie sesión de nuevo.
+@msg	Give `rule` (a Harper rule's key) or `group`, not both.	Indique `rule` (la clave de una regla de Harper) o `group`, no ambos.
 @msg	Give a personal access token for {instance}: TeXCraft keeps it only while it runs, never on disk.	Proporcione un token de acceso personal para {instance}: TeXCraft solo lo guarda mientras se ejecuta, nunca en el disco.
 @msg	Give a personal access token: the forge's API needs one to open a project and commit to it.	Proporcione un token de acceso personal: la API de la forja lo necesita para abrir un proyecto y hacer commit en él.
 @msg	Give the application's ID, as the server shows it once the application is registered.	Indique el ID de la aplicación, tal como lo muestra el servidor una vez registrada la aplicación.
 @msg	Give the project a name.	Dé un nombre al proyecto.
 @msg	Give the title or DOI in at most {MAX_DESCRIPTION_CHARS} characters.	Indique el título o DOI en {MAX_DESCRIPTION_CHARS} caracteres como máximo.
+@msg	Grammar checking is not in this build; Check Grammar with AI is available.	La revisión gramatical no está incluida en esta versión; Revisar gramática con IA está disponible.
+@msg	Grammar checking is off (Settings › Editor).	La revisión gramatical está desactivada (Ajustes › Editor).
+@msg	Grammar is checked offline in English only, and this document is in {lang}: Check Grammar with AI works in any language.	La gramática se revisa sin conexión y solo en inglés, y este documento está en {lang}: Revisar gramática con IA funciona en cualquier idioma.
 @msg	Homework or exercise sheet	Deberes u hoja de ejercicios
 @msg	IEEE conference paper	Artículo de congreso del IEEE
 @msg	IEEE journal article	Artículo de revista del IEEE
@@ -1605,8 +1689,8 @@ unit	{n} s	{n} s
 @msg	Monthly Notices of the RAS article	Artículo de Monthly Notices of the RAS
 @msg	Name a model: one line, as the endpoint lists it.	Nombre un modelo: una línea, tal como lo muestra el endpoint.
 @msg	Nature article	Artículo de Nature
+@msg	No branch is checked out (HEAD is detached), so no branch can be set to follow a remote one.	No hay ninguna rama activa (HEAD está separado), así que no se puede configurar ninguna rama para que siga a una remota.
 @msg	No branch is checked out (HEAD is detached): check out a branch with git first.	No hay ninguna rama activa (HEAD está separado): active primero una rama con git.
-@msg	No branch is checked out (HEAD is detached): there is no branch to follow a remote's.	No hay ninguna rama activa (HEAD está separado): no hay rama que siga a la de un remoto.
 @msg	No build is running, or the engine cannot stop it.	No hay ninguna compilación en curso, o el motor no puede detenerla.
 @msg	No sign-in is running.	No hay ningún inicio de sesión en curso.
 @msg	No sign-in was waiting on this page: sign in again.	Esta página no esperaba ningún inicio de sesión: inicie sesión de nuevo.
@@ -1621,6 +1705,8 @@ unit	{n} s	{n} s
 @msg	Projects are kept by name only in the browser.	En el navegador, los proyectos solo se guardan por nombre.
 @msg	Projects in the browser are not stored in folders.	Los proyectos del navegador no se guardan en carpetas.
 @msg	Protected branch update failed for refs/heads/{name}.	Falló la actualización de la rama protegida para refs/heads/{name}.
+@msg	Return at once; the outcome arrives later, in the Open dialog. A lookup asked while one runs replaces any other waiting.	Volver de inmediato; el resultado llega después, en el diálogo Abrir. Una búsqueda pedida mientras otra se ejecuta sustituye a cualquier otra en espera.
+@msg	Return at once; the outcome arrives later, in the window's status line. Default: wait for it (not in the browser).	Volver de inmediato; el resultado llega después, en la línea de estado de la ventana. Predeterminado: esperarlo (no en el navegador).
 @msg	Save the project first.	Guarde primero el proyecto.
 @msg	Save the project first: a commit holds the files as saved.	Guarde primero el proyecto: un commit contiene los archivos tal como se guardaron.
 @msg	Save the project first: {doing}.	Guarde primero el proyecto: {doing}.
@@ -1631,8 +1717,10 @@ unit	{n} s	{n} s
 @msg	Scientific poster (tikzposter)	Póster científico (tikzposter)
 @msg	Select at most {MAX_REWRITE_CHARS} characters to rewrite at once.	Seleccione como máximo {MAX_REWRITE_CHARS} caracteres para reescribir a la vez.
 @msg	Select the text to rewrite first.	Seleccione primero el texto que desea reescribir.
+@msg	Sign in to {instance} (forge.sign_in with its instance), or give a personal access token for it: TeXCraft keeps a token only while it runs, never on disk.	Inicie sesión en {instance} (forge.sign_in con su instancia), o proporcione un token de acceso personal para ella: TeXCraft solo guarda un token mientras se ejecuta, nunca en el disco.
+@msg	Sign in to {name} (forge.sign_in), or give a personal access token for {instance}: TeXCraft keeps a token only while it runs, never on disk.	Inicie sesión en {name} (forge.sign_in), o proporcione un token de acceso personal para {instance}: TeXCraft solo guarda un token mientras se ejecuta, nunca en el disco.
 @msg	Signed out here, but GitLab could not be told to revoke the token: {e}	Sesión cerrada aquí, pero no se pudo pedir a GitLab que revocara el token: {e}
-@msg	Signed out of {value} here, but {value} could not be told to revoke the token: {e}	Sesión cerrada en {value} aquí, pero no se pudo pedir a {value} que revocara el token: {e}
+@msg	Signed out of {name} here, but {name} could not be told to revoke the token: {e}	Sesión cerrada en {name} aquí, pero no se pudo pedir a {name} que revocara el token: {e}
 @msg	Signing in to GitHub was refused on GitHub's page.	El inicio de sesión en GitHub se rechazó en la página de GitHub.
 @msg	Signing in took too long: the browser did not come back from GitLab. Sign in again.	El inicio de sesión tardó demasiado: el navegador no volvió de GitLab. Inicie sesión de nuevo.
 @msg	Signing in was cancelled.	Se canceló el inicio de sesión.
@@ -1642,7 +1730,8 @@ unit	{n} s	{n} s
 @msg	TeX Live has no package {package}	TeX Live no tiene el paquete {package}
 @msg	TeX Live package {package}	Paquete de TeX Live {package}
 @msg	TeXCraft cannot wait for GitLab's answer on {addr} ({e}): another program, or another TeXCraft signing in, uses it. Try again, or use a personal access token.	TeXCraft no puede esperar la respuesta de GitLab en {addr} ({e}): la usa otro programa u otro TeXCraft que está iniciando sesión. Inténtelo de nuevo o use un token de acceso personal.
-@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a {value} server, or forge.add_server), or use a personal access token.	TeXCraft no tiene ninguna aplicación en este servidor: añádala primero (Ajustes › Cuentas › Añadir un servidor {value}, o forge.add_server), o use un token de acceso personal.
+@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a GitHub Enterprise Server…, or forge.add_server), or use a personal access token.	TeXCraft no tiene ninguna aplicación en este servidor: añádala primero (Ajustes › Cuentas › Añadir un servidor GitHub Enterprise…, o forge.add_server), o use un token de acceso personal.
+@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a GitLab Server…, or forge.add_server), or use a personal access token.	TeXCraft no tiene ninguna aplicación en este servidor: añádala primero (Ajustes › Cuentas › Añadir un servidor GitLab…, o forge.add_server), o use un token de acceso personal.
 @msg	TeXCraft is not signed in to {value}.	TeXCraft no ha iniciado sesión en {value}.
 @msg	TeXCraft is signed in to {value} to read only: committing needs permission to write. Sign in again allowing commits (forge.sign_in with write), then commit.	TeXCraft ha iniciado sesión en {value} solo para lectura: hacer commit requiere permiso de escritura. Inicie sesión de nuevo permitiendo commits (forge.sign_in con write) y luego haga commit.
 @msg	TeXCraft is signed in to {value} to read only: this needs permission to write. Sign in again allowing commits (forge.sign_in with write), then try again.	TeXCraft ha iniciado sesión en {value} solo para lectura: esto requiere permiso de escritura. Inicie sesión de nuevo permitiendo commits (forge.sign_in con write) y vuelva a intentarlo.
@@ -1650,13 +1739,17 @@ unit	{n} s	{n} s
 @msg	TeXCraft stopped waiting for GitLab's answer: {e}	TeXCraft dejó de esperar la respuesta de GitLab: {e}
 @msg	TeXCraft's own templates	Plantillas propias de TeXCraft
 @msg	That is not a valid regular expression: {e}	No es una expresión regular válida: {e}
+@msg	That is not one of the problem's replacements.	Ese no es uno de los reemplazos del problema.
 @msg	That is {size} characters of text, more than the {MAX_ASK_CHARS} a question sends at most: ask about the open file instead.	Son {size} caracteres de texto, más de los {MAX_ASK_CHARS} que envía como máximo una pregunta: pregunte mejor sobre el archivo abierto.
 @msg	The GitLab operation could not start: {e}	No se pudo iniciar la operación de GitLab: {e}
 @msg	The account cannot make repositories in {path}, or has no such organisation or group.	La cuenta no puede crear repositorios en {path}, o no existe esa organización o grupo.
-@msg	The branch {branch} has new commits that change the same parts of files you changed ({value}): nothing was taken in or committed. Choose for each file whether to keep yours or take the branch's, or commit to a new branch and open a {value}.	La rama {branch} tiene commits nuevos que cambian las mismas partes de archivos que usted cambió ({value}): no se ha traído ni confirmado nada. Elija para cada archivo si conserva el suyo o toma el de la rama, o haga commit en una rama nueva y abra una {value}.
+@msg	The branch {branch} has new commits that change the same parts of files you changed ({files}): nothing was taken in or committed. Choose for each file whether to keep yours or take the branch's, or commit to a new branch and open a merge request.	La rama {branch} tiene commits nuevos que cambian las mismas partes de archivos que usted cambió ({files}): no se ha traído ni confirmado nada. Elija para cada archivo si conserva el suyo o toma el de la rama, o haga commit en una rama nueva y abra una merge request.
+@msg	The branch {branch} has new commits that change the same parts of files you changed ({files}): nothing was taken in or committed. Choose for each file whether to keep yours or take the branch's, or commit to a new branch and open a pull request.	La rama {branch} tiene commits nuevos que cambian las mismas partes de archivos que usted cambió ({files}): no se ha traído ni confirmado nada. Elija para cada archivo si conserva el suyo o toma el de la rama, o haga commit en una rama nueva y abra una pull request.
 @msg	The build was stopped.	Se detuvo la compilación.
 @msg	The caret is in the preamble: nothing is suggested there.	El cursor está en el preámbulo: ahí no se sugiere nada.
-@msg	The change is not offered: it {value}. Ask again, or select less.	No se ofrece el cambio: {value}. Vuelva a preguntar o seleccione menos.
+@msg	The change is not offered: it adds {added}. Ask again, or select less.	No se ofrece el cambio: añade {added}. Vuelva a preguntar o seleccione menos.
+@msg	The change is not offered: it drops or alters {dropped} and adds {added}. Ask again, or select less.	No se ofrece el cambio: elimina o altera {dropped} y añade {added}. Vuelva a preguntar o seleccione menos.
+@msg	The change is not offered: it drops or alters {dropped}. Ask again, or select less.	No se ofrece el cambio: elimina o altera {dropped}. Vuelva a preguntar o seleccione menos.
 @msg	The code expired before it was entered on GitHub: sign in again.	El código caducó antes de introducirlo en GitHub: inicie sesión de nuevo.
 @msg	The commit is not after the one checked out: the branches have diverged, and need a merge.	El commit no es posterior al activo: las ramas han divergido y necesitan una fusión.
 @msg	The connection has no place for its token.	La conexión no tiene dónde guardar su token.
@@ -1675,6 +1768,7 @@ unit	{n} s	{n} s
 @msg	The formula is not closed.	La fórmula no está cerrada.
 @msg	The formulas could not be typeset.	No se pudieron componer las fórmulas.
 @msg	The formulas could not be typeset: {message}	No se pudieron componer las fórmulas: {message}
+@msg	The grammar checker stopped before it was done.	El corrector gramatical se detuvo antes de terminar.
 @msg	The kept sign-in cannot be read ({e}): sign in again.	No se puede leer la sesión guardada ({e}): inicie sesión de nuevo.
 @msg	The last build has no message at {path}:{line}.	La última compilación no tiene ningún mensaje en {path}:{line}.
 @msg	The last build has no message {i}.	La última compilación no tiene el mensaje {i}.
@@ -1692,6 +1786,8 @@ unit	{n} s	{n} s
 @msg	The next words are suggested at most once every {value} seconds.	Las palabras siguientes se sugieren como máximo una vez cada {value} segundos.
 @msg	The old token could not be removed from the keychain: {e}	No se pudo quitar del llavero el token anterior: {e}
 @msg	The passage changed while the model answered, so its rewrite is not offered.	El pasaje cambió mientras respondía el modelo, así que no se ofrece su reescritura.
+@msg	The passage changed while the model read it: check it again.	El pasaje cambió mientras el modelo lo leía: vuelva a revisarlo.
+@msg	The passage is longer than the {MAX_GRAMMAR_CHARS} characters checked at once: select a shorter one.	El pasaje supera los {MAX_GRAMMAR_CHARS} caracteres que se revisan de una vez: seleccione uno más corto.
 @msg	The print build wrote no {value}: see the Print messages in the build log.	La compilación para imprenta no generó ningún {value}: vea los mensajes de Impresión en el registro de compilación.
 @msg	The project has a remote already, origin ({url}): push to it (git.push), or change it (git.set_remote).	El proyecto ya tiene un remoto, origin ({url}): envíe a él (git.push) o cámbielo (git.set_remote).
 @msg	The project has no commit yet to merge into.	El proyecto aún no tiene ningún commit en el que fusionar.
@@ -1713,7 +1809,7 @@ unit	{n} s	{n} s
 @msg	The project has no text file to ask about.	El proyecto no tiene ningún archivo de texto sobre el que preguntar.
 @msg	The project has too many files and folders to open: {value} lists only part of them.	El proyecto tiene demasiados archivos y carpetas para abrirlo: {value} solo muestra una parte.
 @msg	The project is not kept in the browser.	El proyecto no se guarda en el navegador.
-@msg	The project is too large to open: its files add up to more than {value} MB (at least {value} MB).	El proyecto es demasiado grande para abrirlo: sus archivos suman más de {value} MB (al menos {value} MB).
+@msg	The project is too large to open: its files add up to more than {limit} MB (at least {size} MB).	El proyecto es demasiado grande para abrirlo: sus archivos suman más de {limit} MB (al menos {size} MB).
 @msg	The project's folder has a name git cannot store.	La carpeta del proyecto tiene un nombre que git no puede guardar.
 @msg	The project's folder is inside a git repository without files (a bare one).	La carpeta del proyecto está dentro de un repositorio git sin archivos (uno bare).
 @msg	The project's folder is not inside its repository's folder.	La carpeta del proyecto no está dentro de la carpeta de su repositorio.
@@ -1732,7 +1828,9 @@ unit	{n} s	{n} s
 @msg	The review could not be saved: {e}	No se pudo guardar la revisión: {e}
 @msg	The review could not be written: {e}	No se pudo escribir la revisión: {e}
 @msg	The review is changed but could not be saved: {e}	La revisión ha cambiado, pero no se pudo guardar: {e}
-@msg	The rewrite is not offered: it {value}. Rewrite a smaller passage, or try again.	No se ofrece la reescritura: {value}. Reescriba un pasaje más corto o inténtelo de nuevo.
+@msg	The rewrite is not offered: it adds {added}. Rewrite a smaller passage, or try again.	No se ofrece la reescritura: añade {added}. Reescriba un pasaje más corto o inténtelo de nuevo.
+@msg	The rewrite is not offered: it drops or alters {dropped} and adds {added}. Rewrite a smaller passage, or try again.	No se ofrece la reescritura: elimina o altera {dropped} y añade {added}. Reescriba un pasaje más corto o inténtelo de nuevo.
+@msg	The rewrite is not offered: it drops or alters {dropped}. Rewrite a smaller passage, or try again.	No se ofrece la reescritura: elimina o altera {dropped}. Reescriba un pasaje más corto o inténtelo de nuevo.
 @msg	The section is longer than the {MAX_REVIEW_CHARS} characters reviewed at once: review a shorter one.	La sección supera los {MAX_REVIEW_CHARS} caracteres que se revisan a la vez: revise una más corta.
 @msg	The server answered with an error ({status}): try again later.	El servidor respondió con un error ({status}): inténtelo de nuevo más tarde.
 @msg	The server could not be reached: {why}	No se pudo llegar al servidor: {why}
@@ -1764,10 +1862,13 @@ unit	{n} s	{n} s
 @msg	There is no commit {commit} in the project's history.	No hay ningún commit {commit} en el historial del proyecto.
 @msg	There is no commit {id} in the repository.	No hay ningún commit {id} en el repositorio.
 @msg	There is no file to make a project from: everything was left out or the source is empty.	No hay ningún archivo con el que crear un proyecto: se omitió todo o el origen está vacío.
+@msg	There is no grammar problem with that id in the file (it may be fixed).	No hay ningún problema gramatical con ese id en el archivo (puede que ya esté corregido).
+@msg	There is no group “{group}”: there are {value}.	No existe el grupo «{group}»: existen {value}.
 @msg	There is no project named {from} in this browser.	No hay ningún proyecto llamado {from} en este navegador.
 @msg	There is no project named {name} in this browser.	No hay ningún proyecto llamado {name} en este navegador.
 @msg	There is no spelling dictionary for {lang}: {hint}.	No hay diccionario ortográfico para {lang}: {hint}.
 @msg	There is no such fix on that line.	No hay tal corrección en esa línea.
+@msg	There is no text to check there.	Ahí no hay texto que revisar.
 @msg	There is no text to review there.	Ahí no hay texto que revisar.
 @msg	There is no usable spelling dictionary for {lang}: {name} could not be read ({reason}).	No hay ningún diccionario ortográfico utilizable para {lang}: no se pudo leer {name} ({reason}).
 @msg	There is no version {id} in the project's history.	No hay ninguna versión {id} en el historial del proyecto.
@@ -1790,6 +1891,7 @@ unit	{n} s	{n} s
 @msg	This is not an application's ID: it has spaces or characters an ID does not have.	Esto no es el ID de una aplicación: tiene espacios o caracteres que un ID no tiene.
 @msg	This page cannot keep the sign-in while it goes to GitLab: {e}	Esta página no puede conservar la sesión mientras va a GitLab: {e}
 @msg	This page did not say its address, which GitLab sends the browser back to.	Esta página no indicó su dirección, a la que GitLab devuelve el navegador.
+@msg	This problem has no replacement to take: change the text yourself.	Este problema no tiene ningún reemplazo que aplicar: cambie el texto usted mismo.
 @msg	This project is on a forge already: commit to it instead.	Este proyecto ya está en una forja: haga commit en ella.
 @msg	This project was not opened from GitLab or GitHub.	Este proyecto no se abrió desde GitLab ni GitHub.
 @msg	This project was not opened from GitLab or GitHub: use Open from GitLab or GitHub… first.	Este proyecto no se abrió desde GitLab ni GitHub: ábralo primero con «Abrir desde GitLab o GitHub…».
@@ -1803,6 +1905,7 @@ unit	{n} s	{n} s
 @msg	Type something to find.	Escriba algo que buscar.
 @msg	You have a repository named {name} on {value} already: choose another name.	Ya tiene un repositorio llamado {name} en {value}: elija otro nombre.
 @msg	Your prompt for {value} lacks {lacks}, so the app's own was sent: fix it in Settings › AI › Prompts.	A su instrucción para {value} le falta {lacks}, así que se envió la propia de la aplicación: corríjala en Ajustes › IA › Instrucciones.
+@msg	`id` is a grammar problem's id, as grammar.check gives it.	`id` es el id de un problema gramatical, tal como lo da grammar.check.
 @msg	`{bib}` is not a .bib file.	`{bib}` no es un archivo .bib.
 @msg	`{commit}` is not a commit id (40 hexadecimal digits).	`{commit}` no es un id de commit (40 dígitos hexadecimales).
 @msg	`{id}` is not a commit id (40 hexadecimal digits).	`{id}` no es un id de commit (40 dígitos hexadecimales).
@@ -1829,16 +1932,19 @@ unit	{n} s	{n} s
 @msg	a rule is drawn in the middle of a row	se dibuja un filete en medio de una fila
 @msg	a symbolic link	un enlace simbólico
 @msg	a table keeps one row and one column at least	una tabla conserva al menos una fila y una columna
-@msg	added the formula {item}	añadió la fórmula {item}
 @msg	an image path cannot hold braces, % or line ends	la ruta de una imagen no puede contener llaves, % ni saltos de línea
 @msg	branch in {path} (its repository is empty)	rama en {path} (su repositorio está vacío)
 @msg	branch {name} in {path}	rama {name} en {path}
 @msg	branches of {path}	ramas de {path}
-@msg	changed or dropped the formula {item}	cambió o eliminó la fórmula {item}
 @msg	commit {parent} in {path}	commit {parent} en {path}
+@msg	file {blob} {path}	archivo {blob} {path}
+@msg	file {id} comes in an encoding not known: {other}	el archivo {id} viene en una codificación desconocida: {other}
+@msg	file {id} has no contents	el archivo {id} no tiene contenido
 @msg	file {id} in {path}	archivo {id} en {path}
+@msg	file {id}: {e}	archivo {id}: {e}
 @msg	files of {path} at {commit}	archivos de {path} en {commit}
 @msg	install the Hunspell dictionary {name} (.aff and .dic) to check it	instale el diccionario Hunspell {name} (.aff y .dic) para revisarlo
+@msg	instantiating retex: {e}	instanciando retex: {e}
 @msg	it answered with the status {status}	respondió con el estado {status}
 @msg	it does not start with {expected}	no empieza por {expected}
 @msg	it is not a git server that speaks the smart HTTP protocol (its answer is {value}, not {expected})	no es un servidor git que hable el protocolo HTTP inteligente (su respuesta es {value}, no {expected})
@@ -1846,13 +1952,19 @@ unit	{n} s	{n} s
 @msg	larger than {value} MB	más de {value} MB
 @msg	line {value} is past the end	la línea {value} está más allá del final
 @msg	making the repository {name}	creando el repositorio {name}
+@msg	no library	ninguna biblioteca
 @msg	no main document	no hay documento principal
 @msg	no mirror answered	no respondió ningún espejo
+@msg	no random source for a new id: {e}	no hay fuente aleatoria para un id nuevo: {e}
+@msg	no random source for a new key: {e}	no hay fuente aleatoria para una clave nueva: {e}
 @msg	no repository answered	no respondió ningún repositorio
 @msg	no response	sin respuesta
 @msg	no template folder	no hay carpeta de plantillas
+@msg	no window	ninguna ventana
 @msg	none is installed	no hay ninguno instalado
 @msg	not UTF-8 text	no es texto UTF-8
+@msg	read: {read}; write: {write}	lectura: {read}; escritura: {write}
+@msg	reading {rel}: {e}	leyendo {rel}: {e}
 @msg	retex did not typeset this formula.	retex no compuso esta fórmula.
 @msg	retex wrote no file	retex no escribió ningún archivo
 @msg	row {value} has more cells than the table has columns	la fila {value} tiene más celdas que columnas la tabla
@@ -1882,6 +1994,7 @@ unit	{n} s	{n} s
 @msg	the package database is not the signed one	la base de datos de paquetes no es la firmada
 @msg	the package database's signature: {e}	la firma de la base de datos de paquetes: {e}
 @msg	the package database: {e}	la base de datos de paquetes: {e}
+@msg	the parameter `on` (true or false) is missing	falta el parámetro `on` (true o false)
 @msg	the project lists more than {value} files and folders	el proyecto contiene más de {value} archivos y carpetas
 @msg	the pull request has no number	la pull request no tiene número
 @msg	the server does not report whether a push worked (no report-status)	el servidor no informa de si un envío funcionó (sin report-status)
@@ -1897,12 +2010,13 @@ unit	{n} s	{n} s
 @msg	there is no closed figure environment at that position in `{path}`	no hay ningún entorno figure cerrado en esa posición de `{path}`
 @msg	there is no file `{path}` in the project	no hay ningún archivo `{path}` en el proyecto
 @msg	there is no tabular at that position in `{path}`	no hay ningún tabular en esa posición de `{path}`
-@msg	this is an address on {value}, not {value}.	esta es una dirección de {value}, no de {value}.
+@msg	this is an address on {known}, not {chosen}.	esta es una dirección de {known}, no de {chosen}.
 @msg	this table stays as source: {value}	esta tabla se queda como código fuente: {value}
 @msg	unknown command `{id}`	comando desconocido `{id}`
 @msg	unknown format `{name}`: pdf, odt, docx, odp, pptx, html, markdown or svg	formato desconocido `{name}`: pdf, odt, docx, odp, pptx, html, markdown o svg
 @msg	unknown output `{name}`: pdf, pdfx, synctex or log	salida desconocida `{name}`: pdf, pdfx, synctex o log
 @msg	unknown panic	pánico desconocido
+@msg	{a} et al.	{a} et al.
 @msg	{branch} cannot be a branch's name.	{branch} no puede ser el nombre de una rama.
 @msg	{branch}: this is the project's branch; give a new one	{branch}: esta es la rama del proyecto; indique una nueva
 @msg	{commit} is not a commit id.	{commit} no es un id de commit.
@@ -1913,6 +2027,8 @@ unit	{n} s	{n} s
 @msg	{file} cannot be removed: {e}	No se puede quitar {file}: {e}
 @msg	{file} cannot be written: {e}	No se puede escribir {file}: {e}
 @msg	{folder} is not empty: choose a new or empty folder.	{folder} no está vacía: elija una carpeta nueva o vacía.
+@msg	{forge} cannot find what was asked for ({what}), or the access token cannot see it: check the address.	{forge} no encuentra lo solicitado ({what}), o el token de acceso no puede verlo: compruebe la dirección.
+@msg	{forge} is refusing requests for now (too many were made): try again in {minutes} minutes.	{forge} rechaza peticiones por ahora (se hicieron demasiadas): inténtelo de nuevo dentro de {minutes} minutos.
 @msg	{id}: a file path leaves its folder	{id}: la ruta de un archivo sale de su carpeta
 @msg	{id}: its main file {main} is not among its files	{id}: su archivo principal {main} no está entre sus archivos
 @msg	{ignore} cannot be written: {e}	No se puede escribir {ignore}: {e}
@@ -1947,7 +2063,6 @@ unit	{n} s	{n} s
 @msg	{value} did not accept the sign-in ({why}): sign in again.	{value} no aceptó el inicio de sesión ({why}): inicie sesión de nuevo.
 @msg	{value} did not answer this page: it cannot be reached from here, or it does not answer web pages (it does not let other sites' pages use its API). Ask its administrator, or use the desktop app.	{value} no respondió a esta página: no se puede llegar a él desde aquí, o no responde a páginas web (no deja que páginas de otros sitios usen su API). Consulte a su administrador o use la aplicación de escritorio.
 @msg	{value} does not answer as {what} ({why}): check the address.	{value} no responde como {what} ({why}): compruebe la dirección.
-@msg	{value} has no {what}, or the access token cannot see it: check the address.	{value} no tiene {what}, o el token de acceso no puede verlo: compruebe la dirección.
 @msg	{value} is not TeX Live {year}	{value} no es TeX Live {year}
 @msg	{value} is not a name this computer can store.	{value} no es un nombre que este ordenador pueda guardar.
 @msg	{value} is not agreed to for {destination}: agree in Settings › AI.	{value} no está aceptado para {destination}: acéptelo en Ajustes › IA.
@@ -1955,10 +2070,11 @@ unit	{n} s	{n} s
 @msg	{value} is provided by your organisation, with its own application: it cannot be changed here.	{value} lo proporciona su organización, con su propia aplicación: no se puede cambiar aquí.
 @msg	{value} is provided by your organisation: it cannot be removed here.	{value} lo proporciona su organización: no se puede quitar aquí.
 @msg	{value} is refusing requests for now (too many were made): try again in {s} seconds.	{value} rechaza peticiones por ahora (se hicieron demasiadas): inténtelo de nuevo dentro de {s} segundos.
-@msg	{value} is refusing requests for now (too many were made): try again in {value} minutes.	{value} rechaza peticiones por ahora (se hicieron demasiadas): inténtelo de nuevo dentro de {value} minutos.
 @msg	{value} is refusing requests for now (too many were made): try again later.	{value} rechaza peticiones por ahora (se hicieron demasiadas): inténtelo de nuevo más tarde.
 @msg	{value} refused the request ({status}): {message}	{value} rechazó la petición ({status}): {message}
 @msg	{value} refused the sign-in: {why}	{value} rechazó el inicio de sesión: {why}
 @msg	{value}. You can close this tab.	{value}. Puede cerrar esta pestaña.
+@msg	{value}: not the archive the package database describes	{value}: no es el archivo comprimido que describe la base de datos de paquetes
 @msg	“{language}” is not a language tag: give one such as en-GB or fr, or `auto`.	«{language}» no es una etiqueta de idioma: indique una como en-GB o fr, o `auto`.
+@msg	“{rule}” is not one of Harper's rules: give its key, as grammar.check gives it (`rule`).	«{rule}» no es una de las reglas de Harper: indique su clave, tal como la da grammar.check (`rule`).
 @msg	“{w}” is not a word that can go in a word list: one word of letters, at most {MAX_WORD_CHARS}.	«{w}» no es una palabra que pueda ir en una lista de palabras: una sola palabra de letras, como máximo {MAX_WORD_CHARS}.
