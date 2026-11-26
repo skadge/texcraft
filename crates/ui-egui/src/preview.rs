@@ -434,7 +434,7 @@ impl Filter {
             Filter::Warnings => tl!("Warnings"),
             Filter::Notes => tl!("Notes"),
             Filter::Accessibility => tl!("Accessibility"),
-            Filter::Print => tl!("Print"),
+            Filter::Print => crate::i18n::tc("messages", "Print"),
         }
     }
 }
@@ -541,7 +541,7 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                     Severity::Error => ("circle-exclamation-point", t.error, tl!("Error")),
                     Severity::Warning => ("triangle-exclamation-point", t.warning, tl!("Warning")),
                     Severity::Note => ("info", t.note, tl!("Note")),
-                    Severity::Hint => ("info", t.text_muted, tl!("Hint")),
+                    Severity::Hint => ("info", t.text_muted, crate::i18n::tc("severity", "Hint")),
                 };
                 let place = d.file.as_ref().map(|f| (f.clone(), d.line));
                 let help = d.help.join("\n");

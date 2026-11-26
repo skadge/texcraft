@@ -939,10 +939,10 @@ fn requests(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
             let bytes: u64 = s["sent"].as_array().map(|a| a.iter().filter_map(|i| i["bytes"].as_u64()).sum()).unwrap_or_default();
             let end = records.iter().find(|r| r["phase"] == "end" && r["run"] == s["run"]);
             let outcome = match end.map(|e| e["outcome"]["status"].as_str().unwrap_or_default()) {
-                Some("done") => tl!("answered"),
-                Some("cancelled") => tl!("cancelled"),
-                Some(_) => tl!("failed"),
-                None => tl!("waiting"),
+                Some("done") => crate::i18n::tc("request", "answered"),
+                Some("cancelled") => crate::i18n::tc("request", "cancelled"),
+                Some(_) => crate::i18n::tc("request", "failed"),
+                None => crate::i18n::tc("request", "waiting"),
             };
             let at = s["at_ms"]
                 .as_i64()

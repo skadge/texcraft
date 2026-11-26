@@ -199,7 +199,7 @@ pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
             Err(tl!("This window cannot open the system's file manager.").to_owned())
         }
         "view.menu_bar" if app.has_system_menu() => {
-            Err(tl!("The menus are in the menu bar at the top of the screen; Control+F2 reaches it from the keyboard.").to_owned())
+            Err(tl!("The menus are in the menu bar at the top of the screen; Ctrl+F2 reaches it from the keyboard.").to_owned())
         }
         // The browser gives a page the clipboard's text only with the paste keys.
         "edit.paste" if cfg!(target_arch = "wasm32") => {

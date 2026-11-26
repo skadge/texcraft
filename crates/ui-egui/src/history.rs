@@ -180,9 +180,9 @@ impl HistoryView {
 /// The word for how a file changed, so the change is not told by colour or icon alone.
 fn change_word(change: &str) -> &'static str {
     match change {
-        "added" => tl!("added"),
-        "deleted" => tl!("deleted"),
-        _ => tl!("modified"),
+        "added" => crate::i18n::tc("file", "added"),
+        "deleted" => crate::i18n::tc("file", "deleted"),
+        _ => crate::i18n::tc("file", "modified"),
     }
 }
 
@@ -355,7 +355,7 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
                 title: tl!("Commit the Project"),
                 label: tl!("What this commit changes"),
                 value: String::new(),
-                action: tl!("Commit"),
+                action: crate::i18n::tc("button", "Commit"),
                 command: "history.commit",
                 params: Box::new(|message| json!({"message": message})),
                 focus: true,
@@ -418,7 +418,7 @@ fn remote_section(app: &mut App, ui: &mut egui::Ui, t: &Tokens, view: &mut Histo
     ui.horizontal(|ui| {
         ui.add_space(t.unit * 2.0);
         let commands: &[(&str, &str)] = if remote["remote"].is_string() {
-            &[("git.push", tl!("Push")), ("git.pull", tl!("Pull"))]
+            &[("git.push", tl!("Push")), ("git.pull", crate::i18n::tc("button", "Pull"))]
         } else {
             &[("forge.save_to_github", tl!("Save to GitHub…")), ("forge.save_to_gitlab", tl!("Save to GitLab…"))]
         };
@@ -590,8 +590,8 @@ fn diff_view(ui: &mut egui::Ui, t: &Tokens, diff: &Diff, action: &mut Option<Act
 fn diff_line(ui: &mut egui::Ui, t: &Tokens, line: &Line, height: f32) {
     let font = t.code_font();
     let (mark, fill, said) = match line.kind {
-        Kind::Added => ("+", Some(t.diff_added), tl!("Added")),
-        Kind::Removed => ("−", Some(t.diff_removed), tl!("Removed")),
+        Kind::Added => ("+", Some(t.diff_added), crate::i18n::tc("line", "Added")),
+        Kind::Removed => ("−", Some(t.diff_removed), crate::i18n::tc("line", "Removed")),
         Kind::Same => (" ", None, tl!("Unchanged")),
         Kind::Gap => ("⋯", None, tl!("Unchanged lines left out")),
     };

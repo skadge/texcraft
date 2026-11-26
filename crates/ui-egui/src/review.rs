@@ -53,7 +53,7 @@ impl Show {
             Show::All => tl!("All"),
             Show::Open => tl!("Open"),
             Show::Resolved => tl!("Resolved"),
-            Show::Mine => tl!("Mine"),
+            Show::Mine => crate::i18n::tc("comments", "Mine"),
         }
     }
 }
@@ -195,9 +195,9 @@ fn group_name(t: &Thread) -> String {
     let who = t.author().map(|a| a.name.clone()).unwrap_or_default();
     if let Some(s) = &t.suggestion {
         let state = match t.state {
-            State::Accepted { .. } => tl!(", accepted"),
-            State::Rejected { .. } => tl!(", rejected"),
-            _ if s.outdated => tl!(", outdated"),
+            State::Accepted { .. } => crate::i18n::tc("suggestion", ", accepted"),
+            State::Rejected { .. } => crate::i18n::tc("suggestion", ", rejected"),
+            _ if s.outdated => crate::i18n::tc("suggestion", ", outdated"),
             _ => "",
         };
         return tl!("Suggestion by {name}: {change}{state}")
@@ -205,7 +205,7 @@ fn group_name(t: &Thread) -> String {
             .replace("{change}", &change_text(t, 60))
             .replace("{state}", state);
     }
-    let state = if t.is_open() { "" } else { tl!(", resolved") };
+    let state = if t.is_open() { "" } else { crate::i18n::tc("comment", ", resolved") };
     tl!("Comment by {name} on “{quote}”{state}")
         .replace("{name}", &who)
         .replace("{quote}", &short(&t.anchor.quote.exact, 60))
@@ -652,7 +652,7 @@ fn message(app: &App, ui: &mut egui::Ui, th: &Thread, m: &Message, first: bool, 
                     if widgets::icon_button(ui, &t, "check", tl!("Resolve"), true).clicked() {
                         actions.push(Action::Run("review.resolve", json!({"id": th.id.to_string()})));
                     }
-                } else if widgets::icon_button(ui, &t, "rotate-ccw", tl!("Reopen"), true).clicked() {
+                } else if widgets::icon_button(ui, &t, "rotate-ccw", crate::i18n::tc("comment", "Reopen"), true).clicked() {
                     actions.push(Action::Run("review.reopen", json!({"id": th.id.to_string()})));
                 }
             }
@@ -852,7 +852,9 @@ fn suggestion(app: &App, ui: &mut egui::Ui, th: &Thread, actions: &mut Vec<Actio
                 }
             });
         });
-    } else if matches!(th.state, State::Rejected { .. }) && widgets::icon_button(ui, &t, "rotate-ccw", tl!("Reopen"), true).clicked() {
+    } else if matches!(th.state, State::Rejected { .. })
+        && widgets::icon_button(ui, &t, "rotate-ccw", crate::i18n::tc("suggestion", "Reopen"), true).clicked()
+    {
         actions.push(Action::Run("review.reopen", json!({"id": id})));
     }
 }
@@ -946,7 +948,7 @@ fn composer(app: &mut App, ui: &mut egui::Ui, actions: &mut Vec<Action>) -> Rect
                     let id = ui.make_persistent_id("review-composer");
                     let field = ui.add(
                         egui::TextEdit::multiline(&mut c.text).id(id).hint_text(tl!("Add a comment…")).desired_rows(3).desired_width(f32::INFINITY).font(t.body()),
-                    ).accessible_name(tl!("Comment"));
+                    ).accessible_name(crate::i18n::tc("noun", "Comment"));
                     if std::mem::take(&mut c.focus) {
                         field.request_focus();
                     }
@@ -986,7 +988,7 @@ fn apply(app: &mut App, actions: Vec<Action>) {
                     "review.accept" => Some(tl!("Suggestion accepted")),
                     "review.reject" => Some(tl!("Suggestion rejected")),
                     "review.reply" => Some(tl!("Reply added")),
-                    "review.delete" => Some(tl!("Deleted")),
+                    "review.delete" => Some(crate::i18n::tc("comment", "Deleted")),
                     _ => None,
                 };
                 if app.run(command, params.clone()).is_some() {

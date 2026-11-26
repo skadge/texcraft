@@ -174,15 +174,21 @@ fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         Some(r)
     });
     key_bindings(app, ui, t, "settings-keys-editor");
-    setting(ui, t, tl!("Close brackets and environments"), tl!("Typing ( [ { adds the closing bracket, and \\begin{…} its \\end{…}."), |ui| {
-        let mut on = app.prefs.auto_close;
-        let r = ui.checkbox(&mut on, "");
-        if r.changed() {
-            app.prefs.auto_close = on;
-            app.prefs_changed = true;
-        }
-        Some(r)
-    });
+    setting(
+        ui,
+        t,
+        tl!("Close brackets and environments"),
+        tl!("Typing an opening bracket, parenthesis or brace adds the closing one, and \\begin{…} adds its \\end{…}."),
+        |ui| {
+            let mut on = app.prefs.auto_close;
+            let r = ui.checkbox(&mut on, "");
+            if r.changed() {
+                app.prefs.auto_close = on;
+                app.prefs_changed = true;
+            }
+            Some(r)
+        },
+    );
     spelling(app, ui, t);
     grammar(app, ui, t);
     let preview =
@@ -405,7 +411,7 @@ fn output(app: &mut App, ui: &mut egui::Ui, t: &Tokens, options: texcraft_engine
     );
     setting(ui, t, tl!("PDF for"), help, |ui| {
         let kinds = [Output::Screen, Output::Accessible, Output::Print];
-        let labels = [(tl!("Screen"), None), (tl!("Accessible"), None), (tl!("Print"), None)];
+        let labels = [(tl!("Screen"), None), (tl!("Accessible"), None), (crate::i18n::tc("pdf", "Print"), None)];
         let selected = kinds.iter().position(|k| *k == options.output).unwrap_or(0);
         if let Some(i) = widgets::segmented(ui, t, "settings-output", &labels, selected) {
             let kind = kinds.get(i).copied().unwrap_or_default();
@@ -460,7 +466,7 @@ fn output(app: &mut App, ui: &mut egui::Ui, t: &Tokens, options: texcraft_engine
 /// people look for it.
 fn key_bindings(app: &mut App, ui: &mut egui::Ui, t: &Tokens, salt: &str) {
     setting(ui, t, tl!("Editor key bindings"), tl!("Standard editing keys, or Vim's modes and commands."), |ui| {
-        let options = [(tl!("Standard"), None), (tl!("Vim"), None)];
+        let options = [(crate::i18n::tc("keys", "Standard"), None), (tl!("Vim"), None)];
         if let Some(i) = widgets::segmented(ui, t, salt, &options, usize::from(app.prefs.vim)) {
             app.prefs.vim = i == 1;
             app.prefs_changed = true;

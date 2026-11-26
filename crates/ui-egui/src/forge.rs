@@ -415,10 +415,10 @@ pub(crate) fn ask_commit(app: &mut App) {
         .iter()
         .map(|c| {
             let what = match c.kind {
-                texcraft_engine::forge::ChangeKind::Added => tl!("added"),
-                texcraft_engine::forge::ChangeKind::Modified => tl!("changed"),
-                texcraft_engine::forge::ChangeKind::Deleted => tl!("deleted"),
-                texcraft_engine::forge::ChangeKind::Moved => tl!("moved"),
+                texcraft_engine::forge::ChangeKind::Added => crate::i18n::tc("file", "added"),
+                texcraft_engine::forge::ChangeKind::Modified => crate::i18n::tc("file", "changed"),
+                texcraft_engine::forge::ChangeKind::Deleted => crate::i18n::tc("file", "deleted"),
+                texcraft_engine::forge::ChangeKind::Moved => crate::i18n::tc("file", "moved"),
             };
             let path = match &c.from {
                 Some(from) => format!("{from} → {}", c.path),
@@ -795,8 +795,11 @@ fn commit_form(ui: &mut egui::Ui, t: &Tokens, form: &mut CommitForm, browser: bo
         Some(token) => form.use_token && !token.trim().is_empty(),
     };
     let ready = decided && !form.message.trim().is_empty() && has_key && !needs_write;
-    let action =
-        if form.to_new_branch { say(form.service, tl!("Commit and Open Merge Request"), tl!("Commit and Open Pull Request")) } else { tl!("Commit") };
+    let action = if form.to_new_branch {
+        say(form.service, tl!("Commit and Open Merge Request"), tl!("Commit and Open Pull Request"))
+    } else {
+        crate::i18n::tc("button", "Commit")
+    };
     match buttons(ui, t, action, false, ready) {
         Outcome::Open if enter && ready => Outcome::Run,
         o => o,
@@ -825,7 +828,9 @@ fn conflicts(ui: &mut egui::Ui, t: &Tokens, rows: &mut [ConflictRow], enabled: b
                 ui.label(RichText::new(row.why).font(t.small()).color(t.text_muted));
             });
             ui.horizontal(|ui| {
-                for (choice, label) in [(Choice::Mine, tl!("Keep mine")), (Choice::Theirs, tl!("Take theirs"))] {
+                for (choice, label) in
+                    [(Choice::Mine, crate::i18n::tc("file", "Keep mine")), (Choice::Theirs, crate::i18n::tc("file", "Take theirs"))]
+                {
                     let on = row.choice == Some(choice);
                     let r = ui.add_enabled(enabled, egui::RadioButton::new(on, label));
                     let name = format!("{label}: {}", row.path);
