@@ -206,7 +206,7 @@ fn required(args: &[Arg]) -> Option<&Arg> {
 }
 
 /// The level of a sectioning command.
-pub(crate) fn heading_level(name: &str) -> Option<u8> {
+pub fn heading_level(name: &str) -> Option<u8> {
     let level = match name {
         "part" => 0,
         "chapter" => 1,

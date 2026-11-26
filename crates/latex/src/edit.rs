@@ -127,13 +127,14 @@ impl Line {
         Some(self.stops.first()?.1..self.stops.last()?.1)
     }
 
-    /// The stop that stands for source offset `byte`: its own, or the first after it (the last
-    /// stop for a byte after the line).
+    /// The stop that stands for source offset `byte`: its own, else the last before it (a byte
+    /// in markup the view hides, such as just inside `\textbf{`, shows where that markup is), the
+    /// first stop for a byte before the line.
     pub fn view_at(&self, byte: usize) -> Option<usize> {
         if let Some(s) = self.stops.iter().find(|s| s.1 == byte) {
             return Some(s.0);
         }
-        self.stops.iter().find(|s| s.1 > byte).or(self.stops.last()).map(|s| s.0)
+        self.stops.iter().rev().find(|s| s.1 < byte).or(self.stops.first()).map(|s| s.0)
     }
 
     /// The parts with the position each starts at.
@@ -710,8 +711,8 @@ pub fn set_heading(text: &str, at: usize, name: &str) -> Option<Vec<Change>> {
         return Some(vec![change(name_start..name_start + old.len(), name)]);
     }
     let blocks = view::build(text, &tree);
-    let para = paragraph_at(&blocks, at)?;
-    Some(vec![change(para.range.start..para.range.start, format!("\\{name}{{")), change(para.range.end..para.range.end, "}")])
+    let para = trimmed(text, paragraph_at(&blocks, at)?.range.clone());
+    Some(vec![change(para.start..para.start, format!("\\{name}{{")), change(para.end..para.end, "}")])
 }
 
 /// A list environment (`itemize`, `enumerate`) at source offset `at`: a list of another kind there
@@ -739,11 +740,15 @@ pub fn set_list(text: &str, at: usize, name: &str) -> Option<Vec<Change>> {
         return Some(out);
     }
     let blocks = view::build(text, &tree);
-    let para = paragraph_at(&blocks, at)?;
-    Some(vec![
-        change(para.range.start..para.range.start, format!("\\begin{{{name}}}\n  \\item ")),
-        change(para.range.end..para.range.end, format!("\n\\end{{{name}}}")),
-    ])
+    let para = trimmed(text, paragraph_at(&blocks, at)?.range.clone());
+    Some(vec![change(para.start..para.start, format!("\\begin{{{name}}}\n  \\item ")), change(para.end..para.end, format!("\n\\end{{{name}}}"))])
+}
+
+/// `r` without the white space at its ends.
+fn trimmed(text: &str, r: Range<usize>) -> Range<usize> {
+    let Some(src) = text.get(r.clone()) else { return r };
+    let start = r.start + (src.len() - src.trim_start().len());
+    start..(r.start + src.trim_end().len()).max(start)
 }
 
 /// `changes` (in order, not overlapping) made on `text`.
