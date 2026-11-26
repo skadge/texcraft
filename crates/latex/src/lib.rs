@@ -13,6 +13,7 @@
 use std::ops::Range;
 
 pub mod auxfile;
+pub mod document;
 pub mod edit;
 pub mod figure;
 pub mod fold;
