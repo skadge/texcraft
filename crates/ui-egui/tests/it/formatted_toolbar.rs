@@ -302,3 +302,18 @@ fn italic_is_pressed_in_emph_and_takes_it_off_and_a_declaration_says_why_it_stay
     assert_eq!(text(&mut h), plain);
     assert!(h.query_by_label_contains("declaration").is_some(), "the status line does not say why");
 }
+
+#[test]
+fn the_toolbars_groups_stay_clear_of_the_more_menu() {
+    // A group is sent to the More menu only when it does not fit (#47's test lost its list
+    // buttons by a few pixels with the interface's own faces); one shown never runs under it.
+    let h = formatted("First paragraph.\n", &[]);
+    let Some(more) = h.query_by_label("More formatting").map(|n| n.rect()) else { return };
+    for name in
+        ["Bold", "Italic", "Code", "Bulleted List", "Numbered List", "Outdent Item", "Indent Item", "Link", "Footnote", "Citation", "Table", "Figure"]
+    {
+        if let Some(r) = h.query_by_role_and_label(Role::Button, name).map(|n| n.rect()) {
+            assert!(r.right() <= more.left(), "{name} ({r:?}) runs under the More menu ({more:?})");
+        }
+    }
+}

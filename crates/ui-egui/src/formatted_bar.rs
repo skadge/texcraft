@@ -60,11 +60,11 @@ fn style_index(here: &Here, names: &[&'static str; 3]) -> Option<usize> {
 }
 
 /// The toolbar's groups, in the order they give way to the More menu when the pane is narrow:
-/// each with its width and its entries for that menu.
-const GROUPS: [(f32, &[(&str, &str)]); 5] = [
+/// each with its number of buttons and its entries for that menu.
+const GROUPS: [(u8, &[(&str, &str)]); 5] = [
     (
         // And the paragraph style's drop-down, as wide as its words.
-        100.0,
+        3,
         &[
             (tn!("Body Text"), "edit.body"),
             (tn!("Heading 1"), "edit.heading_1"),
@@ -76,7 +76,7 @@ const GROUPS: [(f32, &[(&str, &str)]); 5] = [
         ],
     ),
     (
-        130.0,
+        4,
         &[
             (tn!("Bulleted List"), "edit.itemize"),
             (tn!("Numbered List"), "edit.enumerate"),
@@ -84,12 +84,9 @@ const GROUPS: [(f32, &[(&str, &str)]); 5] = [
             (tn!("Indent Item"), "edit.indent"),
         ],
     ),
-    (130.0, &[(tn!("Link"), "edit.link"), (tn!("Footnote"), "edit.footnote"), (tn!("Citation"), "edit.cite"), (tn!("Cross-Reference"), "edit.ref")]),
-    (
-        40.0,
-        &[(tn!("Inline Formula"), "edit.math_inline"), (tn!("Displayed Formula"), "edit.math_display"), (tn!("Numbered Equation"), "edit.equation")],
-    ),
-    (70.0, &[(tn!("Table"), "edit.table"), (tn!("Figure"), "edit.figure")]),
+    (4, &[(tn!("Link"), "edit.link"), (tn!("Footnote"), "edit.footnote"), (tn!("Citation"), "edit.cite"), (tn!("Cross-Reference"), "edit.ref")]),
+    (1, &[(tn!("Inline Formula"), "edit.math_inline"), (tn!("Displayed Formula"), "edit.math_display"), (tn!("Numbered Equation"), "edit.equation")]),
+    (2, &[(tn!("Table"), "edit.table"), (tn!("Figure"), "edit.figure")]),
 ];
 
 /// The toolbar's buttons after the mode switch; the command chosen goes in `chosen`.
@@ -101,12 +98,20 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, chosen: &mut Option<&'stati
         Some(keys) => format!("{label} ({keys})"),
         None => label.to_owned(),
     };
-    // Room for the More menu on the right.
-    let mut room = ui.max_rect().right() - ui.cursor().left() - (t.toolbar_height + 2.0 * t.unit);
+    // Room for the More menu on the right: its button and the margin after it. Each group's
+    // width is what its widgets take, so a group is never sent to the menu while it fits (the
+    // faces' widths change the paragraph style's, and a few pixels decided it, #47's test).
+    let spacing = ui.spacing().item_spacing.x;
+    let button = t.toolbar_height - 2.0 * t.unit + spacing;
+    let mut room = ui.max_rect().right() - ui.cursor().left() - (button + 2.0 * t.unit);
     let style_width = style_width(ui, &t);
     let mut hidden: Vec<usize> = Vec::new();
-    for (i, (width, _)) in GROUPS.iter().enumerate() {
-        let width = if i == 0 { width + style_width } else { *width };
+    for (i, (buttons, _)) in GROUPS.iter().enumerate() {
+        // The divider before it: a line between two margins.
+        let mut width = 2.0 * t.unit + 1.0 + spacing + f32::from(*buttons) * button;
+        if i == 0 {
+            width += style_width + spacing;
+        }
         if !(hidden.is_empty() && width <= room) {
             hidden.push(i);
             continue;
