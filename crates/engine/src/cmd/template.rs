@@ -85,7 +85,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
         .iter()
         .map(|t| {
             json!({
-                "id": t.id, "title": t.title, "publisher": t.publisher, "category": t.category,
+                "id": t.id, "title": t.title, "description": t.description, "example": t.is_example(), "publisher": t.publisher, "category": t.category,
                 "licence": t.licence, "source": t.source_text(), "main": t.main, "kept": kept(s, t),
             })
         })

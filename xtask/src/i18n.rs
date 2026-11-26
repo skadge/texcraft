@@ -387,11 +387,12 @@ fn engine_messages(root: &Path) -> BTreeSet<Key> {
     keys
 }
 
-/// The template catalogue's titles (`templates/catalog.toml`), shown through `@msg` rows.
+/// The template catalogue's titles and descriptions (`templates/catalog.toml`), shown through
+/// `@msg` rows.
 fn template_titles(root: &Path) -> BTreeSet<Key> {
     let text = std::fs::read_to_string(root.join("templates/catalog.toml")).unwrap_or_default();
     text.lines()
-        .filter_map(|l| l.strip_prefix("title = \"")?.strip_suffix('"'))
+        .filter_map(|l| l.strip_prefix("title = \"").or_else(|| l.strip_prefix("description = \""))?.strip_suffix('"'))
         .map(|t| Key { context: "@msg".to_owned(), source: catalog_text(t) })
         .collect()
 }
