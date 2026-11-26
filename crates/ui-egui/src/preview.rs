@@ -178,8 +178,14 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         egui::Popup::menu(&menu).show(|ui| compile_menu(app, ui));
         ui.add_space(t.unit * 2.0);
         let (errors, warnings) = app.session.last_outcome().map_or((0, 0), |o| (o.errors(), o.warnings()));
-        let log_label = if app.view.logs { tl!("Back to PDF") } else { tl!("Build log") };
-        let log = widgets::icon_toggle(ui, &t, "scroll-text", log_label, app.view.logs);
+        // The count the badge draws is said in the button's name too.
+        let log_label = match (app.view.logs, errors, warnings) {
+            (true, _, _) => tl!("Back to PDF").to_owned(),
+            (false, 0, 0) => tl!("Build log").to_owned(),
+            (false, 0, n) => crate::i18n::trn(n, "Build log, {n} warning", "Build log, {n} warnings"),
+            (false, n, _) => crate::i18n::trn(n, "Build log, {n} error", "Build log, {n} errors"),
+        };
+        let log = widgets::icon_toggle(ui, &t, "scroll-text", &log_label, app.view.logs);
         let badge = if errors > 0 { (errors, t.error) } else { (warnings, t.warning) };
         widgets::badge(ui, &t, log.rect.right_top() + vec2(-4.0, 6.0), badge.0, badge.1);
         if log.clicked() {
@@ -468,7 +474,7 @@ fn print_summary(ui: &mut egui::Ui, t: &Tokens, outcome: &Outcome) -> CardAction
         };
         ("triangle-exclamation-point", t.warning, title, message)
     };
-    card(ui, t, Card { icon, color, title: &title, message: &message, help: "", ai: None }, None, None)
+    card(ui, t, Card { icon, color, title: &title, message: &message, help: "", ai: None, noticed: None }, None, None)
 }
 
 fn logs(app: &mut App, ui: &mut egui::Ui) {
@@ -521,7 +527,15 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                 copied = Some((print_summary_text(&outcome), tl!("The message is copied.")));
             }
             if let Status::Unavailable(reason) = &outcome.status {
-                let c = Card { icon: "circle-exclamation-point", color: t.error, title: tl!("Not compiled"), message: reason, help: "", ai: None };
+                let c = Card {
+                    icon: "circle-exclamation-point",
+                    color: t.error,
+                    title: tl!("Not compiled"),
+                    message: reason,
+                    help: "",
+                    ai: None,
+                    noticed: None,
+                };
                 if let CardAction::Copy = card(ui, &t, c, None, None) {
                     copied = Some((reason.clone(), tl!("The message is copied.")));
                 }
@@ -531,7 +545,7 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                 card(
                     ui,
                     &t,
-                    Card { icon: "circle-check", color: t.success, title: tl!("Nothing to report"), message, help: "", ai: None },
+                    Card { icon: "circle-check", color: t.success, title: tl!("Nothing to report"), message, help: "", ai: None, noticed: None },
                     None,
                     None,
                 );
@@ -552,7 +566,14 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                 let page = outcome.place_on_page(d).map(|c| PageRect { page: c.page, x: c.x, y: c.y, width: c.width, height: c.height });
                 // Errors and warnings can be explained, when a model is connected.
                 let ai = (ai_offered && d.severity >= Severity::Warning).then(|| (app.session.ai_explanation(d), ai_blocked.clone()));
-                match card(ui, &t, Card { icon, color, title: &title, message: &d.message, help: &help, ai }, place.as_ref(), page) {
+                let noticed = d.noticed.as_ref().map(|p| (p.file.clone(), p.line));
+                match card(
+                    ui,
+                    &t,
+                    Card { icon, color, title: &title, message: &d.message, help: &help, ai, noticed: noticed.as_ref() },
+                    place.as_ref(),
+                    page,
+                ) {
                     CardAction::Explain => explain = outcome.diagnostics.iter().position(|x| std::ptr::eq(x, d)),
                     CardAction::CancelAi => cancel_ai = true,
                     CardAction::Open(target) => goto = Some(target),
@@ -787,6 +808,8 @@ struct Card<'a> {
     /// For a message AI can explain: its explanation, if asked for, and whether a request is in
     /// flight.
     ai: Option<(Option<&'a texcraft_engine::ai::Explanation>, Option<String>)>,
+    /// Where TeX noticed it, when it is shown where it starts: a second link.
+    noticed: Option<&'a (String, Option<u32>)>,
 }
 
 /// What was done with a log card.
@@ -807,7 +830,7 @@ enum CardAction {
 /// One message as a card: its text can be selected, and its button copies it.
 /// `page`: the area on the PDF's page it is about, for a print check.
 fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Option<u32>)>, page: Option<PageRect>) -> CardAction {
-    let Card { icon, color, title, message, help, ai } = c;
+    let Card { icon, color, title, message, help, ai, noticed } = c;
     let mut action = CardAction::None;
     egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner_large()).inner_margin(egui::Margin::same(12)).show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -846,6 +869,15 @@ fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Opti
                 if !help.is_empty() {
                     ui.add(egui::Label::new(RichText::new(help).font(t.small()).color(t.text_muted)).selectable(true));
                 }
+                // Where TeX noticed it, when that is not where it starts: both are places to look.
+                if let Some((file, line)) = noticed {
+                    let place = line.map_or_else(|| file.clone(), |l| format!("{file}:{l}"));
+                    let text = tf!("TeX noticed it at {place}", place = place);
+                    let link = ui.add(egui::Link::new(RichText::new(text).font(t.small()).color(t.accent)));
+                    if link.on_hover_text(tl!("Open in the editor")).clicked() {
+                        action = CardAction::Open((file.clone(), *line));
+                    }
+                }
                 if let Some((explanation, blocked)) = ai {
                     match crate::ai::explanation(ui, t, explanation, blocked.as_deref()) {
                         crate::ai::Act::Explain => action = CardAction::Explain,
@@ -875,6 +907,10 @@ fn diagnostic_text(d: &Diagnostic) -> String {
     };
     let origin = d.origin.as_ref().map(|o| format!("{o}: ")).unwrap_or_default();
     let mut text = format!("{place}{severity}: {origin}{}", d.message);
+    if let Some(p) = &d.noticed {
+        let line = p.line.map(|l| format!(":{l}")).unwrap_or_default();
+        text.push_str(&format!("\n    noticed at {}{line}", p.file));
+    }
     for h in &d.help {
         text.push_str("\n    ");
         text.push_str(h);

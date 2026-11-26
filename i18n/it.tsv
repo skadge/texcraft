@@ -2078,3 +2078,9 @@ unit	{n} s	{n} s
 @msg	“{language}” is not a language tag: give one such as en-GB or fr, or `auto`.	“{language}” non è un tag di lingua: indicarne uno come en-GB o fr, oppure `auto`.
 @msg	“{rule}” is not one of Harper's rules: give its key, as grammar.check gives it (`rule`).	“{rule}” non è una delle regole di Harper: indicarne la chiave, come la restituisce grammar.check (`rule`).
 @msg	“{w}” is not a word that can go in a word list: one word of letters, at most {MAX_WORD_CHARS}.	“{w}” non è una parola che possa entrare in un elenco di parole: una sola parola di lettere, al massimo {MAX_WORD_CHARS}.
+
+# Build log: where problems start
+@plural	Build log, {n} error|Build log, {n} errors	Log di compilazione, {n} errore|Log di compilazione, {n} errori
+@plural	Build log, {n} warning|Build log, {n} warnings	Log di compilazione, {n} avviso|Log di compilazione, {n} avvisi
+	TeX noticed it at {place}	TeX l'ha notato in {place}
+	{message} (it starts at {place})	{message} (inizia in {place})

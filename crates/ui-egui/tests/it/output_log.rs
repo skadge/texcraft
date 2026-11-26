@@ -90,6 +90,6 @@ fn the_print_filter_lists_print_checks_under_their_summary_and_places_them_on_th
     assert!(h.query_by_label_contains("alternative text").is_none(), "the Print filter lists an accessibility finding");
     h.get_by_label("Page 1").click();
     h.run();
-    assert!(h.query_by_label("Build log").is_some(), "showing the check on its page did not go back to the PDF");
+    assert!(h.query_by_label("Build log, 1 error").is_some(), "showing the check on its page did not go back to the PDF");
     Ok(())
 }

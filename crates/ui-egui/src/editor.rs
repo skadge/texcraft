@@ -1005,6 +1005,15 @@ fn markers(app: &mut App, path: &ProjectPath) -> Markers {
             }
         }
     }
+    // Where TeX noticed a problem that starts elsewhere: marked too, saying where it starts.
+    for d in outcome.diagnostics.iter().filter(|d| d.severity >= Severity::Warning) {
+        let (Some(noticed), Some(file)) = (&d.noticed, &d.file) else { continue };
+        let Some(line) = noticed.line.filter(|_| noticed.file == path.as_str()).map(|l| l.saturating_sub(1)) else { continue };
+        if out.get(&line).is_none_or(|(s, _)| *s < d.severity) {
+            let start = d.line.map_or_else(|| file.clone(), |l| format!("{file}:{l}"));
+            out.insert(line, (d.severity, tf!("{message} (it starts at {place})", message = d.message, place = start)));
+        }
+    }
     out
 }
 
