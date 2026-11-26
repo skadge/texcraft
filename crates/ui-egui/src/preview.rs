@@ -456,7 +456,7 @@ fn print_summary(ui: &mut egui::Ui, t: &Tokens, outcome: &Outcome) -> CardAction
         let message = tl!("The {standard} meets its standard's rules, and the print checks found nothing to fix.").replace("{standard}", standard);
         ("circle-check", t.success, tl!("Ready for print").to_owned(), message)
     } else {
-        let title = if problems == 1 { tl!("1 problem").to_owned() } else { tl!("{n} problems").replace("{n}", &problems.to_string()) };
+        let title = crate::i18n::trn(problems, "{n} problem", "{n} problems");
         let message = if preflight.pdfx.is_none() {
             tl!("No {standard} was written: see the Print messages.").replace("{standard}", standard)
         } else {

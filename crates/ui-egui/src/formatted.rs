@@ -189,8 +189,7 @@ fn summary(text: &str) -> String {
     }
     let packages = match packages {
         0 => String::new(),
-        1 => tl!("1 package").to_owned(),
-        n => tl!("{n} packages").replace("{n}", &n.to_string()),
+        n => crate::i18n::trn(n, "{n} package", "{n} packages"),
     };
     match class {
         Some(c) if !packages.is_empty() => format!("{c} · {packages}"),
