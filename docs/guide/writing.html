@@ -61,11 +61,20 @@
       <p>To place an image, drag it from the project's files onto the source: TeXCraft writes the <code>\includegraphics</code> line there. The image's menu in the file tree has <span class="ui">Insert in Document</span> too. If the main document does not load <code>graphicx</code>, the status line says so.</p>
 
       <h2 id="formatted">The formatted view</h2>
-      <p>The <span class="ui">Source</span> / <span class="ui">Formatted</span> switch above the editor shows a <code>.tex</code> file as a document: headings in a serif face, bold and italic text, lists, the abstract, figure cards with their images, chips for references and citations, and typographic quotes and dashes. The preamble is folded into one bar. Anything the view does not know yet is shown as its source, and says so.</p>
+      <p>The <span class="ui">Source</span> / <span class="ui">Formatted</span> switch above the editor shows a <code>.tex</code> file as a document: headings in a serif face, bold and italic text, lists, the abstract, figure cards with their images, references and citations as the PDF numbers them, included files in their place, and typographic quotes and dashes. The preamble is folded into one bar. Anything the view does not know yet is shown as its source, and says so.</p>
       <figure>
         <img src="../images/formatted.png" width="1440" height="900" alt="The formatted view of an article: the preamble folded into a bar, the title and abstract, headings in a serif face, a formula shown as its source in a rounded box and references as small chips, with the typeset PDF beside it.">
         <figcaption>The formatted view beside the PDF.</figcaption>
       </figure>
+      <h3 id="formatted-numbers">Numbers, citations and included files</h3>
+      <p>The formatted view reads like the PDF, without its LaTeX:</p>
+      <ul>
+        <li><strong>Cross-references and citations</strong> show what the last build gave them: <code>\eqref{eq:solution}</code> reads "(2)", <code>\autoref</code> and <code>\cref</code> read "Figure 2" or "section 1.2", and <code>\cite</code> reads "[3]", or "Knuth [1984]" with <code>natbib</code>'s author-year style. The names are LaTeX's English ones. Hover one for its key and, for a citation, who wrote it and when. Before the first build, or when the build has no such label or entry, the key shows in a grey chip with a question mark, and hovering it says why. A document made with <code>biblatex</code> keeps the keys: its labels are not read yet.</li>
+        <li><strong>Headings, numbered equations, theorems, figures and tables</strong> carry their numbers: an equation's at the right of each numbered row (<code>\nonumber</code>, <code>\notag</code> and <code>\tag</code> are heeded), a theorem's in its name ("Theorem 2 (Small angles)."). Numbers come from the last build where a part has a <code>\label</code>; the others are counted through the document from its main file, as LaTeX counts them. Theorem-like environments are named as <code>\newtheorem</code> declares them; a proof ends with ∎.</li>
+        <li><code>\label</code>s show as a small tag icon, their key on hover.</li>
+        <li><strong>An <code>\input</code> or <code>\include</code> on a line of its own</strong> shows the file's text in its place, between thin rules under the file's name, and the files it includes in turn. The text is read-only there: <span class="ui">Edit Here</span>, or a double-click in it, opens the file in its own formatted view. A file the project does not have is said in words.</li>
+      </ul>
+      <p class="not-yet"><strong>Not yet:</strong> names in the document's language (with <code>babel</code>), <code>biblatex</code>'s labels, ranges in <code>\cref</code> ("eqs. (1) to (3)"), page numbers of a part, and theorem bodies in italics.</p>
       <h3 id="formatted-editing">Editing in the formatted view</h3>
       <p>The formatted view is a place to write without knowing LaTeX: each change you make there is a small edit of the source, and undo is shared with the source view.</p>
       <ul>

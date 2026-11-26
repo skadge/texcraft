@@ -2174,3 +2174,18 @@ unit	{n} s	{n} s
 @msg	For the Astrophysical Journal and other AAS journals.	Para o Astrophysical Journal e outras revistas da AAS.
 @msg	Numbered exercises with their points, for a course.	Exercícios numerados com a respetiva cotação, para uma disciplina.
 @msg	Slides for a talk, in widescreen.	Diapositivos para uma palestra, em ecrã panorâmico.
+# The formatted view for readers: numbers from the build, included files
+	Not built yet: the number shows after the document is built.	Ainda não compilado: o número aparece depois de o documento ser compilado.
+	No bibliography entry named {key} in the last build.	Não há nenhuma entrada bibliográfica chamada {key} na última compilação.
+	No label named {key} in the last build.	Não há nenhuma etiqueta chamada {key} na última compilação.
+	The labels biblatex gives citations are not shown yet.	Os rótulos que o biblatex dá às citações ainda não são mostrados.
+	\\nocite lists the entry in the bibliography; nothing shows in the text.	\\nocite inclui a entrada na bibliografia; no texto não aparece nada.
+	Figure {n}.	Figura {n}.
+	Table {n}.	Tabela {n}.
+	Double-click, or press Enter, to show its source.	Faça duplo clique ou prima Enter para mostrar o código-fonte.
+	{name} includes itself, so it is not shown again here.	{name} inclui-se a si próprio, por isso não é mostrado de novo aqui.
+	{name} is included too deep to be shown here.	{name} está incluído a demasiada profundidade para ser mostrado aqui.
+	{name} is not among the project's files: the build will stop here.	{name} não está entre os ficheiros do projeto: a compilação vai parar aqui.
+	Included here with \\input or \\include: its text is shown read-only.	Incluído aqui com \\input ou \\include: o texto é mostrado só para leitura.
+	Edit Here	Editar aqui
+	Opens {name} in the formatted view, to edit it.	Abre {name} na vista formatada, para o editar.

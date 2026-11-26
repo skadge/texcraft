@@ -306,6 +306,9 @@ pub struct Outcome {
     pub symbols: Option<serde_json::Value>,
     /// The SyncTeX data, for going between the source and the PDF.
     pub synctex: Option<Arc<Vec<u8>>>,
+    /// The `.aux` files the build wrote, one after another (the main document's first): what it
+    /// numbered and how it cites, for the formatted view.
+    pub aux: Option<Arc<str>>,
     /// The kind of PDF the build was asked for.
     pub output: Output,
     /// A print build's PDF/X and checks.
@@ -324,6 +327,7 @@ impl Outcome {
             pages: 0,
             symbols: None,
             synctex: None,
+            aux: None,
             output: Output::Screen,
             preflight: None,
         }

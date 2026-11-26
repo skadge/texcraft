@@ -24,6 +24,7 @@ mod forge_sign_in;
 mod formatted;
 mod formatted_editing;
 mod formatted_in_place;
+mod formatted_readers;
 mod formatted_toolbar;
 mod frame;
 mod gallery;

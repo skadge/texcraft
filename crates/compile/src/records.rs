@@ -215,6 +215,7 @@ pub fn outcome(job: u64, output: &str, main_dir: Option<&str>, options: &Options
         pages,
         symbols,
         synctex: synctex.map(Arc::new),
+        aux: None,
         output: options.output,
         preflight: (options.output == Output::Print).then(|| Preflight {
             standard: options.pdfx,

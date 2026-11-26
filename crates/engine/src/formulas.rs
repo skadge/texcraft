@@ -36,6 +36,8 @@ pub enum FormulaState {
 /// A formula of a file.
 #[derive(Debug, Clone)]
 pub struct Formula {
+    /// The file it is in.
+    pub file: ProjectPath,
     /// The formula with its delimiters, in bytes of the file.
     pub range: Range<usize>,
     /// What is typeset: the math without delimiters, an environment's lines in `aligned` or
@@ -57,8 +59,8 @@ pub struct Formulas {
 /// What the session keeps between frames: the file's formulas for a revision, and the engine.
 #[derive(Default)]
 pub(crate) struct State {
-    /// The file and revision `found` and `preamble` are for.
-    of: Option<(ProjectPath, u64)>,
+    /// The files and revision `found` and `preamble` are for.
+    of: Option<(Vec<ProjectPath>, u64)>,
     found: Vec<Found>,
     preamble: String,
     body_pt: f32,
@@ -69,6 +71,7 @@ pub(crate) struct State {
 /// A formula found in the file, before it is typeset.
 #[derive(Debug, Clone)]
 struct Found {
+    file: ProjectPath,
     range: Range<usize>,
     source: String,
     display: bool,
@@ -79,23 +82,38 @@ impl crate::Session {
     /// The formulas of `path` and how far they are typeset: those not typeset yet are sent to the
     /// engine in one batch. Call it again (each frame) for the batch's results.
     pub fn formulas(&mut self, path: &ProjectPath) -> crate::Result<Formulas> {
+        self.formulas_of(std::slice::from_ref(path))
+    }
+
+    /// The formulas of several files in one batch: the file shown and those it includes, which
+    /// the formatted view shows in place. The first file must be readable; the others are skipped
+    /// when they are not.
+    pub fn formulas_of(&mut self, paths: &[ProjectPath]) -> crate::Result<Formulas> {
         let revision = self.revision;
-        if self.formulas.of.as_ref() != Some(&(path.clone(), revision)) {
+        let Some(path) = paths.first() else { return Ok(Formulas::default()) };
+        if !self.formulas.of.as_ref().is_some_and(|(p, r)| p.as_slice() == paths && *r == revision) {
             let text = self.project.text(path).map_err(|e| e.to_string())?;
-            let found = find(text, &texcraft_latex::view::view(text));
             let main = self.project.main().and_then(|m| self.project.text(m).ok()).unwrap_or(text);
+            // The view's blocks, as the formatted view makes them (with the main file's theorems).
+            let theorems = texcraft_latex::view::theorems(main);
+            let mut found = Vec::new();
+            for p in paths {
+                if let Ok(t) = self.project.text(p) {
+                    found.extend(find(p, t, &texcraft_latex::view::view_with(t, &theorems)));
+                }
+            }
             let preamble = preamble_of(main);
             self.formulas.body_pt = body_size(&preamble);
             self.formulas.preamble = preamble;
             self.formulas.found = found;
-            self.formulas.of = Some((path.clone(), revision));
+            self.formulas.of = Some((paths.to_vec(), revision));
         }
         let states = self.typeset_found();
         let found = &self.formulas.found;
         let formulas = found
             .iter()
             .zip(states)
-            .map(|(f, state)| Formula { range: f.range.clone(), source: f.source.clone(), display: f.display, state })
+            .map(|(f, state)| Formula { file: f.file.clone(), range: f.range.clone(), source: f.source.clone(), display: f.display, state })
             .collect();
         Ok(Formulas { body_pt: self.formulas.body_pt, formulas })
     }
@@ -104,7 +122,9 @@ impl crate::Session {
     /// typeset after the main document's preamble, as `path`'s formulas are: for the formula
     /// editor's preview while it is typed. Call it again (each frame) for the result.
     pub fn formula_preview(&mut self, path: &ProjectPath, math: &str, display: bool, env: Option<&str>) -> FormulaState {
-        if self.formulas(path).is_err() {
+        // The preamble of the formulas asked for last serves when they are this file's.
+        let current = self.formulas.of.as_ref().is_some_and(|(p, r)| p.first() == Some(path) && *r == self.revision);
+        if !current && self.formulas(path).is_err() {
             return FormulaState::Failed(vec![format!("`{path}` cannot be read")]);
         }
         let source = if display { display_source(math, env) } else { math.trim().to_owned() };
@@ -231,52 +251,62 @@ fn body_size(preamble: &str) -> f32 {
 }
 
 /// The formulas of the view `blocks` of `text`, in reading order.
-fn find(text: &str, blocks: &[Block]) -> Vec<Found> {
+fn find(file: &ProjectPath, text: &str, blocks: &[Block]) -> Vec<Found> {
     let mut out = Vec::new();
     for b in blocks {
-        find_block(text, b, &mut out);
+        find_block(file, text, b, &mut out);
     }
     out
 }
 
-fn find_block(text: &str, block: &Block, out: &mut Vec<Found>) {
+fn find_block(file: &ProjectPath, text: &str, block: &Block, out: &mut Vec<Found>) {
     match &block.kind {
         BlockKind::Formula { source, env, closed } => {
             let math = text.get(source.clone()).unwrap_or_default();
-            out.push(Found { range: block.range.clone(), source: display_source(math, env.as_deref()), display: true, closed: *closed });
+            out.push(Found {
+                file: file.clone(),
+                range: block.range.clone(),
+                source: display_source(math, env.as_deref()),
+                display: true,
+                closed: *closed,
+            });
         }
-        BlockKind::Title { title, author, date } => [title, author, date].into_iter().for_each(|i| find_inlines(text, i, out)),
-        BlockKind::Heading { content, .. } => find_inlines(text, content, out),
-        BlockKind::Paragraph(inlines) => find_inlines(text, inlines, out),
+        BlockKind::Title { title, author, date } => [title, author, date].into_iter().for_each(|i| find_inlines(file, text, i, out)),
+        BlockKind::Heading { content, .. } => find_inlines(file, text, content, out),
+        BlockKind::Paragraph(inlines) => find_inlines(file, text, inlines, out),
         BlockKind::List { items, .. } => {
             for item in items {
                 if let Some(label) = &item.label {
-                    find_inlines(text, label, out);
+                    find_inlines(file, text, label, out);
                 }
-                item.blocks.iter().for_each(|b| find_block(text, b, out));
+                item.blocks.iter().for_each(|b| find_block(file, text, b, out));
             }
         }
-        BlockKind::Container { blocks, .. } => blocks.iter().for_each(|b| find_block(text, b, out)),
-        BlockKind::Figure { caption, .. } => find_inlines(text, caption, out),
+        BlockKind::Container { blocks, .. } => blocks.iter().for_each(|b| find_block(file, text, b, out)),
+        BlockKind::Theorem { title, blocks, .. } => {
+            find_inlines(file, text, title, out);
+            blocks.iter().for_each(|b| find_block(file, text, b, out));
+        }
+        BlockKind::Figure { caption, .. } => find_inlines(file, text, caption, out),
         BlockKind::Table(t) => {
-            t.cells.iter().flatten().for_each(|c| find_inlines(text, c, out));
+            t.cells.iter().flatten().for_each(|c| find_inlines(file, text, c, out));
             if let Some(f) = &t.float {
-                find_inlines(text, &f.caption, out);
+                find_inlines(file, text, &f.caption, out);
             }
         }
-        BlockKind::Preamble | BlockKind::Source | BlockKind::UnsupportedTable(_) => {}
+        BlockKind::Preamble | BlockKind::Source | BlockKind::UnsupportedTable(_) | BlockKind::Include { .. } => {}
     }
 }
 
-fn find_inlines(text: &str, inlines: &[Inline], out: &mut Vec<Found>) {
+fn find_inlines(file: &ProjectPath, text: &str, inlines: &[Inline], out: &mut Vec<Found>) {
     for i in inlines {
         match &i.kind {
             InlineKind::Formula { source, display, closed } => {
                 let math = text.get(source.clone()).unwrap_or_default();
                 let source = if *display { display_source(math, None) } else { math.trim().to_owned() };
-                out.push(Found { range: i.range.clone(), source, display: *display, closed: *closed });
+                out.push(Found { file: file.clone(), range: i.range.clone(), source, display: *display, closed: *closed });
             }
-            InlineKind::Footnote(inner) | InlineKind::Link { text: inner, .. } => find_inlines(text, inner, out),
+            InlineKind::Footnote(inner) | InlineKind::Link { text: inner, .. } => find_inlines(file, text, inner, out),
             InlineKind::Text { .. } | InlineKind::LineBreak | InlineKind::Chip { .. } | InlineKind::Source => {}
         }
     }
