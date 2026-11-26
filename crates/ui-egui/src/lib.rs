@@ -15,6 +15,7 @@ mod ai;
 mod ai_ask;
 mod ai_make;
 mod app_icon;
+pub mod commands;
 pub mod control;
 mod dialogs;
 mod drop;

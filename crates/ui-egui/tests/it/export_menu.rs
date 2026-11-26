@@ -112,3 +112,29 @@ fn the_export_pill_turns_while_a_file_is_exported_and_the_status_says_when_it_is
     assert!(h.query_by_label("Exporting…").is_none(), "the pill still turns after the export");
     Ok(())
 }
+
+/// Issue #22: in the browser the PDF is downloaded: the PDF pane's button and the Export menu's
+/// first entry say so and can be chosen once there is a PDF (they were greyed out).
+#[test]
+fn in_the_browser_the_pdf_can_be_downloaded_from_the_pdf_pane() {
+    use egui_kittest::kittest::NodeT as _;
+    let mut s = Session::with_backend(Box::new(super::pdf_preview::Sample));
+    s.use_library(texcraft_engine::library::Library::default());
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), crate::support::app(s));
+    texcraft_ui_egui::ui_cmd::run(h.state_mut(), "build.compile");
+    for _ in 0..400 {
+        h.step();
+        if h.query_by_label("1 / 2").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    h.run();
+    let enabled = |h: &Harness<'_, App>| !h.get_by_role_and_label(egui::accesskit::Role::Button, "Download PDF").accesskit_node().is_disabled();
+    assert!(enabled(&h), "the PDF pane's Download PDF is greyed out");
+    h.get_by_label("Export").click();
+    h.run();
+    // The pane's button, and the menu's entry.
+    let ready = h.query_all_by_label("Download PDF").filter(|n| !n.accesskit_node().is_disabled()).count();
+    assert_eq!(ready, 2, "the Export menu's PDF entry is greyed out or missing");
+}

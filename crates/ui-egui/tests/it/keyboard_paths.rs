@@ -551,7 +551,13 @@ fn the_pdf_pane_s_toolbar_and_menus_are_walked_from_the_keyboard() {
     focus(&mut h, Role::Button, "Compile");
     let stops = tab_to(&mut h, Role::Button, "Zoom In", 20);
     // In the order they read, left to right (Previous page is disabled on the first page).
-    let expected = [(Role::Button, "Build log"), (Role::Button, "Export"), (Role::Button, "Next page"), (Role::Button, "Zoom Out")];
+    let expected = [
+        (Role::Button, "Build log"),
+        (Role::Button, "Save PDF As…"),
+        (Role::Button, "Export"),
+        (Role::Button, "Next page"),
+        (Role::Button, "Zoom Out"),
+    ];
     assert_order(&stops, &expected, "the PDF pane's toolbar");
     // Then the pages and their links.
     let pages: Vec<Stop> = (0..3).map(|_| tab(&mut h)).collect();
@@ -565,7 +571,7 @@ fn the_pdf_pane_s_toolbar_and_menus_are_walked_from_the_keyboard() {
     assert!(entry.name.starts_with("Fit width"), "Enter opens the zoom menu on its first entry: {entry:?}");
     assert_eq!(key(&mut h, egui::Key::Escape).id, zoom.id, "Escape closes it, back on its button");
     let export = focus(&mut h, Role::Button, "Export");
-    assert_eq!(key(&mut h, egui::Key::Enter).name, "PDF", "Enter opens the export menu on its first format");
+    assert_eq!(key(&mut h, egui::Key::Enter).name, "Save PDF As…", "Enter opens the export menu on its first format");
     assert_eq!(key(&mut h, egui::Key::Escape).id, export.id);
     assert_tree(&h, "the PDF pane");
 }

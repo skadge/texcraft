@@ -53,6 +53,8 @@ pub(crate) enum Dialog {
     Settings,
     About,
     GoToFile(crate::goto_file::Palette),
+    /// All Commands: every command, searchable.
+    Commands(crate::commands::Palette),
     /// The formatted view's picker of a citation, a cross-reference or a figure's image.
     Choose(Box<crate::insert_pick::Chooser>),
     ForgeOpen(crate::forge::OpenForm),
@@ -86,6 +88,7 @@ impl Dialog {
             Dialog::Settings => "settings",
             Dialog::About => "about",
             Dialog::GoToFile(_) => "go_to_file",
+            Dialog::Commands(_) => "commands",
             Dialog::Choose(_) => "choose",
             Dialog::ForgeOpen(_) => "forge_open",
             Dialog::ForgeCommit(_) => "forge_commit",
@@ -113,6 +116,7 @@ fn own_window(app: &mut App, ctx: &egui::Context) -> bool {
         Some(Dialog::AiInstruct(_)) => crate::ai::instruct_dialog,
         Some(Dialog::Drop(_)) => crate::drop::dialog,
         Some(Dialog::GoToFile(_)) => crate::goto_file::show,
+        Some(Dialog::Commands(_)) => crate::commands::show,
         Some(Dialog::Choose(_)) => crate::insert_pick::show,
         Some(Dialog::ForgeServer(_) | Dialog::ForgeProposal(_)) => crate::forge_server::dialog,
         Some(Dialog::ForgeSave(_)) => crate::forge_save::dialog,
@@ -142,6 +146,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         Dialog::Shortcuts
         | Dialog::Settings
         | Dialog::GoToFile(_)
+        | Dialog::Commands(_)
         | Dialog::Choose(_)
         | Dialog::ForgeOpen(_)
         | Dialog::ForgeCommit(_)

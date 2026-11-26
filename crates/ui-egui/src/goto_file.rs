@@ -62,7 +62,7 @@ pub(crate) fn filter(query: &str, paths: &[String], recent: &[String]) -> Vec<Ma
 }
 
 /// A greedy subsequence match of `query` (lowercase) in `path`, and its score.
-fn score(query: &[char], path: &str) -> Option<(i64, Vec<usize>)> {
+pub(crate) fn score(query: &[char], path: &str) -> Option<(i64, Vec<usize>)> {
     let name_start = path.rfind('/').map_or(0, |i| i + 1);
     // Try from the file's name first, so a query that fits the name marks it there.
     let candidates = [name_start, 0];

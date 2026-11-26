@@ -2,6 +2,7 @@
 
 mod ai;
 mod ai_make_ask;
+mod all_commands;
 mod carets;
 mod catalogs;
 mod closing;

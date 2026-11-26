@@ -200,11 +200,22 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
             }
         }
         ui.add_space(t.unit * 2.0);
-        let ready = cmd_enabled(app, "build.save_pdf").or_else(|_| cmd_enabled(app, "build.export"));
+        // The PDF a click away: downloaded in the browser, saved where the user chooses elsewhere.
+        let save_pdf = cmd_enabled(app, "build.save_pdf");
+        let save_label = ui_cmd::menu_entry(app, "build.save_pdf").0;
+        let save = widgets::icon_button(ui, &t, "download", save_label, save_pdf.is_ok());
+        let save = match &save_pdf {
+            Err(reason) => save.on_hover_text(crate::i18n::msg(reason)),
+            Ok(()) => save.on_hover_text(save_label),
+        };
+        if save.clicked() {
+            ui_cmd::run(app, "build.save_pdf");
+        }
+        let ready = save_pdf.or_else(|_| cmd_enabled(app, "build.export"));
         // While a file is exported, the pill turns and says so; the status line says when it is done.
         let exporting = app.session.exporting();
         let label = if exporting { tl!("Exporting…") } else { tl!("Export") };
-        let save = widgets::pill_menu(ui, &t, "download", label, exporting, ready.is_ok());
+        let save = widgets::pill_menu(ui, &t, "upload", label, exporting, ready.is_ok());
         match &ready {
             Err(reason) => {
                 let _ = save.on_hover_text(reason.as_str());
@@ -278,7 +289,7 @@ fn page_tools(app: &mut App, ui: &mut egui::Ui) {
 }
 
 fn cmd_enabled(app: &App, id: &str) -> Result<(), String> {
-    texcraft_engine::cmd::find(id).map_or_else(|| Err(String::new()), |c| (c.enabled)(&app.session))
+    ui_cmd::command_enabled(app, id)
 }
 
 fn compile_menu(app: &mut App, ui: &mut egui::Ui) {
@@ -352,8 +363,12 @@ fn export_menu(app: &mut App, ui: &mut egui::Ui) {
         if i == 1 || i == 5 {
             ui.separator();
         }
-        let enabled = if format == Export::Pdf { cmd_enabled(app, "build.save_pdf") } else { convert.clone() };
-        if top_bar::item(ui, &t, None, export_label(format), None, enabled) {
+        let (enabled, label) = if format == Export::Pdf {
+            (cmd_enabled(app, "build.save_pdf"), ui_cmd::menu_entry(app, "build.save_pdf").0)
+        } else {
+            (convert.clone(), export_label(format))
+        };
+        if top_bar::item(ui, &t, None, label, None, enabled) {
             ui.close();
             ui_cmd::export(app, format);
         }

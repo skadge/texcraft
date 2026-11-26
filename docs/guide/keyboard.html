@@ -37,7 +37,17 @@
     </nav>
     <main id="main" tabindex="-1">
       <h1>Keyboard and accessibility</h1>
-      <p class="lead">Everything in TeXCraft can be done from the keyboard. Every command has an entry you can bind to a key, and <kbd>F6</kbd> moves between the parts of the window.</p>
+      <p class="lead">Everything in TeXCraft can be done from the keyboard. Every command has an entry you can bind to a key, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> finds any command by name, and <kbd>F6</kbd> moves between the parts of the window.</p>
+
+      <h2 id="menus">The menus and All Commands</h2>
+      <p>The menus keep what is used often; what is used less is a level down, in a submenu. Every command, in the menus or not, is in <span class="ui">Edit › All Commands…</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>): type part of its name, move with <kbd>Up</kbd> and <kbd>Down</kbd>, and press <kbd>Enter</kbd> to run it. Each command is listed with the part of TeXCraft it belongs to and its shortcut; one that cannot run now is dimmed and says why.</p>
+      <ul>
+        <li><span class="ui">File</span>: New Project, New Project from Template…, Open Project Folder…, Open Recent, Open from GitLab or GitHub…; Save (<span class="ui">Keep in This Browser</span> in the browser), Save Project As…, Download Project as Zip (in the browser), Save PDF As… (<span class="ui">Download PDF</span> in the browser); <span class="ui">Add to Project</span> (New File…, New Folder…, Add Files…, Import a Zip File…); then, for a project opened from GitLab or GitHub, Commit and Update, or else <span class="ui">Save Project to GitLab or GitHub</span>.</li>
+        <li><span class="ui">Edit</span>: Undo, Redo; Cut, Copy, Paste, Select All; Find, Replace, Find in Project, <span class="ui">Go To</span> (Go to File…, Go to Line…, Show in PDF); <span class="ui">Spelling and Grammar</span>, <span class="ui">Review</span> (comments and suggestions), <span class="ui">Folding</span>, and <span class="ui">Rewrite with AI</span> when a model is connected; All Commands…, Settings….</li>
+        <li><span class="ui">Insert</span>: <span class="ui">Heading</span>, <span class="ui">Text Style</span>, <span class="ui">List</span>; Figure, Table, <span class="ui">Formula</span>, Symbols…; Cross-Reference, Citation, Link, Footnote; and Make with AI… and Add a Reference with AI… when a model is connected.</li>
+        <li><span class="ui">Help</span>: User Guide, Keyboard Shortcuts, retex User Manual; Open the Example Project…, First Steps; About TeXCraft.</li>
+      </ul>
+      <p>Compiling and its options are on the <span class="ui">Compile</span> button, the layouts, the side panels and the zoom on their own buttons; their commands are in All Commands too. On macOS the same menus are in the menu bar at the top of the screen, with About and Settings in the TeXCraft menu.</p>
 
       <h2 id="change">Changing shortcuts</h2>
       <p><span class="ui">Help › Keyboard Shortcuts</span> (also the <span class="ui">Keyboard Shortcuts</span> button at the bottom of the rail, and <span class="ui">Change Shortcuts…</span> in <a href="settings.html#keyboard">Settings › Keyboard</a>) lists every command with its shortcut. Give a command a new key, or take one away. Your changes are kept with your settings.</p>
@@ -52,7 +62,7 @@
           <tr><td>Open Project Folder…</td><td>File</td><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td></tr>
           <tr><td>Save</td><td>File</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td></tr>
           <tr><td>Save Project As…</td><td>File</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td></tr>
-          <tr><td>Close File</td><td>File</td><td><kbd>Ctrl</kbd>+<kbd>W</kbd></td></tr>
+          <tr><td>Close File</td><td>All Commands</td><td><kbd>Ctrl</kbd>+<kbd>W</kbd></td></tr>
           <tr><td>Compile</td><td>Compile button</td><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td></tr>
         </tbody>
       </table>
@@ -69,17 +79,18 @@
           <tr><td>Select All</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>A</kbd></td></tr>
           <tr><td>Find</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td></tr>
           <tr><td>Replace</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd></td></tr>
-          <tr><td>Go to Line…</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd></td></tr>
-          <tr><td>Go to File…</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td></tr>
+          <tr><td>Go to Line…</td><td>Edit › Go To</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd></td></tr>
+          <tr><td>Go to File…</td><td>Edit › Go To</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td></tr>
           <tr><td>Find in Project</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></td></tr>
-          <tr><td>Show in PDF</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd></td></tr>
-          <tr><td>Quick Fix</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>.</kbd></td></tr>
-          <tr><td>Next Misspelling</td><td>Edit</td><td><kbd>F7</kbd></td></tr>
-          <tr><td>Fold, Unfold</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>]</kbd></td></tr>
-          <tr><td>Fold All, Unfold All</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd>, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>]</kbd></td></tr>
-          <tr><td>Comment</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd></td></tr>
-          <tr><td>Next Comment, Previous Comment</td><td>Edit</td><td><kbd>F8</kbd>, <kbd>Shift</kbd>+<kbd>F8</kbd></td></tr>
-          <tr><td>Suggest Changes</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td></tr>
+          <tr><td>Show in PDF</td><td>Edit › Go To</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd></td></tr>
+          <tr><td>Quick Fix</td><td>Edit › Spelling and Grammar</td><td><kbd>Ctrl</kbd>+<kbd>.</kbd></td></tr>
+          <tr><td>Next Spelling or Grammar Problem</td><td>Edit › Spelling and Grammar</td><td><kbd>F7</kbd></td></tr>
+          <tr><td>Fold, Unfold</td><td>Edit › Folding</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>]</kbd></td></tr>
+          <tr><td>Fold All, Unfold All</td><td>Edit › Folding</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd>, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>]</kbd></td></tr>
+          <tr><td>Comment</td><td>Edit › Review</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd></td></tr>
+          <tr><td>Next Comment, Previous Comment</td><td>Edit › Review</td><td><kbd>F8</kbd>, <kbd>Shift</kbd>+<kbd>F8</kbd></td></tr>
+          <tr><td>Suggest Changes</td><td>Edit › Review</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td></tr>
+          <tr><td>All Commands…</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></td></tr>
           <tr><td>Settings…</td><td>Edit</td><td><kbd>Ctrl</kbd>+<kbd>,</kbd></td></tr>
         </tbody>
       </table>
@@ -90,9 +101,9 @@
         <caption>Inserting</caption>
         <thead><tr><th scope="col">Command</th><th scope="col">Where</th><th scope="col">Shortcut</th></tr></thead>
         <tbody>
-          <tr><td>Bold</td><td>Insert</td><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td></tr>
-          <tr><td>Italic</td><td>Insert</td><td><kbd>Ctrl</kbd>+<kbd>I</kbd></td></tr>
-          <tr><td>Inline Formula</td><td>Insert</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td></tr>
+          <tr><td>Bold</td><td>Insert › Text Style</td><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td></tr>
+          <tr><td>Italic</td><td>Insert › Text Style</td><td><kbd>Ctrl</kbd>+<kbd>I</kbd></td></tr>
+          <tr><td>Inline Formula</td><td>Insert › Formula</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td></tr>
         </tbody>
       </table>
       </div>
@@ -102,7 +113,7 @@
         <caption>The window and the PDF</caption>
         <thead><tr><th scope="col">Command</th><th scope="col">Where</th><th scope="col">Shortcut</th></tr></thead>
         <tbody>
-          <tr><td>Zoom In, Zoom Out</td><td>PDF pane</td><td><kbd>Ctrl</kbd>+<kbd>=</kbd>, <kbd>Ctrl</kbd>+<kbd>-</kbd></td></tr>
+          <tr><td>Zoom In, Zoom Out</td><td>PDF pane</td><td><kbd>Ctrl</kbd>+<kbd>=</kbd>, <kbd>Ctrl</kbd>+<kbd>-</kbd>; or <kbd>Ctrl</kbd> with the mouse wheel over the PDF</td></tr>
           <tr><td>Actual Size</td><td>PDF pane</td><td><kbd>Ctrl</kbd>+<kbd>0</kbd></td></tr>
           <tr><td>Present the PDF</td><td>PDF pane</td><td><kbd>F5</kbd></td></tr>
           <tr><td>Go to the Menu Bar</td><td>Window</td><td><kbd>F10</kbd>, or <kbd>Alt</kbd> pressed and released alone</td></tr>

@@ -126,7 +126,6 @@
 	Change as asked	Alterar conforme pedido
 	Change to “{text}”	Alterar para “{text}”
 	Changed on the branch but kept as you edited them: {files}.	Alterados no ramo mas mantidos como os editou: {files}.
-	Changes that are not saved are lost.	As alterações não guardadas perdem-se.
 	Check Grammar with AI	Verificar gramática com IA
 	Check Server	Verificar servidor
 	Check comments	Verificar comentários
@@ -2189,3 +2188,47 @@ unit	{n} s	{n} s
 	Included here with \\input or \\include: its text is shown read-only.	Incluído aqui com \\input ou \\include: o texto é mostrado só para leitura.
 	Edit Here	Editar aqui
 	Opens {name} in the formatted view, to edit it.	Abre {name} na vista formatada, para o editar.
+	Add to Project	Adicionar ao projeto
+	All Commands	Todos os comandos
+	Commands	Comandos
+	Don't Keep	Não guardar
+	Download PDF	Transferir o PDF
+	Folding	Dobragem
+	Go To	Ir para
+	Hidden in all projects.	Ocultas em todos os projetos.
+	Hidden in this project.	Ocultas neste projeto.
+	Hidden messages	Mensagens ocultas
+	Hide Like This	Ocultar as deste tipo
+	Hide Them	Ocultá-las
+	Hide the messages of this kind, here or in all projects	Ocultar as mensagens deste tipo, aqui ou em todos os projetos
+	In All Projects	Em todos os projetos
+	In This Project	Neste projeto
+	Keep in This Browser	Guardar neste navegador
+	Keep the changes to {project} in this browser?	Guardar as alterações a {project} neste navegador?
+	List	Lista
+	Messages like this are hidden in all projects: Settings › Building shows them again.	As mensagens deste tipo estão ocultas em todos os projetos: Definições › A compilar volta a mostrá-las.
+	Messages like this are hidden in this project until TeXCraft closes: it has no folder to keep the choice in.	As mensagens deste tipo estão ocultas neste projeto até o TeXCraft fechar: não tem pasta onde guardar a escolha.
+	Messages like this are hidden in this project: Settings › Building shows them again.	As mensagens deste tipo estão ocultas neste projeto: Definições › A compilar volta a mostrá-las.
+	Messages like this are shown again.	As mensagens deste tipo voltam a ser mostradas.
+	Messages of the kinds hidden in Settings › Building	Mensagens dos tipos ocultos em Definições › A compilar
+	No command matches.	Nenhum comando corresponde.
+	No kind of message is hidden. In the build log, Hide Like This hides a warning's kind, here or in all projects.	Nenhum tipo de mensagem está oculto. No registo da compilação, Ocultar as deste tipo oculta o tipo de um aviso, aqui ou em todos os projetos.
+	Save Project to GitLab or GitHub	Guardar o projeto no GitLab ou GitHub
+	Saving writes them to the project's folder on this computer; changes not saved are lost.	Guardar escreve-as na pasta do projeto neste computador; as alterações não guardadas perdem-se.
+	Show Again	Mostrar de novo
+	Spelling and Grammar	Ortografia e gramática
+	TeXCraft keeps your projects in this browser's storage; changes not kept there are lost.	O TeXCraft guarda os seus projetos no armazenamento deste navegador; as alterações que não forem guardadas lá perdem-se.
+	Text Style	Estilo do texto
+	The changes are kept in this browser. Commit them, then try again.	As alterações estão guardadas neste navegador. Faça commit delas e tente de novo.
+	The changes are saved. Commit them, then try again.	As alterações estão guardadas. Faça commit delas e tente de novo.
+	There is no PDF yet: compile the project first.	Ainda não há PDF: compile primeiro o projeto.
+	Type part of a command's name	Escreva parte do nome de um comando
+	{command}, {n} of {total}	{command}, {n} de {total}
+@plural	{n} hidden message|{n} hidden messages	{n} mensagem oculta|{n} mensagens ocultas
+@id	build.hidden_messages	Mensagens ocultas
+@id	build.hide_messages	Ocultar as mensagens deste tipo
+@id	build.show_messages	Mostrar as mensagens de novo
+@id	view.commands	Todos os comandos…
+@msg	Errors are not hidden: fix them instead.	Os erros não são ocultados: corrija-os.
+@msg	Name the kind of message to hide, on one line.	Indique o tipo de mensagem a ocultar, numa linha.
+@msg	Name the kind of message, or the `index` of one of the last build's.	Indique o tipo de mensagem, ou o `index` de uma mensagem da última compilação.

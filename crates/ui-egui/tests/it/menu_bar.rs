@@ -34,7 +34,8 @@ fn focused(h: &Harness<'_, App>, label: &str) -> bool {
 /// The File menu's first entry that can run now: the one the keyboard lands on.
 fn first_file_entry(h: &mut Harness<'_, App>) -> Option<&'static str> {
     let session = h.state_mut().session();
-    texcraft_engine::cmd::all().iter().find(|c| c.menu.first() == Some(&"File") && (c.enabled)(session).is_ok()).map(|c| c.label)
+    let file = texcraft_ui_egui::ui_cmd::commands_in(texcraft_ui_egui::ui_cmd::menu("File"));
+    file.into_iter().filter_map(texcraft_engine::cmd::find).find(|c| (c.enabled)(session).is_ok()).map(|c| c.label)
 }
 
 #[test]
@@ -85,4 +86,28 @@ fn alt_alone_reaches_the_menu_bar_but_alt_with_a_key_does_not() {
     assert!(focused(&h, "File"), "Alt pressed and released alone did not focus the first menu");
     press(&mut h, egui::Key::Escape);
     assert!(focused(&h, "main.tex source"), "Escape did not give the keyboard back to the text");
+}
+
+/// Issue #25: on a phone, each menu fits the screen: what is used less is a level down.
+#[test]
+fn each_menu_fits_on_a_phone_screen() {
+    const PHONE: egui::Vec2 = egui::vec2(400.0, 820.0);
+    let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    let _ = s.execute("file.write", &json!({"path": "main.tex", "text": "Hello.\n"}));
+    let mut h = Harness::builder().with_size(PHONE).build_ui_state(|ui, app: &mut App| app.frame(ui), crate::support::app(s));
+    h.run();
+    // Each menu's last entry here.
+    for (menu, last) in [("File", "Save Project to GitLab or GitHub"), ("Edit", "Settings…"), ("Insert", "Footnote"), ("Help", "About TeXCraft")] {
+        if h.query_by_label(menu).is_none() {
+            h.get_by_label("Menu").click();
+            h.run();
+        }
+        h.get_by_label(menu).click();
+        h.run();
+        // Labelled with their shortcut too: "Settings… Ctrl+,".
+        let bottom = h.query_all_by_label_contains(last).next().map(|n| n.rect().bottom()).unwrap_or(f32::INFINITY);
+        assert!(bottom <= PHONE.y, "the {menu} menu runs past the screen's bottom, to {bottom}");
+        press(&mut h, egui::Key::Escape);
+        press(&mut h, egui::Key::Escape);
+    }
 }

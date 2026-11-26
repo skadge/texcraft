@@ -42,9 +42,9 @@
       <h2 id="projects">Projects</h2>
       <dl>
         <dt>Opening</dt>
-        <dd><span class="ui">File › Open Project Folder…</span> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) opens a folder <span class="tag">Desktop only</span>; recent projects are under <span class="ui">Open Recent</span> at the end of the <span class="ui">File</span> menu, in the project menu beside the project's name, and on the start page. On the desktop you can also give a folder when starting TeXCraft: <code>texcraft path/to/project</code>.</dd>
+        <dd><span class="ui">File › Open Project Folder…</span> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) opens a folder <span class="tag">Desktop only</span>; recent projects are under <span class="ui">File › Open Recent</span>, in the project menu beside the project's name, and on the start page. On the desktop you can also give a folder when starting TeXCraft: <code>texcraft path/to/project</code>.</dd>
         <dt>Saving</dt>
-        <dd><span class="ui">File › Save</span> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) saves every changed file. <span class="ui">File › Save Project As…</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) copies the project to another folder, or in the browser saves it under another name. A dot after the project's name in the top bar means unsaved changes; TeXCraft asks before they could be lost.</dd>
+        <dd><span class="ui">File › Save</span> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) saves every changed file. <span class="ui">File › Save Project As…</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) copies the project to another folder, or in the browser saves it under another name. A dot after the project's name in the top bar means unsaved changes; TeXCraft asks before they could be lost. In the browser, saving is keeping the project in the browser's storage: the entry reads <span class="ui">Keep in This Browser</span>, and the question <span class="ui">Keep in This Browser</span>, <span class="ui">Don't Keep</span> or <span class="ui">Cancel</span>. Nothing leaves your computer: for a project opened from GitLab or GitHub, the question also offers <span class="ui">Commit to GitLab…</span>, which keeps the changes first and then opens the commit dialog.</dd>
         <dt>Renaming</dt>
         <dd>Click the project's name in the top bar and type. On the desktop this renames the project's folder; an untitled project is saved under the name you type.</dd>
         <dt>The main document</dt>
@@ -52,19 +52,19 @@
       </dl>
 
       <h2 id="files">Files and folders</h2>
-      <p>The <span class="ui">Project Files</span> section of the side panel lists the project's files and folders. Click a file to open it in a tab; images are shown in the editor's place. <span class="ui">File › Close File</span> (<kbd>Ctrl</kbd>+<kbd>W</kbd>) closes the tab.</p>
+      <p>The <span class="ui">Project Files</span> section of the side panel lists the project's files and folders. Click a file to open it in a tab; images are shown in the editor's place. The tab's × or <kbd>Ctrl</kbd>+<kbd>W</kbd> (<span class="ui">Close File</span> in All Commands) closes the tab.</p>
       <ul>
-        <li><span class="ui">File › New File…</span> and <span class="ui">File › New Folder…</span> ask for a path in the project, such as <code>chapters/intro.tex</code>.</li>
+        <li><span class="ui">File › Add to Project › New File…</span> and <span class="ui">New Folder…</span> ask for a path in the project, such as <code>chapters/intro.tex</code>.</li>
         <li>A file's menu (right-click, or the menu key when it has the keyboard) has <span class="ui">Rename…</span>, <span class="ui">Move to…</span>, <span class="ui">Delete…</span> and <span class="ui">Set as Main Document</span>; an image's has <span class="ui">Insert in Document</span>.</li>
         <li>Drag a file onto a folder to move it there.</li>
       </ul>
 
       <h2 id="import">Adding files, folders and zip files</h2>
-      <p><span class="ui">File › Add Files…</span> copies files into the project. You can also drop files on the window:</p>
+      <p><span class="ui">File › Add to Project › Add Files…</span> copies files into the project. You can also drop files on the window:</p>
       <ul>
         <li><strong>Files</strong> are added at the project's top level.</li>
         <li><strong>A folder</strong> is added with its files and its folders.</li>
-        <li><strong>A zip file</strong> asks first: <span class="ui">Unzip into the Project</span>, <span class="ui">Add the Zip as a File</span> or <span class="ui">Cancel</span>. <span class="ui">File › Import a Zip File…</span> unzips without asking. When everything in a zip is inside one folder, that folder is left off the paths.</li>
+        <li><strong>A zip file</strong> asks first: <span class="ui">Unzip into the Project</span>, <span class="ui">Add the Zip as a File</span> or <span class="ui">Cancel</span>. <span class="ui">File › Add to Project › Import a Zip File…</span> unzips without asking. When everything in a zip is inside one folder, that folder is left off the paths.</li>
       </ul>
       <p>When files of the same name are there already, one question covers the whole drop: <span class="ui">Replace</span>, <span class="ui">Keep Both</span> (the new one gets another name, such as <code>figure-2.png</code>) or <span class="ui">Skip</span>.</p>
       <p>Some things are always left out, and the status line says what and why: hidden files and folders (such as <code>.git</code>), the build's leftovers (<code>.aux</code>, <code>.log</code>, <code>.synctex.gz</code>, <code>.toc</code>…), links that point out of the folder, and names in a zip that would land outside the project. An import holds at most 5,000 files and 500 MB, and a zip that expands suspiciously far is refused whole.</p>

@@ -67,6 +67,15 @@
         <li>Messages can be selected and copied; <span class="ui">Copy the message</span> on a card, or <span class="ui">Copy the messages shown</span> for all of them.</li>
         <li>With a model connected, <span class="ui">Explain</span> on a card asks it for a plain explanation and a fix (<a href="ai.html#explain">AI assistance</a>). <span class="tag">Desktop only</span></li>
       </ul>
+      <h3 id="hide">Hiding messages of a kind</h3>
+      <p>Some warnings come by the dozen and need no fixing: every overfull box, or every bibliography entry without page numbers. <span class="ui">Hide Like This</span> on a warning's or a note's card hides every message of its kind, <span class="ui">In This Project</span> or <span class="ui">In All Projects</span>. Errors are never hidden.</p>
+      <ul>
+        <li>A kind is the message with what varies left out: what is quoted, file names and numbers. <span class="ui">Overfull \hbox (12.0pt too wide) in paragraph at lines 3--5</span> and <span class="ui">Overfull \hbox (0.5pt too wide) in paragraph at lines 40--41</span> are one kind; a BibTeX entry without pages and one without a journal are two.</li>
+        <li>The log then says how many it hides (<span class="ui">12 hidden messages</span>); <span class="ui">Show</span> lists them again, each with <span class="ui">Show Again</span>. Hidden warnings are not counted on the <span class="ui">Build log</span> button or in the status bar, and are not marked in the editor.</li>
+        <li><a href="settings.html#building">Settings › Building</a> lists the kinds hidden in this project and in all projects, each with <span class="ui">Show Again</span>.</li>
+        <li>A project's choice is kept in its folder, in <code>.texcraft/hidden-messages.txt</code>; one for all projects is kept with your settings.</li>
+      </ul>
+      <p class="not-yet"><strong>Not yet:</strong> in the browser, and for a project not saved to a folder yet, a kind hidden in this project stays hidden only until TeXCraft closes; hide it in all projects to keep the choice.</p>
       <h3 id="raw-log">The raw log and the output files</h3>
       <p>The log also has two sections you can fold: the engine's <span class="ui">Raw log</span>, with a search field (<span class="ui">Previous Match</span>, <span class="ui">Next Match</span> and the count of matches) and <span class="ui">Copy the Raw Log</span>, and the <span class="ui">Output files</span> of the build: the PDF, the PDF for print when one was made, the SyncTeX data and the log.</p>
       <ul>
@@ -80,13 +89,14 @@
         <dt>From the PDF to the source</dt>
         <dd>Double-click (or <kbd>Ctrl</kbd>+click) a place in the PDF: the editor opens the file and line that wrote it, which flashes briefly. This works across files included with <code>\input</code> and <code>\include</code>.</dd>
         <dt>From the source to the PDF</dt>
-        <dd><span class="ui">Edit › Show in PDF</span> (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd>), or the text's right-click menu, marks the caret's line in the PDF and scrolls to it.</dd>
+        <dd><span class="ui">Edit › Go To › Show in PDF</span> (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd>), or the text's right-click menu, marks the caret's line in the PDF and scrolls to it.</dd>
       </dl>
       <p>A line not in the PDF yet (written since the last build) says so: compile first.</p>
 
       <h2 id="preview">The PDF preview</h2>
       <ul>
-        <li><strong>Pages and zoom:</strong> the arrows go to the previous and next page; the zoom menu has <span class="ui">Fit width</span>, <span class="ui">Fit page</span> and fixed zooms from 50 % to 400 %. <span class="ui">Zoom In</span> <kbd>Ctrl</kbd>+<kbd>=</kbd>, <span class="ui">Zoom Out</span> <kbd>Ctrl</kbd>+<kbd>-</kbd>, <span class="ui">Actual Size</span> <kbd>Ctrl</kbd>+<kbd>0</kbd>.</li>
+        <li><strong>Pages and zoom:</strong> the arrows go to the previous and next page; the zoom menu has <span class="ui">Fit width</span>, <span class="ui">Fit page</span> and fixed zooms from 50 % to 400 %. <span class="ui">Zoom In</span> <kbd>Ctrl</kbd>+<kbd>=</kbd>, <span class="ui">Zoom Out</span> <kbd>Ctrl</kbd>+<kbd>-</kbd>, <span class="ui">Actual Size</span> <kbd>Ctrl</kbd>+<kbd>0</kbd>. <kbd>Ctrl</kbd> (<kbd>Cmd</kbd> on a Mac) with the mouse wheel, or a pinch on a touchpad or a touch screen, zooms around the pointer.</li>
+        <li><strong>Moving around:</strong> the wheel scrolls; when the pages are wider or taller than the pane, drag with the middle mouse button to move them.</li>
         <li><strong>Links</strong> in the PDF work: to a place in the document, or to a web or mail address, which opens in your browser.</li>
         <li><strong>Text</strong> can be selected and copied, on one page at a time.</li>
         <li><strong>Presenting:</strong> <span class="ui">Present</span> in the zoom menu, or <kbd>F5</kbd>, shows a page at a time in the whole window. The arrow keys, <kbd>Space</kbd>, <kbd>Page Up</kbd> and <kbd>Page Down</kbd> move between pages, and <kbd>Escape</kbd> leaves.</li>
@@ -102,6 +112,9 @@
       <p>With <span class="ui">PDF for print (PDF/X)</span> chosen, the build also makes a PDF/X file as printers expect it. In <a href="settings.html#building">Settings › Building</a>, choose the standard (PDF/X-4 keeps colour profiles and transparency; PDF/X-1a is CMYK only, for older workflows), the bleed (how far the art runs past the page's edges, often 3 mm) and crop marks.</p>
       <p>The build checks the file as a printer would (image resolution, ink coverage, fonts…). The log then starts with <span class="ui">Ready for print</span> or the number of problems, lists them under the <span class="ui">Print</span> filter, and <span class="ui">Show it on the page</span> marks where each one is. The print PDF is one of the <a href="#raw-log">output files</a>, to save from the log.</p>
 
+      <h2 id="save-pdf">Saving the PDF</h2>
+      <p><span class="ui">Save PDF As…</span> (<span class="ui">Download PDF</span> in the browser) keeps the last build's PDF: the download button in the PDF pane, beside <span class="ui">Export</span>, the first entry of the Export menu, or <span class="ui">File › Save PDF As…</span>. On the desktop it asks where to save; in the browser the file is downloaded. For a print build it is the PDF/X.</p>
+
       <h2 id="export">Exporting to other formats</h2>
       <!-- screenshot: the Export menu open over the PDF pane -->
       <p><span class="ui">Export</span>, in the PDF pane, saves the document in another format:</p>
@@ -110,7 +123,7 @@
         <caption>The Export menu</caption>
         <thead><tr><th scope="col">Entry</th><th scope="col">What you get</th></tr></thead>
         <tbody>
-          <tr><td><span class="ui">PDF</span></td><td>The last build's PDF (the same as <span class="ui">File › Save PDF As…</span>).</td></tr>
+          <tr><td><span class="ui">Save PDF As…</span> (<span class="ui">Download PDF</span> in the browser)</td><td>The last build's PDF (the same as <span class="ui">File › Save PDF As…</span>).</td></tr>
           <tr><td><span class="ui">DOCX Document (.docx)</span></td><td>A word-processor document of the text.</td></tr>
           <tr><td><span class="ui">OpenDocument Text (.odt)</span></td><td>The same, in the OpenDocument format.</td></tr>
           <tr><td><span class="ui">PPTX Presentation (.pptx)</span></td><td>Slides, one per frame of a beamer presentation.</td></tr>

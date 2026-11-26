@@ -3,10 +3,9 @@
 //! controls when the app draws the window's frame (`window.rs`).
 
 use egui::{Align, Layout as EguiLayout, RichText, Sense, vec2};
-use texcraft_engine::cmd;
 
 use crate::theme::Tokens;
-use crate::ui_cmd::{self, MENUS, UI_COMMANDS};
+use crate::ui_cmd::{self, Entry, MENUS};
 use crate::{App, Layout, icons, widgets};
 
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
@@ -370,42 +369,10 @@ pub(crate) fn icon_for(id: &str) -> Option<&'static str> {
 }
 
 fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
-    let t = app.tokens;
     ui.set_min_width(220.0);
     let mut chosen = None;
-    for spec in cmd::all().iter().filter(|c| c.menu.first() == Some(&menu) && ui_cmd::in_menus(app, c.id)) {
-        let mut label = crate::forge::label(app, spec.id).unwrap_or_else(|| crate::i18n::tid(spec.id, spec.label)).to_owned();
-        if spec.id == "build.auto" && app.session.settings.auto_compile {
-            label = format!("{label} ✓");
-        }
-        if item(ui, &t, icon_for(spec.id), &label, app.keys.shortcut_text(spec.id), (spec.enabled)(&app.session)) {
-            chosen = Some(spec.id);
-        }
-    }
-    if menu == "File" {
-        ui.separator();
-        recent_menu(app, ui);
-    }
-    let mut last_group = "";
     let mut rewrite = None;
-    for c in UI_COMMANDS.iter().filter(|c| c.menu == menu) {
-        if !last_group.is_empty() && c.group != last_group {
-            ui.separator();
-        }
-        // Rewrite with AI, before Settings, when a model is connected.
-        if menu == "Edit" && c.group == "settings" && last_group != "settings" && crate::ai::offered(app) {
-            ui.menu_image_text_button(crate::icons::image(crate::ai::ICON, 14.0, t.text_muted), tl!("Rewrite with AI"), |ui| {
-                ui.set_min_width(220.0);
-                rewrite = crate::ai::rewrite_menu(app, ui);
-            });
-            ui.separator();
-        }
-        last_group = c.group;
-        let enabled = crate::fields::menu_enabled(app, ui.ctx(), c.id);
-        if item(ui, &t, icon_for(c.id), crate::i18n::tid(c.id, c.label), app.keys.shortcut_text(c.id), enabled) {
-            chosen = Some(c.id);
-        }
-    }
+    entries(app, ui, ui_cmd::menu(menu), &mut chosen, &mut rewrite);
     if let Some(choice) = rewrite {
         ui.close();
         crate::ai::run_rewrite_choice(app, &choice);
@@ -414,6 +381,57 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
         ui.close();
         if !crate::fields::menu_command(app, id) {
             ui_cmd::run(app, id);
+        }
+    }
+}
+
+/// Draws `list`'s entries ([`ui_cmd::MENU_BAR`]), those that apply here, with a line between
+/// groups; the entry chosen goes to `chosen`, a way of rewriting to `rewrite`.
+fn entries(app: &mut App, ui: &mut egui::Ui, list: &[Entry], chosen: &mut Option<&'static str>, rewrite: &mut Option<serde_json::Value>) {
+    let t = app.tokens;
+    // A line is drawn only between two entries shown.
+    let mut line = false;
+    let mut drawn = false;
+    for entry in list {
+        let shown = match entry {
+            Entry::Separator => {
+                line = drawn;
+                continue;
+            }
+            Entry::Command(id) => ui_cmd::in_menus(app, id),
+            Entry::Submenu(_, inner) => ui_cmd::any_shown(app, inner),
+            Entry::Recent => true,
+            Entry::Rewrite => crate::ai::offered(app),
+        };
+        if !shown {
+            continue;
+        }
+        if std::mem::take(&mut line) {
+            ui.separator();
+        }
+        drawn = true;
+        match entry {
+            Entry::Command(id) => {
+                let (label, enabled) = ui_cmd::menu_entry(app, id);
+                let enabled = if texcraft_engine::cmd::find(id).is_none() { crate::fields::menu_enabled(app, ui.ctx(), id) } else { enabled };
+                if item(ui, &t, icon_for(id), label, app.keys.shortcut_text(id), enabled) {
+                    *chosen = Some(id);
+                }
+            }
+            Entry::Submenu(title, inner) => {
+                ui.menu_button(crate::i18n::t(title), |ui| {
+                    ui.set_min_width(220.0);
+                    entries(app, ui, inner, chosen, rewrite);
+                });
+            }
+            Entry::Recent => recent_menu(app, ui),
+            Entry::Rewrite => {
+                ui.menu_image_text_button(crate::icons::image(crate::ai::ICON, 14.0, t.text_muted), tl!("Rewrite with AI"), |ui| {
+                    ui.set_min_width(220.0);
+                    *rewrite = crate::ai::rewrite_menu(app, ui);
+                });
+            }
+            Entry::Separator => {}
         }
     }
 }
@@ -499,9 +517,8 @@ fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
             chosen = Some("project.rename");
         }
         for id in ["project.save", "project.save_as", "build.save_pdf", "project.open", "project.new"] {
-            if let Some(spec) = cmd::find(id)
-                && item(ui, &t, icon_for(id), crate::i18n::tid(spec.id, spec.label), app.keys.shortcut_text(id), (spec.enabled)(&app.session))
-            {
+            let (label, enabled) = ui_cmd::menu_entry(app, id);
+            if item(ui, &t, icon_for(id), label, app.keys.shortcut_text(id), enabled) {
                 chosen = Some(id);
             }
         }
