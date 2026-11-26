@@ -10,3 +10,8 @@
 - `pdflatex-only.tex`: a document of our own written for pdfLaTeX (`\pdfcompresslevel`,
   `\pdfmapline`, `\pdfstrcmp`, which LuaLaTeX's format does not define), under the repository's
   licence: the build chooses pdfLaTeX for it (#52).
+- `gitlab-release-latest.json` and `github-release-latest.json`: answers written by hand in the
+  shape of GitLab's releases API (`GET /projects/:id/releases/permalink/latest`) and GitHub's
+  (`GET /repos/:owner/:repo/releases/latest`), for a made-up TeXCraft 0.20.0, with a link to
+  another host and an asset of another repository that the readers must leave out. Our own work,
+  under the repository's licence; the checksums, ids and project number are invented.

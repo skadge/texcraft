@@ -1,0 +1,32 @@
+{
+  "name": "TeXCraft 0.20.0",
+  "tag_name": "v0.20.0",
+  "description": "## What's new\n\n- **Updates**: TeXCraft says when a new version is out.\n- Faster builds, see [the guide](https://gitlab.com/severin-lemaignan/texcraft/-/blob/main/docs/guide/index.html).\n\n### Known limits\n\n- The Windows zip is `unsigned`.",
+  "created_at": "2026-12-01T09:58:11.402Z",
+  "released_at": "2026-12-01T09:58:11.402Z",
+  "upcoming_release": false,
+  "author": {"id": 1, "username": "maintainer", "name": "A Maintainer", "state": "active"},
+  "commit": {"id": "0123456789abcdef0123456789abcdef01234567", "short_id": "01234567", "title": "Release 0.20.0"},
+  "commit_path": "/severin-lemaignan/texcraft/-/commit/0123456789abcdef0123456789abcdef01234567",
+  "tag_path": "/severin-lemaignan/texcraft/-/tags/v0.20.0",
+  "assets": {
+    "count": 8,
+    "sources": [
+      {"format": "zip", "url": "https://gitlab.com/severin-lemaignan/texcraft/-/archive/v0.20.0/texcraft-v0.20.0.zip"},
+      {"format": "tar.gz", "url": "https://gitlab.com/severin-lemaignan/texcraft/-/archive/v0.20.0/texcraft-v0.20.0.tar.gz"}
+    ],
+    "links": [
+      {"id": 11, "name": "TeXCraft-0.20.0-x86_64.AppImage", "url": "https://gitlab.com/api/v4/projects/4242/packages/generic/texcraft/0.20.0/TeXCraft-0.20.0-x86_64.AppImage", "direct_asset_url": "https://gitlab.com/api/v4/projects/4242/packages/generic/texcraft/0.20.0/TeXCraft-0.20.0-x86_64.AppImage", "link_type": "package"},
+      {"id": 12, "name": "TeXCraft-0.20.0-x86_64.flatpak", "url": "https://gitlab.com/api/v4/projects/4242/packages/generic/texcraft/0.20.0/TeXCraft-0.20.0-x86_64.flatpak", "direct_asset_url": "https://gitlab.com/api/v4/projects/4242/packages/generic/texcraft/0.20.0/TeXCraft-0.20.0-x86_64.flatpak", "link_type": "package"},
+      {"id": 13, "name": "texcraft-web-0.20.0.tar.gz (browser build)", "url": "https://gitlab.com/api/v4/projects/4242/packages/generic/texcraft/0.20.0/texcraft-web-0.20.0.tar.gz", "direct_asset_url": "https://gitlab.com/api/v4/projects/4242/packages/generic/texcraft/0.20.0/texcraft-web-0.20.0.tar.gz", "link_type": "package"},
+      {"id": 14, "name": "SHA256SUMS", "url": "https://gitlab.com/api/v4/projects/4242/packages/generic/texcraft/0.20.0/SHA256SUMS", "direct_asset_url": "https://gitlab.com/api/v4/projects/4242/packages/generic/texcraft/0.20.0/SHA256SUMS", "link_type": "other"},
+      {"id": 15, "name": "elsewhere", "url": "https://example.org/TeXCraft-0.20.0-x86_64.AppImage", "direct_asset_url": "https://example.org/x", "link_type": "other"}
+    ]
+  },
+  "evidences": [],
+  "_links": {
+    "closed_issues_url": "https://gitlab.com/severin-lemaignan/texcraft/-/issues?release_tag=v0.20.0&scope=all&state=closed",
+    "edit_url": "https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.20.0/edit",
+    "self": "https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.20.0"
+  }
+}

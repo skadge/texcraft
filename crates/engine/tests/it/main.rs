@@ -34,4 +34,5 @@ mod search;
 mod spelling;
 mod sync;
 mod templates;
+mod updates;
 mod versions;

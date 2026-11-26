@@ -59,6 +59,9 @@ trash = "5"
 texcraft-gitwire = { workspace = true }
 # The AI token in the system's keychain (the suite's one keychain namespace).
 craft-suite-account = { workspace = true }
+# Updates (docs/ROADMAP.md, A8): version comparison, GitHub's release format, SHA256SUMS, verified
+# downloads and starting the new version, from the suite's updater.
+craft-update = { workspace = true }
 
 # The clock and the random source of new review ids, in the browser.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -66,8 +69,12 @@ chrono = { workspace = true, features = ["wasmbind"] }
 getrandom = { workspace = true, features = ["wasm_js"] }
 # Harper's dependencies (burn's random numbers) use getrandom 0.3, which needs its browser backend.
 getrandom03 = { package = "getrandom", version = "0.3", features = ["wasm_js"], optional = true }
+# Comparing the site's version with this build's (MIT OR Apache-2.0; craft-update's, on the desktop).
+semver = "1"
 
 [dev-dependencies]
+# The checksums of the fake downloads (updates' tests).
+sha2 = { workspace = true }
 # A fake model behind the suite's provider trait: tests never reach a network.
 craft-ai = { workspace = true }
 texcraft-templates = { workspace = true }
