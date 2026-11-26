@@ -343,3 +343,26 @@ computer.
 6. **Desktop GitLab/GitHub without a folder.** Keep "Open without saving to a folder" as a quiet
    link for people who want the old in-memory behaviour, or drop it?
 7. **Shortcut.** Cmd+Shift+O for Import a Project… is free in our table; is it wanted?
+
+## Decisions (operator, 2026-11-26)
+
+1. The card is named "Overleaf".
+2. GitHub Enterprise servers: not in this dialog for now.
+3. Both stay: the Import dialog and Open Folder… on the desktop.
+4. Clones fetch the full history (gitwire has no shallow fetch), within the size limit.
+5. Clones go into the operating system's documents folder (the XDG documents folder on Linux,
+   Documents on macOS and Windows; through the `dirs` crate or the platform's API), with a
+   Change… choice; a folder chosen there becomes the default, kept in the preferences
+   (`clone_folder`).
+6. No "open without saving to a folder": a git import always makes a local clone, and the dialog
+   says so.
+7. File › Import a Project… gets Ctrl+Shift+O (Cmd+Shift+O on macOS).
+8. **The cards show the services' own logos** (GitLab, GitHub, Overleaf), not a neutral glyph:
+   the operator's decision, taken as fair use to identify the service a card connects to, to be
+   removed if it ever becomes a problem. This departs from standards/naming.md rule 2 ("SHOULD
+   NOT use other companies' logos or icons"), a SHOULD: the reason is recorded here, in
+   docs/feature-names.md and in the commit that adds them. The marks come from the Simple Icons
+   project's release (CC0-1.0, on licences.md), at a pinned version from its own repository, as
+   single-colour SVGs drawn in the text colour; ATTRIBUTION.md records each file, its version
+   and checksum, and that each is its owner's trademark, shown only to name that service. Our own
+   features keep our own words ("Import a Project", "Sync").
