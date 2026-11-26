@@ -240,6 +240,7 @@ fn versions(ui: &mut egui::Ui, t: &Tokens, view: &HistoryView, action: &mut Opti
                         disclosure: None,
                         tag: Some(change_word(change)),
                         icon_color: None,
+                        muted: false,
                     };
                     if widgets::row(ui, t, &row).clicked() {
                         *action = Some(Action::File(path.clone()));

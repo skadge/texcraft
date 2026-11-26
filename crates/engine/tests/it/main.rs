@@ -4,6 +4,7 @@ mod ai;
 mod build_options;
 mod command_sweep;
 mod deleted;
+mod document_outline;
 mod draft;
 mod edits;
 mod export;

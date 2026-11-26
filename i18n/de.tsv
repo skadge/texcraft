@@ -1506,6 +1506,7 @@ unit	{n} s	{n} s
 @id	figure.insert	Abbildung einfügen
 @id	file.close	Datei schließen
 @id	file.delete	Löschen
+@id	file.document_outline	Gliederung des Dokuments
 @id	file.edit	Dateitext bearbeiten
 @id	file.find	In Datei suchen
 @id	file.import	Dateien hinzufügen…
@@ -2189,3 +2190,6 @@ unit	{n} s	{n} s
 	Included here with \\input or \\include: its text is shown read-only.	Hier mit \\input oder \\include eingebunden: Sein Text wird schreibgeschützt gezeigt.
 	Edit Here	Hier bearbeiten
 	Opens {name} in the formatted view, to edit it.	Öffnet {name} in der formatierten Ansicht, um es zu bearbeiten.
+	References	Verweise
+	in {file}	in {file}
+	in {file}, the file shown	in {file}, der angezeigten Datei

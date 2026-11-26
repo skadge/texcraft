@@ -315,6 +315,7 @@ fn folder(app: &App, ui: &mut egui::Ui, node: &Folder, prefix: &str, depth: usiz
             disclosure: Some(open),
             tag: None,
             icon_color: None,
+            muted: false,
         };
         let r = widgets::row(ui, &t, &row);
         if r.clicked() {
@@ -348,6 +349,7 @@ fn folder(app: &App, ui: &mut egui::Ui, node: &Folder, prefix: &str, depth: usiz
             disclosure: None,
             tag: is_main.then(|| tl!("main")),
             icon_color: is_main.then_some(t.accent),
+            muted: false,
         };
         let image = texcraft_engine::cmd::is_image(path);
         let r = widgets::row_sensing(ui, &t, &row, egui::Sense::click_and_drag());
@@ -443,6 +445,8 @@ fn drag_label(ui: &egui::Ui, t: &Tokens, icon: &str, name: &str) {
         });
 }
 
+/// The Outline: the whole document's (docs/ROADMAP.md, E14) when the shown file is part of it,
+/// else the shown file's own.
 fn outline(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     widgets::hairline(ui, &t);
@@ -452,6 +456,19 @@ fn outline(app: &mut App, ui: &mut egui::Ui) {
         empty(ui, &t, tl!("This file has no outline."));
         return;
     };
+    let text = text.to_owned();
+    let document = app.session.document_outline();
+    let in_document = document.iter().any(|e| e.file == path.as_str());
+    if !in_document {
+        file_outline(app, ui, &path, &text);
+        return;
+    }
+    document_outline(app, ui, &path, &document);
+}
+
+/// The shown file's headings alone, for a file the main document does not include.
+fn file_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, text: &str) {
+    let t = app.tokens;
     let headings = texcraft_latex::outline(text);
     if headings.is_empty() {
         empty(ui, &t, tl!("No headings in this file yet."));
@@ -473,6 +490,7 @@ fn outline(app: &mut App, ui: &mut egui::Ui) {
                 disclosure: None,
                 tag: None,
                 icon_color: None,
+                muted: false,
             };
             if widgets::row(ui, &t, &row).clicked() {
                 goto = Some(h.line + 1);
@@ -480,8 +498,105 @@ fn outline(app: &mut App, ui: &mut egui::Ui) {
         }
     });
     if let Some(line) = goto {
-        app.view.goto = Some((path, line));
+        app.view.goto = Some((path.clone(), line));
     }
+}
+
+/// The document's headings through its includes, numbered as in the PDF: the shown file's in the
+/// text's colour with the heading icons, the other files' muted with a file's icon (and named
+/// after their file where a file's part starts), so the shown part does not stand out by colour
+/// alone. An include that is not read says why in its place. A click opens the entry's file at
+/// its line.
+fn document_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, entries: &[texcraft_latex::document::Entry]) {
+    use texcraft_latex::document::EntryKind;
+    let t = app.tokens;
+    let shown = path.as_str();
+    let levels = || entries.iter().filter_map(|e| if let EntryKind::Heading { level, .. } = e.kind { Some(level) } else { None });
+    let Some(top) = levels().min() else {
+        // Only includes that are not read: say so, under the words for no headings.
+        empty(ui, &t, tl!("No headings in this file yet."));
+        for e in entries {
+            problem(ui, &t, e, 0);
+        }
+        return;
+    };
+    // The section the caret is in: the shown file's last heading at or before its line.
+    let caret = app.view.cursor.map(|(line, _)| line.saturating_sub(1));
+    let current = caret.and_then(|c| entries.iter().rposition(|e| e.file == shown && e.line <= c && matches!(e.kind, EntryKind::Heading { .. })));
+    let several = texcraft_latex::document::files(entries).len() > 1;
+    let mut goto: Option<(String, u32)> = None;
+    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 1.0;
+        let mut depth = 0;
+        let mut file_before: Option<&str> = None;
+        for (i, e) in entries.iter().enumerate() {
+            let EntryKind::Heading { level, title, number } = &e.kind else {
+                problem(ui, &t, e, depth + 1);
+                continue;
+            };
+            depth = usize::from(level.saturating_sub(top));
+            let ours = e.file == shown;
+            let label = match number {
+                Some(n) => format!("{n}  {title}"),
+                None => title.clone(),
+            };
+            let name = e.file.rsplit('/').next().unwrap_or(&e.file);
+            let starts = several && file_before != Some(e.file.as_str());
+            file_before = Some(&e.file);
+            let icon = match (ours, *level <= top) {
+                (false, _) => "file-text",
+                (true, true) => "heading-1",
+                (true, false) => "list",
+            };
+            let row = Row {
+                depth,
+                icon,
+                label: &label,
+                selected: current == Some(i),
+                disclosure: None,
+                tag: starts.then_some(name),
+                icon_color: None,
+                muted: !ours,
+            };
+            let r = widgets::row(ui, &t, &row);
+            // Where it is, for the screen reader: the file's name the row shows at a part's
+            // start, and whether it is in the shown file.
+            let place = if ours { tf!("in {file}, the file shown", file = name) } else { tf!("in {file}", file = name) };
+            ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(place));
+            if r.clicked() {
+                goto = Some((e.file.clone(), e.line + 1));
+            }
+        }
+    });
+    if let Some((file, line)) = goto
+        && let Ok(file) = ProjectPath::new(&file)
+    {
+        // The key that chose the entry must not reach the editor, which takes the keyboard now.
+        ui.input_mut(|i| {
+            i.consume_key(egui::Modifiers::NONE, egui::Key::Enter);
+            i.consume_key(egui::Modifiers::NONE, egui::Key::Space);
+        });
+        if file == *path || app.run("file.open", json!({"path": file.as_str()})).is_some() {
+            app.view.goto = Some((file, line));
+        }
+    }
+}
+
+/// An include the outline does not read, in words, at `depth` under the heading before it.
+fn problem(ui: &mut egui::Ui, t: &Tokens, e: &texcraft_latex::document::Entry, depth: usize) {
+    use texcraft_latex::document::{EntryKind, Problem};
+    let EntryKind::Include { name, problem, .. } = &e.kind else { return };
+    let said = match problem {
+        Problem::Missing => tl!("{name} is not among the project's files: the build will stop here."),
+        Problem::Loop => tl!("{name} includes itself, so it is not shown again here."),
+        Problem::TooDeep => tl!("{name} is included too deep to be shown here."),
+    }
+    .replace("{name}", name);
+    ui.horizontal(|ui| {
+        ui.add_space(2.0 * t.unit + depth as f32 * 4.0 * t.unit + t.icon_size + t.unit);
+        ui.add(crate::icons::image("triangle-exclamation-point", t.icon_size, t.text_muted));
+        ui.add(egui::Label::new(egui::RichText::new(said).font(t.small()).color(t.text_muted)).wrap());
+    });
 }
 
 fn empty(ui: &mut egui::Ui, t: &Tokens, text: &str) {

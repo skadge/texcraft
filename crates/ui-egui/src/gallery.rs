@@ -309,6 +309,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                         disclosure: None,
                         tag: Some(&tag),
                         icon_color: None,
+                        muted: false,
                     };
                     if widgets::row(ui, &t, &row).clicked() {
                         app.gallery.category = i;

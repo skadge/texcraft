@@ -227,7 +227,7 @@ fn tab_crosses_the_window_in_reading_order_and_f6_takes_the_keyboard_out_of_the_
         (Role::Button, "Settings"),
         (Role::Button, "Add Files…"),
         (Role::TreeItem, "main.tex"),
-        (Role::TreeItem, "Introduction"),
+        (Role::TreeItem, "1  Introduction"),
         (Role::Tab, "main.tex"),
         (Role::RadioButton, "Source"),
         (Role::Button, "Bold"),
@@ -332,7 +332,14 @@ fn search_and_the_symbols_are_reached_from_their_fields() {
 #[test]
 fn the_editor_s_toolbar_menus_open_and_close_from_the_keyboard() {
     let mut h = blank();
-    for (menu, first) in [("More formatting", "Inline Formula"), ("Heading", "Section"), ("Compile options", "Compile automatically")] {
+    let menus = [
+        ("More formatting", "Figure"),
+        ("Heading", "Section"),
+        ("Formula", "Inline Formula"),
+        ("References", "Cross-Reference"),
+        ("Compile options", "Compile automatically"),
+    ];
+    for (menu, first) in menus {
         focus(&mut h, Role::Button, menu);
         let item = key(&mut h, egui::Key::Enter);
         assert_eq!(item.name, first, "Enter opens {menu} with the keyboard on its first entry");

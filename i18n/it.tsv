@@ -1506,6 +1506,7 @@ unit	{n} s	{n} s
 @id	figure.insert	Inserisci figura
 @id	file.close	Chiudi file
 @id	file.delete	Elimina
+@id	file.document_outline	Struttura del documento
 @id	file.edit	Modifica il testo del file
 @id	file.find	Trova nel file
 @id	file.import	Aggiungi file…
@@ -2189,3 +2190,6 @@ unit	{n} s	{n} s
 	Included here with \\input or \\include: its text is shown read-only.	Incluso qui con \\input o \\include: il suo testo è mostrato in sola lettura.
 	Edit Here	Modifica qui
 	Opens {name} in the formatted view, to edit it.	Apre {name} nella vista formattata, per modificarlo.
+	References	Riferimenti
+	in {file}	in {file}
+	in {file}, the file shown	in {file}, il file mostrato

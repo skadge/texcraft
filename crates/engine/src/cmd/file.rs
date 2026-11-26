@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 use texcraft_project::{Contents, ProjectPath};
 
-use super::{CommandSpec, always, path_param, string};
+use super::{CommandSpec, always, no_params, path_param, string};
 use crate::import::{self, Gathered};
 use crate::{Change, Origin, Result, Session, Transaction};
 
@@ -158,6 +158,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             params: path_schema,
             enabled: always,
             run: outline,
+            changes: false,
+        },
+        CommandSpec {
+            id: "file.document_outline",
+            label: "Document Outline",
+            menu: &[],
+            shortcut: None,
+            params: no_params,
+            enabled: always,
+            run: document_outline,
             changes: false,
         },
     ]
@@ -548,4 +558,13 @@ fn outline(s: &mut Session, p: &Value) -> Result<Value> {
     let path = path_param(p, "path")?;
     let text = s.project.text(&path).map_err(|e| e.to_string())?;
     Ok(json!({"headings": texcraft_latex::outline(text)}))
+}
+
+/// The whole document's outline, from the main file through its `\input`s and `\include`s: each
+/// entry with its file and line (from 0), a heading's level, title and number, or an include that
+/// is not followed and why (`missing`, `loop`, `too_deep`).
+fn document_outline(s: &mut Session, _: &Value) -> Result<Value> {
+    let Some(main) = s.project.main().cloned() else { return Err("The project has no main document.".to_owned()) };
+    let entries = s.document_outline();
+    Ok(json!({"main": main.as_str(), "entries": *entries}))
 }

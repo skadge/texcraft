@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use texcraft_latex::auxfile::{self, Aux, CiteStyle, Missing};
+use texcraft_latex::document::{self, Entry};
 use texcraft_latex::numbers::{self, Numbers};
 use texcraft_latex::view::TheoremKind;
 use texcraft_project::ProjectPath;
@@ -18,6 +19,9 @@ pub(crate) struct State {
     /// The project revision and `.aux` generation `numbered` was made from.
     of: Option<(u64, u64)>,
     numbered: Arc<Numbered>,
+    /// The project revision and `.aux` generation `outline` was made from.
+    outline_of: Option<(u64, u64)>,
+    outline: Arc<Vec<Entry>>,
 }
 
 impl State {
@@ -65,6 +69,27 @@ impl crate::Session {
         self.numbering.numbered = Arc::new(numbered);
         self.numbering.of = Some(key);
         Arc::clone(&self.numbering.numbered)
+    }
+
+    /// The whole document's outline (docs/ROADMAP.md, E14): the headings of the main file and of
+    /// the files it includes, each in its place, numbered as the PDF numbers them; empty without
+    /// a main file.
+    pub fn document_outline(&mut self) -> Arc<Vec<Entry>> {
+        let key = (self.revision, self.numbering.generation);
+        if self.numbering.outline_of == Some(key) {
+            return Arc::clone(&self.numbering.outline);
+        }
+        let numbered = self.numbered();
+        let project = &self.project;
+        let read = |p: &str| -> Option<Arc<str>> { ProjectPath::new(p).ok().and_then(|p| project.text(&p).ok()).map(Arc::from) };
+        let exists = |p: &str| ProjectPath::new(p).ok().is_some_and(|p| project.get(&p).is_some());
+        let entries = match &numbered.main {
+            Some(main) => document::outline(main.as_str(), &read, &exists, Some(&numbered.numbers)),
+            None => Vec::new(),
+        };
+        self.numbering.outline = Arc::new(entries);
+        self.numbering.outline_of = Some(key);
+        Arc::clone(&self.numbering.outline)
     }
 
     /// What `\command{keys}` (a cross-reference or a citation) shows in the PDF, or why it is not

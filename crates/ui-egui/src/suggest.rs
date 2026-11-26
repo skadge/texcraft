@@ -208,17 +208,19 @@ pub(crate) fn passages(app: &App, path: &ProjectPath, selected: Option<Id>) -> V
         .collect()
 }
 
-/// The toolbar's Suggest switch: a button that stays pressed while suggesting. With less than
-/// `room` for it and its label (a narrow pane, a language's longer word), the pencil alone, named
-/// and explained the same.
-pub(crate) fn switch(app: &mut App, ui: &mut egui::Ui, room: f32) -> bool {
+/// The width of the toolbar's Suggest switch, with its label or `compact` (the pencil alone).
+pub(crate) fn switch_width(ui: &egui::Ui, t: &crate::theme::Tokens, compact: bool) -> f32 {
+    let label = if compact { 0.0 } else { ui.fonts_mut(|f| f.layout_no_wrap(tl!("Suggest").to_owned(), t.small(), t.text).size().x) + t.unit };
+    label + 14.0 + 3.0 * t.unit + 8.0
+}
+
+/// The toolbar's Suggest switch: a button that stays pressed while suggesting. `compact` (a
+/// narrow pane, a language's longer word), the pencil alone, named and explained the same.
+pub(crate) fn switch(app: &mut App, ui: &mut egui::Ui, compact: bool) -> bool {
     let t = app.tokens;
     let on = app.editor.suggest;
     let colour = if on { t.accent } else { t.text_muted };
     let label = tl!("Suggest");
-    // The label, the icon and the button's padding.
-    let wanted = ui.fonts_mut(|f| f.layout_no_wrap(label.to_owned(), t.small(), t.text).size().x) + 14.0 + 4.0 * t.unit + 8.0;
-    let compact = room < wanted;
     let icon = icons::image("pencil", 14.0, colour);
     let r = if compact {
         ui.add(egui::Button::selectable(on, egui::Atoms::new(icon)))

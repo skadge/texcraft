@@ -302,6 +302,7 @@ fn results(ui: &mut egui::Ui, t: &Tokens, found: &Found, collapsed: &HashSet<Str
                         disclosure: Some(open),
                         tag: Some(&count),
                         icon_color: None,
+                        muted: false,
                     };
                     let r = widgets::row(ui, t, &row);
                     let said = trn(f.matches.len(), "{n} match", "{n} matches");

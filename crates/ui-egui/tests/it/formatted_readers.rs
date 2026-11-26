@@ -87,7 +87,9 @@ fn an_included_file_is_shown_in_place_and_opens_from_edit_here() {
     assert!(paragraph_with(&harness, "A pendulum swings."), "the included file's text is not shown");
     assert!(paragraph_with(&harness, "It swings back."), "a file it includes is not shown in its place");
     assert!(harness.query_by_label("sections/intro.tex").is_some(), "the included file is not named");
-    assert!(harness.query_by_label_contains("missing is not among the project's files").is_some(), "a missing file is not said in words");
+    // In the view, and in the outline below the files.
+    let said = harness.query_all_by_label_contains("missing is not among the project's files").count();
+    assert!(said >= 2, "a missing file is not said in words in the view and the outline");
     // Its text is not the shown file's: the view's lines stay those of main.tex.
     harness.get_all_by_label("Edit Here").next().unwrap().click();
     harness.run_steps(4);
