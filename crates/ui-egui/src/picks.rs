@@ -98,10 +98,13 @@ impl App {
     /// Files the user chose or dropped, by path and contents (the browser has no paths on disk):
     /// a file's name, or for the files of a dropped folder their path from the folder's name.
     /// They are added to the project at the top level, a zip file asked about first; on the
-    /// start page a folder or a zip file makes a new project.
+    /// start page a folder or a zip file makes a new project. Dropped ones (read after
+    /// [`App::take_dropped_files`]) make a figure in the formatted view when they are one image,
+    /// as on the desktop.
     pub fn add_files(&mut self, files: Vec<(String, Vec<u8>)>) {
         let items = files.into_iter().map(|(name, bytes)| Item::Bytes(name.replace('\\', "/"), bytes)).collect();
-        self.import_items(items, false);
+        let dropped = std::mem::take(&mut self.reading_drop);
+        self.import_items(items, dropped);
     }
 
     /// Files dropped on the window this frame: added to the project (from their path on the
@@ -174,7 +177,9 @@ impl App {
 
     /// Files dropped in the browser, for the shell to read and give to [`App::add_files`].
     pub fn take_dropped_files(&mut self) -> Vec<egui::DroppedFileHandle> {
-        std::mem::take(&mut self.dropped)
+        let dropped = std::mem::take(&mut self.dropped);
+        self.reading_drop |= !dropped.is_empty();
+        dropped
     }
 
     /// A pick the shell could not show: its reason goes to the status line.

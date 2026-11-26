@@ -239,8 +239,10 @@ pub struct App {
     desktop_window: bool,
     /// Whether the system's frame was last asked for (`ViewportCommand::Decorations`).
     decorations: Option<bool>,
-    /// Files dropped in the browser, waiting for the shell to read them.
+    /// Files dropped in the browser, waiting for the shell to read them; and whether the files
+    /// the shell reads next were dropped (one image then makes a figure in the formatted view).
     dropped: Vec<egui::DroppedFileHandle>,
+    reading_drop: bool,
     /// The name given to an untitled project on the desktop, while the user chooses the folder
     /// to make its folder in.
     pending_name: Option<String>,
@@ -348,6 +350,7 @@ impl App {
             desktop_window: false,
             decorations: None,
             dropped: Vec::new(),
+            reading_drop: false,
             pending_name: None,
             recent_files: Vec::new(),
             forge_count: forge::Count::default(),

@@ -29,6 +29,13 @@ use crate::theme::{Tokens, blend};
 mod table;
 pub(crate) use table::CellAt;
 
+#[path = "formatted_figure.rs"]
+mod fig;
+
+#[path = "formatted_source.rs"]
+pub(crate) mod in_place;
+use in_place::{Anchor, Atom, InPlace, What};
+
 /// The view model of the shown file, for the session revision it was made from.
 struct Cache {
     path: ProjectPath,
@@ -66,6 +73,10 @@ pub(crate) struct Formatted {
     pub editing: crate::formatted_edit::Editing,
     /// The toolbar's state: where the caret is.
     pub bar: crate::formatted_bar::State,
+    /// The source editor open in the view (a part shown as source, a formula).
+    pub in_place: Option<InPlace>,
+    /// The new formula dialog.
+    pub new_formula: Option<in_place::NewFormula>,
 }
 
 /// Typeset formulas as textures, by their batch's PDF, page and pixels per point; those not drawn
@@ -236,8 +247,12 @@ struct Cx<'a> {
     caret: Option<usize>,
     /// Bring the line of this source offset into view.
     reveal: Option<usize>,
-    /// The caret's source offset, focused or not: the table holding it shows its toolbar.
+    /// The caret's source offset, focused or not: the table holding it shows its toolbar; and
+    /// the selection's other end.
     edit_caret: Option<usize>,
+    edit_anchor: Option<usize>,
+    /// Out: a table toolbar's Caption or Label button (the operation, and the table's first byte).
+    table_prompt: Option<(&'static str, usize)>,
     /// Give the keyboard to the toolbar of the table holding the caret.
     focus_toolbar: bool,
     /// Out: a table's toolbar holds the keyboard.
@@ -246,6 +261,11 @@ struct Cx<'a> {
     table_action: Option<serde_json::Value>,
     /// Out: a figure's Edit button was pressed (its first byte).
     edit_figure: Option<usize>,
+    /// Out: a figure's `figure.edit` (its `at` the figure's first byte), from its handle, its menu
+    /// or Add Caption.
+    figure_action: Option<serde_json::Value>,
+    /// Out: a figure's Label… (its first byte).
+    figure_label: Option<usize>,
     /// The misspelled words' bytes, in order.
     misspelled: &'a [Range<usize>],
     /// The grammar problems' bytes, in order.
@@ -254,6 +274,13 @@ struct Cx<'a> {
     cited: &'a HashMap<String, String>,
     /// Out: a cross-reference was followed (Ctrl+click): its key.
     follow: Option<String>,
+    /// The source editor open in the view, and its formula's preview.
+    in_place: Option<&'a mut InPlace>,
+    preview: Option<&'a FormulaState>,
+    /// Out: the editor was left (Escape, a click outside).
+    close_in_place: bool,
+    /// Out: a part was clicked or activated to edit it in place.
+    open: Option<InPlace>,
 }
 
 /// A line of text as drawn: what its characters stand for, its layout and where it is, the slot
@@ -268,6 +295,8 @@ pub(crate) struct DrawnLine {
     pub phantom: bool,
     /// The table cell it is.
     pub cell: Option<CellAt>,
+    /// Its runs that open in the source editor (formulas, commands shown as source).
+    pub atoms: Vec<Atom>,
 }
 
 /// The line of the pieces of a paragraph, or an empty one at `empty_at`.
@@ -290,6 +319,10 @@ fn line_of(pieces: &[Piece], empty_at: usize) -> Line {
 }
 
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
+    // An editor left open on another file: its edit goes in now.
+    if app.editor.formatted.in_place.as_ref().is_some_and(|ip| &ip.path != path) {
+        in_place::close(app);
+    }
     // The view is made from the editor's buffer, which it edits: its text is the file's.
     let version = app.editor.source.doc.buffer.version();
     let fresh = app.editor.formatted.cache.as_ref().is_some_and(|c| &c.path == path && c.revision == version);
@@ -322,8 +355,19 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
     }
     let typeset: HashMap<usize, FormulaState> = found.formulas.into_iter().map(|f| (f.range.start, f.state)).collect();
+    let preview = match app.editor.formatted.in_place.as_ref() {
+        Some(InPlace { what: What::Formula { display, env }, buffer, .. }) if !buffer.trim().is_empty() => {
+            let (math, display, env) = (buffer.clone(), *display, env.clone());
+            Some(app.session.formula_preview(path, &math, display, env.as_deref()))
+        }
+        _ => None,
+    };
     let t = app.tokens;
     let caret = crate::formatted_edit::caret_byte(app);
+    let anchor = {
+        let d = &app.editor.source.doc;
+        d.buffer.char_to_byte(d.selection.primary().anchor)
+    };
     let reveal = std::mem::take(&mut app.editor.formatted.editing.reveal).then_some(caret);
     let vim = app.editor.source.vim.is_some();
     let misspelled = misspellings(app, ui, path);
@@ -353,14 +397,22 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         caret: focused.then_some(caret),
         reveal,
         edit_caret: Some(caret),
+        edit_anchor: Some(anchor),
+        table_prompt: None,
         focus_toolbar: std::mem::take(&mut app.editor.formatted.editing.focus_toolbar),
         toolbar_focused: false,
         table_action: None,
         edit_figure: None,
+        figure_action: None,
+        figure_label: None,
         misspelled: &misspelled,
         grammar: &grammar,
         cited: &cited,
         follow: None,
+        in_place: app.editor.formatted.in_place.as_mut(),
+        preview: preview.as_ref(),
+        close_in_place: false,
+        open: None,
     };
     let page = 6.0 * t.unit;
     app.view.cursor = None;
@@ -395,7 +447,10 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     cx.ink.end();
     let (jump, toggle, first, lines) = (cx.jump.take(), cx.toggle_preamble, cx.first, std::mem::take(&mut cx.lines));
     let (table_action, edit_figure, toolbar_focused) = (cx.table_action.take(), cx.edit_figure, cx.toolbar_focused);
+    let table_prompt = cx.table_prompt.take();
+    let (figure_action, figure_label) = (cx.figure_action.take(), cx.figure_label);
     let follow = cx.follow.take();
+    let (close_in_place, open) = (cx.close_in_place, cx.open.take());
     app.region(crate::Region::Editor, if lines.is_empty() { first.unwrap_or(doc_id) } else { doc_id });
     // Escape on a table's toolbar gives the keyboard back to the cell.
     let e = &mut app.editor.formatted.editing;
@@ -403,8 +458,24 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         e.focus = true;
     }
     crate::formatted_edit::finish(app, ui, (path, &text), &lines, (&painter, &doc_r), edits);
+    if close_in_place {
+        in_place::close(app);
+    }
+    if let Some(ip) = open {
+        in_place::open(app, ip);
+    }
+    in_place::new_formula_dialog(app, &ui.ctx().clone(), path);
     if let Some(action) = table_action {
         run_table_action(app, path, &text, action);
+    }
+    if let Some((op, at)) = table_prompt {
+        float_prompt(app, path, "table.edit", op, at);
+    }
+    if let Some(at) = figure_label {
+        float_prompt(app, path, "figure.edit", "label", at);
+    }
+    if let Some(action) = figure_action {
+        run_figure_action(app, path, action);
     }
     if let Some(key) = follow {
         follow_reference(app, &key);
@@ -571,6 +642,55 @@ fn run_table_action(app: &mut App, path: &ProjectPath, text: &str, mut action: s
     app.editor.formatted.editing.focus = true;
 }
 
+/// Runs a figure's `figure.edit`, its position made characters; with `caret_in_caption`, the
+/// caret then goes in the caption it added.
+fn run_figure_action(app: &mut App, path: &ProjectPath, mut action: serde_json::Value) {
+    crate::editor::send_edits(app);
+    let Ok(text) = app.session.project().text(path).map(str::to_owned) else { return };
+    let byte = action["at"].as_u64().unwrap_or(0) as usize + 1;
+    let caret_in_caption = action.as_object_mut().and_then(|o| o.remove("caret_in_caption")).is_some();
+    action["at"] = serde_json::json!(text.get(..byte).map_or(0, |s| s.chars().count()));
+    action["path"] = serde_json::json!(path.as_str());
+    if app.run("figure.edit", action).is_none() || !caret_in_caption {
+        app.editor.formatted.editing.focus = true;
+        return;
+    }
+    let Ok(text) = app.session.project().text(path).map(str::to_owned) else { return };
+    if let Some((inner, _)) = texcraft_latex::figure::find(&text, byte).and_then(|f| f.caption) {
+        let at = text.get(..inner.start).map_or(0, |s| s.chars().count());
+        crate::editor::select_after_edit(app, path, at, at);
+    }
+    app.editor.formatted.editing.focus = true;
+    app.editor.formatted.editing.reveal = true;
+}
+
+/// Asks for a table's or a figure's caption or label (`op`), starting from the one it has, then
+/// runs `command` (`table.edit`, `figure.edit`); `at` is a byte inside the table or figure.
+fn float_prompt(app: &mut App, path: &ProjectPath, command: &'static str, op: &'static str, at: usize) {
+    crate::editor::send_edits(app);
+    let Ok(text) = app.session.project().text(path).map(str::to_owned) else { return };
+    let table = command == "table.edit";
+    let float = if table { texcraft_latex::figure::find_table_float(&text, at) } else { texcraft_latex::figure::find(&text, at + 1) };
+    let src = |r: &Range<usize>| text.get(r.clone()).unwrap_or_default().to_owned();
+    let (title, label) = match (table, op) {
+        (true, "caption") => (tl!("Table Caption"), tl!("The caption, in LaTeX")),
+        (true, _) => (tl!("Table Label"), tl!("The label references use, such as tab:results")),
+        (false, _) => (tl!("Figure Label"), tl!("The label references use, such as fig:plot")),
+    };
+    let value = if op == "caption" {
+        float.as_ref().and_then(|f| f.caption.as_ref()).map(|c| src(&c.0)).unwrap_or_default()
+    } else {
+        float.as_ref().and_then(|f| f.label.as_ref()).map(&src).unwrap_or_default()
+    };
+    let chars = text.get(..at + 1).map_or(0, |s| s.chars().count());
+    let file = path.as_str().to_owned();
+    let params = move |v: &str| {
+        if table { serde_json::json!({"path": file, "at": chars, "op": op, op: v}) } else { serde_json::json!({"path": file, "at": chars, op: v}) }
+    };
+    let prompt = crate::dialogs::Prompt { title, label, value, action: tl!("Apply"), command, params: Box::new(params), focus: true };
+    app.view.dialog = Some(crate::dialogs::Dialog::Prompt(prompt));
+}
+
 /// The id of the formatted view's editable text for `path`.
 pub(crate) fn text_id(path: &ProjectPath) -> egui::Id {
     egui::Id::unique(("formatted-text", path.as_str()))
@@ -679,7 +799,7 @@ fn draw_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, block: &Block, depth: usize) {
         BlockKind::List { kind, items } => list(ui, cx, *kind, items, depth),
         BlockKind::Container { name, blocks } => container(ui, cx, name, blocks, depth),
         BlockKind::Formula { source, env, closed } => formula(ui, cx, range, source, env.as_deref(), *closed),
-        BlockKind::Figure { image, caption, label } => figure_card(ui, cx, range, image.as_ref(), caption, label.as_ref()),
+        BlockKind::Figure { image, caption, label } => fig::card(ui, cx, range, image.as_ref(), caption, label.as_ref()),
         BlockKind::Table(tb) => table::table_block(ui, cx, range, tb),
         BlockKind::UnsupportedTable(why) => table::unsupported(ui, cx, range, why),
         BlockKind::Source => source_block(ui, cx, range),
@@ -705,6 +825,8 @@ struct Piece {
     kind: PieceKind,
     /// For text: the source each of its characters stands for ([`edit::offsets`]).
     offsets: Option<Vec<usize>>,
+    /// For a formula: its math, and whether it is displayed.
+    math: Option<(Range<usize>, bool)>,
 }
 
 enum PieceKind {
@@ -782,7 +904,7 @@ impl Builder<'_> {
         let start = self.chars;
         self.chars += s.chars().count();
         self.job.append(s, 0.0, format);
-        self.pieces.push(Piece { chars: start..self.chars, range, kind, offsets: None });
+        self.pieces.push(Piece { chars: start..self.chars, range, kind, offsets: None, math: None });
     }
 
     /// A no-break space as wide as typeset formula `b`, in a line tall enough for its height above
@@ -826,12 +948,15 @@ impl Builder<'_> {
                 let format = self.format(outer, self.color);
                 self.append("\n", format, range, PieceKind::Break);
             }
-            InlineKind::Formula { source, .. } => {
+            InlineKind::Formula { source, display, .. } => {
                 let math = collapse(self.text.get(source.clone()).unwrap_or_default());
                 self.plain.push_str(&math);
                 let kind = match self.typeset.get(&range.start) {
                     Some(FormulaState::Typeset(b)) => {
                         self.typeset_space(b, range);
+                        if let Some(p) = self.pieces.last_mut() {
+                            p.math = Some((source.clone(), *display));
+                        }
                         return;
                     }
                     Some(FormulaState::Failed(messages)) => PieceKind::FormulaError(messages.join("\n")),
@@ -841,6 +966,9 @@ impl Builder<'_> {
                 let font = FontId::new(self.t.code_size * self.size / self.t.reading_size * 0.95, FontFamily::Monospace);
                 let format = self.atom_format(font, self.t.syntax_math);
                 self.append(&format!("\u{a0}{math}\u{a0}"), format, range, kind);
+                if let Some(p) = self.pieces.last_mut() {
+                    p.math = Some((source.clone(), *display));
+                }
             }
             InlineKind::Chip { kind, command, key } => {
                 self.plain.push_str(key);
@@ -867,7 +995,7 @@ impl Builder<'_> {
                 }
                 self.color = color;
                 self.pieces.retain(|p| p.chars.start < start);
-                self.pieces.push(Piece { chars: start..self.chars, range, kind: PieceKind::Link(url.clone()), offsets: None });
+                self.pieces.push(Piece { chars: start..self.chars, range, kind: PieceKind::Link(url.clone()), offsets: None, math: None });
             }
             InlineKind::Source => {
                 let src = collapse(self.text.get(range.clone()).unwrap_or_default());
@@ -963,13 +1091,16 @@ fn piece_tip(kind: &PieceKind, text: &str, range: &Range<usize>, cited: &HashMap
             if who.is_empty() { said } else { format!("{said}: {}", who.join("; ")) }
         }
         PieceKind::Chip(ChipKind::File, command) => tl!("File read with \\{command}: {key}").replace("{command}", command).replace("{key}", &key()),
-        PieceKind::Formula(true) => tl!("The formula's source, while it is typeset. Double-click to edit it.").to_owned(),
+        PieceKind::Formula(true) => tl!("The formula's source, while it is typeset. Click to edit it here.").to_owned(),
         PieceKind::Formula(false) => {
-            tl!("The formula's source: this version typesets formulas in the desktop app only. Double-click to edit it.").to_owned()
+            tl!("The formula's source: this version typesets formulas in the desktop app only. Click to edit it here.").to_owned()
         }
-        PieceKind::Typeset(_) => tl!("A formula. Double-click to edit its source.").to_owned(),
+        PieceKind::Typeset(_) => tl!("A formula. Click, or select it and press Enter, to edit it here.").to_owned(),
         PieceKind::FormulaError(message) => tl!("This formula has an error: {message}").replace("{message}", message),
-        PieceKind::Source => tl!("Shown as its source: the formatted view does not show this command yet.").to_owned(),
+        PieceKind::Source => {
+            tl!("Shown as its source: the formatted view does not show this command yet. Click, or select it and press Enter, to edit it here.")
+                .to_owned()
+        }
         PieceKind::Link(url) => url.clone(),
         PieceKind::Footnote(note) => tl!("Footnote: {text}").replace("{text}", note),
     })
@@ -1033,13 +1164,24 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
         Some(tip) => r.on_hover_text_at_pointer(tip),
         None => r,
     };
-    // A double-click on a run goes to where that run's source starts.
-    if r.double_clicked() {
+    let atoms: Vec<Atom> = pieces.iter().filter_map(atom_of).collect();
+    // A click on a formula or a command shown as source edits it here.
+    let clicked_atom = hovered.and_then(atom_of).filter(|_| (r.clicked() || r.double_clicked()) && !ui.input(|i| i.modifiers.command));
+    if let Some(atom) = &clicked_atom {
+        cx.open = Some(InPlace::of_atom(cx.path, cx.text, atom));
+    } else if r.double_clicked() {
+        // A double-click on a run goes to where that run's source starts.
         cx.jump = Some(Jump(hovered.map_or(range.start, |p| p.range.start)));
     }
     let role = para.role;
     r.widget_info(|| egui::WidgetInfo::labeled(role, true, &plain_text));
-    let line = line_of(&pieces, para.empty_at.unwrap_or(range.start));
+    let mut line = line_of(&pieces, para.empty_at.unwrap_or(range.start));
+    if let Some(at) = para.empty_at.filter(|_| line.first_stop().is_none()) {
+        // Only what the view adds ("Figure."): the caret stands after it, at `at`.
+        let mut parts = line.parts().to_vec();
+        parts.push(Part::Text(vec![at]));
+        line = Line::new(parts);
+    }
     if let Some(byte) = cx.reveal
         && line.span().is_some_and(|s| s.start <= byte && byte <= s.end)
     {
@@ -1048,8 +1190,22 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
         ui.scroll_to_rect(caret.expand(para.size), None);
         cx.reveal = None;
     }
-    cx.lines.push(DrawnLine { line, galley, origin, slot, response: r.clone(), phantom: false, cell: para.cell });
+    let under = in_place::under(cx, &atoms);
+    cx.lines.push(DrawnLine { line, galley, origin, slot, response: r.clone(), phantom: false, cell: para.cell, atoms });
+    if under {
+        ui.add_space(cx.t.unit * 2.0);
+        in_place::draw(ui, cx);
+    }
     r
+}
+
+/// The run a piece opens in the source editor: a formula, a command shown as source.
+fn atom_of(p: &Piece) -> Option<Atom> {
+    match p.kind {
+        PieceKind::Formula(_) | PieceKind::Typeset(_) | PieceKind::FormulaError(_) => Some(Atom { range: p.range.clone(), math: p.math.clone() }),
+        PieceKind::Source => Some(Atom { range: p.range.clone(), math: None }),
+        _ => None,
+    }
 }
 
 /// Where a block ends in the view: a heading after the label shown with it.
@@ -1079,23 +1235,29 @@ fn phantom(ui: &mut egui::Ui, cx: &mut Cx<'_>, (prev, next): (usize, usize), las
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::CLICK | Sense::DRAG);
     let slot = ui.painter().add(egui::Shape::Noop);
     let origin = pos2(rect.left(), rect.center().y - galley.size().y / 2.0);
-    cx.lines.push(DrawnLine { line: Line::empty(c), galley, origin, slot, response, phantom: true, cell: None });
+    cx.lines.push(DrawnLine { line: Line::empty(c), galley, origin, slot, response, phantom: true, cell: None, atoms: Vec::new() });
     if !last {
         ui.add_space(gap_before(&t, &BlockKind::Paragraph(Vec::new())));
     }
 }
 
-/// The focus ring, Enter and double-click of a part of the view.
-fn activate(ui: &egui::Ui, cx: &mut Cx<'_>, r: &egui::Response, rect: Rect, start: usize, target: Option<usize>) {
+/// The focus ring of a part of the view; whether Enter was pressed on it.
+fn focusable(ui: &egui::Ui, cx: &mut Cx<'_>, r: &egui::Response, rect: Rect) -> bool {
     if cx.first.is_none() {
         cx.first = Some(r.id);
     }
-    if r.has_focus() {
-        cx.focused = true;
-        crate::widgets::focus_ring(ui, &cx.t, r, rect.expand(cx.t.unit), cx.t.corner());
-        if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            cx.jump = Some(Jump(start));
-        }
+    if !r.has_focus() {
+        return false;
+    }
+    cx.focused = true;
+    crate::widgets::focus_ring(ui, &cx.t, r, rect.expand(cx.t.unit), cx.t.corner());
+    ui.input(|i| i.key_pressed(egui::Key::Enter))
+}
+
+/// The focus ring, Enter and double-click of a part of the view: they show its source.
+fn activate(ui: &egui::Ui, cx: &mut Cx<'_>, r: &egui::Response, rect: Rect, start: usize, target: Option<usize>) {
+    if focusable(ui, cx, r, rect) {
+        cx.jump = Some(Jump(start));
     }
     if let Some(at) = target {
         cx.jump = Some(Jump(at));
@@ -1242,7 +1404,7 @@ fn preamble(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>) {
         cx.focused = true;
     }
     crate::widgets::focus_ring(ui, &t, &r, rect, t.corner_large());
-    let _ = r.on_hover_text(tl!("The preamble: the document's class, packages and settings. Double-click its source to edit it."));
+    let _ = r.on_hover_text(tl!("The preamble: the document's class, packages and settings. Click its source to edit it here."));
     if open {
         let src = cx.text.get(range.clone()).unwrap_or_default().trim_end();
         let _ = code(ui, cx, src, range.start, Some(egui::CornerRadius { nw: 0, ne: 0, sw: t.radius_large, se: t.radius_large }), None);
@@ -1253,6 +1415,12 @@ fn preamble(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>) {
 /// `header`; double-clicking a character jumps to it.
 fn code(ui: &mut egui::Ui, cx: &mut Cx<'_>, src: &str, offset: usize, corner: Option<egui::CornerRadius>, header: Option<&str>) -> egui::Response {
     let t = cx.t;
+    if in_place::at_block(cx, offset) {
+        let top = ui.cursor().min;
+        in_place::draw(ui, cx);
+        let rect = Rect::from_min_max(top, pos2(top.x + ui.available_width(), ui.cursor().top()));
+        return ui.interact(rect, egui::Id::unique(("in-place-block", offset)), Sense::hover());
+    }
     let pad = 3.0 * t.unit;
     let head = header.map(|h| ui.painter().layout_no_wrap(h.to_owned(), t.small(), t.text_muted));
     let head_h = head.as_ref().map_or(0.0, |g| g.size().y + 2.0 * t.unit);
@@ -1276,22 +1444,18 @@ fn code(ui: &mut egui::Ui, cx: &mut Cx<'_>, src: &str, offset: usize, corner: Op
     }
     let origin = rect.min + vec2(pad, pad + head_h);
     ui.painter().galley(origin, Arc::clone(&galley), t.text);
-    let target = if r.double_clicked() {
-        r.interact_pointer_pos().map(|p| {
-            let chars = galley.cursor_from_pos(p - origin).index.0;
-            offset + src.char_indices().nth(chars).map_or(src.len(), |(b, _)| b)
-        })
-    } else {
-        None
-    };
-    let source = tl!("Source: {text}").replace("{text}", src);
+    let source = tl!("LaTeX source: {text}").replace("{text}", src);
     // Its header is visible, so the name starts with it.
     let label = match header {
         Some(h) => format!("{h}. {source}"),
         None => source,
     };
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Code, true, &label));
-    activate(ui, cx, &r, rect, offset, target);
+    // A click or Enter edits it here.
+    if focusable(ui, cx, &r, rect) || r.clicked() {
+        let header = header.map_or_else(|| tl!("LaTeX").to_owned(), str::to_owned);
+        cx.open = Some(InPlace::new(cx.path, cx.text, offset..offset + src.len(), What::Source, Anchor::Block(offset), header));
+    }
     r
 }
 
@@ -1517,6 +1681,18 @@ fn indented(ui: &mut egui::Ui, cx: &mut Cx<'_>, blocks: &[Block], depth: usize, 
 
 fn formula(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, source: &Range<usize>, env: Option<&str>, closed: bool) {
     let t = cx.t;
+    if in_place::at_block(cx, range.start) {
+        return in_place::draw(ui, cx);
+    }
+    // A click or Enter edits its math here, with its preview.
+    let edit_here = |cx: &mut Cx<'_>| {
+        let what = What::Formula { display: true, env: env.map(str::to_owned) };
+        let title = match env {
+            Some(env) => tl!("Formula ({env}), in LaTeX").replace("{env}", env),
+            None => tl!("Formula (LaTeX)").to_owned(),
+        };
+        cx.open = Some(InPlace::new(cx.path, cx.text, source.clone(), what, Anchor::Block(range.start), title));
+    };
     let math = cx.text.get(source.clone()).unwrap_or_default();
     let lines: Vec<&str> = math.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
     let shown = lines.join("\n");
@@ -1550,8 +1726,10 @@ fn formula(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, source: &Ra
         // Named by its source, as a picture of a formula is.
         let label = collapse(math);
         r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, &label));
-        let r = r.on_hover_text(tl!("A formula. Double-click to edit its source."));
-        activate(ui, cx, &r, image.expand(t.unit), range.start, None);
+        let r = r.on_hover_text(tl!("A formula. Click, or press Enter, to edit it here."));
+        if focusable(ui, cx, &r, image.expand(t.unit)) || r.clicked() {
+            edit_here(cx);
+        }
         return;
     }
     let font = FontId::new(t.code_size, FontFamily::Monospace);
@@ -1574,11 +1752,13 @@ fn formula(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, source: &Ra
     let tip = match &state {
         // Not closed: its tag says so.
         Some(FormulaState::Failed(messages)) if closed => tl!("This formula has an error: {message}").replace("{message}", &messages.join("\n")),
-        Some(FormulaState::Pending) => tl!("The formula's source, while it is typeset. Double-click to edit it.").to_owned(),
-        _ => tl!("The formula's source: this version typesets formulas in the desktop app only. Double-click to edit it.").to_owned(),
+        Some(FormulaState::Pending) => tl!("The formula's source, while it is typeset. Click to edit it here.").to_owned(),
+        _ => tl!("The formula's source: this version typesets formulas in the desktop app only. Click to edit it here.").to_owned(),
     };
     let r = r.on_hover_text(tip);
-    activate(ui, cx, &r, pill, range.start, None);
+    if focusable(ui, cx, &r, pill) || r.clicked() {
+        edit_here(cx);
+    }
 }
 
 /// A project file `\includegraphics` names: as written or with a figure extension, from the
@@ -1632,111 +1812,26 @@ fn picture(ui: &egui::Ui, cx: &mut Cx<'_>, name: &str) -> Picture {
     decoded
 }
 
-fn figure_card(
-    ui: &mut egui::Ui,
-    cx: &mut Cx<'_>,
-    range: &Range<usize>,
-    image: Option<&texcraft_latex::view::Image>,
-    caption: &[Inline],
-    label: Option<&Inline>,
-) {
-    let t = cx.t;
-    let width = ui.available_width();
-    let pad = 4.0 * t.unit;
-    let top = ui.cursor().top();
-    let left = ui.cursor().left();
-    // The card's frame goes under what is drawn in it.
-    let frame_shape = ui.painter().add(egui::Shape::Noop);
-    ui.add_space(pad);
-    let inner = width - 2.0 * pad;
-    let max_h = t.reading_size * 20.0;
-    let (shown, name) = match image {
-        Some(img) => (picture(ui, cx, &img.path), img.path.clone()),
-        None => (Err(tl!("This figure has no image.").to_owned()), String::new()),
-    };
-    let image_r = match shown {
-        Ok((texture, natural)) => {
-            let scale = (inner / natural.x).min(max_h / natural.y).min(1.5);
-            let size = natural * scale;
-            let (row, r) = ui.allocate_exact_size(vec2(width, size.y), Sense::click());
-            let rect = Rect::from_center_size(row.center(), size);
-            ui.painter().image(texture.id(), rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
-            let label = tl!("Image {name}").replace("{name}", &name);
-            r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, &label));
-            r
-        }
-        Err(why) => {
-            let (row, r) = ui.allocate_exact_size(vec2(width, t.reading_size * 7.0), Sense::click());
-            let rect = row.shrink2(vec2(pad, 0.0));
-            ui.painter().rect_filled(rect, t.corner(), blend(t.surface, t.pressed));
-            crate::icons::paint(ui, Rect::from_center_size(rect.center() - vec2(0.0, 12.0), Vec2::splat(28.0)), "image", 24.0, t.text_muted);
-            let galley = ui.painter().layout(why.clone(), t.small(), t.text_muted, rect.width() - 2.0 * pad);
-            let at = pos2(rect.center().x - galley.size().x / 2.0, rect.center().y + 10.0);
-            ui.painter().galley(at, galley, t.text_muted);
-            r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, &why));
-            r
-        }
-    };
-    let image_start = image.map_or(range.start, |i| i.range.start);
-    let image_rect = image_r.rect;
-    activate(ui, cx, &image_r, image_rect, image_start, None);
-    ui.add_space(3.0 * t.unit);
-    let mut inlines = vec![Inline {
-        kind: InlineKind::Text { text: format!("{} ", tl!("Figure.")), style: Style { bold: true, sans: true, ..Style::default() } },
-        range: range.start..range.start,
-    }];
-    inlines.extend(caption.iter().cloned());
-    if let Some(label) = label {
-        inlines.push(Inline {
-            kind: InlineKind::Text { text: "\u{2002}".into(), style: Style::default() },
-            range: label.range.start..label.range.start,
-        });
-        inlines.push(label.clone());
-    }
-    ui.horizontal_top(|ui| {
-        ui.add_space(pad);
-        ui.vertical(|ui| {
-            ui.set_width(inner);
-            let _ = paragraph(
-                ui,
-                cx,
-                &inlines,
-                range,
-                &Para { size: t.reading_size * 0.9, bold: false, color: t.text, role: egui::Role::FigureCaption, empty_at: None, cell: None },
-            );
-        });
-    });
-    // The figure dialog: image, width, placement, caption and label.
-    let edit = ui
-        .with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-            ui.add_space(pad);
-            crate::widgets::text_button(ui, &t, tl!("Edit Figure…"), true)
-        })
-        .inner;
-    if edit.clicked() {
-        cx.edit_figure = Some(range.start + 1);
-    }
-    ui.add_space(pad);
-    let card = Rect::from_min_max(pos2(left, top), pos2(left + width, ui.cursor().top()));
-    ui.painter().set(
-        frame_shape,
-        egui::Shape::Rect(egui::epaint::RectShape::new(card, t.corner_large(), blend(t.surface, t.current_line), t.hairline(), StrokeKind::Inside)),
-    );
-}
-
 fn source_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>) {
     let src = cx.text.get(range.clone()).unwrap_or_default().trim_end();
-    let is_table = src.starts_with("\\begin{table") || src.starts_with("\\begin{tabular");
-    let (tag, tip) = if is_table {
-        (
-            tl!("Table, shown as source"),
-            tl!(
-                "The table editor shows a table float holding one tabular with its caption and label; this one holds more, so it is shown as its source."
-            ),
-        )
-    } else {
-        (tl!("Shown as source"), tl!("The formatted view cannot show this faithfully yet, so it shows its source."))
-    };
-    let r = code(ui, cx, src, range.start, None, Some(tag));
-    let _ = r.on_hover_text(tip);
+    let (tag, tip) = source_reason(src);
+    let r = code(ui, cx, src, range.start, None, Some(&tag));
+    let _ = r.on_hover_text(format!("{tip} {}", tl!("Click, or press Enter, to edit it here.")));
+}
+
+/// The title of a block shown as its source (what it is) and why the view shows it so.
+fn source_reason(src: &str) -> (String, String) {
+    let env = src.strip_prefix("\\begin{").and_then(|r| r.split_once('}')).map(|(name, _)| name.trim());
+    match env {
+        Some(name) if name.starts_with("table") => (
+            tl!("LaTeX: a table float").to_owned(),
+            tl!("The table editor shows a table float holding one tabular with its caption and label; this one holds more, so it is shown as its source.")
+                .to_owned(),
+        ),
+        Some(name) => (
+            tl!("LaTeX: the {name} environment").replace("{name}", name),
+            tl!("The formatted view does not show the {name} environment, so it shows its source.").replace("{name}", name),
+        ),
+        None => (tl!("LaTeX").to_owned(), tl!("The formatted view cannot show this faithfully yet, so it shows its source.").to_owned()),
+    }
 }

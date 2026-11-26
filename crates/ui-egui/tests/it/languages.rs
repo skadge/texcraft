@@ -143,3 +143,35 @@ fn longer_languages_fit_the_main_window_settings_and_dialogs() {
     found.extend(problems(&h, "start page", &Vec::new()));
     assert!(found.is_empty(), "{} layout problems:\n{}", found.len(), found.join("\n"));
 }
+
+#[test]
+fn longer_languages_fit_the_formatted_view_and_its_table_toolbar() {
+    let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    let text = "\\documentclass{article}\n\\begin{document}\nHello.\n\n\\begin{tabular}{ll}\n  Hello & Hello \\\\\n  Hello & Hello \\\\\n\\end{tabular}\n\\end{document}\n";
+    assert!(s.execute("file.write", &json!({"path": "main.tex", "text": text})).is_ok());
+    assert!(s.execute("file.open", &json!({"path": "main.tex"})).is_ok());
+    let prefs = Prefs {
+        auto_compile: false,
+        language: texcraft_ui_egui::i18n::PSEUDO.to_owned(),
+        layout: "split".to_owned(),
+        side: "files".to_owned(),
+        ..Prefs::default()
+    };
+    let mut h = Harness::builder().with_size(WINDOW).build_ui_state(|ui, app: &mut App| app.frame(ui), App::with_prefs(s, prefs));
+    run(&mut h);
+    tap(&mut h, "⟦Formatted");
+    assert!(h.query_by_role(Role::Table).is_some(), "the formatted view is not shown");
+    let mut found = problems(&h, "formatted view", &Vec::new());
+    let cell = h.query_all_by_role(Role::Cell).next().map(|n| n.rect().center());
+    if let Some(at) = cell {
+        h.event(egui::Event::PointerMoved(at));
+        for pressed in [true, false] {
+            h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+            h.run();
+        }
+        run(&mut h);
+    }
+    assert!(h.query_by_role(Role::Toolbar).is_some_and(|_| h.query_by_label_contains("⟦Header row").is_some()), "the table's toolbar is not shown");
+    found.extend(problems(&h, "table toolbar", &Vec::new()));
+    assert!(found.is_empty(), "{} layout problems:\n{}", found.len(), found.join("\n"));
+}

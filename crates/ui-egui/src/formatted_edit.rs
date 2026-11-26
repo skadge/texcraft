@@ -140,23 +140,9 @@ pub(crate) fn command(app: &mut App, id: &str, params: &serde_json::Value) -> Op
             return Some(true);
         }
         "edit.math_inline" | "edit.math_display" | "edit.equation" if !has("latex") => {
-            let title = match id {
-                "edit.math_inline" => tl!("Inline Formula"),
-                "edit.math_display" => tl!("Displayed Formula"),
-                _ => tl!("Numbered Equation"),
-            };
-            let command = match id {
-                "edit.math_inline" => "edit.math_inline",
-                "edit.math_display" => "edit.math_display",
-                _ => "edit.equation",
-            };
-            ask(
-                app,
-                (title, tl!("The formula in LaTeX, such as x^2 + \\alpha"), tl!("Insert")),
-                command,
-                selected_text(app),
-                |v| serde_json::json!({"latex": v}),
-            );
+            // A field with the formula's typeset preview under it.
+            let start = selected_text(app);
+            crate::formatted::in_place::ask_formula(app, id, start);
             return Some(true);
         }
         "edit.cite" | "edit.ref" | "edit.link" | "edit.footnote" | "edit.math_inline" | "edit.math_display" | "edit.equation" => {}
@@ -441,9 +427,23 @@ fn run_command(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, id: &str, para
         return;
     }
     match id {
-        "edit.bold" => style(app, f, "textbf"),
-        "edit.italic" => style(app, f, "textit"),
-        "edit.code" => style(app, f, "texttt"),
+        "edit.bold" | "edit.italic" | "edit.code" => {
+            // What sets the style at the caret: a command is taken off, `\emph` too; a
+            // declaration is the source's to change.
+            let here = crate::formatted_bar::here(app);
+            let (name, by) = match id {
+                "edit.bold" => ("textbf", here.bold_by),
+                "edit.italic" => ("textit", here.italic_by),
+                _ => ("texttt", here.code_by),
+            };
+            match by {
+                Some(edit::StyledBy::Declaration) => {
+                    say(app, tl!("This style comes from a declaration such as \\bfseries or \\itshape in its group: change it in the source."));
+                }
+                Some(edit::StyledBy::Emph) => style(app, f, "emph"),
+                _ => style(app, f, name),
+            }
+        }
         "edit.body" => match edit::set_body(f.text, at) {
             Some(changes) => {
                 let at = edit::map_offset(&changes, at);
@@ -595,6 +595,13 @@ fn replace(app: &mut App, f: &Frame<'_>, source: &str, kind: EditKind) {
 
 fn enter(app: &mut App, f: &Frame<'_>, edit: Edit) {
     let Some((a, h)) = selection(app, f) else { return };
+    if let Some(atom) = selected_atom(app, f, h.line) {
+        // A formula or a command shown as source, selected: Enter edits it here.
+        if let Some(path) = app.session.current().cloned() {
+            crate::formatted::in_place::open(app, crate::formatted::in_place::InPlace::of_atom(&path, f.text, &atom));
+        }
+        return;
+    }
     if a != h {
         // The selection goes first; the line break comes on the view without it.
         replace(app, f, "", EditKind::Other);
@@ -610,6 +617,15 @@ fn enter(app: &mut App, f: &Frame<'_>, edit: Edit) {
         }
         None => say(app, tl!("A paragraph cannot be broken here: this text is part of a caption, a footnote or a formula.")),
     }
+}
+
+/// The run of line `line` that opens in the source editor, when the selection is exactly it.
+fn selected_atom(app: &App, f: &Frame<'_>, line: usize) -> Option<crate::formatted::in_place::Atom> {
+    let d = &app.editor.source.doc;
+    let r = d.selection.primary();
+    let (a, b) = (d.buffer.char_to_byte(r.start()), d.buffer.char_to_byte(r.end()));
+    (a < b).then_some(())?;
+    f.lines.get(line)?.atoms.iter().find(|atom| atom.range == (a..b)).cloned()
 }
 
 /// Backspace (`back`) or Delete.
@@ -918,6 +934,11 @@ fn style(app: &mut App, f: &Frame<'_>, name: &str) {
         pieces.extend(line.pieces(from, to));
     }
     let changes = edit::toggle_style(f.text, &pieces, name);
+    if changes.is_empty() {
+        // Part of a styled run: there is nothing to wrap, and its command is not the selection's.
+        say(app, tl!("Select all of the styled text to take its style away."));
+        return;
+    }
     let (Some(start), Some(end)) = (pieces.first().map(|r| r.start), pieces.last().map(|r| r.end)) else { return };
     // The selection keeps the same text: inside the commands added, without those removed.
     let start = edit::map_offset(&changes, start);
