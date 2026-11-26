@@ -904,6 +904,11 @@ impl PdfView {
     /// Asks for `pages` (in that order) at `scale`, those not drawn at it yet; the renderer drops
     /// what it was asked before and is no longer wanted.
     fn request(&mut self, ctx: &egui::Context, pages: &[usize], scale: f32) {
+        // No side of a page's texture over what the GPU takes (2048 in some browsers and CI's
+        // software renderer): past that zoom the page is drawn at the largest scale that fits.
+        let max_side = ctx.input(|i| i.max_texture_side) as f32;
+        let largest = self.sizes.iter().map(|s| s[0].max(s[1])).fold(0.0, f32::max);
+        let scale = if largest > 0.0 { scale.min(max_side / largest) } else { scale };
         if let Some(doc) = self.doc.clone() {
             self.pages.request(ctx, &doc, self.generation, pages, scale);
         }

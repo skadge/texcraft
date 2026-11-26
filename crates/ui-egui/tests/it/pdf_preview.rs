@@ -216,6 +216,20 @@ fn the_middle_button_drags_the_pages() {
     assert!(after.x > before.x + 60.0 && after.y > before.y + 60.0, "the pages did not follow the pointer: {before:?} to {after:?}");
 }
 
+/// At a zoom whose page would be larger than the GPU takes (2048 in some browsers and in CI's
+/// software renderer), the page is drawn at the largest scale that fits instead of failing.
+#[test]
+fn a_page_zoomed_past_the_gpus_largest_texture_is_drawn_at_the_largest_that_fits() {
+    let mut harness = built();
+    harness.input_mut().max_texture_side = Some(1024);
+    harness.get_by_label("Fit width").click();
+    settle(&mut harness);
+    harness.get_by_label("400 %").click();
+    settle(&mut harness);
+    let largest = harness.ctx.tex_manager().read().allocated().map(|(_, meta)| meta.size[0].max(meta.size[1])).max().unwrap_or(0);
+    assert!(largest > 0 && largest <= 1024, "a texture of {largest} px for a 1024 px limit");
+}
+
 /// Issue #41: the zoom's Fit button goes back to the last fit chosen, named after it, and has
 /// nothing to do at that fit already.
 #[test]
