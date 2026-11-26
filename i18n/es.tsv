@@ -22,6 +22,7 @@
 	 · recording @{r}	 · grabando @{r}
 	A formula. Double-click to edit its source.	Una fórmula. Haga doble clic para editar su código fuente.
 	A label cannot hold braces, backslashes, % or #.	Una etiqueta no puede contener llaves, barras invertidas, % ni #.
+	A name for the project as it is now	Un nombre para el proyecto tal como está ahora
 	A name for the project, kept in this browser	Un nombre para el proyecto, guardado en este navegador
 	A new file	Un archivo nuevo
 	A new or empty folder for the project	Una carpeta nueva o vacía para el proyecto
@@ -31,6 +32,7 @@
 	A sign-in is kept while TeXCraft runs only.	La sesión solo se conserva mientras TeXCraft está en ejecución.
 	A table keeps one column at least.	Una tabla conserva al menos una columna.
 	A table keeps one row at least.	Una tabla conserva al menos una fila.
+	A Token for {service}	Un token para {service}
 	A token is kept: type to replace it	Hay un token guardado: escriba para sustituirlo
 	AI	IA
 	AI is off until you connect a model: any OpenAI-compatible endpoint, a server on this computer (llama.cpp, Ollama, vLLM) included. Every change it proposes arrives as a suggested change.	La IA está desactivada hasta que conecte un modelo: cualquier endpoint compatible con OpenAI, incluido un servidor en este ordenador (llama.cpp, Ollama, vLLM). Cada cambio que propone llega como cambio sugerido.
@@ -73,6 +75,7 @@
 	Agreement	Concordancia
 	All	Todo
 	All borders	Todos los bordes
+	All changes saved	Todos los cambios guardados
 	Allow Commits on GitLab	Permitir commits en GitLab
 	Also check the text after % in the source.	Revisar también el texto tras % en el código fuente.
 	Another branch…	Otra rama…
@@ -172,7 +175,6 @@
 	Comments beside the text are hidden; the Review panel lists them.	Los comentarios junto al texto están ocultos; el panel Revisión los muestra.
 	Commit and Open Merge Request	Hacer commit y abrir merge request
 	Commit and Open Pull Request	Hacer commit y abrir pull request
-	Commit the Project	Hacer commit del proyecto
 	Commit to GitHub	Hacer commit en GitHub
 	Commit to GitHub…	Hacer commit en GitHub…
 	Commit to GitLab	Hacer commit en GitLab
@@ -183,7 +185,6 @@
 	Committed.	Commit hecho.
 	Committing to GitHub…	Haciendo commit en GitHub…
 	Committing to GitLab…	Haciendo commit en GitLab…
-	Commit…	Hacer commit…
 	Compile	Compilar
 	Compile automatically	Compilar automáticamente
 	Compile the project to see it here.	Compile el proyecto para verlo aquí.
@@ -478,6 +479,8 @@
 	Name	Nombre
 	Name a symbol of the palette by its command, such as \\alpha.	Nombre un símbolo de la paleta por su comando, como \\alpha.
 	Name the build output: pdf, pdfx, synctex or log.	Nombre la salida de compilación: pdf, pdfx, synctex o log.
+	Name This Version	Nombrar esta versión
+	Name This Version…	Nombrar esta versión…
 	New File	Nuevo archivo
 	New File…	Nuevo archivo…
 	New Folder	Nueva carpeta
@@ -508,7 +511,7 @@
 	No project matches: type its whole address to open it.	Ningún proyecto coincide: escriba su dirección completa para abrirlo.
 	No recent projects	No hay proyectos recientes
 	No reference was drafted: {error}	No se redactó ninguna referencia: {error}
-	No remote yet: save the project to GitHub or GitLab to keep it there too.	Aún no hay remoto: guarde el proyecto en GitHub o GitLab para conservarlo también allí.
+	No remote	Sin remoto
 	No results	Sin resultados
 	No review: {error}	Sin revisión: {error}
 	No rewrite: {error}	Sin reescritura: {error}
@@ -527,13 +530,16 @@
 	Not compiled yet	Aún sin compilar
 	Not found in the file: “{quote}”	No encontrado en el archivo: «{quote}»
 	Not opened: {address} is not a web or mail address. Links from the PDF open only those.	No abierto: {address} no es una dirección web ni de correo. Los enlaces del PDF solo abren esas.
-	Not pushed yet.	Aún sin enviar.
+	Not saved	No guardado
 	Note	Nota
 	Notes	Notas
 	Nothing changed since the last commit.	Nada ha cambiado desde el último commit.
+	Nothing changed since the latest version.	Nada ha cambiado desde la última versión.
 	Nothing has been compiled yet.	Aún no se ha compilado nada.
 	Nothing in this file is folded.	No hay nada plegado en este archivo.
 	Nothing leaves this computer. A kind switched off is never sent.	Nada sale de este ordenador. Un tipo desactivado nunca se envía.
+	nothing new to send	nada nuevo que enviar
+	nothing sent to the remote yet	aún no se ha enviado nada al remoto
 	Nothing to commit: the files are as on the branch.	Nada para hacer commit: los archivos están como en la rama.
 	Nothing to report	Nada que informar
 	Nothing was made: {error}	No se creó nada: {error}
@@ -544,6 +550,7 @@
 	Omega, capital	Omega mayúscula
 	On a page of floats	En una página de flotantes
 	On this computer: nothing leaves it, and no token is needed.	En este ordenador: nada sale de él y no hace falta ningún token.
+	on {service}	en {service}
 	One caret	Un cursor
 	Only LaTeX files (.tex) have a formatted view.	Solo los archivos LaTeX (.tex) tienen vista formateada.
 	Only a .tex file can be the main document.	Solo un archivo .tex puede ser el documento principal.
@@ -669,7 +676,7 @@
 	Rejected by {name} · {text}	Rechazado por {name} · {text}
 	Rejected by {name}, {when}	Rechazado por {name}, {when}
 	Relations	Relaciones
-	Remote {name}:	Remoto {name}:
+	Remote {name}: {url}	Remoto {name}: {url}
 	Remove Server	Quitar servidor
 	Remove from recent projects	Quitar de los proyectos recientes
 	Remove from recent projects:	Quitar de los proyectos recientes:
@@ -711,6 +718,7 @@
 	Restore {file} as it was before it was deleted?	¿Restaurar {file} como estaba antes de eliminarlo?
 	Restore {file} as it was {when}?	¿Restaurar {file} como estaba {when}?
 	Restored, as unsaved changes: the next save makes a new version.	Restaurado, como cambios sin guardar: el próximo guardado crea una versión nueva.
+	Restored. It is saved after the next pause in typing, and the history keeps every version.	Restaurado. Se guarda tras la próxima pausa al escribir, y el historial conserva todas las versiones.
 	Review	Revisión
 	Review This Section	Revisar esta sección
 	Rewrite	Reescribir
@@ -720,6 +728,9 @@
 	Row below	Fila abajo
 	Rules of this kind are checked.	Se comprueban las reglas de este tipo.
 	Russian	Ruso
+	Save automatically	Guardar automáticamente
+	Save the project to GitHub or GitLab to keep it there too, and to sync it.	Guarde el proyecto en GitHub o GitLab para conservarlo también allí y sincronizarlo.
+	Saving…	Guardando…
 	SVG Image (.svg)	Imagen SVG (.svg)
 	Save	Guardar
 	Save As…	Guardar como…
@@ -840,6 +851,10 @@
 	Swedish	Sueco
 	Symbols	Símbolos
 	Symbols…	Símbolos…
+	Sync	Sincronizar
+	Synced with {remote}: took in {files}.	Sincronizado con {remote}: se incorporaron {files}.
+	Synced with {remote}: your versions are sent.	Sincronizado con {remote}: sus versiones se han enviado.
+	Syncing…	Sincronizando…
 	SyncTeX data	Datos de SyncTeX
 	System	Sistema
 	System title bar	Barra de título del sistema
@@ -864,6 +879,8 @@
 	The AI connection and its token are forgotten.	La conexión de IA y su token se han olvidado.
 	The API's base address: https://, or http:// only for this computer.	La dirección base de la API: https://, o http:// solo para este ordenador.
 	The ID is not a secret: it is kept in the preferences. Sign-ins stay in the keychain.	El ID no es secreto: se guarda en las preferencias. Las sesiones permanecen en el llavero.
+	The last changes to {project} could not be kept in this browser	Los últimos cambios de {project} no se pudieron conservar en este navegador
+	The last changes to {project} could not be saved	Los últimos cambios de {project} no se pudieron guardar
 	The LaTeX is made and typeset: its preview is in the dialog.	El LaTeX está creado y compuesto: su vista previa está en el diálogo.
 	The LaTeX is made but does not typeset: the dialog shows why.	El LaTeX está creado pero no se compone: el diálogo muestra por qué.
 	The LaTeX made	El LaTeX creado
@@ -947,6 +964,8 @@
 	The prompt for {kind} is the app's own again.	La instrucción para {kind} vuelve a ser la propia de la aplicación.
 	The push did not work: {why}	El envío no funcionó: {why}
 	The raw log is copied.	Registro sin procesar copiado.
+	The remote has new commits that change the same parts of these files. For each, keep your version or take the remote's.	El remoto tiene commits nuevos que cambian las mismas partes de estos archivos. Para cada uno, conserve su versión o tome la del remoto.
+	The remote is on {service}: {url}	El remoto está en {service}: {url}
 	The rewrite is a suggested change: accept or reject it beside the text or in the Review panel.	La reescritura es un cambio sugerido: acéptela o recházela junto al texto o en el panel Revisión.
 	The rule {rule} is off: turn it on again in Settings › Editor.	La regla {rule} está desactivada: vuelva a activarla en Ajustes › Editor.
 	The section at the caret.	La sección del cursor.
@@ -990,7 +1009,6 @@
 	This file	Este archivo
 	This file ({file})	Este archivo ({file})
 	This file has no outline.	Este archivo no tiene esquema.
-	This folder is in a git repository of its own: saving does not commit, Commit does.	Esta carpeta está en un repositorio git propio: guardar no hace commit; Hacer commit sí.
 	This folder no longer exists.	Esta carpeta ya no existe.
 	This formula has an error: {message}	Esta fórmula tiene un error: {message}
 	This grammar problem is ignored until TeXCraft closes.	Este problema gramatical se ignora hasta que se cierre TeXCraft.
@@ -1040,9 +1058,10 @@
 	Unzip into the Project	Descomprimir en el proyecto
 	Unzip {file}?	¿Descomprimir {file}?
 	Up and Down choose a fix, Enter applies it, Escape closes.	Arriba y Abajo eligen una corrección, Intro la aplica, Escape cierra.
+	Up to date	Al día
 	Up to date with the branch {branch}.	Al día con la rama {branch}.
-	Up to date with the remote, as last pushed or pulled.	Al día con el remoto, según el último envío o traída.
 	Up to date with {remote}.	Al día con {remote}.
+	up to date, as last synced	al día, según la última sincronización
 	Update	Actualizar
 	Update from GitHub	Actualizar desde GitHub
 	Update from GitLab	Actualizar desde GitLab
@@ -1053,6 +1072,7 @@
 	Use a personal access token instead	Usar en su lugar un token de acceso personal
 	Use a personal access token instead of the sign-in	Usar un token de acceso personal en lugar del inicio de sesión
 	Use this instruction again	Volver a usar esta instrucción
+	Version named.	Versión nombrada.
 	Version {version}	Versión {version}
 	Vim	Vim
 	Vim's keys work in the source; here the standard keys edit the text.	Las teclas de Vim funcionan en el código fuente; aquí las teclas estándar editan el texto.
@@ -1071,13 +1091,16 @@
 	Width, as a share of the line	Ancho, como fracción de la línea
 	Withdraw Suggestion	Retirar sugerencia
 	Word choice and usage	Elección y uso de las palabras
+	Write changes shortly after typing stops, and keep versions of the project by themselves. Off, File › Save saves, and closing asks about changes not saved.	Escribir los cambios poco después de dejar de teclear y guardar versiones del proyecto por sí solas. Desactivado, Archivo › Guardar guarda, y al cerrar se pregunta por los cambios sin guardar.
 	Write LaTeX, see the PDF as you type.	Escriba LaTeX y vea el PDF mientras escribe.
 	Xi, capital	Xi mayúscula
 	You signed in to GitLab to read only. To commit, GitLab asks you to let TeXCraft write too (the api scope); your message is kept.	Ha iniciado sesión en GitLab solo para lectura. Para hacer commit, GitLab le pide que permita también escribir a TeXCraft (el ámbito api); su mensaje se conserva.
 	You signed in to GitLab to read only. To make a project, GitLab asks you to let TeXCraft write too (the api scope).	Ha iniciado sesión en GitLab solo para lectura. Para crear un proyecto, GitLab le pide que permita también escribir a TeXCraft (el ámbito api).
 	You: sign in, or give a token, to choose another owner.	Usted: inicie sesión o proporcione un token para elegir otro propietario.
+	Your changes are not saved: {why}	Sus cambios no se han guardado: {why}
 	Your changes are on the new branch {branch}, in merge request !{iid} into {target}. The project now follows {branch}.	Sus cambios están en la rama nueva {branch}, en la merge request !{iid} hacia {target}. El proyecto sigue ahora {branch}.
 	Your changes are on the new branch {branch}, in pull request #{iid} into {target}. The project now follows {branch}.	Sus cambios están en la rama nueva {branch}, en la pull request #{iid} hacia {target}. El proyecto sigue ahora {branch}.
+	Your changes are saved, but no version of them could be made: {why}	Sus cambios están guardados, pero no se pudo crear una versión de ellos: {why}
 	Your description, the main document's preamble and, for a figure, the names of the project's images.	Su descripción, el preámbulo del documento principal y, para una figura, los nombres de las imágenes del proyecto.
 	Your instruction, the selected text and a few lines around it.	Su instrucción, el texto seleccionado y unas líneas a su alrededor.
 	Your key	Su clave
@@ -1310,6 +1333,7 @@
 	{file} formatted	{file} formateado
 	{host} (GitHub Enterprise Server)	{host} (GitHub Enterprise Server)
 	{host} (GitLab)	{host} (GitLab)
+	{host} asks for a personal access token that can read and write the repository. Signing in to GitLab or GitHub in Settings › Accounts works too.	{host} pide un token de acceso personal que pueda leer y escribir el repositorio. También sirve iniciar sesión en GitLab o GitHub en Ajustes › Cuentas.
 	{host} is a GitHub Enterprise Server (version {version}).	{host} es un GitHub Enterprise Server (versión {version}).
 	{host} is a GitHub Enterprise Server.	{host} es un GitHub Enterprise Server.
 	{host} is a GitLab server (version {version}).	{host} es un servidor GitLab (versión {version}).
@@ -1337,9 +1361,12 @@
 	{project}: PDF	{project}: PDF
 	{publisher} · from the {source} · licence {licence}	{publisher} · de {source} · licencia {licence}
 	{remote} has these commits already.	{remote} ya tiene estos commits.
+	{service} lets git reach a project with a git authentication token: make one in your {service} account's settings, then paste it here.	{service} permite que git llegue a un proyecto con un token de autenticación de git: cree uno en los ajustes de su cuenta de {service} y péguelo aquí.
 	{source} · licence {licence}	{source} · licencia {licence}
 	{style}, paragraph style	{style}, estilo de párrafo
 	{time} · {size} to {destination} · {model} · {outcome}	{time} · {size} a {destination} · {model} · {outcome}
+	{why} Try again, or download the project as a zip from the File menu to keep a copy.	{why} Vuelva a intentarlo, o descargue el proyecto como zip desde el menú Archivo para conservar una copia.
+	{why} Try again, or leave them unsaved.	{why} Vuelva a intentarlo, o déjelos sin guardar.
 	{w} × {h} pixels	{w} × {h} píxeles
 	{w} × {h} pt	{w} × {h} pt
 	“{word}” is ignored until TeXCraft closes.	«{word}» se ignora hasta que se cierre TeXCraft.
@@ -1390,10 +1417,9 @@ suggestion	Reopen	Reabrir
 @plural	{n} already in the project|{n} already in the project	{n} ya en el proyecto|{n} ya en el proyecto
 @plural	{n} build output|{n} build outputs	{n} salida de compilación|{n} salidas de compilación
 @plural	{n} caret|{n} carets	{n} cursor|{n} cursores
+@plural	{n} changed file to send|{n} changed files to send	{n} archivo cambiado por enviar|{n} archivos cambiados por enviar
 @plural	{n} changed file|{n} changed files	{n} archivo cambiado|{n} archivos cambiados
 @plural	{n} comment|{n} comments	{n} comentario|{n} comentarios
-@plural	{n} commit to pull|{n} commits to pull	{n} commit por traer|{n} commits por traer
-@plural	{n} commit to push|{n} commits to push	{n} commit por enviar|{n} commits por enviar
 @plural	{n} completion|{n} completions	{n} compleción|{n} compleciones
 @plural	{n} day ago|{n} days ago	hace {n} día|hace {n} días
 @plural	{n} error|{n} errors	{n} error|{n} errores
@@ -1422,6 +1448,8 @@ suggestion	Reopen	Reabrir
 @plural	{n} suggestion|{n} suggestions	{n} sugerencia|{n} sugerencias
 @plural	{n} that could not be read or added|{n} that could not be read or added	{n} que no se pudo leer ni añadir|{n} que no se pudieron leer ni añadir
 @plural	{n} unsafe name|{n} unsafe names	{n} nombre no seguro|{n} nombres no seguros
+@plural	{n} version to receive|{n} versions to receive	{n} versión por recibir|{n} versiones por recibir
+@plural	{n} version to send|{n} versions to send	{n} versión por enviar|{n} versiones por enviar
 @plural	{n} warning|{n} warnings	{n} advertencia|{n} advertencias
 @plural	{n} was dropped: the words it quoted are not in the text.|{n} were dropped: the words they quoted are not in the text.	Se descartó {n}: las palabras que citaba no están en el texto.|Se descartaron {n}: las palabras que citaban no están en el texto.
 
@@ -1553,12 +1581,14 @@ unit	{n} s	{n} s
 @id	history.restore	Restaurar una versión
 @id	history.show	Mostrar una versión de un archivo
 @id	history.status	Estado del historial
+@id	history.version	Crear una versión
 @id	language.add_word	Añadir al diccionario
 @id	language.fix	Aplicar corrección rápida
 @id	language.ignore_word	Ignorar palabra
 @id	language.spelling_options	Opciones de ortografía
 @id	pdf.locate	Mostrar en el PDF
 @id	pdf.source	Ir al código fuente
+@id	project.autosave	Guardar automáticamente
 @id	project.delete	Eliminar proyecto
 @id	project.find	Buscar en el proyecto
 @id	project.from_template	Nuevo proyecto desde plantilla…
@@ -1570,6 +1600,8 @@ unit	{n} s	{n} s
 @id	project.replace	Reemplazar en el proyecto
 @id	project.save	Guardar
 @id	project.save_as	Guardar proyecto como…
+@id	project.sync	Sincronizar
+@id	project.write	Escribir los cambios
 @id	table.edit	Editar tabla
 @id	table.inspect	Leer tablas
 @id	template.fetch	Descargar plantilla
@@ -1668,6 +1700,7 @@ unit	{n} s	{n} s
 @msg	Give the application's ID, as the server shows it once the application is registered.	Indique el ID de la aplicación, tal como lo muestra el servidor una vez registrada la aplicación.
 @msg	Give the project a name.	Dé un nombre al proyecto.
 @msg	Give the title or DOI in at most {MAX_DESCRIPTION_CHARS} characters.	Indique el título o DOI en {MAX_DESCRIPTION_CHARS} caracteres como máximo.
+@msg	Give your {value} git authentication token for this project (token): TeXCraft keeps it only while it runs, never on disk.	Indique su token de autenticación de git de {value} para este proyecto (token): TeXCraft lo conserva solo mientras se ejecuta, nunca en el disco.
 @msg	Grammar checking is not in this build; Check Grammar with AI is available.	La revisión gramatical no está incluida en esta versión; Revisar gramática con IA está disponible.
 @msg	Grammar checking is off (Settings › Editor).	La revisión gramatical está desactivada (Ajustes › Editor).
 @msg	Grammar is checked offline in English only, and this document is in {lang}: Check Grammar with AI works in any language.	La gramática se revisa sin conexión y solo en inglés, y este documento está en {lang}: Revisar gramática con IA funciona en cualquier idioma.
@@ -1694,6 +1727,7 @@ unit	{n} s	{n} s
 @msg	No branch is checked out (HEAD is detached), so no branch can be set to follow a remote one.	No hay ninguna rama activa (HEAD está separado), así que no se puede configurar ninguna rama para que siga a una remota.
 @msg	No branch is checked out (HEAD is detached): check out a branch with git first.	No hay ninguna rama activa (HEAD está separado): active primero una rama con git.
 @msg	No build is running, or the engine cannot stop it.	No hay ninguna compilación en curso, o el motor no puede detenerla.
+@msg	No credentials for the remote's server.	No hay credenciales para el servidor del remoto.
 @msg	No sign-in is running.	No hay ningún inicio de sesión en curso.
 @msg	No sign-in was waiting on this page: sign in again.	Esta página no esperaba ningún inicio de sesión: inicie sesión de nuevo.
 @msg	No source line is known there: build the project first, or point at its text.	No se conoce ninguna línea fuente ahí: compile primero el proyecto o señale su texto.
@@ -1795,6 +1829,7 @@ unit	{n} s	{n} s
 @msg	The project has no commit yet to merge into.	El proyecto aún no tiene ningún commit en el que fusionar.
 @msg	The project has no commit yet: save it first.	El proyecto aún no tiene ningún commit: guárdelo primero.
 @msg	The project has no folder yet.	El proyecto aún no tiene carpeta.
+@msg	The project has no folder yet: save it in a folder first.	El proyecto aún no tiene carpeta: guárdelo antes en una carpeta.
 @msg	The project has no folder yet: use Save Project As.	El proyecto aún no tiene carpeta: use Guardar proyecto como.
 @msg	The project has no folder.	El proyecto no tiene carpeta.
 @msg	The project has no git repository yet: save it in a folder first.	El proyecto aún no tiene repositorio git: guárdelo primero en una carpeta.
@@ -1805,7 +1840,10 @@ unit	{n} s	{n} s
 @msg	The project has no main document to build.	El proyecto no tiene ningún documento principal que compilar.
 @msg	The project has no main document to export.	El proyecto no tiene ningún documento principal que exportar.
 @msg	The project has no main document.	El proyecto no tiene documento principal.
+@msg	The project has no name yet: save it first.	El proyecto aún no tiene nombre: guárdelo primero.
 @msg	The project has no name yet: use Save Project As.	El proyecto aún no tiene nombre: use Guardar proyecto como.
+@msg	The project has no remote to sync with.	El proyecto no tiene remoto con el que sincronizar.
+@msg	The project has no remote to sync with: save it to GitLab or GitHub, or give its folder a remote (git.set_remote).	El proyecto no tiene remoto con el que sincronizar: guárdelo en GitLab o GitHub, o dé un remoto a su carpeta (git.set_remote).
 @msg	The project has no remote {remote}: set one (git.set_remote) first.	El proyecto no tiene el remoto {remote}: establezca uno primero (git.set_remote).
 @msg	The project has no remote {remote}: set one (git.set_remote), or save the project to GitLab or GitHub.	El proyecto no tiene el remoto {remote}: establezca uno (git.set_remote) o guarde el proyecto en GitLab o GitHub.
 @msg	The project has no text file to ask about.	El proyecto no tiene ningún archivo de texto sobre el que preguntar.
@@ -1818,7 +1856,7 @@ unit	{n} s	{n} s
 @msg	The project's folder {old} could not be renamed: {e}	No se pudo cambiar el nombre de la carpeta del proyecto {old}: {e}
 @msg	The project's new git repository cannot be found.	No se encuentra el nuevo repositorio git del proyecto.
 @msg	The remote {remote} has no branch {branch}: push it there first.	El remoto {remote} no tiene la rama {branch}: envíela allí primero.
-@msg	The remote's branch {branch} and this project changed the same files in ways that do not merge: {value}. Nothing was changed: settle them with git, or keep one side's version and commit it.	La rama {branch} del remoto y este proyecto cambiaron los mismos archivos de formas que no se pueden fusionar: {value}. No se ha cambiado nada: resuélvalo con git, o conserve la versión de una de las partes y haga commit.
+@msg	The remote's branch {branch} and this project changed the same files in ways that do not merge: {value}. Nothing was changed: choose which version of each to keep, then try again.	La rama {branch} del remoto y este proyecto cambiaron los mismos archivos de formas que no se combinan: {value}. No se cambió nada: elija qué versión conservar de cada uno y vuelva a intentarlo.
 @msg	The remote's branch {branch} has commits this project does not have: pull first, then push.	La rama {branch} del remoto tiene commits que este proyecto no tiene: traiga primero y luego envíe.
 @msg	The repository has a file at {path}, which cannot be written safely.	El repositorio tiene un archivo en {path} que no se puede escribir de forma segura.
 @msg	The repository has no commit {commit}.	El repositorio no tiene el commit {commit}.
