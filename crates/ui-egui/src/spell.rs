@@ -52,6 +52,7 @@ pub(crate) fn problems(app: &mut App, path: &ProjectPath) -> Vec<Problem> {
                 fixes: Vec::new(),
                 build: false,
                 spelling: true,
+                grammar: None,
             }
         })
         .collect()
@@ -151,32 +152,41 @@ pub(crate) fn run(app: &mut App, id: &str, params: &Value) {
     }
 }
 
-/// Moves the caret to the next misspelled word of the file, from the top after the last one.
+/// Moves the caret to the next misspelled word or grammar problem of the file, from the top after
+/// the last one.
 fn next(app: &mut App) {
     let Some(path) = app.session.current().cloned().filter(checked) else {
         app.view.status = Some((tl!("Open a LaTeX file to check its spelling.").to_owned(), true));
         return;
     };
-    let found = match app.session.misspellings(&path, None) {
-        Ok(found) => found,
-        Err(why) => {
+    let spelling = app.session.misspellings(&path, None);
+    // What the grammar checker found so far (it goes on in the background).
+    let grammar = app.session.grammar_problems(&path, None);
+    let (misspelled, grammar) = match (spelling, grammar) {
+        (Err(why), Err(_)) => {
             app.view.status = Some((why, true));
             return;
         }
+        (s, g) => (s.unwrap_or_default(), g.unwrap_or_default()),
     };
     let source = &mut app.editor.source;
     let b = &source.doc.buffer;
+    let last = b.len_lines().saturating_sub(1);
+    let at = |line: usize, column: usize| (b.line_to_char(line.min(last)) + column).min(b.line_end(line.min(last)));
+    // Each problem: where it starts and ends, and what to say.
+    let mut all: Vec<(usize, usize, String)> =
+        misspelled.iter().map(|m| (at(m.line, m.column), at(m.line, m.end_column), message(&m.word))).collect();
+    all.extend(grammar.into_iter().map(|g| (at(g.line, g.column), at(g.end_line, g.end_column), g.message)));
+    all.sort_by_key(|(s, ..)| *s);
     let caret = source.caret();
-    let at = |m: &texcraft_engine::Misspelling| b.line_to_char(m.line.min(b.len_lines().saturating_sub(1))) + m.column;
-    let target = found.iter().find(|m| at(m) > caret).or(found.first());
+    let target = all.iter().find(|(s, ..)| *s > caret).or(all.first()).cloned();
     match target {
-        Some(m) => {
-            let start = at(m);
-            source.select(start, start + (m.end_column - m.column));
+        Some((start, end, said)) => {
+            source.select(start, end);
             source.reveal = true;
             app.editor.focus = true;
-            app.view.status = Some((message(&m.word), false));
+            app.view.status = Some((said, false));
         }
-        None => app.view.status = Some((tl!("No misspelled words in this file.").to_owned(), false)),
+        None => app.view.status = Some((tl!("No misspelled words or grammar problems in this file.").to_owned(), false)),
     }
 }

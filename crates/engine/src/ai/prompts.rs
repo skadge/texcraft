@@ -47,7 +47,7 @@ const AFTER: Placeholder =
 const PASSAGE: Placeholder = p("passage", true, "The selected text.");
 
 /// Every kind's prompt, in the order of [`super::REQUESTS`].
-pub const PROMPTS: [PromptSpec; 8] = [
+pub const PROMPTS: [PromptSpec; 9] = [
     PromptSpec {
         kind: "explain",
         default: "You help someone writing a LaTeX document understand a message from building it. \
@@ -132,6 +132,19 @@ QUOTE: the exact words\nREMARK: the remark\n\
 with a blank line between remarks. Give at most 12 remarks; when there is nothing to remark, answer NONE.\n\n\
 <<<SECTION\n{section}\nSECTION>>>\n",
         placeholders: &[p("section", true, "The section at the caret.")],
+    },
+    PromptSpec {
+        kind: "grammar",
+        default: "You check the grammar of a passage of a LaTeX document written in {language}. \
+Report mistakes of grammar, agreement, word order, punctuation and word choice; leave LaTeX commands, formulas, labels, references and citations alone, and do not report style. \
+For each mistake, copy the exact words it is about, as written in the passage (as few words as needed, on one line), say what is wrong in one short sentence, and give the words as they should be, as\n\
+QUOTE: the exact words\nPROBLEM: what is wrong\nREPLACEMENT: the words as they should be\n\
+with a blank line between mistakes. Give at most 20; when there is no mistake, answer NONE.\n\n\
+<<<PASSAGE\n{passage}\nPASSAGE>>>\n",
+        placeholders: &[
+            p("passage", true, "The selected text, or the paragraph at the caret."),
+            p("language", false, "The document's language, as a tag (en-GB, fr): from babel or polyglossia, else the spelling language."),
+        ],
     },
 ];
 

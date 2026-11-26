@@ -58,6 +58,8 @@ pub(crate) struct Formatted {
     ink: Ink,
     /// The misspelled words' bytes, with the session revision and the time they were found at.
     misspelled: Option<(u64, f64, Misspelled)>,
+    /// The grammar problems' bytes, the same way.
+    grammar: Option<(u64, f64, Misspelled)>,
     /// The caret's keys and pointer.
     pub editing: crate::formatted_edit::Editing,
 }
@@ -236,6 +238,8 @@ struct Cx<'a> {
     edit_figure: Option<usize>,
     /// The misspelled words' bytes, in order.
     misspelled: &'a [Range<usize>],
+    /// The grammar problems' bytes, in order.
+    grammar: &'a [Range<usize>],
 }
 
 /// A line of text as drawn: what its characters stand for, its layout and where it is, the slot
@@ -309,6 +313,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     let reveal = std::mem::take(&mut app.editor.formatted.editing.reveal).then_some(caret);
     let vim = app.editor.source.vim.is_some();
     let misspelled = misspellings(app, ui, path);
+    let grammar = grammar_problems(app, ui, path);
     let ink = &mut app.editor.formatted.ink;
     ink.begin();
     let mut cx = Cx {
@@ -338,6 +343,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         table_action: None,
         edit_figure: None,
         misspelled: &misspelled,
+        grammar: &grammar,
     };
     let page = 6.0 * t.unit;
     app.view.cursor = None;
@@ -412,8 +418,39 @@ fn misspellings(app: &mut App, ui: &egui::Ui, path: &ProjectPath) -> Arc<Vec<Ran
     found
 }
 
-/// A wavy line under the misspelled words of a paragraph's text pieces.
-fn paint_misspellings(ui: &egui::Ui, t: &Tokens, galley: &Galley, pieces: &[Piece], origin: Pos2, (text, misspelled): (&str, &[Range<usize>])) {
+/// The grammar problems of the shown file, as the misspelled words are found; the view repaints
+/// while passages are checked in the background.
+fn grammar_problems(app: &mut App, ui: &egui::Ui, path: &ProjectPath) -> Misspelled {
+    if !crate::spell::checked(path) {
+        return Arc::default();
+    }
+    let now = ui.input(|i| i.time);
+    let revision = app.session.revision();
+    let busy = app.session.grammar_busy();
+    if busy {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(150));
+    }
+    if let Some((r, at, found)) = &app.editor.formatted.grammar
+        && *r == revision
+        && (now - at < 1.0 || (!busy && now - at < 5.0))
+    {
+        return Arc::clone(found);
+    }
+    let found: Misspelled = Arc::new(app.session.grammar_problems(path, None).unwrap_or_default().into_iter().map(|g| g.range).collect());
+    app.editor.formatted.grammar = Some((revision, now, Arc::clone(&found)));
+    found
+}
+
+/// A line under the marked words of a paragraph's text pieces: wavy (misspelled) or double
+/// (grammar), in `color`.
+fn paint_marks(
+    ui: &egui::Ui,
+    (color, double): (Color32, bool),
+    galley: &Galley,
+    pieces: &[Piece],
+    origin: Pos2,
+    (text, misspelled): (&str, &[Range<usize>]),
+) {
     if misspelled.is_empty() {
         return;
     }
@@ -436,11 +473,17 @@ fn paint_misspellings(ui: &egui::Ui, t: &Tokens, galley: &Galley, pieces: &[Piec
             for r in span_rects(galley, (p.chars.start + first, p.chars.start + last + 1)) {
                 let r = r.translate(origin.to_vec2());
                 let y = r.bottom() - 2.0;
+                if double {
+                    for dy in [-1.5, 0.5] {
+                        ui.painter().hline(r.x_range(), y + dy, Stroke::new(1.0, color));
+                    }
+                    continue;
+                }
                 let step = 2.5;
                 let points: Vec<Pos2> = (0..=(r.width() / step).max(1.0) as usize)
                     .map(|i| pos2(r.left() + i as f32 * step, y + if i % 2 == 0 { -1.2 } else { 1.2 }))
                     .collect();
-                ui.painter().add(egui::Shape::line(points, Stroke::new(1.0, t.spelling)));
+                ui.painter().add(egui::Shape::line(points, Stroke::new(1.0, color)));
             }
         }
     }
@@ -901,7 +944,8 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
     if ui.is_rect_visible(rect) {
         paint_pieces(ui, &t, &galley, &pieces, origin, para.size);
         ui.painter().galley(origin, Arc::clone(&galley), t.text);
-        paint_misspellings(ui, &t, &galley, &pieces, origin, (cx.text, cx.misspelled));
+        paint_marks(ui, (t.spelling, false), &galley, &pieces, origin, (cx.text, cx.misspelled));
+        paint_marks(ui, (t.grammar, true), &galley, &pieces, origin, (cx.text, cx.grammar));
         paint_chip_icons(ui, &t, &galley, &pieces, origin, para.size);
         paint_typeset(ui, cx, &galley, &pieces, origin, (scale, para.color));
     }

@@ -45,6 +45,8 @@ pub struct Tokens {
     pub note: Color32,
     /// The wavy line under a misspelled word, set apart from the problems' colours.
     pub spelling: Color32,
+    /// The double line under a grammar problem.
+    pub grammar: Color32,
     /// Behind a source line with an error.
     pub error_line: Color32,
     /// Behind the line with the caret.
@@ -136,6 +138,7 @@ impl Tokens {
             success: rgb(0x17683B),
             note: rgb(0x2557D6),
             spelling: rgb(0xA3249E),
+            grammar: rgb(0x0B6E7F),
             error_line: alpha(rgb(0xC42B1C), 22),
             current_line: alpha(rgb(0x1B1E23), 8),
             search_match: alpha(rgb(0xE8A317), 77),
@@ -179,6 +182,7 @@ impl Tokens {
             success: rgb(0x6FD39A),
             note: rgb(0x7AA7FF),
             spelling: rgb(0xF08BE4),
+            grammar: rgb(0x5CC9DC),
             error_line: alpha(rgb(0xFF6B6B), 36),
             current_line: alpha(rgb(0xFFFFFF), 10),
             search_match: alpha(rgb(0xF2C45A), 64),

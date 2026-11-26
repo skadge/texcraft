@@ -146,6 +146,25 @@ pub(crate) struct Problem {
     pub build: bool,
     /// A misspelled word: its fixes are the dictionary's spellings.
     pub spelling: bool,
+    /// A grammar problem: its fixes are its replacements.
+    pub grammar: Option<GrammarMark>,
+}
+
+/// What a grammar problem is, for Ignore and Turn Off This Rule.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GrammarMark {
+    /// As `grammar.ignore` takes it.
+    pub id: String,
+    /// Harper's rule; `None` for one the model found.
+    pub rule: Option<String>,
+}
+
+/// How a problem is underlined: the shape tells kinds apart as well as the colour.
+#[derive(Clone, Copy)]
+enum Line {
+    Wavy,
+    Dotted,
+    Double,
 }
 
 /// The popup of a problem: its message, help and fixes.
@@ -459,6 +478,12 @@ impl SourceEditor {
     pub fn misspelling_at_caret(&self) -> Option<&Problem> {
         let caret = self.caret();
         self.problems.iter().find(|p| p.spelling && p.start <= caret && caret <= p.end)
+    }
+
+    /// The grammar problem at the caret, if it is on one.
+    pub fn grammar_at_caret(&self) -> Option<&Problem> {
+        let caret = self.caret();
+        self.problems.iter().find(|p| p.grammar.is_some() && p.start <= caret && caret <= p.end)
     }
 
     /// Whether typing inserts text: always, or in Vim's Insert mode.
@@ -1860,6 +1885,7 @@ impl SourceEditor {
         let mut ai_act = None;
         let (icon, color) = match popup.problem.severity {
             _ if popup.problem.spelling => ("type", t.spelling),
+            _ if popup.problem.grammar.is_some() => ("message-square-text", t.grammar),
             Severity::Error => ("circle-exclamation-point", t.error),
             Severity::Warning => ("triangle-exclamation-point", t.warning),
             _ => ("info", t.note),
@@ -2237,16 +2263,17 @@ impl SourceEditor {
     }
 
     /// The problems of one line, underlined: hints with dots, warnings, errors and misspelled words
-    /// with waves.
+    /// with waves, grammar problems with a double line.
     fn paint_problems(&self, painter: &egui::Painter, t: &Tokens, galley: &Galley, at: Pos2, (line_start, line_len): (usize, usize)) {
         for p in self.problems.iter().filter(|p| p.end > line_start && p.start <= line_start + line_len) {
             let (s, e) = (p.start.saturating_sub(line_start).min(line_len), (p.end - line_start).min(line_len));
             let span = (s, e.max(s + 1).min(line_len.max(s + 1)));
             match p.severity {
-                _ if p.spelling => underline(painter, galley, at, span, t.spelling, true),
-                Severity::Error => underline(painter, galley, at, span, t.error, true),
-                Severity::Warning => underline(painter, galley, at, span, t.warning, true),
-                _ => underline(painter, galley, at, span, t.note, false),
+                _ if p.spelling => underline(painter, galley, at, span, t.spelling, Line::Wavy),
+                _ if p.grammar.is_some() => underline(painter, galley, at, span, t.grammar, Line::Double),
+                Severity::Error => underline(painter, galley, at, span, t.error, Line::Wavy),
+                Severity::Warning => underline(painter, galley, at, span, t.warning, Line::Wavy),
+                _ => underline(painter, galley, at, span, t.note, Line::Dotted),
             }
         }
     }
@@ -2436,7 +2463,7 @@ fn paint_passage(painter: &egui::Painter, galley: &Galley, at: Pos2, p: &Passage
     };
     paint_span(painter, galley, at, (s, e), p.color.gamma_multiply(strength), through_break);
     match p.mark {
-        Mark::Comment if p.selected => underline(painter, galley, at, (s, e), p.color, false),
+        Mark::Comment if p.selected => underline(painter, galley, at, (s, e), p.color, Line::Dotted),
         Mark::Comment => {}
         Mark::Deleted => rule(painter, galley, at, (s, e), p.color, 0.5),
         Mark::Inserted => rule(painter, galley, at, (s, e), p.color, 1.0),
@@ -2461,7 +2488,7 @@ fn rule(painter: &egui::Painter, galley: &Galley, at: Pos2, (s, e): (usize, usiz
 }
 
 /// A dotted (or, `wavy`, a wavy) line under chars `s..e` of one line's galley.
-fn underline(painter: &egui::Painter, galley: &Galley, at: Pos2, (s, e): (usize, usize), color: egui::Color32, wavy: bool) {
+fn underline(painter: &egui::Painter, galley: &Galley, at: Pos2, (s, e): (usize, usize), color: egui::Color32, line: Line) {
     let mut row_start = 0;
     for row in &galley.rows {
         let n = row.char_count_excluding_newline().0;
@@ -2470,7 +2497,11 @@ fn underline(painter: &egui::Painter, galley: &Galley, at: Pos2, (s, e): (usize,
             let x0 = at.x + row.pos.x + row.x_offset(egui::text::CharIndex(a - row_start));
             let x1 = at.x + row.pos.x + row.x_offset(egui::text::CharIndex(z - row_start));
             let y = at.y + row.max_y() - 1.5;
-            if wavy {
+            if let Line::Double = line {
+                for dy in [-1.5, 0.5] {
+                    painter.hline(x0..=x1, y + dy, egui::Stroke::new(1.0, color));
+                }
+            } else if let Line::Wavy = line {
                 let mut points = Vec::new();
                 let mut x = x0;
                 let mut up = true;

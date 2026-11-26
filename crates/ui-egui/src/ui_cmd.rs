@@ -39,7 +39,10 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.find_in_project", "Find in Project", "Edit", "find", Some("Cmd+Shift+F")),
     ui("view.show_in_pdf", "Show in PDF", "Edit", "find", Some("Cmd+Alt+J")),
     ui("edit.quick_fix", "Quick Fix", "Edit", "fix", Some("Cmd+.")),
-    ui("edit.spelling.next", "Next Misspelling", "Edit", "fix", Some("F7")),
+    ui("edit.spelling.next", "Next Spelling or Grammar Problem", "Edit", "fix", Some("F7")),
+    // Sends the selection, or the paragraph at the caret, to the connected model; the problems it
+    // finds are underlined as grammar problems.
+    ui("edit.ai_grammar", "Check Grammar with AI", "Edit", "fix", None),
     ui("edit.fold", "Fold", "Edit", "fold", Some("Cmd+Shift+[")),
     ui("edit.unfold", "Unfold", "Edit", "fold", Some("Cmd+Shift+]")),
     ui("edit.fold_all", "Fold All", "Edit", "fold", Some("Cmd+Alt+Shift+[")),
@@ -129,6 +132,10 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("edit.spelling.replace", "Change Spelling", "Spelling", "spelling", None),
     ui("edit.spelling.add", "Add to Dictionary", "Spelling", "spelling", None),
     ui("edit.spelling.ignore", "Ignore Word", "Spelling", "spelling", None),
+    // The text's context menu on a grammar problem; `{"text": …}` chooses the replacement.
+    ui("edit.grammar.replace", "Take the Grammar Replacement", "Grammar", "grammar", None),
+    ui("edit.grammar.ignore", "Ignore Grammar Problem", "Grammar", "grammar", None),
+    ui("edit.grammar.rule_off", "Turn Off This Rule", "Grammar", "grammar", None),
     // The palette's symbols: `{"command": "\\alpha"}`.
     ui("edit.insert_symbol", "Insert Symbol", "Symbols", "symbols", None),
     // The user guide online; `{"page": "ai.html"}` opens one of its pages (docs/guide/).
@@ -168,6 +175,7 @@ pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
         "edit.ai_make" => crate::ai_make::can_make(app, crate::ai::Kind::Make),
         "edit.ai_reference" => crate::ai_make::can_make(app, crate::ai::Kind::Reference),
         "edit.ai_review" => crate::ai_ask::can_review(app),
+        "edit.ai_grammar" => crate::grammar::can_check_with_ai(app),
         "edit.accept_all" | "edit.reject_all" if crate::review::open_suggestions_in_current(app) == 0 => {
             Err(tl!("There are no open suggestions in this file.").to_owned())
         }
@@ -276,6 +284,7 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "view.fit_page" => app.pdf.set_fit(crate::pdf_view::Fit::Page),
         "view.actual_size" => app.pdf.set_fit(crate::pdf_view::Fit::Zoom(1.0)),
         "edit.spelling.replace" | "edit.spelling.add" | "edit.spelling.ignore" | "edit.spelling.next" => crate::spell::run(app, id, params),
+        "edit.grammar.replace" | "edit.grammar.ignore" | "edit.grammar.rule_off" => crate::grammar::run(app, id, params),
         "edit.symbols" => crate::symbols::toggle(app),
         "edit.insert_symbol" => crate::symbols::run(app, params),
         id if id.starts_with("window.") => {
@@ -288,6 +297,7 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "edit.ai_make" => crate::ai_make::open_make(app),
         "edit.ai_reference" => crate::ai_make::open_reference(app),
         "edit.ai_review" => crate::ai_ask::review(app),
+        "edit.ai_grammar" => crate::grammar::check_with_ai(app),
         id if id.starts_with("edit.") => {
             if !crate::editor::edit(app, id) {
                 app.view.status = Some((tl!("Open a text file to edit it.").to_owned(), true));

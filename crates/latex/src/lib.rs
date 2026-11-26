@@ -16,6 +16,7 @@ pub mod edit;
 pub mod figure;
 pub mod fold;
 pub mod keep;
+pub mod passage;
 pub mod prose;
 pub mod table;
 pub mod tree;

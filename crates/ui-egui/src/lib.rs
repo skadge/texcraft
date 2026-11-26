@@ -32,6 +32,7 @@ mod formatted;
 mod formatted_edit;
 mod gallery;
 mod goto_file;
+mod grammar;
 pub mod icons;
 mod keys;
 mod pdf_view;
@@ -273,6 +274,7 @@ impl App {
         session.restore_ai(prefs.ai.clone());
         session.restore_forge_servers(prefs.forge_servers.clone());
         session.settings.spelling = prefs.spelling.clone();
+        session.settings.grammar = prefs.grammar.clone();
         session.set_user_words(&prefs.words);
         let (layout, side) = (prefs.layout(), prefs.side());
         let keys = keys::Keys::new(prefs.shortcuts.clone());
@@ -378,6 +380,7 @@ impl App {
         current.auto_compile = self.session.settings.auto_compile;
         current.build = self.session.settings.build;
         current.spelling = self.session.settings.spelling.clone();
+        current.grammar = self.session.settings.grammar.clone();
         current.words = self.session.user_words();
         if current != self.prefs {
             self.prefs = current;

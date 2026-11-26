@@ -56,6 +56,8 @@ pub struct Prefs {
     pub forge_servers: Vec<texcraft_engine::forge::servers::Server>,
     /// Spell checking: on, the language, comments.
     pub spelling: texcraft_engine::SpellingOptions,
+    /// Grammar checking: on, the rules and groups switched off.
+    pub grammar: texcraft_engine::GrammarOptions,
     /// The user's words (Add to Dictionary), for every project.
     pub words: Vec<String>,
     /// The symbols inserted last, by command, the latest first.
@@ -117,6 +119,7 @@ impl Default for Prefs {
             ai: texcraft_engine::ai::Saved::default(),
             forge_servers: Vec::new(),
             spelling: texcraft_engine::SpellingOptions::default(),
+            grammar: texcraft_engine::GrammarOptions::default(),
             words: Vec::new(),
             recent_symbols: Vec::new(),
             ai_complete: false,

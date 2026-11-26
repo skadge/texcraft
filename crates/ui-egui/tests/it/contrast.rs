@@ -12,7 +12,7 @@ fn text_and_controls_keep_their_contrast_in_both_themes() {
             for (name, fg) in [("text", t.text), ("text_muted", t.text_muted), ("error", t.error), ("warning", t.warning), ("success", t.success)] {
                 assert!(contrast(fg, surface) >= 4.5, "{:?}: {name} on {surface:?} is {:.2}:1", t.scheme, contrast(fg, surface));
             }
-            for (name, fg) in [("control_border", t.control_border), ("accent", t.accent), ("spelling", t.spelling)] {
+            for (name, fg) in [("control_border", t.control_border), ("accent", t.accent), ("spelling", t.spelling), ("grammar", t.grammar)] {
                 assert!(contrast(fg, surface) >= 3.0, "{:?}: {name} on {surface:?} is {:.2}:1", t.scheme, contrast(fg, surface));
             }
         }

@@ -11,8 +11,10 @@ mod edits;
 pub mod file_access;
 pub mod find;
 mod formulas;
+pub mod grammar;
 mod language;
 pub mod spelling;
+pub use grammar::{GrammarOptions, GrammarProblem};
 pub use spelling::{Misspelling, SpellingOptions};
 mod sync;
 pub use edits::FileEdit;
@@ -66,6 +68,9 @@ pub struct Settings {
     /// Spell checking: on, the language, comments (`language.spelling_options`).
     #[serde(default)]
     pub spelling: SpellingOptions,
+    /// Grammar checking: on, the rules and groups switched off (`grammar.options`, `grammar.rule`).
+    #[serde(default)]
+    pub grammar: GrammarOptions,
 }
 
 impl Default for Settings {
@@ -76,6 +81,7 @@ impl Default for Settings {
             build: texcraft_compile::Options::default(),
             with_suggestions: false,
             spelling: SpellingOptions::default(),
+            grammar: GrammarOptions::default(),
         }
     }
 }
@@ -201,6 +207,7 @@ pub struct Session {
     ai: ai::State,
     /// Spell checking: the dictionary, the word lists and each file's words.
     spelling: spelling::State,
+    grammar: grammar::State,
     /// Where each kind of build output was last saved (`build.save_output`).
     saved_outputs: std::collections::BTreeMap<&'static str, PathBuf>,
 }
@@ -267,6 +274,7 @@ impl Session {
             git_http: cmd::git::default_http(),
             ai: ai::State::default(),
             spelling: spelling::State::default(),
+            grammar: grammar::State::default(),
             saved_outputs: std::collections::BTreeMap::new(),
         }
     }

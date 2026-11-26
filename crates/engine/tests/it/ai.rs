@@ -893,3 +893,40 @@ fn an_agent_session_cannot_agree_to_any_new_kind_of_request() -> R {
     let _ = std::fs::remove_dir_all(&dir);
     Ok(())
 }
+
+#[test]
+fn a_grammar_check_sends_what_was_disclosed_and_places_problems_on_the_words_they_quote() -> R {
+    let seen = Seen::default();
+    let reply = "QUOTE: \"\\textbf{bold word\"\nPROBLEM: Say it in plain words.\nREPLACEMENT: bold words\n\n\
+                 QUOTE: is here.\nPROBLEM: Say where.\nREPLACEMENT: is on the left.\n\n\
+                 QUOTE: words that are not there\nPROBLEM: Lost.\nREPLACEMENT: gone";
+    let mut s = session(20, reply, &seen)?;
+    connect_remote(&mut s)?;
+    let t = text(&s);
+    let at = t.find("The \\textbf{bold").ok_or("no line 20")?;
+    let start = t[..at].chars().count();
+    let end = start + t[at..].find('\n').unwrap_or_default();
+    let p = json!({"path": "main.tex", "start": start, "end": end});
+    let mut d = p.clone();
+    d["request"] = json!("grammar");
+    let disclosed = s.execute("ai.disclose", &d)?;
+    let r = s.execute("ai.grammar", &p)?;
+    let sent = seen.prompts();
+    assert_eq!(sent.first().map(String::as_str), disclosed["sends"]["prompt"].as_str(), "the request differs from its disclosure");
+    let prompt = sent.first().cloned().unwrap_or_default();
+    assert!(
+        prompt.contains("bold word is here") && !prompt.contains("FAR-AWAY-TEXT") && !prompt.contains("Line 21"),
+        "more or less than the passage was sent"
+    );
+    assert_eq!((r["found"].as_u64(), r["dropped"].as_u64()), (Some(2), Some(1)), "{r}");
+    assert_eq!(text(&s), t, "the check edited the file");
+    s.execute("grammar.options", &json!({"on": false}))?;
+    let v = s.execute("grammar.check", &json!({"path": "main.tex"}))?;
+    let found: Vec<&Value> = v["problems"].as_array().map(|a| a.iter().filter(|p| p["from"] == "AI (small)").collect()).unwrap_or_default();
+    assert_eq!(found.len(), 2, "{v}");
+    // On the line it quotes; a replacement that would lose LaTeX (the \textbf) is not offered.
+    assert!(found.iter().all(|p| p["line"] == 20), "{v}");
+    let replacements: Vec<&Value> = found.iter().map(|p| &p["replacements"]).collect();
+    assert!(replacements.contains(&&json!([])) && replacements.contains(&&json!(["is on the left."])), "{v}");
+    Ok(())
+}
