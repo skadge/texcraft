@@ -74,9 +74,12 @@ pub(crate) fn harness(s: Session) -> Harness<'static, App> {
     Harness::builder().with_size(egui::vec2(1400.0, 900.0)).with_max_steps(60).build_ui_state(|ui, app: &mut App| app.frame(ui), app)
 }
 
-/// Runs frames until no AI request is in flight.
+/// Runs frames until no AI request is in flight. Bounded by time, not by frames: Make with AI
+/// typesets its answer with retex, which takes far longer on a machine busy with other builds
+/// (a frame count of 1.5 s failed about one run in four there).
 pub(crate) fn settle(h: &mut Harness<'_, App>) -> bool {
-    for _ in 0..300 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while std::time::Instant::now() < deadline {
         h.step();
         if !h.state().session().ai_busy() {
             h.run();
