@@ -374,6 +374,36 @@ fn a_sync_in_conflict_lists_the_files_and_the_choice_made_settles_them() -> R {
 }
 
 #[test]
+fn a_sync_merges_edits_to_other_sentences_of_the_same_paragraph_without_asking() -> R {
+    let dir = temp("sync-words")?;
+    let fake = Fake::account(Service::GitHub, "", "ada", TOKEN);
+    let server = server(&dir)?;
+    let (a_dir, b_dir) = (dir.join("a"), dir.join("b"));
+    let paragraph =
+        |first: &str, last: &str| format!("\\section{{Results}}\nThe model {first} the baseline \\cite{{x}}. Training takes {last} on one GPU.\n");
+    let mut a = session(&fake, &server);
+    write(&mut a, "main.tex", &paragraph("beats", "a day"))?;
+    a.execute("project.save_as", &json!({"path": a_dir.display().to_string()}))?;
+    a.execute("git.set_remote", &json!({"name": "origin", "url": "https://github.com/ada/paper.git"}))?;
+    a.execute("project.sync", &json!({"token": TOKEN}))?;
+    let mut b = clone_of(&a_dir, &b_dir, &fake, &server)?;
+    // B edits the second sentence and syncs; A edits the first sentence of the same line.
+    write(&mut b, "main.tex", &paragraph("beats", "two days"))?;
+    b.execute("project.sync", &json!({"token": TOKEN}))?;
+    write(&mut a, "main.tex", &paragraph("matches", "a day"))?;
+
+    let done = a.execute("project.sync", &json!({"token": TOKEN}))?;
+    assert_eq!(done["pulled"]["merged"], true, "{done}");
+    assert_eq!(text(&a, "main.tex"), Some(paragraph("matches", "two days")));
+    assert!(a.forge_conflicts().is_empty(), "nothing asked");
+    assert_eq!(server.get("refs/heads/main").map(|id| id.to_string()), Some(head(&mut a)?), "and sent");
+    b.execute("project.sync", &json!({"token": TOKEN}))?;
+    assert_eq!(text(&b, "main.tex"), Some(paragraph("matches", "two days")));
+    std::fs::remove_dir_all(&dir)?;
+    Ok(())
+}
+
+#[test]
 fn an_overleaf_remote_is_named_and_reached_with_its_git_token() -> R {
     const OVERLEAF_TOKEN: &str = "olp_engine0test0token";
     let dir = temp("overleaf")?;
