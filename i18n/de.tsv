@@ -303,6 +303,8 @@
 	Fit	Einpassen
 	Fit page	Ganze Seite
 	Fit width	Seitenbreite
+	Back to Fit Page	Zurück zu Ganze Seite
+	Back to Fit Width	Zurück zu Seitenbreite
 	Fix Grammar and Spelling	Grammatik und Rechtschreibung korrigieren
 	Fix all hints in this file	Alle Hinweise in dieser Datei beheben
 	Fix them before sending the {standard} to the printer: the Print filter lists them.	Beheben Sie sie, bevor Sie das {standard} an die Druckerei senden: Der Filter „Druck“ listet sie auf.

@@ -212,6 +212,8 @@ pub(crate) struct PdfView {
     sizes: Vec<[f32; 2]>,
     error: Option<String>,
     fit: Fit,
+    /// The last fit chosen (width or page), which the zoom's Fit button goes back to.
+    last_fit: Fit,
     /// The zoom used for the last frame.
     zoom: f32,
     /// Drawn pages: the pixel scale and generation each was drawn at, and its texture.
@@ -270,6 +272,7 @@ impl Default for PdfView {
             sizes: Vec::new(),
             error: None,
             fit: Fit::Width,
+            last_fit: Fit::Width,
             zoom: 1.0,
             textures: HashMap::new(),
             page: 0,
@@ -409,10 +412,18 @@ impl PdfView {
         self.offset
     }
 
+    /// The fit the zoom's Fit button goes back to: the last of fit width and fit page chosen.
+    pub fn last_fit(&self) -> Fit {
+        self.last_fit
+    }
+
     pub fn set_fit(&mut self, fit: Fit) {
         self.fit = match fit {
             Fit::Zoom(z) => Fit::Zoom(z.clamp(MIN_ZOOM, MAX_ZOOM)),
-            other => other,
+            other => {
+                self.last_fit = other;
+                other
+            }
         };
     }
 

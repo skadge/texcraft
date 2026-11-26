@@ -194,14 +194,6 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         if log.clicked() {
             app.view.logs = !app.view.logs;
         }
-        // The browser cannot open a second window of the app: no button there (the command
-        // says why).
-        if ui_cmd::enabled(app, "view.pdf_window").is_ok() {
-            let label = if app.view.pdf_window { tl!("Put the PDF back in the main window") } else { tl!("Open the PDF in its own window") };
-            if widgets::icon_toggle(ui, &t, "window-out", label, app.view.pdf_window).clicked() {
-                ui_cmd::run(app, "view.pdf_window");
-            }
-        }
         ui.add_space(t.unit * 2.0);
         // The PDF a click away: downloaded in the browser, saved where the user chooses elsewhere.
         let save_pdf = cmd_enabled(app, "build.save_pdf");
@@ -243,19 +235,26 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
                 ui.add(egui::Label::new(RichText::new(text).font(t.small()).color(t.text_muted)).truncate());
             }
         };
+        // The pages and the zoom at the bar's end, made in the order they read, and after them,
+        // at the very end, the button that moves the PDF to its own window; that button alone
+        // when the pages are not shown here.
         let fits = widgets::fits_before_right(ui, "pdf-tools");
-        if app.view.logs || !app.pdf.has_pdf() || app.view.narrow || !fits {
-            show_progress(ui);
-            return !fits;
-        }
-        // The pages and the zoom at the bar's end, made in the order they read.
-        let room = widgets::room_before_right(ui, "pdf-tools");
+        let here = !app.view.logs && app.pdf.has_pdf() && !app.view.narrow && fits;
+        let key = if here { "pdf-tools" } else { "pdf-window" };
+        let room = widgets::room_before_right(ui, key);
         ui.allocate_ui_with_layout(vec2(room, ui.available_height()), Layout::left_to_right(Align::Center), |ui| {
             ui.set_width(room);
             show_progress(ui);
         });
-        widgets::right_aligned(ui, "pdf-tools", |ui| page_tools(app, ui));
-        false
+        widgets::right_aligned(ui, key, |ui| {
+            if here {
+                page_tools(app, ui);
+            }
+            window_button(app, ui);
+            // The margin at the bar's end, counted in the controls' width.
+            ui.allocate_space(vec2(t.unit * 2.0 - ui.spacing().item_spacing.x, 1.0));
+        });
+        !fits
     });
     // A narrow window has no room for them on the bar: they are a second row.
     if (app.view.narrow || second_row.inner) && !app.view.logs && app.pdf.has_pdf() {
@@ -265,6 +264,20 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
             ui.add_space(t.unit * 2.0);
             page_tools(app, ui);
         });
+    }
+}
+
+/// The button that opens the PDF in its own window, or puts it back. The browser cannot open a
+/// second window of the app: no button there (the command says why).
+fn window_button(app: &mut App, ui: &mut egui::Ui) {
+    if ui_cmd::enabled(app, "view.pdf_window").is_err() {
+        return;
+    }
+    let t = app.tokens;
+    ui.add_space(t.unit * 2.0);
+    let label = if app.view.pdf_window { tl!("Put the PDF back in the main window") } else { tl!("Open the PDF in its own window") };
+    if widgets::icon_toggle(ui, &t, "window-out", label, app.view.pdf_window).clicked() {
+        ui_cmd::run(app, "view.pdf_window");
     }
 }
 
@@ -287,8 +300,14 @@ fn page_tools(app: &mut App, ui: &mut egui::Ui) {
     if widgets::icon_button(ui, &t, "zoom-in", tl!("Zoom In"), true).clicked() {
         ui_cmd::run(app, "view.zoom_in");
     }
-    // The margin at the bar's end, counted in the controls' width.
-    ui.allocate_space(vec2(t.unit * 2.0 - ui.spacing().item_spacing.x, 1.0));
+    // Back to the last fit chosen, named after it; at that fit already, there is nothing to do.
+    let (label, id) = match app.pdf.last_fit() {
+        Fit::Page => (tl!("Back to Fit Page"), "view.fit_page"),
+        _ => (tl!("Back to Fit Width"), "view.fit_width"),
+    };
+    if widgets::icon_button(ui, &t, "fit-width", label, app.pdf.fit() != app.pdf.last_fit()).clicked() {
+        ui_cmd::run(app, id);
+    }
 }
 
 fn cmd_enabled(app: &App, id: &str) -> Result<(), String> {

@@ -215,3 +215,36 @@ fn the_middle_button_drags_the_pages() {
     let after = scroll(&mut harness);
     assert!(after.x > before.x + 60.0 && after.y > before.y + 60.0, "the pages did not follow the pointer: {before:?} to {after:?}");
 }
+
+/// Issue #41: the zoom's Fit button goes back to the last fit chosen, named after it, and has
+/// nothing to do at that fit already.
+#[test]
+fn the_fit_button_goes_back_to_the_last_fit_chosen() {
+    use egui_kittest::kittest::NodeT as _;
+    let mut harness = built();
+    let enabled = |h: &Harness<'_, App>, name: &str| !h.get_by_label(name).accesskit_node().is_disabled();
+    assert!(!enabled(&harness, "Back to Fit Width"), "at fit width already, the button can be clicked");
+    ui_cmd::run(harness.state_mut(), "view.fit_page");
+    ui_cmd::run(harness.state_mut(), "view.zoom_in");
+    settle(&mut harness);
+    assert!(harness.query_by_label("Fit page").is_none(), "the zoom is still at fit page");
+    assert!(enabled(&harness, "Back to Fit Page"), "the button does not go back to the fit chosen last");
+    harness.get_by_label("Back to Fit Page").click();
+    settle(&mut harness);
+    assert!(harness.query_by_label("Fit page").is_some(), "the button did not go back to fit page");
+}
+
+/// Issue #40: the button that moves the PDF to its own window ends the PDF's header, after the
+/// zoom.
+#[test]
+fn the_own_window_button_ends_the_header_after_the_zoom() {
+    let harness = built();
+    let rect = |label: &str| harness.get_by_label(label).rect();
+    let window = rect("Open the PDF in its own window");
+    for before in ["Zoom In", "Back to Fit Width", "Fit width", "Export"] {
+        let r = rect(before);
+        assert!(r.right() <= window.left(), "{before} is not before the window's button: {r:?} {window:?}");
+    }
+    let compile = rect("Compile");
+    assert!((window.center().y - compile.center().y).abs() < compile.height() / 2.0, "the window's button left the header");
+}

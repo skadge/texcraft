@@ -303,6 +303,8 @@
 	Fit	Ajustar
 	Fit page	Ajustar página
 	Fit width	Ajustar ancho
+	Back to Fit Page	Volver a Ajustar página
+	Back to Fit Width	Volver a Ajustar ancho
 	Fix Grammar and Spelling	Corregir gramática y ortografía
 	Fix all hints in this file	Corregir todas las indicaciones de este archivo
 	Fix them before sending the {standard} to the printer: the Print filter lists them.	Corríjalos antes de enviar el {standard} a la imprenta: el filtro Impresión los muestra.
