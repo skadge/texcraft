@@ -68,6 +68,36 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "build.hide_messages",
+            label: "Hide Messages Like This",
+            menu: &[],
+            shortcut: None,
+            params: hide_schema,
+            enabled: always,
+            run: hide_messages,
+            changes: true,
+        },
+        CommandSpec {
+            id: "build.show_messages",
+            label: "Show Messages Again",
+            menu: &[],
+            shortcut: None,
+            params: show_schema,
+            enabled: always,
+            run: show_messages,
+            changes: true,
+        },
+        CommandSpec {
+            id: "build.hidden_messages",
+            label: "Hidden Messages",
+            menu: &[],
+            shortcut: None,
+            params: no_params,
+            enabled: always,
+            run: |s, _| Ok(s.hidden_info()),
+            changes: false,
+        },
+        CommandSpec {
             id: "build.save_pdf",
             label: "Save PDF As…",
             menu: &["File"],
@@ -201,6 +231,53 @@ fn clean(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn path_schema() -> Value {
     json!({"type": "object", "properties": {"path": {"type": "string", "description": "Where to write the PDF."}}, "required": ["path"], "additionalProperties": false})
+}
+
+fn hide_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "kind": {"type": "string", "description": "The kind of message: as `build.hidden_messages` lists them, its origin then its wording with what varies replaced by …"},
+        "index": {"type": "integer", "minimum": 0, "description": "Instead of `kind`: the kind of this message of `build.result`'s diagnostics, from 0."},
+        "scope": {"enum": ["project", "user"], "description": "This project (its .texcraft/hidden-messages.txt; for the session when it has no folder), or every project (the user's preferences). Default: project."}
+    }, "additionalProperties": false})
+}
+
+fn show_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "kind": {"type": "string"},
+        "scope": {"enum": ["project", "user"], "description": "Where to show it again; both without."}
+    }, "required": ["kind"], "additionalProperties": false})
+}
+
+fn scope(p: &Value) -> Result<Option<crate::hidden::Scope>> {
+    match p.get("scope").and_then(Value::as_str) {
+        None => Ok(None),
+        Some("project") => Ok(Some(crate::hidden::Scope::Project)),
+        Some("user") => Ok(Some(crate::hidden::Scope::User)),
+        Some(other) => Err(format!("unknown scope `{other}`: project or user")),
+    }
+}
+
+/// Hides the messages of a kind: named, or that of one of the last build's messages. Errors stay.
+fn hide_messages(s: &mut Session, p: &Value) -> Result<Value> {
+    let kind = match (p.get("kind").and_then(Value::as_str), p.get("index").and_then(Value::as_u64)) {
+        (Some(kind), _) => kind.to_owned(),
+        (None, Some(i)) => {
+            let d = s.last_outcome().and_then(|o| o.diagnostics.get(i as usize)).ok_or_else(|| format!("The last build has no message {i}."))?;
+            if d.severity == texcraft_compile::Severity::Error {
+                return Err("Errors are not hidden: fix them instead.".to_owned());
+            }
+            crate::hidden::kind(d)
+        }
+        (None, None) => return Err("Name the kind of message, or the `index` of one of the last build's.".to_owned()),
+    };
+    let kept = s.hide_kind(&kind, scope(p)?.unwrap_or(crate::hidden::Scope::Project))?;
+    Ok(json!({"kind": kind, "kept": kept, "hiddenNow": s.hidden_count()}))
+}
+
+fn show_messages(s: &mut Session, p: &Value) -> Result<Value> {
+    let kind = super::string(p, "kind")?;
+    s.show_kind(kind, scope(p)?)?;
+    Ok(json!({"kind": kind, "hiddenNow": s.hidden_count()}))
 }
 
 fn has_pdf(s: &Session) -> Result<()> {
@@ -395,6 +472,7 @@ fn auto(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn result(s: &mut Session, _: &Value) -> Result<Value> {
+    s.refresh_hidden();
     // The running build's draft PDF, while its later passes run.
     let draft = s.draft_pdf().map(|d| json!({"job": d.job, "pass": d.pass, "pdfBytes": d.pdf.len()}));
     let Some(o) = s.last_outcome() else {
@@ -408,6 +486,7 @@ fn result(s: &mut Session, _: &Value) -> Result<Value> {
         "seconds": o.seconds,
         "errors": o.errors(),
         "warnings": o.warnings(),
+        "hidden": s.hidden_count(),
         "pdfBytes": o.pdf.as_ref().map(|p| p.len()),
         "diagnostics": o.diagnostics,
         "draft": draft,

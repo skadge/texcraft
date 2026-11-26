@@ -158,6 +158,8 @@ pub(crate) struct View {
     pub settings_focus: bool,
     /// Which messages the build log lists.
     pub log_filter: preview::Filter,
+    /// The build log lists the messages of hidden kinds too, to show them again.
+    pub log_hidden: bool,
     /// The raw log's search.
     pub log_search: preview::LogSearch,
     /// Folders folded in the file tree.
@@ -290,6 +292,7 @@ impl App {
         session.restore_forge_servers(prefs.forge_servers.clone());
         session.settings.spelling = prefs.spelling.clone();
         session.settings.grammar = prefs.grammar.clone();
+        session.settings.hidden_messages = prefs.hidden_messages.clone();
         session.set_user_words(&prefs.words);
         let (layout, side) = (prefs.layout(), prefs.side());
         let keys = keys::Keys::new(prefs.shortcuts.clone());
@@ -306,6 +309,7 @@ impl App {
                 dialog: None,
                 cursor: None,
                 log_filter: preview::Filter::All,
+                log_hidden: false,
                 log_search: preview::LogSearch::default(),
                 settings_tab: 0,
                 settings_page: false,
@@ -401,6 +405,7 @@ impl App {
         current.build = self.session.settings.build;
         current.spelling = self.session.settings.spelling.clone();
         current.grammar = self.session.settings.grammar.clone();
+        current.hidden_messages = self.session.settings.hidden_messages.clone();
         current.words = self.session.user_words();
         if current != self.prefs {
             self.prefs = current;
@@ -773,6 +778,8 @@ impl App {
     fn draw(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
         self.ctx = ctx.clone();
+        // The project's hidden kinds of build message, read again when another project opened.
+        self.session.refresh_hidden();
         // A dialog to give the keyboard to, or a menu opened from the keyboard last frame: Tab's
         // move, before anything is drawn, gives it to the dialog's first control, or from the
         // menu's button to its first entry, drawn right after it.

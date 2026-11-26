@@ -177,7 +177,7 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         crate::widgets::keyboard_menu(ui, &menu);
         egui::Popup::menu(&menu).show(|ui| compile_menu(app, ui));
         ui.add_space(t.unit * 2.0);
-        let (errors, warnings) = app.session.last_outcome().map_or((0, 0), |o| (o.errors(), o.warnings()));
+        let (errors, warnings) = app.session.last_outcome().map_or((0, 0), |o| (o.errors(), app.session.warnings_shown()));
         // The count the badge draws is said in the button's name too.
         let log_label = match (app.view.logs, errors, warnings) {
             (true, _, _) => tl!("Back to PDF").to_owned(),
@@ -474,7 +474,7 @@ fn print_summary(ui: &mut egui::Ui, t: &Tokens, outcome: &Outcome) -> CardAction
         };
         ("triangle-exclamation-point", t.warning, title, message)
     };
-    card(ui, t, Card { icon, color, title: &title, message: &message, help: "", ai: None, noticed: None }, None, None)
+    card(ui, t, Card { icon, color, title: &title, message: &message, help: "", ai: None, noticed: None, hide: None }, None, None)
 }
 
 fn logs(app: &mut App, ui: &mut egui::Ui) {
@@ -486,7 +486,11 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| ui.label(RichText::new(tl!("Nothing has been compiled yet.")).color(t.text_muted)));
         return;
     };
-    let count = |f: Filter| outcome.diagnostics.iter().filter(|d| f.keeps(d)).count();
+    // Messages of a kind the user hid are left out, unless asked for (to show them again).
+    let hidden_count = app.session.hidden_count();
+    let with_hidden = app.view.log_hidden && hidden_count > 0;
+    let listed = |d: &Diagnostic| with_hidden || !app.session.is_hidden(d);
+    let count = |f: Filter| outcome.diagnostics.iter().filter(|d| f.keeps(d) && listed(d)).count();
     let filters = filters(&outcome);
     if !filters.contains(&app.view.log_filter) {
         app.view.log_filter = Filter::All;
@@ -506,10 +510,14 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
     let browser = app.session.library().is_some();
     let file_manager = ui_cmd::enabled(app, "view.show_output").is_ok();
     let mut output_action = None;
+    // Hide the messages of this one's kind (its index in the build's messages), or show them again.
+    let mut hide_kind: Option<(usize, &str)> = None;
+    let mut show_again: Option<String> = None;
+    let mut toggle_hidden = false;
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         egui::Frame::new().inner_margin(egui::Margin::same(12)).show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(t.unit * 2.0, t.unit * 2.0);
-            let shown: Vec<&Diagnostic> = outcome.diagnostics.iter().filter(|d| app.view.log_filter.keeps(d)).collect();
+            let shown: Vec<&Diagnostic> = outcome.diagnostics.iter().filter(|d| app.view.log_filter.keeps(d) && listed(d)).collect();
             ui.horizontal(|ui| {
                 let options: Vec<(&str, Option<&str>)> = labels.iter().map(|l| (l.as_str(), None)).collect();
                 let selected = filters.iter().position(|f| *f == app.view.log_filter).unwrap_or(0);
@@ -523,6 +531,18 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                     }
                 });
             });
+            if hidden_count > 0 {
+                ui.horizontal(|ui| {
+                    let said = crate::i18n::trn(hidden_count, "{n} hidden message", "{n} hidden messages");
+                    ui.label(RichText::new(&said).font(t.small()).color(t.text_muted));
+                    let label = if with_hidden { tl!("Hide Them") } else { tl!("Show") };
+                    let r = widgets::text_button(ui, &t, label, true);
+                    let r = r.on_hover_text(tl!("Messages of the kinds hidden in Settings › Building"));
+                    if r.clicked() {
+                        toggle_hidden = true;
+                    }
+                });
+            }
             if let CardAction::Copy = print_summary(ui, &t, &outcome) {
                 copied = Some((print_summary_text(&outcome), tl!("The message is copied.")));
             }
@@ -535,6 +555,7 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                     help: "",
                     ai: None,
                     noticed: None,
+                    hide: None,
                 };
                 if let CardAction::Copy = card(ui, &t, c, None, None) {
                     copied = Some((reason.clone(), tl!("The message is copied.")));
@@ -545,7 +566,16 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                 card(
                     ui,
                     &t,
-                    Card { icon: "circle-check", color: t.success, title: tl!("Nothing to report"), message, help: "", ai: None, noticed: None },
+                    Card {
+                        icon: "circle-check",
+                        color: t.success,
+                        title: tl!("Nothing to report"),
+                        message,
+                        help: "",
+                        ai: None,
+                        noticed: None,
+                        hide: None,
+                    },
                     None,
                     None,
                 );
@@ -567,13 +597,17 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
                 // Errors and warnings can be explained, when a model is connected.
                 let ai = (ai_offered && d.severity >= Severity::Warning).then(|| (app.session.ai_explanation(d), ai_blocked.clone()));
                 let noticed = d.noticed.as_ref().map(|p| (p.file.clone(), p.line));
+                // Errors are never hidden.
+                let hide = (d.severity < Severity::Error).then(|| app.session.is_hidden(d));
                 match card(
                     ui,
                     &t,
-                    Card { icon, color, title: &title, message: &d.message, help: &help, ai, noticed: noticed.as_ref() },
+                    Card { icon, color, title: &title, message: &d.message, help: &help, ai, noticed: noticed.as_ref(), hide },
                     place.as_ref(),
                     page,
                 ) {
+                    CardAction::Hide(scope) => hide_kind = outcome.diagnostics.iter().position(|x| std::ptr::eq(x, d)).map(|i| (i, scope)),
+                    CardAction::ShowAgain => show_again = Some(texcraft_engine::hidden::kind(d)),
                     CardAction::Explain => explain = outcome.diagnostics.iter().position(|x| std::ptr::eq(x, d)),
                     CardAction::CancelAi => cancel_ai = true,
                     CardAction::Open(target) => goto = Some(target),
@@ -594,6 +628,26 @@ fn logs(app: &mut App, ui: &mut egui::Ui) {
             });
         });
     });
+    if toggle_hidden {
+        app.view.log_hidden = !app.view.log_hidden;
+    }
+    if let Some((index, scope)) = hide_kind
+        && let Some(done) = app.run("build.hide_messages", json!({"index": index, "scope": scope}))
+    {
+        let said = match done["kept"].as_str() {
+            Some("user") => tl!("Messages like this are hidden in all projects: Settings › Building shows them again."),
+            Some("session") => tl!("Messages like this are hidden in this project until TeXCraft closes: it has no folder to keep the choice in."),
+            _ => tl!("Messages like this are hidden in this project: Settings › Building shows them again."),
+        };
+        app.view.status = Some((said.to_owned(), false));
+        app.prefs_changed |= scope == "user";
+    }
+    if let Some(kind) = show_again
+        && app.run("build.show_messages", json!({"kind": kind})).is_some()
+    {
+        app.view.status = Some((tl!("Messages like this are shown again.").to_owned(), false));
+        app.prefs_changed = true;
+    }
     match output_action {
         Some((kind, OutputAction::Save)) => ui_cmd::run_with(app, "build.save_output", &json!({"output": kind})),
         Some((kind, OutputAction::Show)) => ui_cmd::run_with(app, "view.show_output", &json!({"output": kind})),
@@ -810,6 +864,9 @@ struct Card<'a> {
     ai: Option<(Option<&'a texcraft_engine::ai::Explanation>, Option<String>)>,
     /// Where TeX noticed it, when it is shown where it starts: a second link.
     noticed: Option<&'a (String, Option<u32>)>,
+    /// For a message that can be hidden (not an error): whether its kind is hidden now. It offers
+    /// to hide its kind, or to show it again.
+    hide: Option<bool>,
 }
 
 /// What was done with a log card.
@@ -823,6 +880,10 @@ enum CardAction {
     ShowOnPage(PageRect),
     /// Its Explain button was clicked.
     Explain,
+    /// Hide the messages of its kind: in this project (`project`) or all of them (`user`).
+    Hide(&'static str),
+    /// Show the messages of its kind again.
+    ShowAgain,
     /// Its explanation's Cancel was clicked.
     CancelAi,
 }
@@ -830,7 +891,7 @@ enum CardAction {
 /// One message as a card: its text can be selected, and its button copies it.
 /// `page`: the area on the PDF's page it is about, for a print check.
 fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Option<u32>)>, page: Option<PageRect>) -> CardAction {
-    let Card { icon, color, title, message, help, ai, noticed } = c;
+    let Card { icon, color, title, message, help, ai, noticed, hide } = c;
     let mut action = CardAction::None;
     egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner_large()).inner_margin(egui::Margin::same(12)).show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -843,6 +904,23 @@ fn card(ui: &mut egui::Ui, t: &Tokens, c: Card<'_>, place: Option<&(String, Opti
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         if widgets::icon_button(ui, t, "copy", tl!("Copy the message"), true).clicked() {
                             action = CardAction::Copy;
+                        }
+                        match hide {
+                            Some(false) => {
+                                let r = widgets::text_button(ui, t, tl!("Hide Like This"), true);
+                                let r = r.on_hover_text(tl!("Hide the messages of this kind, here or in all projects"));
+                                crate::widgets::keyboard_menu(ui, &r);
+                                egui::Popup::menu(&r).show(|ui| {
+                                    if top_bar::item(ui, t, None, tl!("In This Project"), None, Ok(())) {
+                                        action = CardAction::Hide("project");
+                                    }
+                                    if top_bar::item(ui, t, None, tl!("In All Projects"), None, Ok(())) {
+                                        action = CardAction::Hide("user");
+                                    }
+                                });
+                            }
+                            Some(true) if widgets::text_button(ui, t, tl!("Show Again"), true).clicked() => action = CardAction::ShowAgain,
+                            Some(true) | None => {}
                         }
                         if let Some((file, line)) = place {
                             let text = match line {

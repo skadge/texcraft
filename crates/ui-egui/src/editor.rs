@@ -926,7 +926,11 @@ fn problems(app: &mut App, path: &ProjectPath, ctx: &egui::Context) -> Vec<crate
         .collect();
     let b = &app.editor.source.doc.buffer;
     if let Some(outcome) = app.session.last_outcome() {
-        for d in outcome.diagnostics.iter().filter(|d| d.file.as_deref() == Some(path.as_str()) && d.severity >= Severity::Warning) {
+        for d in outcome
+            .diagnostics
+            .iter()
+            .filter(|d| d.file.as_deref() == Some(path.as_str()) && d.severity >= Severity::Warning && !app.session.is_hidden(d))
+        {
             let Some(line) = d.line.map(|l| (l.saturating_sub(1) as usize).min(last)) else { continue };
             let text: Vec<char> = b.line(line).chars().collect();
             let span = d
@@ -997,7 +1001,11 @@ fn markers(app: &mut App, path: &ProjectPath) -> Markers {
         }
     }
     let Some(outcome) = app.session.last_outcome() else { return out };
-    for d in outcome.diagnostics.iter().filter(|d| d.file.as_deref() == Some(path.as_str()) && d.severity >= Severity::Warning) {
+    for d in outcome
+        .diagnostics
+        .iter()
+        .filter(|d| d.file.as_deref() == Some(path.as_str()) && d.severity >= Severity::Warning && !app.session.is_hidden(d))
+    {
         let Some(line) = d.line.map(|l| l.saturating_sub(1)) else { continue };
         match out.get(&line) {
             Some((s, _)) if *s >= d.severity => {}
@@ -1007,7 +1015,7 @@ fn markers(app: &mut App, path: &ProjectPath) -> Markers {
         }
     }
     // Where TeX noticed a problem that starts elsewhere: marked too, saying where it starts.
-    for d in outcome.diagnostics.iter().filter(|d| d.severity >= Severity::Warning) {
+    for d in outcome.diagnostics.iter().filter(|d| d.severity >= Severity::Warning && !app.session.is_hidden(d)) {
         let (Some(noticed), Some(file)) = (&d.noticed, &d.file) else { continue };
         let Some(line) = noticed.line.filter(|_| noticed.file == path.as_str()).map(|l| l.saturating_sub(1)) else { continue };
         if out.get(&line).is_none_or(|(s, _)| *s < d.severity) {
