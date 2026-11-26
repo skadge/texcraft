@@ -134,7 +134,7 @@
 	Check spelling	Verificar ortografia
 	Checking the server…	A verificar o servidor…
 	Checking {language}, as the document's babel or polyglossia sets it.	A verificar {language}, conforme definido pelo babel ou polyglossia do documento.
-	Checking {language}, the interface's language: the document names none.	A verificar {language}, o idioma da interface: o documento não indica nenhum.
+	Checking {language}, from the interface's language and the system's region: the document names none.	A verificar em {language}, segundo o idioma da interface e a região do sistema: o documento não indica nenhum.
 	Checking {language}.	A verificar {language}.
 	Chinese	Chinês
 	Choose Where to Make the Project's Folder	Escolher onde criar a pasta do projeto
@@ -306,7 +306,6 @@
 	Back to Fit Page	Voltar a Ajustar à página
 	Back to Fit Width	Voltar a Ajustar à largura
 	Fix Grammar and Spelling	Corrigir gramática e ortografia
-	Fix all hints in this file	Corrigir todas as indicações neste ficheiro
 	Fix them before sending the {standard} to the printer: the Print filter lists them.	Corrija-os antes de enviar o {standard} para a gráfica: o filtro Impressão lista-os.
 	Flesh out these bullet points	Desenvolver estes pontos
 	Focus mode is off.	O modo de foco está desligado.
@@ -326,6 +325,7 @@
 	Free software under the MIT or Apache 2.0 licence. Icons from Lucide (ISC).	Software livre sob a licença MIT ou Apache 2.0. Ícones do Lucide (ISC).
 	French	Francês
 	From the document	Do documento
+	From the document ({language})	Do documento ({language})
 	Gamma, capital	Gama maiúsculo
 	German	Alemão
 	GitHub (github.com)	GitHub (github.com)
@@ -777,6 +777,7 @@
 	Show What Was Sent	Mostrar o que foi enviado
 	Show in Folder	Mostrar na pasta
 	Show in PDF	Mostrar no PDF
+	Show in Source	Mostrar no código-fonte
 	Show it on the page	Mostrar na página
 	Show suggestions in the PDF	Mostrar sugestões no PDF
 	Show the PDF a page at a time, in the whole window.	Mostrar o PDF uma página de cada vez, na janela inteira.
@@ -955,7 +956,7 @@
 	The selected part of the PDF has no text to copy: its font does not say which characters it draws.	A parte selecionada do PDF não tem texto para copiar: o tipo de letra não indica que caracteres desenha.
 	The selected text and a few lines around it.	O texto selecionado e algumas linhas à volta.
 	The selected text, or the paragraph at the caret, and the document's language.	O texto selecionado, ou o parágrafo do cursor, e o idioma do documento.
-	The size of the source text, in points.	O tamanho do texto do código-fonte, em pontos.
+	The size of the source text, in points; the formatted view's text follows it. Ctrl with the mouse wheel over the text changes it too.	O tamanho do texto-fonte, em pontos; o texto da vista formatada acompanha-o. Ctrl com a roda do rato sobre o texto também o muda.
 	The system's title bar above the window, in place of the window's buttons in the top bar.	A barra de título do sistema por cima da janela, em vez dos botões da janela na barra superior.
 	The table editor shows a table float holding one tabular with its caption and label; this one holds more, so it is shown as its source.	O editor de tabelas mostra um flutuante de tabela com um único tabular, a legenda e a etiqueta; este contém mais, por isso é mostrado como código-fonte.
 	The table editor shows this table as its source, because it cannot show it faithfully as a grid.	O editor de tabelas mostra esta tabela como código-fonte, porque não a consegue mostrar fielmente como grelha.
@@ -1327,7 +1328,7 @@
 	{name} (needed): {means}	{name} (necessário): {means}
 	{name} accepted a suggestion	{name} aceitou uma sugestão
 	{name} cannot be shown: {e}	Não é possível mostrar {name}: {e}
-	{name} is not a text file ({size} bytes); it cannot be edited here.	{name} não é um ficheiro de texto ({size} bytes); não pode ser editado aqui.
+	{name} is not a text file ({size}); it cannot be edited here.	{name} não é um ficheiro de texto ({size}); não pode ser editado aqui.
 	{name} is not among the project's files.	{name} não está entre os ficheiros do projeto.
 	{name} rejected a suggestion	{name} rejeitou uma sugestão
 	{name} replied: {text}	{name} respondeu: {text}
@@ -1348,6 +1349,13 @@
 	“{word}” is not in the dictionary	“{word}” não está no dicionário
 	Opening the user guide in your browser.	A abrir o guia do utilizador no navegador.
 	What is sent, and when: the user guide's AI page	O que é enviado e quando: a página de IA do guia do utilizador
+	{files} was not loaded: a file larger than {limit} stays in the folder, unchanged, and is not part of the build.	{files} não foi carregado: um ficheiro com mais de {limit} fica na pasta, inalterado, e não faz parte da compilação.
+	These files were not loaded: {files}. Files larger than {limit} stay in the folder, unchanged, and are not part of the build.	Estes ficheiros não foram carregados: {files}. Os ficheiros com mais de {limit} ficam na pasta, inalterados, e não fazem parte da compilação.
+	Off	Desativada
+	Spelling is off.	A verificação ortográfica está desativada.
+	Spelling off	Ortografia desativada
+	spelling language	idioma da verificação ortográfica
+	The source is shown already: this goes from the formatted view to it.	O código-fonte já está à vista: isto leva da vista formatada até ele.
 button	Commit	Fazer commit
 button	Pull	Receber
 comment	, resolved	, resolvido
@@ -1381,6 +1389,7 @@ suggestion	Reopen	Reabrir
 # Counts
 @plural	; {n} overlapped another and is outdated|; {n} overlapped others and are outdated	; {n} sobrepôs-se a outra e está desatualizada|; {n} sobrepuseram-se a outras e estão desatualizadas
 @plural	Compiled with {n} error|Compiled with {n} errors	Compilado com {n} erro|Compilado com {n} erros
+@plural	Apply this fix everywhere in this file ({n} place)|Apply this fix everywhere in this file ({n} places)	Aplicar esta correção em todo o ficheiro ({n} sítio)|Aplicar esta correção em todo o ficheiro ({n} sítios)
 @plural	Compiled with {n} warning|Compiled with {n} warnings	Compilado com {n} aviso|Compilado com {n} avisos
 @plural	Connected: the endpoint offers {n} model.|Connected: the endpoint offers {n} models.	Ligado: o endpoint oferece {n} modelo.|Ligado: o endpoint oferece {n} modelos.
 @plural	Failed with {n} error|Failed with {n} errors	Falhou com {n} erro|Falhou com {n} erros
@@ -1598,6 +1607,10 @@ unit	{n} s	{n} s
 @id	view.present.previous	Página anterior
 @id	view.previous_region	Região anterior
 @id	view.show_in_pdf	Mostrar no PDF
+@id	view.show_in_source	Mostrar no código-fonte
+@id	view.text_larger	Texto maior
+@id	view.text_smaller	Texto menor
+@id	view.text_default	Tamanho de texto predefinido
 @id	view.show_output	Mostrar resultado da compilação na pasta
 @id	view.side.ask	Perguntar à IA
 @id	view.side.files	Ficheiros do projeto
@@ -1763,7 +1776,7 @@ unit	{n} s	{n} s
 @msg	The export could not be zipped: {e}	Não foi possível compactar a exportação: {e}
 @msg	The export could not start: {e}	Não foi possível iniciar a exportação: {e}
 @msg	The export stopped unexpectedly.	A exportação parou inesperadamente.
-@msg	The file is larger than a project file may be.	O ficheiro é maior do que um ficheiro de projeto pode ser.
+@msg	The file is {size}, larger than the {limit} a project file may have.	O ficheiro tem {size}, mais do que os {limit} que um ficheiro de projeto pode ter.
 @msg	The fix's edits overlap.	As edições da correção sobrepõem-se.
 @msg	The folder {dir} cannot be read: {e}	Não é possível ler a pasta {dir}: {e}
 @msg	The folder {parent} cannot be made: {e}	Não é possível criar a pasta {parent}: {e}
@@ -1953,7 +1966,7 @@ unit	{n} s	{n} s
 @msg	it does not start with {expected}	não começa por {expected}
 @msg	it is not a git server that speaks the smart HTTP protocol (its answer is {value}, not {expected})	não é um servidor git que fale o protocolo HTTP inteligente (a resposta é {value}, não {expected})
 @msg	it is {what}	é {what}
-@msg	larger than {value} MB	maior que {value} MB
+@msg	larger than the {mb} MB a project file may have	maior do que os {mb} MB que um ficheiro de projeto pode ter
 @msg	line {value} is past the end	a linha {value} está além do fim
 @msg	making the repository {name}	a criar o repositório {name}
 @msg	no library	nenhuma biblioteca
@@ -2057,8 +2070,7 @@ unit	{n} s	{n} s
 @msg	{path} was removed from the project but could not be read in its folder: {e}	{path} foi removido do projeto, mas não foi possível lê-lo na pasta: {e}
 @msg	{path} was removed from the project but stays in its folder: its last version is not in the project's history, and an agent cannot move it to the trash.	{path} foi removido do projeto, mas continua na sua pasta: a última versão não está no histórico do projeto, e um agente não o pode mover para o lixo.
 @msg	{source} has no file name	{source} não tem nome de ficheiro
-@msg	{source} is larger than TeXCraft reads ({max} bytes)	{source} é maior do que o TeXCraft lê ({max} bytes)
-@msg	{source} is larger than a project file may be, or cannot be read	{source} é maior do que um ficheiro de projeto pode ser, ou não pode ser lido
+@msg	{source} is {size}, larger than the {limit} TeXCraft reads.	{source} tem {size}, mais do que os {limit} que o TeXCraft lê.
 @msg	{text} is no command	{text} não é um comando
 @msg	{url}: HTTP {value}	{url}: HTTP {value}
 @msg	{value} answered with an error ({status}): try again later.	{value} respondeu com um erro ({status}): tente de novo mais tarde.
@@ -2248,3 +2260,5 @@ unit	{n} s	{n} s
 @msg	Errors are not hidden: fix them instead.	Os erros não são ocultados: corrija-os.
 @msg	Name the kind of message to hide, on one line.	Indique o tipo de mensagem a ocultar, numa linha.
 @msg	Name the kind of message, or the `index` of one of the last build's.	Indique o tipo de mensagem, ou o `index` de uma mensagem da última compilação.
+@msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	Os ficheiros com mais de {limit} não foram carregados: ficam na pasta do projeto, inalterados, e não fazem parte das suas compilações.
+@msg	Apply this fix everywhere in this file ({n} places)	Aplicar esta correção em todo o ficheiro ({n} sítios)

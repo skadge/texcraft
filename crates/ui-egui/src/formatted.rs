@@ -2,9 +2,10 @@
 //! ([`texcraft_latex::view`]) drawn as a document, at a reading measure in the reading face.
 //!
 //! Its text is edited in place ([`crate::formatted_edit`], F3): the caret moves through paragraphs,
-//! headings and list items, and each key makes a minimal edit of the source. Double-clicking a part
-//! (or pressing Enter on a formula, a figure or a part shown as source) shows the source with the
-//! caret where that part starts. Formulas are drawn as retex typesets them after the main
+//! headings and list items, and each key makes a minimal edit of the source. A double-click in the
+//! text selects a word, a triple-click the paragraph; Ctrl+double-click (Cmd on a Mac), Show in
+//! Source, or a double-click on a part that is not text (or Enter on a formula, a figure or a part
+//! shown as source) shows the source with the caret where that part starts. Formulas are drawn as retex typesets them after the main
 //! document's preamble (F2: [`Session::formulas`](texcraft_engine::Session::formulas)), as ink in
 //! the colour of the text, at the window's pixels per point; until then, and where the build has no
 //! engine for them (the browser), they are shown as their source. What the view cannot show
@@ -845,6 +846,24 @@ fn keyboard_scroll(ui: &mut egui::Ui, part: bool, text: bool) {
 }
 
 /// Shows the source of `path` with the caret at byte `byte`.
+/// Whether the current file is shown in the formatted view.
+pub(crate) fn shown(app: &App) -> bool {
+    app.session.current().is_some_and(|p| app.editor.formatted.shows(p) && available(p))
+}
+
+/// Goes from the formatted view to the source, the caret and the selection where they were
+/// (`view.show_in_source`): the two views share them.
+pub(crate) fn show_in_source(app: &mut App) {
+    let Some(path) = app.session.current().cloned() else { return };
+    app.editor.formatted.set(&path, false);
+    let now = app.ctx.input(|i| i.time);
+    let source = &mut app.editor.source;
+    let line = source.doc.buffer.char_to_line(source.doc.selection.primary().head.min(source.doc.buffer.len_chars()));
+    source.flash_line(line, now);
+    source.reveal = true;
+    app.editor.focus = true;
+}
+
 fn to_source(app: &mut App, ui: &egui::Ui, path: &ProjectPath, text: &str, byte: usize) {
     app.editor.formatted.set(path, false);
     let at = text.get(..byte).map_or(0, |s| s.chars().count());
@@ -1357,8 +1376,9 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
     let clicked_atom = hovered.and_then(atom_of).filter(|_| (r.clicked() || r.double_clicked()) && !ui.input(|i| i.modifiers.command));
     if let Some(atom) = &clicked_atom {
         cx.open = Some(InPlace::of_atom(cx.path, cx.text, atom));
-    } else if r.double_clicked() {
-        // A double-click on a run goes to where that run's source starts.
+    } else if r.double_clicked() && ui.input(|i| i.modifiers.command) {
+        // Ctrl+double-click (Cmd on a Mac) on a run goes to where that run's source starts; a
+        // plain double-click selects the word (`formatted_edit`).
         cx.jump = Some(Jump(hovered.map_or(range.start, |p| p.range.start)));
     }
     let role = para.role;

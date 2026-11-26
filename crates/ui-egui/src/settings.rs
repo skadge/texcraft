@@ -210,7 +210,7 @@ fn appearance(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
                             app.prefs.language = code.to_owned();
                             app.prefs_changed = true;
                             crate::i18n::set_language(code);
-                            app.session.set_interface_language(crate::i18n::current_code());
+                            app.session.set_interface_language(&crate::i18n::spelling_fallback());
                         }
                     };
                     choose(ui, "auto", tl!("System"));
@@ -225,17 +225,21 @@ fn appearance(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
 }
 
 fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
-    setting(ui, t, tl!("Font size"), tl!("The size of the source text, in points."), |ui| {
-        let mut size = app.prefs.editor_font_size;
-        ui.label(crate::i18n::measure(f64::from(size), 1, "{n} pt"));
-        let r = ui.add(egui::Slider::new(&mut size, 10.0..=22.0).step_by(0.5).show_value(false));
-        if r.changed() {
-            app.prefs.editor_font_size = size;
-            app.prefs_changed = true;
-            app.apply_editor_font();
-        }
-        Some(r)
-    });
+    setting(
+        ui,
+        t,
+        tl!("Font size"),
+        tl!("The size of the source text, in points; the formatted view's text follows it. Ctrl with the mouse wheel over the text changes it too."),
+        |ui| {
+            let mut size = app.prefs.editor_font_size;
+            ui.label(crate::i18n::measure(f64::from(size), 1, "{n} pt"));
+            let r = ui.add(egui::Slider::new(&mut size, crate::prefs::TEXT_SIZE_MIN..=crate::prefs::TEXT_SIZE_MAX).step_by(0.5).show_value(false));
+            if r.changed() {
+                app.set_text_size(size);
+            }
+            Some(r)
+        },
+    );
     key_bindings(app, ui, t, "settings-keys-editor");
     setting(
         ui,
@@ -263,7 +267,7 @@ fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
 }
 
 /// The spelling languages offered, by tag; others can be set by agents (`language.spelling_options`).
-const SPELLING_LANGUAGES: &[(&str, &str)] = &[
+pub(crate) const SPELLING_LANGUAGES: &[(&str, &str)] = &[
     ("en-US", tn!("English (United States)")),
     ("en-GB", tn!("English (United Kingdom)")),
     ("en-CA", tn!("English (Canada)")),
@@ -287,6 +291,28 @@ const SPELLING_LANGUAGES: &[(&str, &str)] = &[
     ("fi", tn!("Finnish")),
 ];
 
+/// A spelling language's name by its tag (`en-GB`: English (United Kingdom)); the tag itself for
+/// one not offered.
+pub(crate) fn spelling_language_name(tag: &str) -> String {
+    SPELLING_LANGUAGES.iter().find(|(c, _)| c.eq_ignore_ascii_case(tag)).map_or_else(|| tag.to_owned(), |(_, n)| crate::i18n::t(n).to_owned())
+}
+
+/// What spelling checks now and where its language comes from, or why nothing is checked.
+pub(crate) fn spelling_help(app: &App) -> String {
+    let (language, from) = app.session.spelling_language();
+    let name = spelling_language_name(&language);
+    match (app.session.spelling_ready(), from) {
+        (Err(why), _) if app.session.settings.spelling.on => crate::i18n::msg(&why),
+        (_, texcraft_engine::spelling::LanguageFrom::Document) => {
+            tl!("Checking {language}, as the document's babel or polyglossia sets it.").replace("{language}", &name)
+        }
+        (_, texcraft_engine::spelling::LanguageFrom::Interface) => {
+            tl!("Checking {language}, from the interface's language and the system's region: the document names none.").replace("{language}", &name)
+        }
+        _ => tl!("Checking {language}.").replace("{language}", &name),
+    }
+}
+
 /// Spell checking: on, the language (with what is checked now, or why nothing is), comments.
 fn spelling(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     let options = app.session.settings.spelling.clone();
@@ -298,20 +324,8 @@ fn spelling(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         }
         Some(r)
     });
-    let (language, from) = app.session.spelling_language();
-    let name = |tag: &str| {
-        SPELLING_LANGUAGES.iter().find(|(c, _)| c.eq_ignore_ascii_case(tag)).map_or_else(|| tag.to_owned(), |(_, n)| crate::i18n::t(n).to_owned())
-    };
-    let help = match (app.session.spelling_ready(), from) {
-        (Err(why), _) if options.on => why,
-        (_, texcraft_engine::spelling::LanguageFrom::Document) => {
-            tl!("Checking {language}, as the document's babel or polyglossia sets it.").replace("{language}", &name(&language))
-        }
-        (_, texcraft_engine::spelling::LanguageFrom::Interface) => {
-            tl!("Checking {language}, the interface's language: the document names none.").replace("{language}", &name(&language))
-        }
-        _ => tl!("Checking {language}.").replace("{language}", &name(&language)),
-    };
+    let name = spelling_language_name;
+    let help = spelling_help(app);
     setting(ui, t, tl!("Spelling language"), &help, |ui| {
         let current = if options.language == "auto" { tl!("From the document").to_owned() } else { name(&options.language) };
         let mut chosen = None;

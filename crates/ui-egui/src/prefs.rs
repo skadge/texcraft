@@ -18,13 +18,19 @@ pub enum ThemePref {
     Dark,
 }
 
+/// The source text's size by default, and its bounds, in points.
+pub const TEXT_SIZE_DEFAULT: f32 = 13.5;
+pub const TEXT_SIZE_MIN: f32 = 10.0;
+pub const TEXT_SIZE_MAX: f32 = 22.0;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Prefs {
     pub theme: ThemePref,
     /// An interface language code, or `auto` for the system's.
     pub language: String,
-    /// The source text's size, in points.
+    /// The source text's size, in points, from [`TEXT_SIZE_MIN`] to [`TEXT_SIZE_MAX`]; the
+    /// formatted view's text follows it in proportion.
     pub editor_font_size: f32,
     pub auto_compile: bool,
     pub auto_compile_delay_ms: u64,
@@ -109,7 +115,7 @@ impl Default for Prefs {
         Self {
             theme: ThemePref::System,
             language: "auto".to_owned(),
-            editor_font_size: 13.5,
+            editor_font_size: TEXT_SIZE_DEFAULT,
             auto_compile: true,
             auto_compile_delay_ms: 800,
             layout: "split".to_owned(),

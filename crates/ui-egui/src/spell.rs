@@ -76,6 +76,7 @@ pub(crate) fn fixes(app: &mut App, p: &Problem) -> Vec<texcraft_engine::Fix> {
             edits: vec![texcraft_engine::TextEdit { line: p.line, column, end_line: p.line, end_column, text: s }],
             preferred: i == 0,
             problem: Some(p.message.clone()),
+            everywhere: 0,
         })
         .collect()
 }
@@ -125,6 +126,7 @@ pub(crate) fn run(app: &mut App, id: &str, params: &Value) {
                         }],
                         preferred: true,
                         problem: None,
+                        everywhere: 0,
                     })
                 }),
                 None => fixes.into_iter().next(),
@@ -200,5 +202,57 @@ fn next(app: &mut App) {
             app.view.status = Some((said, false));
         }
         None => app.view.status = Some((tl!("No misspelled words or grammar problems in this file.").to_owned(), false)),
+    }
+}
+
+/// The status bar's spelling language (issue #37): what is checked now, or that spelling is off;
+/// a click (or Enter) opens a menu to take the document's language, another installed one, or to
+/// turn spelling off, through `language.spelling_options`.
+pub(crate) fn status(app: &mut App, ui: &mut egui::Ui) {
+    let t = app.tokens;
+    let options = app.session.settings.spelling.clone();
+    let (language, _) = app.session.spelling_language();
+    let shown = if options.on { crate::settings::spelling_language_name(&language) } else { tl!("Spelling off").to_owned() };
+    let ready = app.session.spelling_ready().is_ok();
+    let color = if ready || !options.on { t.text_muted } else { t.warning };
+    let icon = if ready || !options.on { "type" } else { "triangle-exclamation-point" };
+    let button = egui::Button::image_and_text(crate::icons::image(icon, 13.0, color), egui::RichText::new(&shown).font(t.small()).color(color))
+        .frame_when_inactive(false);
+    let r = ui.add(button);
+    crate::widgets::focus_ring(ui, &t, &r, r.rect, t.corner());
+    let help = if options.on { crate::settings::spelling_help(app) } else { tl!("Spelling is off.").to_owned() };
+    let r = r.accessible_name(format!("{shown}, {}", tl!("spelling language"))).on_hover_text(help);
+    crate::widgets::keyboard_menu(ui, &r);
+    let mut chosen: Option<Value> = None;
+    egui::Popup::menu(&r).show(|ui| {
+        let (automatic, _) = app.session.automatic_spelling_language();
+        let auto = tl!("From the document ({language})").replace("{language}", &crate::settings::spelling_language_name(&automatic));
+        if ui.selectable_label(options.on && options.language == "auto", auto).clicked() {
+            chosen = Some(json!({"on": true, "language": "auto"}));
+        }
+        ui.separator();
+        for (tag, name) in crate::settings::SPELLING_LANGUAGES {
+            // Only the languages there is a dictionary for: the others say why in Settings.
+            if app.session.spelling_available(tag).is_err() {
+                continue;
+            }
+            if ui.selectable_label(options.on && options.language.eq_ignore_ascii_case(tag), crate::i18n::t(name)).clicked() {
+                chosen = Some(json!({"on": true, "language": tag}));
+            }
+        }
+        ui.separator();
+        if ui.selectable_label(!options.on, tl!("Off")).clicked() {
+            chosen = Some(json!({"on": false}));
+        }
+    });
+    if let Some(params) = chosen
+        && let Some(done) = app.run("language.spelling_options", params)
+    {
+        let said = match done["on"].as_bool() {
+            Some(false) => tl!("Spelling is off.").to_owned(),
+            _ => tl!("Checking {language}.")
+                .replace("{language}", &crate::settings::spelling_language_name(done["checking"].as_str().unwrap_or_default())),
+        };
+        app.view.status = Some((said, false));
     }
 }

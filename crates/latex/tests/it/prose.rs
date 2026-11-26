@@ -95,6 +95,11 @@ fn the_language_comes_from_babel_or_polyglossia() {
     // Languages given to the class reach babel.
     assert_eq!(document_language("\\documentclass[12pt,polish]{article}\n\\usepackage{babel}"), Some("pl"));
     assert_eq!(document_language("\\usepackage{polyglossia}\n\\setdefaultlanguage[variant=british]{italian}"), Some("it"));
+    // Issue #36: polyglossia's English variants spell as their country does.
+    assert_eq!(document_language("\\usepackage{polyglossia}\n\\setdefaultlanguage[variant=british]{english}"), Some("en-GB"));
+    assert_eq!(document_language("\\setmainlanguage[variant=uk, ordinalmonthday=false]{english}"), Some("en-GB"));
+    assert_eq!(document_language("\\setmainlanguage[variant=american]{english}"), Some("en-US"));
+    assert_eq!(document_language("\\setmainlanguage{english}"), Some("en"));
     assert_eq!(document_language("\\documentclass{article}\n\\begin{document}\\usepackage[french]{babel}"), None);
     assert_eq!(document_language("\\usepackage[french]{csquotes}"), None);
 }

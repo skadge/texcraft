@@ -115,3 +115,75 @@ fn a_click_in_the_text_keeps_the_keyboard_for_typed_and_composed_text() {
     }
     assert_eq!(text(&mut h), "First paragraph.\n\nSecond one.!é\n", "composed text after a click went nowhere");
 }
+
+/// Clicks `times` times in a row at `at` with the mouse and `modifiers`, quickly enough to count
+/// as a double or triple click.
+fn clicks(h: &mut Harness<'_, App>, at: egui::Pos2, times: usize, modifiers: egui::Modifiers) {
+    // Held down through the clicks, as the window reports keys held.
+    h.event(egui::Event::ModifiersChanged(modifiers));
+    h.event(egui::Event::PointerMoved(at));
+    h.step();
+    for _ in 0..times {
+        for pressed in [true, false] {
+            h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers });
+            h.step();
+        }
+    }
+    h.event(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
+    // A jump to the source flashes its line for a while.
+    h.run_steps(4);
+}
+
+#[test]
+fn a_double_click_selects_the_word_a_triple_click_the_paragraph_and_ctrl_double_click_shows_the_source() {
+    // #38: a double-click jumped to the source editor.
+    let start = "First paragraph.\n\nSecond one here.\n";
+    let harness = || {
+        let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+        assert!(s.execute("file.write", &json!({"path": "main.tex", "text": start})).is_ok());
+        let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
+        // Short frames, so the clicks come quickly enough to count together.
+        let mut h = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).with_step_dt(0.02).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+        h.run();
+        h.get_by_label("Formatted").click();
+        h.run();
+        // Later than a double-click's delay after the clock's start, which egui would take for
+        // an earlier click.
+        h.run_steps(30);
+        let r = h.get_by_role_and_label(egui::accesskit::Role::Paragraph, "Second one here.").rect();
+        // Inside the first word, past its first letter, wherever the text is aligned.
+        let at = egui::pos2(r.left() + 20.0, r.center().y);
+        (h, at)
+    };
+
+    let (mut h, at) = harness();
+    clicks(&mut h, at, 2, egui::Modifiers::NONE);
+    assert!(h.query_by_label("main.tex formatted").is_some(), "the double-click left the formatted view");
+    h.event(egui::Event::Text("X".into()));
+    h.run();
+    assert_eq!(text(&mut h), start.replacen("Second", "X", 1), "the double-click did not select the word");
+
+    let (mut h, at) = harness();
+    clicks(&mut h, at, 3, egui::Modifiers::NONE);
+    h.event(egui::Event::Text("X".into()));
+    h.run();
+    assert_eq!(text(&mut h), "First paragraph.\n\nX\n", "the triple-click did not select the paragraph");
+
+    let (mut h, at) = harness();
+    clicks(&mut h, at, 2, egui::Modifiers::COMMAND);
+    assert!(h.query_by_label("main.tex formatted").is_none(), "Ctrl+double-click did not show the source");
+}
+
+#[test]
+fn show_in_source_takes_the_selection_to_the_source_editor() {
+    let mut h = formatted("Some words.\n");
+    texcraft_ui_egui::ui_cmd::run(h.state_mut(), "edit.select_all");
+    h.run();
+    texcraft_ui_egui::ui_cmd::run(h.state_mut(), "view.show_in_source");
+    // The line flashes in the source for a moment.
+    h.run_steps(8);
+    assert!(h.query_by_label("main.tex formatted").is_none(), "the formatted view is still shown");
+    h.event(egui::Event::Text("X".into()));
+    h.run_steps(2);
+    assert_eq!(text(&mut h), "X\n", "the selection did not come along to the source");
+}

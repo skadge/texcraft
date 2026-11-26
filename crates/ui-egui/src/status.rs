@@ -37,8 +37,8 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, room: egui::Rect) {
             let label = if app.view.narrow { ui.add(egui::Label::new(rich).truncate()) } else { ui.label(rich) };
             announce(ui, &label, &text);
         }
-        // At the bar's end, made in the order they read: the caret, the language, the comments,
-        // the engine, and focus mode's way out.
+        // At the bar's end, made in the order they read: the caret, the language, the spelling
+        // language, the comments, the engine, and focus mode's way out.
         widgets::right_aligned(ui, "status-end", |ui| {
             ui.spacing_mut().item_spacing.x = t.unit * 4.0;
             let small = |s: String| egui::RichText::new(s).font(t.small()).color(t.text_muted);
@@ -49,6 +49,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, room: egui::Rect) {
                     ui.label(small(tl!("Ln {line}, Col {col}").replace("{line}", &line.to_string()).replace("{col}", &col.to_string())));
                 }
                 ui.label(small("LaTeX".to_owned()));
+                crate::spell::status(app, ui);
                 crate::review::status(app, ui);
             }
             if !app.view.narrow {

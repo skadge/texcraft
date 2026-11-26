@@ -40,12 +40,12 @@
       <p class="lead">TeXCraft has its own source editor, made for LaTeX, and a formatted view that shows a file as a document. Both edit the same text.</p>
 
       <h2 id="source-editor">The source editor</h2>
-      <p>The editor highlights LaTeX, numbers the lines and marks the lines with errors and warnings from the last build. It understands the document as it is built, so it can help:</p>
+      <p>The editor highlights LaTeX, numbers the lines and marks the lines with errors and warnings from the last build. <kbd>Ctrl</kbd> (<kbd>Cmd</kbd> on a Mac) with the mouse wheel over the text makes it larger or smaller, here and in the formatted view, and the size is kept (<a href="settings.html#editor">Settings › Editor › Font size</a>). It understands the document as it is built, so it can help:</p>
       <dl>
         <dt>Completion</dt>
         <dd>As you type, the editor offers labels inside <code>\ref{…}</code>, and the commands, environments and citation keys of your document once it has been built. <kbd>Ctrl</kbd>+<kbd>Space</kbd> asks for completions at the caret.</dd>
         <dt>Errors and quick fixes</dt>
-        <dd>An error is underlined on its exact span. Hover it to read the engine's explanation. <span class="ui">Edit › Spelling and Grammar › Quick Fix</span> (<kbd>Ctrl</kbd>+<kbd>.</kbd>) lists the fixes the engine offers there, such as adding the <code>\usepackage</code> a command needs; <kbd>Up</kbd> and <kbd>Down</kbd> choose, <kbd>Enter</kbd> applies.</dd>
+        <dd>An error is underlined on its exact span. Hover it to read the engine's explanation. <span class="ui">Edit › Spelling and Grammar › Quick Fix</span> (<kbd>Ctrl</kbd>+<kbd>.</kbd>) lists the fixes the engine offers there, such as adding the <code>\usepackage</code> a command needs; <kbd>Up</kbd> and <kbd>Down</kbd> choose, <kbd>Enter</kbd> applies. When the file has other hints of the same kind (three periods instead of <code>\dots</code>, say), <span class="ui">Apply this fix everywhere in this file</span> fixes all of them, and says how many; hints of other kinds stay as they are.</dd>
         <dt>Go to definition</dt>
         <dd><kbd>F12</kbd> on a reference or a command goes to where it is defined.</dd>
         <dt>Closing brackets and environments</dt>
@@ -85,8 +85,9 @@
         <li>In a list, <kbd>Tab</kbd> puts the item under the one before it, <kbd>Shift</kbd>+<kbd>Tab</kbd> takes it one level out.</li>
         <li>A chip, a formula or a part shown as source is one unit: <kbd>Backspace</kbd> or <kbd>Delete</kbd> next to it selects it, a second press deletes it.</li>
         <li>Undo takes back typing a word at a time.</li>
+        <li>A double-click selects a word, a triple-click the whole paragraph. <kbd>Ctrl</kbd>+double-click (<kbd>Cmd</kbd> on a Mac) goes to that place in the source, as does <span class="ui">Edit › Go To › Show in Source</span>, which also takes the selection along.</li>
         <li>Hover a citation to see who wrote it and when, from the project's <code>.bib</code> files. <kbd>Ctrl</kbd>+click a cross-reference to go to its label.</li>
-        <li>Right-click (or <kbd>Shift</kbd>+<kbd>F10</kbd>) for the text's menu: on a misspelled word, its spellings, <span class="ui">Add to Dictionary</span> and <span class="ui">Ignore</span>, then cut, copy, paste and select all.</li>
+        <li>Right-click (or <kbd>Shift</kbd>+<kbd>F10</kbd>) for the text's menu: on a misspelled word, its spellings, <span class="ui">Add to Dictionary</span> and <span class="ui">Ignore</span>, then cut, copy, paste, select all and <span class="ui">Show in Source</span>.</li>
       </ul>
       <h3 id="formatted-latex">LaTeX and formulas, edited in place</h3>
       <p>What the view cannot show as a document, such as a <code>tikzpicture</code>, an environment or a command it does not know, or a table the grid cannot show, is drawn as a framed <strong>LaTeX</strong> block whose title says what it is; hover it to see why it is shown as source. Click it, or press <kbd>Enter</kbd> on it, and it opens where it stands in a small source editor with the source's colours (<kbd>Tab</kbd> indents there). <kbd>Escape</kbd>, or a click anywhere else, brings the formatted view back; what you typed goes into the file as one change of the characters you changed, and one undo takes it back. The preamble's source, when you show it, opens the same way.</p>
@@ -123,10 +124,11 @@
       <h2 id="spelling">Spelling</h2>
       <p>Misspelled words are underlined as you type. Commands, their keys and labels, formulas, code and verbatim text are skipped; the text after <code>%</code> is checked only if you ask for it in <a href="settings.html#editor">Settings › Editor</a>.</p>
       <ul>
-        <li>The language is the document's, as set by <code>babel</code> or <code>polyglossia</code>, unless you choose one in Settings. English is always available. On the desktop, other languages work once their Hunspell dictionary (<code>.aff</code> and <code>.dic</code> files) is installed on your system; without one, TeXCraft says which to install rather than checking against another language.</li>
+        <li>The language is the document's, as set by <code>babel</code> (<code>british</code> or <code>UKenglish</code> for British English, <code>american</code> for American) or <code>polyglossia</code> (<code>english</code> with <code>variant=british</code>), unless you choose one in Settings or from the status bar. A document that names none is checked in the interface's language as your system's region writes it: British English on a British system, American English on an American one. English is always available, American, British, Canadian and Australian; British English accepts both <em>-ise</em> and <em>-ize</em>. On the desktop, other languages work once their Hunspell dictionary (<code>.aff</code> and <code>.dic</code> files) is installed on your system; without one, TeXCraft says which to install rather than checking against another language.</li>
         <li>Rest the pointer on a misspelled word, or press <span class="ui">Quick Fix</span> (<kbd>Ctrl</kbd>+<kbd>.</kbd>) with the caret on it, for a small popup: up to five spellings, then <span class="ui">Add to Dictionary</span> (your own word list, kept with your settings) and <span class="ui">Ignore</span> (until TeXCraft closes). <kbd>Up</kbd> and <kbd>Down</kbd> choose, <kbd>Enter</kbd> takes the choice, <kbd>Escape</kbd> closes. Right-clicking the word offers the same.</li>
         <li>A grammar problem's popup is as small: the problem in a line, its replacements, <span class="ui">Ignore</span> and <span class="ui">Turn Off This Rule</span>.</li>
         <li><span class="ui">Edit › Spelling and Grammar › Next Spelling or Grammar Problem</span> (<kbd>F7</kbd>) goes to the next one.</li>
+        <li>The status bar shows the language being checked (or <span class="ui">Spelling off</span>). Click it, or reach it with <kbd>Tab</kbd> and press <kbd>Enter</kbd>, for a menu: the document's language, the other languages with a dictionary, and <span class="ui">Off</span>. The choice is kept, as in Settings.</li>
         <li>A project can carry its own words in <code>.texcraft/words.txt</code>, one per line, shared with everyone who has the project.</li>
       </ul>
 

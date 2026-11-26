@@ -14,6 +14,9 @@ use texcraft_project::{Contents, MAX_FILE_BYTES, ProjectPath};
 
 use crate::Session;
 
+// A file loads from a forge exactly when it would from a folder, a zip or a dropped folder.
+const _: () = assert!(texcraft_forge::MAX_FILE == MAX_FILE_BYTES as u64, "the forge's file limit is a project file's");
+
 /// What one import may bring in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Limits {

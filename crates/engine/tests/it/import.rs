@@ -149,6 +149,43 @@ fn an_import_past_its_limits_says_what_it_left_out() -> R {
     Ok(())
 }
 
+/// A sparse file of `len` bytes at `rel`: as large as asked, without the disk or the time.
+fn sparse(dir: &Scratch, rel: &str, len: u64) -> std::io::Result<()> {
+    std::fs::File::create(dir.0.join(rel))?.set_len(len)
+}
+
+#[test]
+fn a_file_too_large_to_load_never_stops_a_folder_opening_and_is_skipped_alike_by_an_import() -> R {
+    // Issue #28: a big reference PDF in the folder made Open Folder fail.
+    let dir = Scratch::new("too-large").map_err(io)?;
+    dir.write("paper/main.tex", "\\documentclass{article}").map_err(io)?;
+    dir.write("paper/references/notes.txt", "notes").map_err(io)?;
+    let big = texcraft_engine::project::MAX_FILE_BYTES as u64 + 1;
+    sparse(&dir, "paper/references/atlas.pdf", big).map_err(io)?;
+    let folder = dir.0.join("paper").display().to_string();
+
+    let mut s = session();
+    let opened = s.execute("project.open", &json!({"path": folder}))?;
+    assert_eq!(paths(&s), ["main.tex", "references/notes.txt"], "the other files load");
+    assert_eq!(opened["not_loaded"][0]["path"], "references/atlas.pdf", "{opened}");
+    assert_eq!(opened["not_loaded"][0]["bytes"].as_u64(), Some(big), "{opened}");
+    let size = opened["not_loaded"][0]["size"].as_str().unwrap_or_default();
+    assert!(size.ends_with("MB") && !size.contains(&big.to_string()), "the size is in units, not a byte count: {size}");
+    let listed = s.execute("project.inspect", &json!({}))?;
+    assert_eq!(listed["not_loaded"][0]["path"], "references/atlas.pdf", "the project knows the file: {listed}");
+
+    // Saving leaves it in the folder as it was.
+    s.execute("file.write", &json!({"path": "main.tex", "text": "changed"}))?;
+    s.execute("project.save", &json!({}))?;
+    assert_eq!(std::fs::metadata(dir.0.join("paper/references/atlas.pdf")).map_err(io)?.len(), big);
+
+    // Brought in rather than opened, the same file is left out for the same reason.
+    let mut t = session();
+    let imported = t.execute("file.import", &json!({"source": folder}))?;
+    assert_eq!(reason_of(&imported, "paper/references/atlas.pdf").as_deref(), Some("too_large"), "{imported}");
+    Ok(())
+}
+
 #[test]
 fn files_already_in_the_project_are_replaced_kept_beside_or_skipped_as_asked() -> R {
     let dir = Scratch::new("existing").map_err(io)?;

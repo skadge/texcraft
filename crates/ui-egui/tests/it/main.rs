@@ -60,6 +60,7 @@ mod suggest;
 mod support;
 mod system_menu;
 mod tables;
+mod text_size;
 mod touch;
 mod unsaved;
 mod vim;

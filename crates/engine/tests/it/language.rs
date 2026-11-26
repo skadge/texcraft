@@ -91,3 +91,18 @@ fn the_formulas_of_a_file_are_typeset_in_reading_order_or_say_why_not() {
         "two aligned lines are not taller than one: {r}"
     );
 }
+
+#[test]
+fn a_hints_fix_everywhere_changes_only_the_hints_of_its_kind_and_says_how_many() {
+    // Issue #42: "Fix all hints in this file" fixed every hint, of every kind.
+    let mut s = session("First...\nSecond...\nOld style: {\\bf bold}.\n").unwrap();
+    let fixes = s.execute("language.fixes", &json!({"path": "main.tex", "line": 1})).unwrap();
+    let list = fixes["fixes"].as_array().cloned().unwrap_or_default();
+    let index = list.iter().position(|f| f["everywhere"].as_u64().unwrap_or(0) > 0).unwrap_or_else(|| panic!("no fix for every such hint: {fixes}"));
+    assert_eq!(list[index]["everywhere"], 2, "{fixes}");
+    assert_eq!(list[index]["problem"], list[0]["problem"], "it is not offered for this hint: {fixes}");
+    s.execute("language.fix", &json!({"path": "main.tex", "line": 1, "index": index})).unwrap();
+    let text = s.project().text(&texcraft_engine::project::ProjectPath::new("main.tex").unwrap()).unwrap().to_owned();
+    assert!(!text.contains("..."), "a hint of the kind is left: {text}");
+    assert!(text.contains("{\\bf bold}"), "a hint of another kind was fixed too: {text}");
+}

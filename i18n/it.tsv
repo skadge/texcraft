@@ -134,7 +134,7 @@
 	Check spelling	Controlla l'ortografia
 	Checking the server…	Verifica del server…
 	Checking {language}, as the document's babel or polyglossia sets it.	Controllo in {language}, come impostato da babel o polyglossia nel documento.
-	Checking {language}, the interface's language: the document names none.	Controllo in {language}, la lingua dell'interfaccia: il documento non ne indica nessuna.
+	Checking {language}, from the interface's language and the system's region: the document names none.	Controllo in {language}, secondo la lingua dell'interfaccia e la regione del sistema: il documento non ne indica nessuna.
 	Checking {language}.	Controllo in {language}.
 	Chinese	Cinese
 	Choose Where to Make the Project's Folder	Scegli dove creare la cartella del progetto
@@ -306,7 +306,6 @@
 	Back to Fit Page	Torna ad Adatta alla pagina
 	Back to Fit Width	Torna ad Adatta alla larghezza
 	Fix Grammar and Spelling	Correggi grammatica e ortografia
-	Fix all hints in this file	Correggi tutti i suggerimenti in questo file
 	Fix them before sending the {standard} to the printer: the Print filter lists them.	Correggerli prima di inviare il {standard} alla tipografia: il filtro Stampa li elenca.
 	Flesh out these bullet points	Sviluppa questi punti elenco
 	Focus mode is off.	La modalità concentrazione è disattivata.
@@ -326,6 +325,7 @@
 	Free software under the MIT or Apache 2.0 licence. Icons from Lucide (ISC).	Software libero con licenza MIT o Apache 2.0. Icone da Lucide (ISC).
 	French	Francese
 	From the document	Dal documento
+	From the document ({language})	Dal documento ({language})
 	Gamma, capital	Gamma maiuscola
 	German	Tedesco
 	GitHub (github.com)	GitHub (github.com)
@@ -777,6 +777,7 @@
 	Show What Was Sent	Mostra ciò che è stato inviato
 	Show in Folder	Mostra nella cartella
 	Show in PDF	Mostra nel PDF
+	Show in Source	Mostra nel sorgente
 	Show it on the page	Mostralo sulla pagina
 	Show suggestions in the PDF	Mostra i suggerimenti nel PDF
 	Show the PDF a page at a time, in the whole window.	Mostra il PDF una pagina alla volta, nell'intera finestra.
@@ -955,7 +956,7 @@
 	The selected part of the PDF has no text to copy: its font does not say which characters it draws.	La parte selezionata del PDF non ha testo da copiare: il suo font non indica quali caratteri disegna.
 	The selected text and a few lines around it.	Il testo selezionato e alcune righe intorno.
 	The selected text, or the paragraph at the caret, and the document's language.	Il testo selezionato, o il paragrafo al cursore, e la lingua del documento.
-	The size of the source text, in points.	La dimensione del testo sorgente, in punti.
+	The size of the source text, in points; the formatted view's text follows it. Ctrl with the mouse wheel over the text changes it too.	La dimensione del testo sorgente, in punti; il testo della vista formattata la segue. Ctrl con la rotella del mouse sul testo la cambia anche.
 	The system's title bar above the window, in place of the window's buttons in the top bar.	La barra del titolo di sistema sopra la finestra, al posto dei pulsanti della finestra nella barra superiore.
 	The table editor shows a table float holding one tabular with its caption and label; this one holds more, so it is shown as its source.	L'editor di tabelle mostra un ambiente table con un solo tabular, la sua didascalia e l'etichetta; questo contiene di più, quindi è mostrato come sorgente.
 	The table editor shows this table as its source, because it cannot show it faithfully as a grid.	L'editor di tabelle mostra questa tabella come sorgente, perché non può mostrarla fedelmente come griglia.
@@ -1327,7 +1328,7 @@
 	{name} (needed): {means}	{name} (necessario): {means}
 	{name} accepted a suggestion	{name} ha accettato un suggerimento
 	{name} cannot be shown: {e}	Impossibile mostrare {name}: {e}
-	{name} is not a text file ({size} bytes); it cannot be edited here.	{name} non è un file di testo ({size} byte); non può essere modificato qui.
+	{name} is not a text file ({size}); it cannot be edited here.	{name} non è un file di testo ({size}); non può essere modificato qui.
 	{name} is not among the project's files.	{name} non è tra i file del progetto.
 	{name} rejected a suggestion	{name} ha rifiutato un suggerimento
 	{name} replied: {text}	{name} ha risposto: {text}
@@ -1348,6 +1349,13 @@
 	“{word}” is not in the dictionary	“{word}” non è nel dizionario
 	Opening the user guide in your browser.	Apertura della guida utente nel browser.
 	What is sent, and when: the user guide's AI page	Cosa viene inviato e quando: la pagina IA della guida utente
+	{files} was not loaded: a file larger than {limit} stays in the folder, unchanged, and is not part of the build.	{files} non è stato caricato: un file più grande di {limit} resta nella cartella, invariato, e non fa parte della compilazione.
+	These files were not loaded: {files}. Files larger than {limit} stay in the folder, unchanged, and are not part of the build.	Questi file non sono stati caricati: {files}. I file più grandi di {limit} restano nella cartella, invariati, e non fanno parte della compilazione.
+	Off	Disattivato
+	Spelling is off.	Il controllo ortografico è disattivato.
+	Spelling off	Ortografia disattivata
+	spelling language	lingua del controllo ortografico
+	The source is shown already: this goes from the formatted view to it.	Il sorgente è già mostrato: questo porta dalla vista formattata al sorgente.
 button	Commit	Commit
 button	Pull	Pull
 comment	, resolved	, risolto
@@ -1381,6 +1389,7 @@ suggestion	Reopen	Riapri
 # Counts
 @plural	; {n} overlapped another and is outdated|; {n} overlapped others and are outdated	; {n} si sovrapponeva a un altro ed è superato|; {n} si sovrapponevano ad altri e sono superati
 @plural	Compiled with {n} error|Compiled with {n} errors	Compilato con {n} errore|Compilato con {n} errori
+@plural	Apply this fix everywhere in this file ({n} place)|Apply this fix everywhere in this file ({n} places)	Applica questa correzione ovunque in questo file ({n} punto)|Applica questa correzione ovunque in questo file ({n} punti)
 @plural	Compiled with {n} warning|Compiled with {n} warnings	Compilato con {n} avviso|Compilato con {n} avvisi
 @plural	Connected: the endpoint offers {n} model.|Connected: the endpoint offers {n} models.	Connesso: l'endpoint offre {n} modello.|Connesso: l'endpoint offre {n} modelli.
 @plural	Failed with {n} error|Failed with {n} errors	Non riuscito con {n} errore|Non riuscito con {n} errori
@@ -1598,6 +1607,10 @@ unit	{n} s	{n} s
 @id	view.present.previous	Pagina precedente
 @id	view.previous_region	Area precedente
 @id	view.show_in_pdf	Mostra nel PDF
+@id	view.show_in_source	Mostra nel sorgente
+@id	view.text_larger	Testo più grande
+@id	view.text_smaller	Testo più piccolo
+@id	view.text_default	Dimensione predefinita del testo
 @id	view.show_output	Mostra output di compilazione nella cartella
 @id	view.side.ask	Chiedi all'IA
 @id	view.side.files	File del progetto
@@ -1763,7 +1776,7 @@ unit	{n} s	{n} s
 @msg	The export could not be zipped: {e}	Impossibile comprimere l'esportazione in zip: {e}
 @msg	The export could not start: {e}	Impossibile avviare l'esportazione: {e}
 @msg	The export stopped unexpectedly.	L'esportazione si è interrotta inaspettatamente.
-@msg	The file is larger than a project file may be.	Il file è più grande di quanto possa essere un file di progetto.
+@msg	The file is {size}, larger than the {limit} a project file may have.	Il file è di {size}, più dei {limit} che un file di progetto può avere.
 @msg	The fix's edits overlap.	Le modifiche della correzione si sovrappongono.
 @msg	The folder {dir} cannot be read: {e}	Impossibile leggere la cartella {dir}: {e}
 @msg	The folder {parent} cannot be made: {e}	Impossibile creare la cartella {parent}: {e}
@@ -1953,7 +1966,7 @@ unit	{n} s	{n} s
 @msg	it does not start with {expected}	non inizia con {expected}
 @msg	it is not a git server that speaks the smart HTTP protocol (its answer is {value}, not {expected})	non è un server git che parla il protocollo smart HTTP (la sua risposta è {value}, non {expected})
 @msg	it is {what}	è {what}
-@msg	larger than {value} MB	più grande di {value} MB
+@msg	larger than the {mb} MB a project file may have	più grande dei {mb} MB che un file di progetto può avere
 @msg	line {value} is past the end	la riga {value} è oltre la fine
 @msg	making the repository {name}	la creazione del repository {name}
 @msg	no library	nessuna libreria
@@ -2057,8 +2070,7 @@ unit	{n} s	{n} s
 @msg	{path} was removed from the project but could not be read in its folder: {e}	{path} è stato rimosso dal progetto ma non è stato possibile leggerlo nella sua cartella: {e}
 @msg	{path} was removed from the project but stays in its folder: its last version is not in the project's history, and an agent cannot move it to the trash.	{path} è stato rimosso dal progetto ma resta nella sua cartella: la sua ultima versione non è nella cronologia del progetto, e un agente non può spostarlo nel cestino.
 @msg	{source} has no file name	{source} non ha un nome file
-@msg	{source} is larger than TeXCraft reads ({max} bytes)	{source} è più grande di quanto TeXCraft legga ({max} byte)
-@msg	{source} is larger than a project file may be, or cannot be read	{source} è più grande di quanto possa essere un file di progetto, o non è leggibile
+@msg	{source} is {size}, larger than the {limit} TeXCraft reads.	{source} è di {size}, più dei {limit} che TeXCraft legge.
 @msg	{text} is no command	{text} non è un comando
 @msg	{url}: HTTP {value}	{url}: HTTP {value}
 @msg	{value} answered with an error ({status}): try again later.	{value} ha risposto con un errore ({status}): riprovare più tardi.
@@ -2248,3 +2260,5 @@ unit	{n} s	{n} s
 @msg	Errors are not hidden: fix them instead.	Gli errori non vengono nascosti: correggili.
 @msg	Name the kind of message to hide, on one line.	Indica il tipo di messaggio da nascondere, su una riga.
 @msg	Name the kind of message, or the `index` of one of the last build's.	Indica il tipo di messaggio, o l'`index` di un messaggio dell'ultima compilazione.
+@msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	I file più grandi di {limit} non sono stati caricati: restano nella cartella del progetto, invariati, e non fanno parte delle sue compilazioni.
+@msg	Apply this fix everywhere in this file ({n} places)	Applica questa correzione ovunque in questo file ({n} punti)

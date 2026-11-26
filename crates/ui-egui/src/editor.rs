@@ -286,23 +286,35 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             Some(path) if !is_text && crate::figure_view::is_figure(&path) => crate::figure_view::show(app, ui, &path),
             Some(path) if !is_text => {
                 let bytes = app.session.project().get(&path).map_or(0, Contents::len);
-                let detail = tl!("{name} is not a text file ({size} bytes); it cannot be edited here.")
+                let detail = tl!("{name} is not a text file ({size}); it cannot be edited here.")
                     .replace("{name}", path.file_name())
-                    .replace("{size}", &bytes.to_string());
+                    .replace("{size}", &crate::i18n::file_size(bytes as u64));
                 empty(ui, &t, "image", tl!("Binary file"), &detail);
             }
             Some(path) => {
                 if crate::figure_view::is_svg(&path) {
                     crate::figure_view::svg_bar(app, ui, &path);
                 }
+                let area = ui.available_rect_before_wrap();
                 if formatted {
                     crate::formatted::show(app, ui, &path);
                 } else {
                     source(app, ui, &path);
                 }
+                text_zoom(app, ui, area);
             }
         }
     });
+}
+
+/// Ctrl with the mouse wheel (Cmd on a Mac), or a pinch, over the text in `area` makes it larger
+/// or smaller (issue #33), as over the PDF it zooms the pages.
+fn text_zoom(app: &mut App, ui: &egui::Ui, area: egui::Rect) {
+    let over = ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| area.contains(p) && ui.ctx().layer_id_at(p) == Some(ui.layer_id()));
+    let zoom = ui.input(|i| i.zoom_delta());
+    if over && (zoom - 1.0).abs() > 1e-4 {
+        app.set_text_size(app.prefs.editor_font_size * zoom);
+    }
 }
 
 fn empty(ui: &mut egui::Ui, t: &Tokens, icon: &str, title: &str, detail: &str) {
@@ -1027,6 +1039,7 @@ fn problems(app: &mut App, path: &ProjectPath, ctx: &egui::Context) -> Vec<crate
                     }],
                     preferred: i == 0,
                     problem: Some(d.message.clone()),
+                    everywhere: 0,
                 })
                 .collect();
             out.push(crate::source::Problem {
@@ -1355,11 +1368,8 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         }
     } else if let Some(line) = out.fixes_for {
         let message = app.editor.source.popup.as_ref().map(|p| p.problem.message.clone());
-        let fixes: Vec<texcraft_engine::Fix> =
-            app.session.fixes(path, line).into_iter().filter(|f| f.problem.is_none() || f.problem == message).collect();
-        // "Fix all" only when there is a fix of the problem itself.
-        let own = fixes.iter().any(|f| f.problem.is_some());
-        let fixes = fixes.into_iter().filter(|f| own && (f.problem.is_some() || f.edits.len() > 1)).collect();
+        // The problem's own fixes, and its fix applied to every hint of its kind in the file.
+        let fixes: Vec<texcraft_engine::Fix> = app.session.fixes(path, line).into_iter().filter(|f| f.problem == message).collect();
         if let Some(popup) = app.editor.source.popup.as_mut() {
             popup.fixes = Some(fixes);
         }

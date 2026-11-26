@@ -12,7 +12,8 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-/// Largest file a project holds, in bytes. Bigger files are refused when added or loaded.
+/// Largest file a project holds, in bytes. Bigger files are refused when added; a folder's are
+/// left in the folder, not loaded ([`Project::not_loaded`]).
 pub const MAX_FILE_BYTES: usize = 64 * 1024 * 1024;
 /// Most files a project holds.
 pub const MAX_FILES: usize = 10_000;
@@ -27,7 +28,7 @@ pub enum Error {
     NoSuchFile(String),
     #[error("a file `{0}` already exists")]
     Exists(String),
-    #[error("`{0}` is {1} bytes, more than the {MAX_FILE_BYTES} a project file may have")]
+    #[error("`{0}` is {size}, more than the {limit} a project file may have", size = size_words(*.1 as u64), limit = size_words(MAX_FILE_BYTES as u64))]
     TooLarge(String, usize),
     #[error("the project already has {MAX_FILES} files")]
     TooManyFiles,
@@ -38,6 +39,23 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// A size for people, in English for the engine's messages: `512 bytes`, `1.5 kB`, `88.7 MB`,
+/// `2.0 GB` (units of 1024, as the interface's sizes).
+pub fn size_words(bytes: u64) -> String {
+    const UNITS: [&str; 3] = ["kB", "MB", "GB"];
+    if bytes < 1024 {
+        return format!("{bytes} bytes");
+    }
+    let mut value = bytes as f64 / 1024.0;
+    let mut unit = 0;
+    while value >= 1024.0 && unit + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+    let unit = UNITS.get(unit).copied().unwrap_or("GB");
+    format!("{value:.1} {unit}")
+}
 
 /// A checked relative path inside a project, such as `chapters/intro.tex`.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
@@ -151,6 +169,9 @@ impl Contents {
 pub struct Project {
     files: BTreeMap<ProjectPath, Contents>,
     main: Option<ProjectPath>,
+    /// Files of the project's folder too large to load, with their sizes in bytes: they stay in
+    /// the folder, untouched by saving, and are not built.
+    not_loaded: BTreeMap<ProjectPath, u64>,
 }
 
 impl Project {
@@ -176,6 +197,12 @@ impl Project {
 
     pub fn paths(&self) -> impl Iterator<Item = &ProjectPath> {
         self.files.keys()
+    }
+
+    /// The files of the project's folder that were too large to load, with their sizes in bytes
+    /// ([`MAX_FILE_BYTES`]): the project knows them, but has not their contents.
+    pub fn not_loaded(&self) -> impl Iterator<Item = (&ProjectPath, u64)> {
+        self.not_loaded.iter().map(|(p, n)| (p, *n))
     }
 
     pub fn len(&self) -> usize {

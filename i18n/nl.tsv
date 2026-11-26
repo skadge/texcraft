@@ -134,7 +134,7 @@
 	Check spelling	Spelling controleren
 	Checking the server…	De server wordt gecontroleerd…
 	Checking {language}, as the document's babel or polyglossia sets it.	{language} wordt gecontroleerd, zoals babel of polyglossia in het document dat instelt.
-	Checking {language}, the interface's language: the document names none.	{language} wordt gecontroleerd, de taal van de interface: het document noemt er geen.
+	Checking {language}, from the interface's language and the system's region: the document names none.	Controle in {language}, volgens de taal van de interface en de regio van het systeem: het document noemt er geen.
 	Checking {language}.	{language} wordt gecontroleerd.
 	Chinese	Chinees
 	Choose Where to Make the Project's Folder	Kies waar de map van het project komt
@@ -306,7 +306,6 @@
 	Back to Fit Page	Terug naar Pagina passend
 	Back to Fit Width	Terug naar Breedte passend
 	Fix Grammar and Spelling	Grammatica en spelling verbeteren
-	Fix all hints in this file	Alle hints in dit bestand verhelpen
 	Fix them before sending the {standard} to the printer: the Print filter lists them.	Verhelp ze voordat u de {standard} naar de drukker stuurt: het filter Drukwerk somt ze op.
 	Flesh out these bullet points	Deze opsommingspunten uitwerken
 	Focus mode is off.	Focusmodus staat uit.
@@ -326,6 +325,7 @@
 	Free software under the MIT or Apache 2.0 licence. Icons from Lucide (ISC).	Vrije software onder de MIT- of Apache 2.0-licentie. Pictogrammen van Lucide (ISC).
 	French	Frans
 	From the document	Uit het document
+	From the document ({language})	Uit het document ({language})
 	Gamma, capital	Gamma, hoofdletter
 	German	Duits
 	GitHub (github.com)	GitHub (github.com)
@@ -777,6 +777,7 @@
 	Show What Was Sent	Tonen wat is verstuurd
 	Show in Folder	In map tonen
 	Show in PDF	In pdf tonen
+	Show in Source	Tonen in de broncode
 	Show it on the page	Op de pagina tonen
 	Show suggestions in the PDF	Voorstellen in de pdf tonen
 	Show the PDF a page at a time, in the whole window.	De pdf pagina voor pagina tonen, in het hele venster.
@@ -955,7 +956,7 @@
 	The selected part of the PDF has no text to copy: its font does not say which characters it draws.	Het geselecteerde deel van de pdf heeft geen tekst om te kopiëren: het lettertype zegt niet welke tekens het tekent.
 	The selected text and a few lines around it.	De geselecteerde tekst en enkele regels eromheen.
 	The selected text, or the paragraph at the caret, and the document's language.	De geselecteerde tekst, of de alinea bij de cursor, en de taal van het document.
-	The size of the source text, in points.	De grootte van de brontekst, in punten.
+	The size of the source text, in points; the formatted view's text follows it. Ctrl with the mouse wheel over the text changes it too.	De grootte van de brontekst, in punten; de tekst van de opgemaakte weergave volgt die. Ctrl met het muiswiel boven de tekst verandert die ook.
 	The system's title bar above the window, in place of the window's buttons in the top bar.	De titelbalk van het systeem boven het venster, in plaats van de vensterknoppen in de bovenbalk.
 	The table editor shows a table float holding one tabular with its caption and label; this one holds more, so it is shown as its source.	De tabeleditor toont een zwevende tabel met één tabular met bijschrift en label; deze bevat meer en wordt daarom als broncode getoond.
 	The table editor shows this table as its source, because it cannot show it faithfully as a grid.	De tabeleditor toont deze tabel als broncode, omdat hij haar niet getrouw als raster kan tonen.
@@ -1327,7 +1328,7 @@
 	{name} (needed): {means}	{name} (nodig): {means}
 	{name} accepted a suggestion	{name} heeft een voorstel geaccepteerd
 	{name} cannot be shown: {e}	{name} kan niet worden getoond: {e}
-	{name} is not a text file ({size} bytes); it cannot be edited here.	{name} is geen tekstbestand ({size} bytes); het kan hier niet worden bewerkt.
+	{name} is not a text file ({size}); it cannot be edited here.	{name} is geen tekstbestand ({size}); het kan hier niet worden bewerkt.
 	{name} is not among the project's files.	{name} hoort niet bij de bestanden van het project.
 	{name} rejected a suggestion	{name} heeft een voorstel afgewezen
 	{name} replied: {text}	{name} antwoordde: {text}
@@ -1348,6 +1349,13 @@
 	“{word}” is not in the dictionary	“{word}” staat niet in het woordenboek
 	Opening the user guide in your browser.	De gebruikershandleiding wordt in uw browser geopend.
 	What is sent, and when: the user guide's AI page	Wat er wordt verzonden en wanneer: de AI-pagina van de gebruikershandleiding
+	{files} was not loaded: a file larger than {limit} stays in the folder, unchanged, and is not part of the build.	{files} is niet geladen: een bestand groter dan {limit} blijft ongewijzigd in de map en hoort niet bij de build.
+	These files were not loaded: {files}. Files larger than {limit} stay in the folder, unchanged, and are not part of the build.	Deze bestanden zijn niet geladen: {files}. Bestanden groter dan {limit} blijven ongewijzigd in de map en horen niet bij de build.
+	Off	Uit
+	Spelling is off.	De spellingcontrole staat uit.
+	Spelling off	Spelling uit
+	spelling language	taal van de spellingcontrole
+	The source is shown already: this goes from the formatted view to it.	De broncode wordt al getoond: dit gaat van de opgemaakte weergave naar de broncode.
 button	Commit	Committen
 button	Pull	Pullen
 comment	, resolved	, opgelost
@@ -1381,6 +1389,7 @@ suggestion	Reopen	Heropenen
 # Counts
 @plural	; {n} overlapped another and is outdated|; {n} overlapped others and are outdated	; {n} overlapte een ander en is verouderd|; {n} overlapten andere en zijn verouderd
 @plural	Compiled with {n} error|Compiled with {n} errors	Gecompileerd met {n} fout|Gecompileerd met {n} fouten
+@plural	Apply this fix everywhere in this file ({n} place)|Apply this fix everywhere in this file ({n} places)	Deze correctie overal in dit bestand toepassen ({n} plek)|Deze correctie overal in dit bestand toepassen ({n} plekken)
 @plural	Compiled with {n} warning|Compiled with {n} warnings	Gecompileerd met {n} waarschuwing|Gecompileerd met {n} waarschuwingen
 @plural	Connected: the endpoint offers {n} model.|Connected: the endpoint offers {n} models.	Gekoppeld: het endpoint biedt {n} model.|Gekoppeld: het endpoint biedt {n} modellen.
 @plural	Failed with {n} error|Failed with {n} errors	Mislukt met {n} fout|Mislukt met {n} fouten
@@ -1598,6 +1607,10 @@ unit	{n} s	{n} s
 @id	view.present.previous	Vorige pagina
 @id	view.previous_region	Vorig gebied
 @id	view.show_in_pdf	In pdf tonen
+@id	view.show_in_source	Tonen in de broncode
+@id	view.text_larger	Grotere tekst
+@id	view.text_smaller	Kleinere tekst
+@id	view.text_default	Standaardtekstgrootte
 @id	view.show_output	Builduitvoer in map tonen
 @id	view.side.ask	AI vragen
 @id	view.side.files	Projectbestanden
@@ -1763,7 +1776,7 @@ unit	{n} s	{n} s
 @msg	The export could not be zipped: {e}	De export kon niet worden gezipt: {e}
 @msg	The export could not start: {e}	De export kon niet beginnen: {e}
 @msg	The export stopped unexpectedly.	De export is onverwacht gestopt.
-@msg	The file is larger than a project file may be.	Het bestand is groter dan een projectbestand mag zijn.
+@msg	The file is {size}, larger than the {limit} a project file may have.	Het bestand is {size}, groter dan de {limit} die een projectbestand mag hebben.
 @msg	The fix's edits overlap.	De bewerkingen van de oplossing overlappen.
 @msg	The folder {dir} cannot be read: {e}	De map {dir} kan niet worden gelezen: {e}
 @msg	The folder {parent} cannot be made: {e}	De map {parent} kan niet worden gemaakt: {e}
@@ -1953,7 +1966,7 @@ unit	{n} s	{n} s
 @msg	it does not start with {expected}	het begint niet met {expected}
 @msg	it is not a git server that speaks the smart HTTP protocol (its answer is {value}, not {expected})	het is geen git-server die het smart-HTTP-protocol spreekt (het antwoord is {value}, niet {expected})
 @msg	it is {what}	het is {what}
-@msg	larger than {value} MB	groter dan {value} MB
+@msg	larger than the {mb} MB a project file may have	groter dan de {mb} MB die een projectbestand mag hebben
 @msg	line {value} is past the end	regel {value} ligt voorbij het einde
 @msg	making the repository {name}	de repository {name} wordt gemaakt
 @msg	no library	geen bibliotheek
@@ -2057,8 +2070,7 @@ unit	{n} s	{n} s
 @msg	{path} was removed from the project but could not be read in its folder: {e}	{path} is uit het project verwijderd maar kon niet in de map worden gelezen: {e}
 @msg	{path} was removed from the project but stays in its folder: its last version is not in the project's history, and an agent cannot move it to the trash.	{path} is uit het project verwijderd maar blijft in de map staan: de laatste versie staat niet in de geschiedenis van het project, en een agent kan het niet naar de prullenbak verplaatsen.
 @msg	{source} has no file name	{source} heeft geen bestandsnaam
-@msg	{source} is larger than TeXCraft reads ({max} bytes)	{source} is groter dan TeXCraft leest ({max} bytes)
-@msg	{source} is larger than a project file may be, or cannot be read	{source} is groter dan een projectbestand mag zijn, of kan niet worden gelezen
+@msg	{source} is {size}, larger than the {limit} TeXCraft reads.	{source} is {size}, groter dan de {limit} die TeXCraft leest.
 @msg	{text} is no command	{text} is geen commando
 @msg	{url}: HTTP {value}	{url}: HTTP {value}
 @msg	{value} answered with an error ({status}): try again later.	{value} antwoordde met een fout ({status}): probeer het later opnieuw.
@@ -2248,3 +2260,5 @@ unit	{n} s	{n} s
 @msg	Errors are not hidden: fix them instead.	Fouten worden niet verborgen: los ze op.
 @msg	Name the kind of message to hide, on one line.	Noem de soort melding om te verbergen, op één regel.
 @msg	Name the kind of message, or the `index` of one of the last build's.	Noem de soort melding, of de `index` van een melding van de laatste build.
+@msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	Bestanden groter dan {limit} zijn niet geladen: ze blijven ongewijzigd in de map van het project en horen niet bij de builds.
+@msg	Apply this fix everywhere in this file ({n} places)	Deze correctie overal in dit bestand toepassen ({n} plekken)

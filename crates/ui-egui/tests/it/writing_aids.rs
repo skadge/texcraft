@@ -143,3 +143,31 @@ fn a_misspelled_words_popup_offers_a_few_spellings_and_add_to_dictionary_from_th
     let ui = h.state_mut().control("ui.inspect", &json!({}));
     assert!(ui["result"]["status"]["text"].as_str().is_some_and(|t| t.starts_with("Added “wrod”")), "{ui}");
 }
+
+#[test]
+fn the_status_bar_says_the_spelling_language_and_its_menu_changes_it_or_turns_spelling_off() {
+    // Issue #37. The document asks for British English; the fake dictionary has English only.
+    let doc = "\\documentclass{article}\n\\usepackage[british]{babel}\n\\begin{document}\nThe wrod.\n\\end{document}\n";
+    let mut h = harness_with(doc, SpellingOptions::default()).unwrap();
+    h.run();
+    let item = h.get_by_label_contains("English (United Kingdom), spelling language");
+    item.click();
+    h.run();
+    assert!(h.query_by_label_contains("From the document (English (United Kingdom))").is_some(), "the document's language is not offered");
+    assert!(h.query_by_label("French").is_none(), "a language without a dictionary is offered");
+    h.get_by_label("English (United States)").click();
+    h.run();
+    assert_eq!(h.state().session().spelling_language().0, "en-US", "the choice did not reach the session");
+    assert!(h.query_by_label_contains("English (United States), spelling language").is_some(), "the status bar does not say the choice");
+
+    // From the keyboard: the item takes the focus, Enter opens the menu, Off turns spelling off.
+    h.get_by_label_contains("English (United States), spelling language").focus();
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    h.run();
+    h.get_by_label("Off").click();
+    h.run();
+    assert!(!h.state().session().settings.spelling.on, "Off did not turn spelling off");
+    assert!(h.query_by_label_contains("Spelling off, spelling language").is_some(), "the status bar does not say spelling is off");
+}

@@ -368,6 +368,23 @@ fn pointer(app: &mut App, ctx: &egui::Context, f: &Frame<'_>) {
         e.focus = true;
         ctx.request_repaint();
     }
+    // A double-click selects the word, a triple-click the paragraph (Ctrl or Cmd with a
+    // double-click goes to the source instead: `formatted::paragraph`).
+    let command = ctx.input(|i| i.modifiers.command);
+    for (i, d) in f.lines.iter().enumerate().filter(|_| !finger && !command) {
+        let r = &d.response;
+        let Some(p) = r.interact_pointer_pos().filter(|_| r.double_clicked() || r.triple_clicked()) else { continue };
+        let chosen = if r.triple_clicked() {
+            d.line.first_stop().zip(d.line.last_stop()).map(|(a, b)| (Pos { line: i, at: a }, Pos { line: i, at: b }))
+        } else {
+            word_at(f, Pos { line: i, at: stop_at(d, p) })
+        };
+        if let Some((a, h)) = chosen {
+            set_selection(app, f, a, h);
+            app.editor.formatted.editing.dragging = false;
+            ctx.request_repaint();
+        }
+    }
     if !app.editor.formatted.editing.dragging {
         return;
     }
@@ -973,7 +990,8 @@ fn word_at(f: &Frame<'_>, h: Pos) -> Option<(Pos, Pos)> {
     let line = f.doc.lines.get(h.line)?;
     let chars = f.chars(h.line);
     let is_word = |i: usize| chars.get(i).is_some_and(|c| c.is_alphanumeric());
-    if !(h.at > 0 && is_word(h.at - 1) && is_word(h.at)) {
+    // Inside a word, or at its start or end.
+    if !(is_word(h.at) || (h.at > 0 && is_word(h.at - 1))) {
         return None;
     }
     let (mut s, mut e) = (h.at, h.at);
@@ -1170,9 +1188,13 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, f: &Frame<'_>, response: &egui
             }
             ui.separator();
         }
-        for (id, label) in
-            [("edit.cut", tl!("Cut")), ("edit.copy", tl!("Copy")), ("edit.paste", tl!("Paste")), ("edit.select_all", tl!("Select All"))]
-        {
+        for (id, label) in [
+            ("edit.cut", tl!("Cut")),
+            ("edit.copy", tl!("Copy")),
+            ("edit.paste", tl!("Paste")),
+            ("edit.select_all", tl!("Select All")),
+            ("view.show_in_source", tl!("Show in Source")),
+        ] {
             let enabled = match id {
                 "edit.cut" | "edit.copy" if !selected => Err(tl!("Select some text first.").to_owned()),
                 _ => crate::ui_cmd::enabled(app, id),

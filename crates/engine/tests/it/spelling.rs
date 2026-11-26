@@ -118,3 +118,33 @@ fn the_suites_english_dictionary_marks_a_misspelling_and_offers_its_fix() -> R {
     assert!(offered.contains(&"mistake"), "{offered:?}");
     Ok(())
 }
+
+#[test]
+fn a_british_document_is_checked_with_british_spellings_and_an_american_one_with_american() -> R {
+    // Issue #36: "labour" was flagged, with "labor" offered, in a British text.
+    // Telling the two apart takes a British dictionary: SCOWL's embedded from craft-i18n, or one
+    // installed on the system. The built-in word list alone has one English, so only the language
+    // chosen is checked then.
+    let dialects = craft_proof::english_source(craft_proof::ProofLang::EnGb).is_some_and(|s| s != craft_proof::EnglishSource::CoreList);
+    let text = |lang: &str| {
+        format!("\\documentclass{{article}}\n\\usepackage[{lang}]{{babel}}\n\\begin{{document}}\nThe labour of the neighbour.\n\\end{{document}}\n")
+    };
+    for british in ["british", "UKenglish"] {
+        let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+        s.execute("file.write", &json!({"path": "main.tex", "text": text(british)}))?;
+        let v = check(&mut s)?;
+        assert_eq!(v["language"], "en-GB", "{v}");
+        assert!(!dialects || words(&v).is_empty(), "British spellings flagged in a {british} document: {v}");
+    }
+    let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    s.execute("file.write", &json!({"path": "main.tex", "text": text("american")}))?;
+    let v = check(&mut s)?;
+    assert_eq!(v["language"], "en-US", "{v}");
+    assert!(!dialects || words(&v).iter().any(|w| w == "labour"), "an American document takes British spellings: {v}");
+    // Chosen in the settings, British English is checked whatever the document says.
+    s.execute("language.spelling_options", &json!({"language": "en-GB"}))?;
+    let v = check(&mut s)?;
+    assert_eq!(v["language"], "en-GB", "{v}");
+    assert!(!dialects || words(&v).is_empty(), "{v}");
+    Ok(())
+}

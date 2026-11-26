@@ -38,6 +38,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.go_to_file", "Go to File…", "Edit", Some("Cmd+P")),
     ui("view.find_in_project", "Find in Project", "Edit", Some("Cmd+Shift+F")),
     ui("view.show_in_pdf", "Show in PDF", "Edit", Some("Cmd+Alt+J")),
+    // From the formatted view: the source, with the caret and selection where they were.
+    ui("view.show_in_source", "Show in Source", "Edit", None),
     ui("edit.quick_fix", "Quick Fix", "Edit", Some("Cmd+.")),
     ui("edit.spelling.next", "Next Spelling or Grammar Problem", "Edit", Some("F7")),
     // Sends the selection, or the paragraph at the caret, to the connected model; the problems it
@@ -125,6 +127,11 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.show_output", "Show Build Output in Folder", "View", None),
     // Desktop only; closing the window, or choosing a layout, puts the PDF back.
     ui("view.pdf_window", "PDF in Its Own Window", "View", None),
+    // The text's size, in the source and the formatted view (Ctrl with the mouse wheel over the
+    // text does it too); kept with the preferences. Ctrl+0, Ctrl+= and Ctrl+- zoom the PDF.
+    ui("view.text_larger", "Larger Text", "View", None),
+    ui("view.text_smaller", "Smaller Text", "View", None),
+    ui("view.text_default", "Default Text Size", "View", None),
     ui("view.zoom_in", "Zoom In", "View", Some("Cmd+=")),
     ui("view.zoom_out", "Zoom Out", "View", Some("Cmd+-")),
     ui("view.fit_width", "Fit Width", "View", None),
@@ -250,7 +257,7 @@ pub const MENU_BAR: &[(&str, &[Entry])] = &[
             C("edit.find"),
             C("edit.replace"),
             C("view.find_in_project"),
-            Sub(tn!("Go To"), &[C("view.go_to_file"), C("edit.goto_line"), C("view.show_in_pdf")]),
+            Sub(tn!("Go To"), &[C("view.go_to_file"), C("edit.goto_line"), C("view.show_in_pdf"), C("view.show_in_source")]),
             S,
             Sub(tn!("Spelling and Grammar"), &[C("edit.spelling.next"), C("edit.quick_fix"), C("edit.ai_grammar")]),
             Sub(
@@ -369,6 +376,9 @@ pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
         "view.pdf_window" if app.view.narrow && !app.view.pdf_window => {
             Err(tl!("On a screen this narrow the PDF is a tab beside the source: a window of its own would not help.").to_owned())
         }
+        "view.show_in_source" if !crate::formatted::shown(app) => {
+            Err(tl!("The source is shown already: this goes from the formatted view to it.").to_owned())
+        }
         "view.show_output" if !app.file_manager || app.session.library().is_some() => {
             Err(tl!("This window cannot open the system's file manager.").to_owned())
         }
@@ -458,6 +468,13 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             (Some(path), Some((line, _))) => crate::preview::show_in_pdf(app, &path, line),
             _ => app.view.status = Some((tl!("Open a source file to show its place in the PDF.").to_owned(), false)),
         },
+        "view.show_in_source" => match enabled(app, id) {
+            Err(reason) => app.view.status = Some((reason, false)),
+            Ok(()) => crate::formatted::show_in_source(app),
+        },
+        "view.text_larger" => app.set_text_size(app.prefs.editor_font_size + 1.0),
+        "view.text_smaller" => app.set_text_size(app.prefs.editor_font_size - 1.0),
+        "view.text_default" => app.set_text_size(crate::prefs::TEXT_SIZE_DEFAULT),
         "view.zoom_in" => app.pdf.zoom_by(1.25),
         "view.zoom_out" => app.pdf.zoom_by(0.8),
         "view.present" => {

@@ -337,10 +337,14 @@ pub fn document_language(text: &str) -> Option<&'static str> {
                 }
             }
             "setdefaultlanguage" | "setmainlanguage" => {
-                // The tree gives these no arguments: the next group is the language.
-                let group = nodes.get(i + 1..).unwrap_or_default().iter().find(|g| !matches!(g.kind, Kind::Text) || !is_blank_or_option(text, g));
-                if let Some(Node { kind: Kind::Group { .. }, range }) = group
-                    && let Some(tag) = text.get(range.start + 1..range.end.saturating_sub(1)).and_then(|l| babel_tag(l.trim()))
+                // The tree gives these no arguments: the next group is the language, after
+                // options such as `[variant=british]`.
+                let after = nodes.get(i + 1..).unwrap_or_default();
+                let group = after.iter().position(|g| !matches!(g.kind, Kind::Text) || !is_blank_or_option(text, g));
+                let options: String = after.get(..group.unwrap_or(0)).unwrap_or_default().iter().filter_map(|n| text.get(n.range.clone())).collect();
+                if let Some(Node { kind: Kind::Group { .. }, range }) = group.and_then(|g| after.get(g))
+                    && let Some(name) = text.get(range.start + 1..range.end.saturating_sub(1)).map(str::trim)
+                    && let Some(tag) = variant_tag(name, &options).or_else(|| babel_tag(name))
                 {
                     found = Some(tag);
                 }
@@ -349,6 +353,24 @@ pub fn document_language(text: &str) -> Option<&'static str> {
         }
     }
     found
+}
+
+/// The tag of polyglossia's English with a `variant` option (`[variant=british]`, `[variant=uk]`,
+/// `[variant=us]`), when `options` (the text before the language's group) gives one.
+fn variant_tag(name: &str, options: &str) -> Option<&'static str> {
+    if name != "english" {
+        return None;
+    }
+    let inside = options.trim().strip_prefix('[')?.strip_suffix(']')?;
+    let variant = inside.split(',').find_map(|o| o.trim().strip_prefix("variant").map(str::trim)?.strip_prefix('=')).map(str::trim)?;
+    Some(match variant {
+        "british" | "uk" => "en-GB",
+        "american" | "us" | "usmax" => "en-US",
+        "australian" => "en-AU",
+        "canadian" => "en-CA",
+        "newzealand" => "en-NZ",
+        _ => return None,
+    })
 }
 
 /// Whether text node `n` is blank or an option list (`[variant=british]`).

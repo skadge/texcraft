@@ -302,7 +302,7 @@ impl App {
         let (layout, side) = (prefs.layout(), prefs.side());
         let keys = keys::Keys::new(prefs.shortcuts.clone());
         i18n::set_language(&prefs.language);
-        session.set_interface_language(i18n::current_code());
+        session.set_interface_language(&i18n::spelling_fallback());
         let mut app = Self {
             session,
             tokens: Tokens::dark(),
@@ -561,11 +561,14 @@ impl App {
 
     /// Opens the project in `folder` and remembers it among the recent projects.
     pub fn open_project(&mut self, folder: &str) {
-        if self.run("project.open", json!({"path": folder})).is_some() {
+        if let Some(opened) = self.run("project.open", json!({"path": folder})) {
             self.start = false;
             self.remember_project();
             self.pdf = pdf_view::PdfView::default();
             self.view.last_edit = Some(0.0);
+            if let Some(said) = not_loaded_words(&opened) {
+                self.view.status = Some((said, false));
+            }
         }
     }
 
@@ -716,11 +719,28 @@ impl App {
         }
     }
 
-    /// The source text's size from the preferences.
+    /// The text's size from the preferences: the source's, and the formatted view's in
+    /// proportion to it.
     pub(crate) fn apply_editor_font(&mut self) {
-        let size = self.prefs.editor_font_size.clamp(10.0, 22.0);
+        let size = self.prefs.editor_font_size.clamp(prefs::TEXT_SIZE_MIN, prefs::TEXT_SIZE_MAX);
         self.tokens.code_size = size;
         self.tokens.code_line_height = (size * 1.55).round();
+        let scale = size / prefs::TEXT_SIZE_DEFAULT;
+        let base = Tokens::dark();
+        self.tokens.reading_size = base.reading_size * scale;
+        self.tokens.heading_sizes = base.heading_sizes.map(|h| h * scale);
+    }
+
+    /// Makes the text `size` points (within the bounds), kept with the preferences: Ctrl with the
+    /// mouse wheel over the text, and the text size commands (issue #33).
+    pub(crate) fn set_text_size(&mut self, size: f32) {
+        let size = size.clamp(prefs::TEXT_SIZE_MIN, prefs::TEXT_SIZE_MAX);
+        if (size - self.prefs.editor_font_size).abs() > f32::EPSILON {
+            self.prefs.editor_font_size = size;
+            self.prefs_changed = true;
+            self.apply_editor_font();
+            self.ctx.request_repaint();
+        }
     }
 
     pub fn session(&self) -> &Session {
@@ -1052,4 +1072,21 @@ impl App {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(delay - (now - edited)));
         }
     }
+}
+
+/// What `project.open` left in the folder because it is too large to load, in words with each
+/// file's size (issue #28); none when it loaded everything.
+fn not_loaded_words(opened: &Value) -> Option<String> {
+    let files: Vec<String> = opened["not_loaded"]
+        .as_array()?
+        .iter()
+        .filter_map(|f| Some(format!("{} ({})", f["path"].as_str()?, i18n::file_size(f["bytes"].as_u64()?))))
+        .collect();
+    let limit = i18n::file_size(texcraft_engine::project::MAX_FILE_BYTES as u64);
+    let template = match files.len() {
+        0 => return None,
+        1 => tl!("{files} was not loaded: a file larger than {limit} stays in the folder, unchanged, and is not part of the build."),
+        _ => tl!("These files were not loaded: {files}. Files larger than {limit} stay in the folder, unchanged, and are not part of the build."),
+    };
+    Some(i18n::fill(template, &[("files", &files.join(", ")), ("limit", &limit)]))
 }

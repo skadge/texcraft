@@ -38,8 +38,10 @@ pub use sync::{
     changes, check_branch_name, commit, commit_to_new_branch, is_review, open, pull,
 };
 
-/// Files larger than this are not loaded (datasets, videos): the project opens without them.
-pub const MAX_FILE: u64 = 10 * 1024 * 1024;
+/// Files larger than this are not loaded (datasets, videos): the project opens without them. The
+/// same as a project file's limit (`texcraft_project::MAX_FILE_BYTES`, checked by the engine), so
+/// a file opens from a forge exactly when it would from a folder, a zip or a dropped folder.
+pub const MAX_FILE: u64 = 64 * 1024 * 1024;
 /// Projects larger than this are refused: their files would all be in memory.
 pub const MAX_PROJECT: u64 = 200 * 1024 * 1024;
 /// Files fetched at once.
