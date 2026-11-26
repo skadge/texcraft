@@ -11,10 +11,10 @@ use egui::RichText;
 use serde_json::{Value, json};
 use texcraft_engine::forge::Service;
 
-use crate::dialogs::{Dialog, Outcome, button_row, buttons, title};
+use crate::App;
+use crate::dialogs::{Dialog, Outcome, actions, buttons, title};
 use crate::forge::{SignInAction, field, say, sign_in_or_token, sign_in_view, token_hint, token_note};
 use crate::theme::Tokens;
-use crate::{App, widgets};
 
 /// The Save Project to GitHub or GitLab dialog's fields and state.
 pub(crate) struct SaveForm {
@@ -185,8 +185,7 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
     let mut outcome = Outcome::Open;
     let mut action = None;
     let mut open_page = None;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-forge-save")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
-        ui.set_width(460.0);
+    let modal = crate::sheet::show(ctx, &t, "texcraft-forge-save", 460.0, crate::sheet::Leave::Close, |ui| {
         if let Some(Dialog::ForgeSave(form)) = app.view.dialog.as_mut() {
             outcome = match &form.done {
                 Some(_) => done_form(ui, &t, form, &mut open_page),
@@ -194,7 +193,7 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
             };
         }
     });
-    if modal.should_close() || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+    if modal.close || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         outcome = Outcome::Cancel;
     }
     if let Some(url) = open_page {
@@ -422,7 +421,7 @@ fn done_form(ui: &mut egui::Ui, t: &Tokens, form: &mut SaveForm, open_page: &mut
     }
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
-    button_row(ui, |ui| {
+    actions(ui, |ui| {
         if ui.add(egui::Button::new(tl!("Close")).min_size(egui::vec2(80.0, 30.0))).clicked() {
             outcome = Outcome::Cancel;
         }

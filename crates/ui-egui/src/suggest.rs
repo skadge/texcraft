@@ -226,10 +226,10 @@ pub(crate) fn switch(app: &mut App, ui: &mut egui::Ui, room: f32) -> bool {
         let text = RichText::new(label).font(t.small()).color(if on { t.text } else { t.text_muted });
         ui.add(egui::Button::selectable(on, egui::Atoms::new((icon, text))))
     };
-    let tip = if on {
-        tl!("Suggesting: edits become suggestions (Cmd+Shift+E to edit the file)")
-    } else {
-        tl!("Suggest changes instead of editing the file")
+    let tip = match (on, app.keys.shortcut_text("edit.suggest_mode")) {
+        (true, Some(keys)) => tf!("Suggesting: edits become suggestions ({keys} to edit the file)", keys = keys),
+        (true, None) => tl!("Suggesting: edits become suggestions").to_owned(),
+        (false, _) => tl!("Suggest changes instead of editing the file").to_owned(),
     };
     r.widget_info(|| egui::WidgetInfo::selected(egui::Role::CheckBox, true, on, tl!("Suggest changes")));
     r.on_hover_text(tip).clicked()

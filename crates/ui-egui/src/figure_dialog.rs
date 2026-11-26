@@ -86,7 +86,15 @@ pub(crate) fn form(ui: &mut egui::Ui, t: &Tokens, f: &mut FigureForm) -> Outcome
         combo.request_focus();
     }
     if f.images.is_empty() {
-        ui.label(RichText::new(tl!("The project has no images: add one with File › Add Files.")).font(t.small()).color(t.text_muted));
+        ui.label(
+            RichText::new(tf!(
+                "The project has no images: add one with {menu} › {command}.",
+                menu = tl!("File"),
+                command = crate::i18n::tid("file.import", "Add Files…").trim_end_matches('…')
+            ))
+            .font(t.small())
+            .color(t.text_muted),
+        );
     }
     ui.add_space(t.unit * 3.0);
     let label = ui.label(RichText::new(tl!("Width, as a share of the line")).color(t.text_muted));

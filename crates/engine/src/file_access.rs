@@ -44,7 +44,7 @@ impl AutomationRoots {
 
     pub fn describe(&self) -> String {
         let list = |v: &[PathBuf]| v.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ");
-        format!("read: {}; write: {}", list(&self.read), list(&self.write))
+        format!("read: {read}; write: {write}", read = list(&self.read), write = list(&self.write))
     }
 
     /// The resolved form of `path` when `access` to it is allowed; a message naming the path, the

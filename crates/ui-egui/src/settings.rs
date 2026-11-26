@@ -22,9 +22,24 @@ const TABS: &[(&str, &str)] = &[
 
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let t = app.tokens;
+    let narrow = crate::sheet::narrow(ctx, &t);
+    // On a phone the sections are a list, each opening as a page of its own with Back to it.
+    let page = narrow && app.view.settings_page;
+    let leave = if page { crate::sheet::Leave::Back(tl!("Settings")) } else { crate::sheet::Leave::Close };
     let mut close = false;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-settings")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
-        ui.set_width(720.0);
+    let shown = crate::sheet::show(ctx, &t, "texcraft-settings", 720.0, leave, |ui| {
+        if narrow {
+            if page {
+                let label = TABS.get(app.view.settings_tab).map_or("", |(l, _)| crate::i18n::t(l));
+                crate::dialogs::title(ui, &t, label);
+                ui.spacing_mut().item_spacing.y = t.unit * 3.0;
+                section(app, ui, &t);
+            } else {
+                crate::dialogs::title(ui, &t, tl!("Settings"));
+                sections(app, ui, &t, true);
+            }
+            return;
+        }
         ui.horizontal(|ui| {
             ui.label(RichText::new(tl!("Settings")).font(t.title()));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -34,56 +49,87 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             });
         });
         ui.add_space(t.unit * 3.0);
+        // As tall as the window allows (the AI tab's Connect is not below the fold); a tab taller
+        // than that (a long language, a small window) scrolls, so the title and Close stay.
+        let room = (ui.ctx().content_rect().height() - 160.0).max(200.0);
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
                 ui.set_width(160.0);
-                for (i, (label, icon)) in TABS.iter().enumerate() {
-                    let row = widgets::Row {
-                        depth: 0,
-                        icon,
-                        label: crate::i18n::t(label),
-                        selected: app.view.settings_tab == i,
-                        disclosure: None,
-                        tag: None,
-                        icon_color: None,
-                    };
-                    // A tab of a tab list, not a tree's item.
-                    let r = widgets::row(ui, &t, &row);
-                    ui.ctx().accesskit_node_builder(r.id, |node| node.set_role(egui::accesskit::Role::Tab));
-                    if r.clicked() {
-                        app.view.settings_tab = i;
-                    }
-                }
+                sections(app, ui, &t, false);
             });
             ui.add_space(t.unit * 4.0);
-            // A tab taller than the window (a long language, a small window) scrolls, so the
-            // dialog's title and Close stay on the screen.
-            let room = (ui.ctx().content_rect().height() - 120.0).max(200.0);
             egui::ScrollArea::vertical().id_salt("settings-tab").max_height(room).auto_shrink([false, true]).show(ui, |ui| {
                 ui.vertical(|ui| {
-                    ui.set_min_height(320.0_f32.min(room));
+                    ui.set_min_height(room.min(640.0));
                     ui.spacing_mut().item_spacing.y = t.unit * 3.0;
-                    match app.view.settings_tab {
-                        0 => appearance(app, ui, &t),
-                        1 => editor(app, ui, &t),
-                        2 => building(app, ui, &t),
-                        3 => keyboard(app, ui, &t),
-                        4 => review(app, ui, &t),
-                        5 => crate::ai::settings(app, ui, &t),
-                        _ => crate::forge::settings(app, ui, &t),
-                    }
+                    section(app, ui, &t);
                 });
             });
         });
     });
-    if close || modal.should_close() {
+    if shown.back {
+        app.view.settings_page = false;
+        app.view.settings_focus = true;
+    }
+    if close || shown.close {
         app.view.dialog = None;
+        app.view.settings_page = false;
+    }
+}
+
+/// The sections: tabs beside the section shown, or on a phone a list whose rows open them.
+fn sections(app: &mut App, ui: &mut egui::Ui, t: &Tokens, list: bool) {
+    for (i, (label, icon)) in TABS.iter().enumerate() {
+        let selected = !list && app.view.settings_tab == i;
+        let row = widgets::Row { depth: 0, icon, label: crate::i18n::t(label), selected, disclosure: None, tag: None, icon_color: None };
+        let r = widgets::row(ui, t, &row);
+        // A tab of a tab list, or a button opening its page; not a tree's item.
+        let role = if list { egui::accesskit::Role::Button } else { egui::accesskit::Role::Tab };
+        ui.ctx().accesskit_node_builder(r.id, |node| node.set_role(role));
+        if list && app.view.settings_tab == i && std::mem::take(&mut app.view.settings_focus) {
+            r.request_focus();
+        }
+        if r.clicked() {
+            app.view.settings_tab = i;
+            if list {
+                app.view.settings_page = true;
+                crate::sheet::focus_leave(ui.ctx(), "texcraft-settings");
+            }
+        }
+    }
+}
+
+/// The section chosen.
+fn section(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    match app.view.settings_tab {
+        0 => appearance(app, ui, t),
+        1 => editor(app, ui, t),
+        2 => building(app, ui, t),
+        3 => keyboard(app, ui, t),
+        4 => review(app, ui, t),
+        5 => crate::ai::settings(app, ui, t),
+        _ => crate::forge::settings(app, ui, t),
     }
 }
 
 /// A setting: its name and explanation on the left, its control on the right. The control's
 /// response, when it returns one, is named after the setting (AGENTS.md rule 21).
 fn setting(ui: &mut egui::Ui, t: &Tokens, name: &str, help: &str, control: impl FnOnce(&mut egui::Ui) -> Option<egui::Response>) {
+    // Too narrow for both side by side (a phone): the control goes under its explanation.
+    if ui.available_width() < 480.0 {
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 2.0;
+            ui.label(RichText::new(name).font(t.strong()));
+            ui.label(RichText::new(help).font(t.small()).color(t.text_muted));
+            ui.add_space(t.unit);
+            ui.horizontal_wrapped(|ui| {
+                if let Some(response) = control(ui) {
+                    let _ = response.accessible_name(name);
+                }
+            });
+        });
+        return;
+    }
     ui.horizontal(|ui| {
         ui.vertical(|ui| {
             ui.set_width(300.0);
@@ -174,15 +220,21 @@ fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         Some(r)
     });
     key_bindings(app, ui, t, "settings-keys-editor");
-    setting(ui, t, tl!("Close brackets and environments"), tl!("Typing ( [ { adds the closing bracket, and \\begin{…} its \\end{…}."), |ui| {
-        let mut on = app.prefs.auto_close;
-        let r = ui.checkbox(&mut on, "");
-        if r.changed() {
-            app.prefs.auto_close = on;
-            app.prefs_changed = true;
-        }
-        Some(r)
-    });
+    setting(
+        ui,
+        t,
+        tl!("Close brackets and environments"),
+        tl!("Typing an opening bracket, parenthesis or brace adds the closing one, and \\begin{…} adds its \\end{…}."),
+        |ui| {
+            let mut on = app.prefs.auto_close;
+            let r = ui.checkbox(&mut on, "");
+            if r.changed() {
+                app.prefs.auto_close = on;
+                app.prefs_changed = true;
+            }
+            Some(r)
+        },
+    );
     spelling(app, ui, t);
     grammar(app, ui, t);
     let preview =
@@ -405,7 +457,7 @@ fn output(app: &mut App, ui: &mut egui::Ui, t: &Tokens, options: texcraft_engine
     );
     setting(ui, t, tl!("PDF for"), help, |ui| {
         let kinds = [Output::Screen, Output::Accessible, Output::Print];
-        let labels = [(tl!("Screen"), None), (tl!("Accessible"), None), (tl!("Print"), None)];
+        let labels = [(tl!("Screen"), None), (tl!("Accessible"), None), (crate::i18n::tc("pdf", "Print"), None)];
         let selected = kinds.iter().position(|k| *k == options.output).unwrap_or(0);
         if let Some(i) = widgets::segmented(ui, t, "settings-output", &labels, selected) {
             let kind = kinds.get(i).copied().unwrap_or_default();
@@ -460,7 +512,7 @@ fn output(app: &mut App, ui: &mut egui::Ui, t: &Tokens, options: texcraft_engine
 /// people look for it.
 fn key_bindings(app: &mut App, ui: &mut egui::Ui, t: &Tokens, salt: &str) {
     setting(ui, t, tl!("Editor key bindings"), tl!("Standard editing keys, or Vim's modes and commands."), |ui| {
-        let options = [(tl!("Standard"), None), (tl!("Vim"), None)];
+        let options = [(crate::i18n::tc("keys", "Standard"), None), (tl!("Vim"), None)];
         if let Some(i) = widgets::segmented(ui, t, salt, &options, usize::from(app.prefs.vim)) {
             app.prefs.vim = i == 1;
             app.prefs_changed = true;

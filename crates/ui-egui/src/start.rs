@@ -26,6 +26,50 @@ pub struct Thumbnail {
     pub rgba: Vec<u8>,
 }
 
+/// What the browser says of the room for the projects it keeps (`navigator.storage`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BrowserStorage {
+    /// Whether the browser keeps the site's data until the user deletes it (persistent storage
+    /// granted), or may remove it when space runs low; `None` when it did not say.
+    pub persisted: Option<bool>,
+    /// The bytes the site uses, and may use at most, when the browser says.
+    pub used: Option<u64>,
+    pub quota: Option<u64>,
+}
+
+/// `bytes` in the unit that suits it.
+fn size_text(bytes: u64) -> String {
+    let b = bytes as f64;
+    if b >= 1e9 {
+        crate::i18n::measure(b / 1e9, 1, "{n} GB")
+    } else if b >= 1e6 {
+        crate::i18n::measure(b / 1e6, 1, "{n} MB")
+    } else {
+        crate::i18n::measure((b / 1e3).ceil(), 0, "{n} kB")
+    }
+}
+
+/// What the start page says of where the browser keeps the projects: whether they are kept for
+/// good, and the room used and left.
+fn storage(app: &App, ui: &mut egui::Ui, t: &Tokens) {
+    let Some(storage) = app.browser_storage else { return };
+    let mut lines = Vec::new();
+    match storage.persisted {
+        Some(true) => lines.push(tl!("Kept until you delete them.").to_owned()),
+        Some(false) => lines
+            .push(tl!("The browser may remove them when space runs low: download each as a zip (File menu) to keep a copy elsewhere.").to_owned()),
+        None => {}
+    }
+    if let (Some(used), Some(quota)) = (storage.used, storage.quota) {
+        let left = quota.saturating_sub(used);
+        lines.push(tl!("{used} used, {left} available.").replace("{used}", &size_text(used)).replace("{left}", &size_text(left)));
+    }
+    for line in lines {
+        ui.horizontal_wrapped(|ui| ui.label(RichText::new(line).font(t.small()).color(t.text_muted)));
+    }
+    ui.add_space(t.unit * 2.0);
+}
+
 /// Thumbnails known to the interface: drawn ones, and ones to hand to the shell.
 #[derive(Default)]
 pub(crate) struct Thumbnails {
@@ -98,7 +142,12 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     });
 }
 
+/// Below this width the start page's buttons go under the title, one per line, the main one first.
+const NARROW_HEADER: f32 = 600.0;
+
 fn header(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    let narrow = ui.available_width() < NARROW_HEADER;
+    let mut chosen = None;
     ui.allocate_ui_with_layout(vec2(ui.available_width(), 64.0), Layout::left_to_right(Align::Center), |ui| {
         let (icon, _) = ui.allocate_exact_size(vec2(56.0, 56.0), Sense::hover());
         crate::app_icon::paint(ui, icon);
@@ -107,34 +156,59 @@ fn header(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             ui.label(RichText::new("TeXCraft").font(egui::FontId::new(28.0, crate::fonts::semibold())));
             ui.label(RichText::new(tl!("Write LaTeX, see the PDF as you type.")).color(t.text_muted));
         });
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = t.unit * 2.0;
-            let gitlab = egui::Button::image_and_text(icons::image("download", t.icon_size, t.text), tl!("Open from GitLab or GitHub…"))
-                .min_size(vec2(0.0, 34.0));
-            if ui.add(gitlab).clicked() {
-                crate::ui_cmd::run(app, "forge.open");
-            }
-            // In the browser the projects are listed below: there are no folders to open.
-            if app.session.library().is_none() {
-                let open =
-                    egui::Button::image_and_text(icons::image("folder-open", t.icon_size, t.text), tl!("Open Folder…")).min_size(vec2(0.0, 34.0));
-                if ui.add(open).clicked() {
-                    crate::ui_cmd::run(app, "project.open");
+        if !narrow {
+            // At the row's end, in reading order (the keyboard meets New Project first).
+            let buttons = buttons(app, t);
+            widgets::right_aligned(ui, "start-buttons", |ui| {
+                ui.spacing_mut().item_spacing.x = t.unit * 2.0;
+                for (id, button) in buttons {
+                    if ui.add(button).clicked() {
+                        chosen = Some(id);
+                    }
                 }
-            }
-            let new = egui::Button::image_and_text(
-                icons::image("file-plus", t.icon_size, t.on_accent),
-                RichText::new(tl!("New Project")).color(t.on_accent).font(t.strong()),
-            )
-            .fill(t.accent)
-            .stroke(egui::Stroke::NONE)
-            .min_size(vec2(0.0, 34.0));
-            if ui.add(new).clicked() {
-                // A blank project or a template, from the gallery.
-                app.open_gallery();
-            }
-        });
+            });
+        }
     });
+    if narrow {
+        // A phone: each button as wide as the page, so none is cut off at its edges.
+        ui.add_space(t.unit * 4.0);
+        for (id, button) in buttons(app, t) {
+            if ui.add_sized(vec2(ui.available_width(), 40.0), button).clicked() {
+                chosen = Some(id);
+            }
+        }
+    }
+    match chosen {
+        // A blank project or a template, from the gallery.
+        Some(NEW) => app.open_gallery(),
+        Some(id) => crate::ui_cmd::run(app, id),
+        None => {}
+    }
+}
+
+/// The start page's New Project button, which opens the gallery rather than running a command.
+const NEW: &str = "";
+
+/// The start page's buttons with their commands, the main one first: New Project, on the desktop
+/// Open Folder… (in the browser the projects are listed below: there are no folders), and Open
+/// from GitLab or GitHub….
+fn buttons(app: &App, t: &Tokens) -> Vec<(&'static str, egui::Button<'static>)> {
+    let new = egui::Button::image_and_text(
+        icons::image("file-plus", t.icon_size, t.on_accent),
+        RichText::new(tl!("New Project")).color(t.on_accent).font(t.strong()),
+    )
+    .fill(t.accent)
+    .stroke(egui::Stroke::NONE)
+    .min_size(vec2(0.0, 34.0));
+    let gitlab =
+        egui::Button::image_and_text(icons::image("download", t.icon_size, t.text), tl!("Open from GitLab or GitHub…")).min_size(vec2(0.0, 34.0));
+    let mut all = vec![(NEW, new)];
+    if app.session.library().is_none() {
+        let open = egui::Button::image_and_text(icons::image("folder-open", t.icon_size, t.text), tl!("Open Folder…")).min_size(vec2(0.0, 34.0));
+        all.push(("project.open", open));
+    }
+    all.push(("forge.open", gitlab));
+    all
 }
 
 /// A card per publisher's template, and the blank project. Choosing one asks for a folder and
@@ -188,6 +262,9 @@ fn recent(app: &mut App, ui: &mut egui::Ui, t: &Tokens, width: f32) {
     let title = if library.is_some() { tl!("Projects in this browser") } else { tl!("Recent projects") };
     ui.horizontal(|ui| widgets::section_title(ui, t, title));
     ui.add_space(t.unit * 3.0);
+    if library.is_some() {
+        storage(app, ui, t);
+    }
     let recent = library.clone().unwrap_or_else(|| app.prefs.recent.clone());
     if recent.is_empty() {
         let empty = if library.is_some() { tl!("Projects you save appear here.") } else { tl!("Projects you open appear here.") };

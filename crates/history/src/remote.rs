@@ -144,7 +144,7 @@ impl History {
     /// Makes the checked-out branch follow branch `branch` of remote `remote`.
     pub fn set_upstream(&mut self, remote: &str, branch: &str) -> Result<()> {
         check_remote_name(remote)?;
-        let local = self.branch().ok_or("No branch is checked out (HEAD is detached): there is no branch to follow a remote's.")?;
+        let local = self.branch().ok_or("No branch is checked out (HEAD is detached), so no branch can be set to follow a remote one.")?;
         let mut file = self.config()?;
         git!("The upstream cannot be set", file.set_raw_value_by("branch", local.as_str(), "remote", remote))?;
         let merge = format!("refs/heads/{branch}");

@@ -237,21 +237,44 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let mut close = false;
     let mut create: Option<String> = None;
     let mut blank = false;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-gallery")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
-        ui.set_width(866.0); // four cards and their gaps beside the categories, with no leftover strip
+    let narrow = crate::sheet::narrow(ctx, &t);
+    let listing = Listing { templates: &templates, kept: &kept, in_browser };
+    let modal = crate::sheet::show(ctx, &t, "texcraft-gallery", 866.0, crate::sheet::Leave::Close, |ui| {
+        // Four cards and their gaps beside the categories, with no leftover strip.
+        if narrow {
+            // A phone: the search and the categories above the cards, which make one column.
+            crate::dialogs::title(ui, &t, tl!("New Project"));
+            search(app, ui, f32::INFINITY);
+            ui.add_space(t.unit * 2.0);
+            let (_, label, _) = CATEGORIES.get(app.gallery.category).copied().unwrap_or(("", "", ""));
+            let combo = craft_ui::ComboBox::from_id_salt("gallery-category")
+                .width(ui.available_width())
+                .selected_text(crate::i18n::t(label))
+                .show_ui(ui, |ui| {
+                    for (i, (key, label, _)) in CATEGORIES.iter().enumerate() {
+                        let count = templates.iter().filter(|t| key.is_empty() || t.category == *key).count();
+                        if count > 0 || key.is_empty() {
+                            let text = format!("{} ({count})", crate::i18n::t(label));
+                            if ui.selectable_label(app.gallery.category == i, text).clicked() {
+                                app.gallery.category = i;
+                            }
+                        }
+                    }
+                });
+            let _ = combo.response.accessible_name(tl!("Category"));
+            ui.add_space(t.unit * 3.0);
+            cards(app, ui, &t, &listing, &mut blank, None);
+            ui.add_space(t.unit * 3.0);
+            details(app, ui, &t, &listing, &mut create);
+            return;
+        }
         ui.horizontal(|ui| {
             ui.label(RichText::new(tl!("New Project")).font(t.title()));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if widgets::icon_button(ui, &t, "x", tl!("Close"), true).clicked() {
                     close = true;
                 }
-                let edit = ui.add(
-                    egui::TextEdit::singleline(&mut app.gallery.search).hint_text(tl!("Search by title, publisher or class")).desired_width(280.0),
-                );
-                if std::mem::take(&mut app.gallery.focus_search) {
-                    edit.request_focus();
-                }
-                let _ = edit.accessible_name(tl!("Search templates"));
+                search(app, ui, 280.0);
             });
         });
         ui.add_space(t.unit * 3.0);
@@ -281,44 +304,16 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             });
             ui.add_space(t.unit * 3.0);
             ui.vertical(|ui| {
-                let (category, _, _) = CATEGORIES.get(app.gallery.category).copied().unwrap_or(("", "", ""));
-                let needle = app.gallery.search.to_lowercase();
-                let shown: Vec<&Template> = templates
-                    .iter()
-                    .filter(|t| category.is_empty() || t.category == category)
-                    .filter(|t| {
-                        needle.is_empty()
-                            || [&t.title, &crate::i18n::msg(&t.title), &t.publisher, &t.source_text(), &t.id]
-                                .iter()
-                                .any(|s| s.to_lowercase().contains(&needle))
-                    })
-                    .collect();
-                egui::ScrollArea::vertical().max_height(420.0).auto_shrink([false, true]).show(ui, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing = vec2(12.0, 12.0);
-                        if category.is_empty() && needle.is_empty() && blank_card(ui, &t) {
-                            blank = true;
-                        }
-                        for template in &shown {
-                            let selected = app.gallery.selected.as_deref() == Some(template.id.as_str());
-                            if card(ui, &t, template, selected, kept(template), in_browser) {
-                                app.gallery.selected = Some(template.id.clone());
-                            }
-                        }
-                    });
-                    if shown.is_empty() {
-                        ui.label(RichText::new(tl!("No template matches.")).color(t.text_muted));
-                    }
-                });
+                cards(app, ui, &t, &listing, &mut blank, Some(420.0));
                 ui.add_space(t.unit * 3.0);
                 widgets::hairline(ui, &t);
                 ui.add_space(t.unit * 2.0);
-                details(app, ui, &t, &templates, &kept, &mut create);
+                details(app, ui, &t, &listing, &mut create);
             });
         });
     });
     // While a download runs the gallery stays open, showing its progress.
-    if (modal.should_close() || close) && app.gallery.job.is_none() {
+    if (modal.close || close) && app.gallery.job.is_none() {
         app.gallery.open = false;
     }
     if blank {
@@ -330,10 +325,68 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     }
 }
 
+/// The templates the gallery offers, and what it says of each.
+#[derive(Clone, Copy)]
+struct Listing<'a> {
+    templates: &'a [Template],
+    kept: &'a dyn Fn(&Template) -> bool,
+    in_browser: bool,
+}
+
+/// The search field, `width` wide.
+fn search(app: &mut App, ui: &mut egui::Ui, width: f32) {
+    let edit = ui.add(egui::TextEdit::singleline(&mut app.gallery.search).hint_text(tl!("Search by title, publisher or class")).desired_width(width));
+    if std::mem::take(&mut app.gallery.focus_search) {
+        edit.request_focus();
+    }
+    let _ = edit.accessible_name(tl!("Search templates"));
+}
+
+/// The templates of the chosen category that match the search, as cards (in a scrolled area at
+/// most `height` tall, when given), the blank project first.
+fn cards(app: &mut App, ui: &mut egui::Ui, t: &Tokens, listing: &Listing<'_>, blank: &mut bool, height: Option<f32>) {
+    let Listing { templates, kept, in_browser } = *listing;
+    let (category, _, _) = CATEGORIES.get(app.gallery.category).copied().unwrap_or(("", "", ""));
+    let needle = app.gallery.search.to_lowercase();
+    let shown: Vec<&Template> = templates
+        .iter()
+        .filter(|t| category.is_empty() || t.category == category)
+        .filter(|t| {
+            needle.is_empty()
+                || [&t.title, &crate::i18n::msg(&t.title), &t.publisher, &t.source_text(), &t.id].iter().any(|s| s.to_lowercase().contains(&needle))
+        })
+        .collect();
+    let mut add = |ui: &mut egui::Ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(12.0, 12.0);
+            if category.is_empty() && needle.is_empty() && blank_card(ui, t) {
+                *blank = true;
+            }
+            for template in &shown {
+                let selected = app.gallery.selected.as_deref() == Some(template.id.as_str());
+                if card(ui, t, template, selected, kept(template), in_browser) {
+                    app.gallery.selected = Some(template.id.clone());
+                }
+            }
+        });
+        if shown.is_empty() {
+            ui.label(RichText::new(tl!("No template matches.")).color(t.text_muted));
+        }
+    };
+    match height {
+        Some(height) => {
+            egui::ScrollArea::vertical().max_height(height).auto_shrink([false, true]).show(ui, |ui| add(ui));
+        }
+        None => add(ui),
+    }
+}
+
 /// The details of the selected template, and Create.
-fn details(app: &mut App, ui: &mut egui::Ui, t: &Tokens, templates: &[Template], kept: &dyn Fn(&Template) -> bool, create: &mut Option<String>) {
+fn details(app: &mut App, ui: &mut egui::Ui, t: &Tokens, listing: &Listing<'_>, create: &mut Option<String>) {
+    let Listing { templates, kept, .. } = *listing;
     let selected = app.gallery.selected.as_ref().and_then(|id| templates.iter().find(|t| &t.id == id));
-    ui.horizontal(|ui| {
+    let sheet = crate::sheet::in_sheet(ui);
+    let body = |ui: &mut egui::Ui| {
         ui.set_min_height(56.0);
         match selected {
             None => {
@@ -352,22 +405,34 @@ fn details(app: &mut App, ui: &mut egui::Ui, t: &Tokens, templates: &[Template],
                 });
             }
         }
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if let Some(job) = &app.gallery.job {
-                ui.label(RichText::new(&job.label).color(t.text_muted));
-                let (rect, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
-                widgets::spinner(ui, rect.center(), 6.0, t.accent);
-                return;
-            }
-            let label = RichText::new(tl!("Create Project…")).color(t.on_accent).font(t.strong());
-            let button = egui::Button::new(label).fill(t.accent).stroke(egui::Stroke::NONE).min_size(vec2(140.0, 32.0));
-            if ui.add_enabled(selected.is_some(), button).clicked() {
-                *create = selected.map(|t| t.id.clone());
-            }
-        });
-    });
+        if !sheet {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| create_button(app, ui, t, selected, create));
+        }
+    };
+    // On a phone's sheet the details go under each other, and Create to its bottom bar.
+    if sheet {
+        ui.vertical(body);
+        crate::dialogs::actions(ui, |ui| create_button(app, ui, t, selected, create));
+    } else {
+        ui.horizontal(body);
+    }
     if let Some(error) = &app.gallery.error {
         ui.colored_label(t.error, crate::i18n::msg(error));
+    }
+}
+
+/// Create, or the download's progress while one runs.
+fn create_button(app: &App, ui: &mut egui::Ui, t: &Tokens, selected: Option<&Template>, create: &mut Option<String>) {
+    if let Some(job) = &app.gallery.job {
+        ui.label(RichText::new(&job.label).color(t.text_muted));
+        let (rect, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
+        widgets::spinner(ui, rect.center(), 6.0, t.accent);
+        return;
+    }
+    let label = RichText::new(tl!("Create Project…")).color(t.on_accent).font(t.strong());
+    let button = egui::Button::new(label).fill(t.accent).stroke(egui::Stroke::NONE).min_size(vec2(140.0, 32.0));
+    if ui.add_enabled(selected.is_some(), button).clicked() {
+        *create = selected.map(|t| t.id.clone());
     }
 }
 
@@ -384,8 +449,14 @@ fn state(kept: bool, in_browser: bool) -> &'static str {
     }
 }
 
+/// A card's size: on a phone's sheet as wide as the sheet, so the cards make one column.
+fn card_size(ui: &egui::Ui) -> egui::Vec2 {
+    if crate::sheet::in_sheet(ui) { vec2(ui.available_width().max(CARD.x), CARD.y) } else { CARD }
+}
+
 pub(crate) fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected: bool, kept: bool, in_browser: bool) -> bool {
-    let (rect, r) = ui.allocate_exact_size(CARD, Sense::click());
+    let size = card_size(ui);
+    let (rect, r) = ui.allocate_exact_size(size, Sense::click());
     // The catalogue's titles are English, shown through the catalogs' `@msg` rows.
     let title = crate::i18n::msg(&template.title);
     r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, selected, &title));
@@ -394,7 +465,7 @@ pub(crate) fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected:
     ui.painter().rect_filled(rect, t.corner_large(), fill);
     let stroke = if selected { egui::Stroke::new(2.0, t.accent) } else { t.hairline() };
     ui.painter().rect_stroke(rect, t.corner_large(), stroke, egui::StrokeKind::Inside);
-    let top = egui::Rect::from_min_size(rect.min + vec2(12.0, 12.0), vec2(CARD.x - 24.0, 40.0));
+    let top = egui::Rect::from_min_size(rect.min + vec2(12.0, 12.0), vec2(size.x - 24.0, 40.0));
     icons::paint(ui, egui::Rect::from_min_size(top.min, vec2(24.0, 24.0)), icon_for(&template.category), 20.0, t.accent);
     if kept {
         let badge = egui::Rect::from_min_size(egui::pos2(rect.right() - 30.0, rect.top() + 10.0), vec2(20.0, 20.0));
@@ -402,7 +473,7 @@ pub(crate) fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected:
     }
     let mut y = top.top() + 32.0;
     for (text, font, color, rows) in [(&template.publisher, t.strong(), t.text, 2), (&title, t.small(), t.text_muted, 3)] {
-        let mut job = egui::text::LayoutJob::simple(text.clone(), font, color, CARD.x - 24.0);
+        let mut job = egui::text::LayoutJob::simple(text.clone(), font, color, size.x - 24.0);
         job.wrap.max_rows = rows;
         let galley = ui.painter().layout_job(job);
         let h = galley.size().y;
@@ -420,7 +491,7 @@ pub(crate) fn card(ui: &mut egui::Ui, t: &Tokens, template: &Template, selected:
 
 /// The blank project's card; returns whether it was clicked.
 pub(crate) fn blank_card(ui: &mut egui::Ui, t: &Tokens) -> bool {
-    let (rect, r) = ui.allocate_exact_size(CARD, Sense::click());
+    let (rect, r) = ui.allocate_exact_size(card_size(ui), Sense::click());
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Blank project")));
     let fill = if r.hovered() { blend(t.surface, t.hover) } else { t.surface };
     ui.painter().rect_filled(rect, t.corner_large(), fill);

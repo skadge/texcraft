@@ -298,10 +298,10 @@ pub(super) fn instance_of(p: &Value, service: Service) -> Result<String> {
 /// `why` signing in to `service` is not offered, in words.
 fn unavailable(service: Service, why: Unavailable) -> String {
     match why {
-        Unavailable::UnknownServer => format!(
-            "TeXCraft has no application on this server: add it first (Settings › Accounts › Add a {} server, or forge.add_server), or use a personal access token.",
-            service.name()
-        ),
+        Unavailable::UnknownServer => match service {
+            Service::GitLab => "TeXCraft has no application on this server: add it first (Settings › Accounts › Add a GitLab Server…, or forge.add_server), or use a personal access token.".to_owned(),
+            Service::GitHub => "TeXCraft has no application on this server: add it first (Settings › Accounts › Add a GitHub Enterprise Server…, or forge.add_server), or use a personal access token.".to_owned(),
+        },
         Unavailable::NoApplication => {
             format!("This build has no {} application yet, so it cannot sign in: use a personal access token instead.", service.name())
         }
@@ -846,7 +846,7 @@ impl Session {
             self.forge_auth.signing_out = None;
             return Some(match outcome {
                 Ok(()) => Ok(json!({"operation": "sign_out", "service": service.id(), "revoked": true})),
-                Err(e) => Err(format!("Signed out of {} here, but {} could not be told to revoke the token: {e}", service.name(), service.name())),
+                Err(e) => Err(format!("Signed out of {name} here, but {name} could not be told to revoke the token: {e}", name = service.name())),
             });
         }
         None

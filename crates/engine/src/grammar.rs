@@ -194,6 +194,11 @@ mod harper {
             for (rule, lints) in self.group.organized_lints(&doc) {
                 for l in lints {
                     let flagged: String = text.chars().skip(l.span.start).take(l.span.end.saturating_sub(l.span.start)).collect();
+                    // TeX reads a run of spaces, or a line's end and the next line's indent, as one
+                    // space: several in the source are no mistake.
+                    if rule == "Spaces" && flagged.chars().count() > 1 && flagged.chars().all(char::is_whitespace) {
+                        continue;
+                    }
                     let replacements = l
                         .suggestions
                         .iter()

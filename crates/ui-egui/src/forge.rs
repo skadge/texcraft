@@ -15,10 +15,10 @@ use serde_json::{Value, json};
 use texcraft_engine::forge::{Choice, ConflictKind, Service};
 use texcraft_engine::{ForgeProblem, SignInProgress, SignInUnavailable};
 
-use crate::dialogs::{Dialog, Outcome, button_row, buttons, title};
+use crate::dialogs::{Dialog, Outcome, actions, buttons, title};
 use crate::i18n::trn;
 use crate::theme::Tokens;
-use crate::{App, icons, widgets};
+use crate::{App, icons};
 
 /// The Open from GitLab or GitHub dialog's fields.
 pub(crate) struct OpenForm {
@@ -415,10 +415,10 @@ pub(crate) fn ask_commit(app: &mut App) {
         .iter()
         .map(|c| {
             let what = match c.kind {
-                texcraft_engine::forge::ChangeKind::Added => tl!("added"),
-                texcraft_engine::forge::ChangeKind::Modified => tl!("changed"),
-                texcraft_engine::forge::ChangeKind::Deleted => tl!("deleted"),
-                texcraft_engine::forge::ChangeKind::Moved => tl!("moved"),
+                texcraft_engine::forge::ChangeKind::Added => crate::i18n::tc("file", "added"),
+                texcraft_engine::forge::ChangeKind::Modified => crate::i18n::tc("file", "changed"),
+                texcraft_engine::forge::ChangeKind::Deleted => crate::i18n::tc("file", "deleted"),
+                texcraft_engine::forge::ChangeKind::Moved => crate::i18n::tc("file", "moved"),
             };
             let path = match &c.from {
                 Some(from) => format!("{from} → {}", c.path),
@@ -485,17 +485,14 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
     let unknown = app.session.forge_sign_in_unavailable_at(service, &instance) == Some(SignInUnavailable::UnknownServer);
     crate::forge_pick::tick(app, ctx);
     let mut action = None;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-forge-dialog")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
-        ui.set_width(460.0);
-        match app.view.dialog.as_mut() {
-            Some(Dialog::ForgeOpen(form)) => outcome = open_form(ui, &t, form, browser, &view, unknown, &mut action),
-            Some(Dialog::ForgeCommit(form)) => outcome = commit_form(ui, &t, form, browser, &view, &mut action),
-            Some(Dialog::ForgeResolve(form)) => outcome = resolve_form(ui, &t, form),
-            Some(Dialog::ForgeMergeRequest(note)) => outcome = merge_request_note(ui, &t, note),
-            _ => {}
-        }
+    let modal = crate::sheet::show(ctx, &t, "texcraft-forge-dialog", 460.0, crate::sheet::Leave::Close, |ui| match app.view.dialog.as_mut() {
+        Some(Dialog::ForgeOpen(form)) => outcome = open_form(ui, &t, form, browser, &view, unknown, &mut action),
+        Some(Dialog::ForgeCommit(form)) => outcome = commit_form(ui, &t, form, browser, &view, &mut action),
+        Some(Dialog::ForgeResolve(form)) => outcome = resolve_form(ui, &t, form),
+        Some(Dialog::ForgeMergeRequest(note)) => outcome = merge_request_note(ui, &t, note),
+        _ => {}
     });
-    if modal.should_close() || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+    if modal.close || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         outcome = Outcome::Cancel;
     }
     if let Some(action) = action {
@@ -727,7 +724,7 @@ fn commit_form(ui: &mut egui::Ui, t: &Tokens, form: &mut CommitForm, browser: bo
         ui.label(RichText::new(tl!("Nothing to commit: the files are as on the branch.")).color(t.text_muted));
         let mut outcome = Outcome::Open;
         ui.add_space(t.unit * 4.0);
-        button_row(ui, |ui| {
+        actions(ui, |ui| {
             if ui.add(egui::Button::new(tl!("Close")).min_size(egui::vec2(80.0, 30.0))).clicked() {
                 outcome = Outcome::Cancel;
             }
@@ -795,8 +792,11 @@ fn commit_form(ui: &mut egui::Ui, t: &Tokens, form: &mut CommitForm, browser: bo
         Some(token) => form.use_token && !token.trim().is_empty(),
     };
     let ready = decided && !form.message.trim().is_empty() && has_key && !needs_write;
-    let action =
-        if form.to_new_branch { say(form.service, tl!("Commit and Open Merge Request"), tl!("Commit and Open Pull Request")) } else { tl!("Commit") };
+    let action = if form.to_new_branch {
+        say(form.service, tl!("Commit and Open Merge Request"), tl!("Commit and Open Pull Request"))
+    } else {
+        crate::i18n::tc("button", "Commit")
+    };
     match buttons(ui, t, action, false, ready) {
         Outcome::Open if enter && ready => Outcome::Run,
         o => o,
@@ -825,7 +825,9 @@ fn conflicts(ui: &mut egui::Ui, t: &Tokens, rows: &mut [ConflictRow], enabled: b
                 ui.label(RichText::new(row.why).font(t.small()).color(t.text_muted));
             });
             ui.horizontal(|ui| {
-                for (choice, label) in [(Choice::Mine, tl!("Keep mine")), (Choice::Theirs, tl!("Take theirs"))] {
+                for (choice, label) in
+                    [(Choice::Mine, crate::i18n::tc("file", "Keep mine")), (Choice::Theirs, crate::i18n::tc("file", "Take theirs"))]
+                {
                     let on = row.choice == Some(choice);
                     let r = ui.add_enabled(enabled, egui::RadioButton::new(on, label));
                     let name = format!("{label}: {}", row.path);
@@ -866,7 +868,7 @@ fn merge_request_note(ui: &mut egui::Ui, t: &Tokens, note: &mut MergeRequestNote
     }
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
-    button_row(ui, |ui| {
+    actions(ui, |ui| {
         if ui.add(egui::Button::new(tl!("Close")).min_size(egui::vec2(80.0, 30.0))).clicked() {
             outcome = Outcome::Cancel;
         }

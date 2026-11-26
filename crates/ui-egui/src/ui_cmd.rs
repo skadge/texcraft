@@ -195,11 +195,14 @@ pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
         "view.pdf_window" if cfg!(target_arch = "wasm32") => {
             Err(tl!("In the browser the PDF stays in the page: a web page cannot open a second window of the app.").to_owned())
         }
+        "view.pdf_window" if app.view.narrow && !app.view.pdf_window => {
+            Err(tl!("On a screen this narrow the PDF is a tab beside the source: a window of its own would not help.").to_owned())
+        }
         "view.show_output" if !app.file_manager || app.session.library().is_some() => {
             Err(tl!("This window cannot open the system's file manager.").to_owned())
         }
         "view.menu_bar" if app.has_system_menu() => {
-            Err(tl!("The menus are in the menu bar at the top of the screen; Control+F2 reaches it from the keyboard.").to_owned())
+            Err(tl!("The menus are in the menu bar at the top of the screen; Ctrl+F2 reaches it from the keyboard.").to_owned())
         }
         // The browser gives a page the clipboard's text only with the paste keys.
         "edit.paste" if cfg!(target_arch = "wasm32") => {
@@ -268,6 +271,7 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "view.logs" => app.view.logs = !app.view.logs,
         "view.show_output" => show_output(app, params),
         "build.save_output" => save_output(app, params),
+        "project.download_zip" => download_zip(app, params),
         "view.theme" => {
             let next = if app.tokens.scheme == Scheme::Dark { ThemePref::Light } else { ThemePref::Dark };
             let ctx = app.ctx.clone();
@@ -407,6 +411,25 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             app.run(id, json!({}));
         }
     }
+}
+
+/// Whether the menus offer command `id` here: downloading the project as a zip is the browser's
+/// way to keep a copy elsewhere (a desktop project is a folder already).
+pub fn in_menus(app: &App, id: &str) -> bool {
+    id != "project.download_zip" || app.session.library().is_some()
+}
+
+/// Downloads the project as a zip file (in the browser; with a `path`, writes it there) and says
+/// so on the status line.
+fn download_zip(app: &mut App, params: &serde_json::Value) {
+    let Some(done) = app.run("project.download_zip", params.clone()) else { return };
+    let file = done["path"].as_str().unwrap_or_default();
+    let said = if done["download"].as_bool() == Some(true) {
+        tl!("Downloading {file}.").replace("{file}", file)
+    } else {
+        tl!("Saved to {path}.").replace("{path}", file)
+    };
+    app.view.status = Some((said, false));
 }
 
 /// Exports to `format`: asks where (a native picker, or a typed path), then runs `build.export`.

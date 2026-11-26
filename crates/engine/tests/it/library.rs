@@ -321,3 +321,78 @@ fn the_history_the_shell_stores_comes_back_and_moves_with_a_renamed_project() ->
     assert_eq!(shown["text"], "one\n", "the files' bytes came back too");
     Ok(())
 }
+
+/// The browser's storage, as the shell writes the library's changes to it: here one that is full
+/// for the projects' files.
+fn store_all(s: &mut Session, store: impl Fn(&Change) -> Result<(), String>) -> Vec<String> {
+    let mut refused = Vec::new();
+    for change in s.take_library_changes() {
+        if let Err(e) = store(&change) {
+            s.not_stored(&change);
+            refused.push(e);
+        }
+    }
+    refused
+}
+
+fn full(change: &Change) -> Result<(), String> {
+    match change {
+        Change::Saved(..) | Change::Versions { .. } => Err("QuotaExceededError: The quota has been exceeded.".to_owned()),
+        _ => Ok(()),
+    }
+}
+
+#[test]
+fn a_save_the_full_storage_refuses_leaves_the_project_unsaved_and_the_next_save_stores_it_again() {
+    let mut s = session();
+    s.execute("file.write", &json!({"path": "main.tex", "text": "Kept."})).unwrap();
+    s.execute("project.save_as", &json!({"path": "Thesis"})).unwrap();
+    assert!(store_all(&mut s, |_| Ok(())).is_empty());
+    assert!(!s.is_dirty());
+
+    s.execute("file.write", &json!({"path": "main.tex", "text": "Lost if not kept."})).unwrap();
+    s.execute("project.save", &json!({})).unwrap();
+    let refused = store_all(&mut s, full);
+    assert!(!refused.is_empty() && refused.iter().all(|e| texcraft_engine::library::out_of_room(e)), "the refusal is not said as lack of room");
+    assert!(s.is_dirty(), "a save the storage refused counts as saved");
+
+    // Room was made: the next save stores the whole project again.
+    s.execute("project.save", &json!({})).unwrap();
+    let changes = s.take_library_changes();
+    assert!(
+        changes.iter().any(|c| matches!(c, Change::Saved(name, p) if name == "Thesis" && p.files.iter().any(|(_, b)| b == b"Lost if not kept.")))
+    );
+}
+
+#[test]
+fn a_refused_write_of_another_project_leaves_the_open_one_saved() {
+    let mut s = session();
+    s.execute("project.save_as", &json!({"path": "Open"})).unwrap();
+    let _ = s.take_library_changes();
+    s.not_stored(&Change::Thread { project: "Other".into(), file: "t.md".into(), text: None });
+    assert!(!s.is_dirty());
+    assert!(!texcraft_engine::library::out_of_room("NotFoundError: no such store"), "any error is taken for a full disk");
+}
+
+#[test]
+fn a_project_downloaded_as_a_zip_opens_again_as_the_same_project() {
+    let dir = std::env::temp_dir().join(format!("texcraft-it-{}-zip-round-trip", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut s = session();
+    s.execute("file.write", &json!({"path": "main.tex", "text": "\\documentclass{article}\n\\input{chapters/one}\n"})).unwrap();
+    s.execute("file.new", &json!({"path": "chapters/one.tex", "text": "Once."})).unwrap();
+    s.execute("file.import", &json!({"path": "figures/dot.png", "data": "iVBORw0KGgo="})).unwrap();
+    s.execute("project.save_as", &json!({"path": "Thesis"})).unwrap();
+    let zip = dir.join("Thesis.zip");
+    let done = s.execute("project.download_zip", &json!({"path": zip.display().to_string()})).unwrap();
+    assert_eq!(done["files"], json!(s.project().len()));
+    let files =
+        |s: &Session| -> Vec<(String, Vec<u8>)> { s.project().files().map(|(p, c)| (p.as_str().to_owned(), c.as_bytes().to_vec())).collect() };
+    let before = files(&s);
+
+    let mut other = session();
+    other.execute("project.import", &json!({"source": zip.display().to_string()})).unwrap();
+    assert_eq!(files(&other), before, "the zip does not open as the same project");
+    let _ = std::fs::remove_dir_all(&dir);
+}

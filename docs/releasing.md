@@ -134,15 +134,17 @@ With the packages from step 8 (or from the release):
   Open Folder through the portal, and a template from New Project.
 - **Browser**: `tar xzf texcraft-web-*.tar.gz && cd web && python3 -m http.server` (any static
   server), open it in a browser: the loading screen shows progress, the editor draws, files can be
-  added and dropped, and Compile says the engine is not available in the browser yet. After the
+  added and dropped, a template makes a project, and Compile builds it in the page (the first build
+  of a visit fetches its TeX files). After the
   `pages` job, the same at the Pages address (a subpath: the build uses relative URLs).
 - **Release page**: the description is the changelog section, and the four links download.
 
 ## Known limits
 
-- Only x86_64 Linux packages; macOS and Windows build from source.
+- Only x86_64 Linux packages are tested; the Windows zip and the macOS app (Apple Silicon) on the
+  GitHub releases are experimental and unsigned.
 - In the browser, a document that needs a package outside the site's TeX tree does not build.
-- The translation catalogs have their language names but few rows yet: what they lack shows in English.
+- The translation catalogs are new: what they lack shows in English.
 - The packages are not signed, and the AppImage carries no update information.
 - The Flatpak does not use a host TeX Live.
 - The Flatpak job needs a runner that runs containers privileged (bubblewrap's user namespaces).

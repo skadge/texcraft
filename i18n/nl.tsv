@@ -20,12 +20,6 @@
 	 · edited	 · bewerkt
 	 · pass {n}	 · doorgang {n}
 	 · recording @{r}	 · opname @{r}
-	, accepted	, geaccepteerd
-	, outdated	, verouderd
-	, rejected	, afgewezen
-	, resolved	, opgelost
-	1 package	1 pakket
-	1 problem	1 probleem
 	A formula. Double-click to edit its source.	Een formule. Dubbelklik om de broncode te bewerken.
 	A label cannot hold braces, backslashes, % or #.	Een label mag geen accolades, backslashes, % of # bevatten.
 	A name for the project, kept in this browser	Een naam voor het project, bewaard in deze browser
@@ -54,6 +48,7 @@
 	Add	Toevoegen
 	Add Files to the Project	Bestanden aan het project toevoegen
 	Add Files…	Bestanden toevoegen…
+	Add Footnote	Voetnoot toevoegen
 	Add Server	Server toevoegen
 	Add a Comment	Opmerking toevoegen
 	Add a File	Bestand toevoegen
@@ -68,7 +63,6 @@
 	Add the Zip as a File	De zip als bestand toevoegen
 	Add to Dictionary	Aan woordenboek toevoegen
 	Add {host} for Signing In…	{host} toevoegen om aan te melden…
-	Added	Toegevoegd
 	Added {host}: sign in to it with its Sign In button.	{host} toegevoegd: meld u erbij aan met de knop Aanmelden.
 	Added “{word}” to the project's words (.texcraft/words.txt).	“{word}” toegevoegd aan de woorden van het project (.texcraft/words.txt).
 	Added “{word}” to the project's words for this session: the project has no folder yet.	“{word}” voor deze sessie toegevoegd aan de woorden van het project: het project heeft nog geen map.
@@ -76,6 +70,7 @@
 	After a pause in typing at the end of a line, the paragraph up to the caret is sent and the model's next words are shown in grey after it: Tab takes them, typing on or Escape dismisses them.	Na een typpauze aan het einde van een regel wordt de alinea tot de cursor verstuurd en verschijnen de volgende woorden van het model in grijs erachter: Tab neemt ze over, doortypen of Escape verwerpt ze.
 	Agree to Send	Akkoord met versturen
 	Agreed: the kinds switched on are sent to {destination} without asking again.	Akkoord: de ingeschakelde soorten worden naar {destination} verstuurd zonder het opnieuw te vragen.
+	Agreement	Congruentie
 	All	Alles
 	All borders	Alle randen
 	Allow Commits on GitLab	Commits op GitLab toestaan
@@ -102,9 +97,11 @@
 	Auto-Compile: compile now	Automatisch compileren: nu compileren
 	Back to PDF	Terug naar pdf
 	Back to the menu bar, the sections and the side panel. Escape does it too when no field has the keyboard.	Terug naar de menubalk, de secties en het zijpaneel. Escape doet dat ook als geen veld het toetsenbord heeft.
+	Bibliography entries	Bibliografievermeldingen
 	Binary file	Binair bestand
 	Blank project	Leeg project
 	Bleed	Afloop
+	Body Text	Platte tekst
 	Bold	Vet
 	Booktabs rules	Booktabs-lijnen
 	Booktabs rules need the booktabs package: add \\usepackage{booktabs} to the preamble of {main}.	Booktabs-lijnen vereisen het pakket booktabs: voeg \\usepackage{booktabs} toe aan de preambule van {main}.
@@ -117,7 +114,7 @@
 	Build with the open suggestions applied; the files do not change	Bouwen met de open voorstellen toegepast; de bestanden veranderen niet
 	Building	Bezig met bouwen
 	Building the PDF	De pdf wordt gebouwd
-	Bulleted list	Lijst met opsommingstekens
+	Bulleted List	Lijst met opsommingstekens
 	CVs	Cv's
 	Cancel	Annuleren
 	Cancel Signing In	Aanmelden annuleren
@@ -130,8 +127,11 @@
 	Change to “{text}”	Wijzigen in “{text}”
 	Changed on the branch but kept as you edited them: {files}.	Gewijzigd op de branch maar behouden zoals u ze bewerkte: {files}.
 	Changes that are not saved are lost.	Wijzigingen die niet zijn opgeslagen, gaan verloren.
+	Check Grammar with AI	Grammatica controleren met AI
 	Check Server	Server controleren
 	Check comments	Opmerkingen controleren
+	Check grammar	Grammatica controleren
+	Check grammar (English)	Grammatica controleren (Engels)
 	Check spelling	Spelling controleren
 	Checking the server…	De server wordt gecontroleerd…
 	Checking {language}, as the document's babel or polyglossia sets it.	{language} wordt gecontroleerd, zoals babel of polyglossia in het document dat instelt.
@@ -171,7 +171,6 @@
 	Comments	Opmerkingen
 	Comments are shown beside the text.	Opmerkingen worden naast de tekst getoond.
 	Comments beside the text are hidden; the Review panel lists them.	Opmerkingen naast de tekst zijn verborgen; het paneel Review somt ze op.
-	Commit	Committen
 	Commit and Open Merge Request	Committen en merge request openen
 	Commit and Open Pull Request	Committen en pull request openen
 	Commit the Project	Het project committen
@@ -213,10 +212,12 @@
 	Create Project…	Project aanmaken…
 	Croatian	Kroatisch
 	Crop marks	Snijtekens
-	Cross-reference	Kruisverwijzing
+	Cross-Reference	Kruisverwijzing
 	Ctrl+Enter in the question	Ctrl+Enter in de vraag
+	Ctrl+click to go to it.	Ctrl+klik om ernaartoe te gaan.
 	Cut	Knippen
 	Czech	Tsjechisch
+	DOCX Document (.docx)	DOCX-document (.docx)
 	Danish	Deens
 	Dark	Donker
 	Delete	Verwijderen
@@ -229,13 +230,12 @@
 	Delete {file}?	{file} verwijderen?
 	Delete {project}?	{project} verwijderen?
 	Delete “{old}”	“{old}” verwijderen
-	Deleted	Verwijderd
 	Delete…	Verwijderen…
 	Delimiters	Scheidingstekens
 	Delta, capital	Delta, hoofdletter
 	Describe it	Beschrijven
 	Description (optional)	Beschrijving (optioneel)
-	Displayed formula	Losstaande formule
+	Displayed Formula	Losstaande formule
 	Don't Save	Niet opslaan
 	Done	Gereed
 	Download	Downloaden
@@ -264,9 +264,9 @@
 	Edit comment	Opmerking bewerken
 	Editing: your edits change the file.	Bewerken: uw bewerkingen wijzigen het bestand.
 	Editor	Editor
+	Editor Only	Alleen editor
 	Editor and PDF	Editor en pdf
 	Editor key bindings	Toetsbindingen van de editor
-	Editor only	Alleen editor
 	Endpoint	Endpoint
 	Engine	Engine
 	English	Engels
@@ -313,11 +313,14 @@
 	Folded lines {from}–{to}, {what}	Regels {from}–{to} ingevouwen, {what}
 	Folder not found	Map niet gevonden
 	Font size	Lettergrootte
+	Footnote	Voetnoot
 	Footnote: {text}	Voetnoot: {text}
 	For reading on a screen; accessible (tagged, PDF/UA, checked for screen readers); or for print (a PDF/X, checked as printers check it).	Om op een scherm te lezen; toegankelijk (getagd, PDF/UA, gecontroleerd voor schermlezers); of voor drukwerk (een PDF/X, gecontroleerd zoals drukkers dat doen).
 	Forget	Vergeten
 	Formatted	Opgemaakt
+	Formula	Formule
 	Formula: {text}	Formule: {text}
+	Found by AI ({model}).	Gevonden door AI ({model}).
 	Free software under the MIT or Apache 2.0 licence. Icons from Lucide (ISC).	Vrije software onder de MIT- of Apache 2.0-licentie. Pictogrammen van Lucide (ISC).
 	French	Frans
 	From the document	Uit het document
@@ -333,8 +336,15 @@
 	Go to Line	Naar regel gaan
 	Go to this line	Naar deze regel gaan
 	Going to GitLab to sign in…	Naar GitLab om aan te melden…
+	Grammar and word order	Grammatica en woordvolgorde
+	Grammar checking is not in this build.	Grammaticacontrole zit niet in deze build.
+	Grammar checking is not in this build; Check Grammar with AI is available.	Grammaticacontrole zit niet in deze build; Grammatica controleren met AI is beschikbaar.
+	Grammar problems in English text are underlined with a double line, checked on this computer by Harper; spelling stays with the spell checker.	Grammaticaproblemen in Engelse tekst worden dubbel onderstreept, gecontroleerd op deze computer door Harper; de spelling blijft bij de spellingcontrole.
 	Greek	Grieks
 	Heading	Kop
+	Heading 1	Kop 1
+	Heading 2	Kop 2
+	Heading 3	Kop 3
 	Help	Help
 	Here, if it fits	Hier, als het past
 	Hide	Verbergen
@@ -343,7 +353,6 @@
 	Hide the comments beside the text	De opmerkingen naast de tekst verbergen
 	Hide the comments beside the text (the Review panel still lists them)	De opmerkingen naast de tekst verbergen (het paneel Review somt ze nog op)
 	Hide the token	Het token verbergen
-	Hint	Hint
 	History	Geschiedenis
 	Homepage URL	URL van homepage
 	How far the art may run past the page's edges, to be trimmed off; printers often ask for 3 mm.	Hoe ver de opmaak buiten de paginaranden mag lopen, om te worden afgesneden; drukkers vragen vaak 3 mm.
@@ -353,6 +362,7 @@
 	Ignore	Negeren
 	Image	Afbeelding
 	Image {name}	Afbeelding {name}
+	Images	Afbeeldingen
 	Images go into the file itself: stop suggesting to insert one.	Afbeeldingen komen in het bestand zelf: stop met voorstellen er een in te voegen.
 	Import a Zip File	Zipbestand importeren
 	In Selection	In selectie
@@ -361,10 +371,14 @@
 	In the browser, GitHub needs a personal access token: GitHub's sign-in does not answer web pages.	In de browser heeft GitHub een persoonlijk toegangstoken nodig: de aanmelding van GitHub antwoordt geen webpagina's.
 	In the browser, paste with Ctrl+V (Cmd+V on a Mac): a menu cannot read the clipboard there.	Plak in de browser met Ctrl+V (Cmd+V op een Mac): een menu kan het klembord daar niet lezen.
 	In this browser	In deze browser
+	Indent Item	Item laten inspringen
 	Indonesian	Indonesisch
-	Inline formula	Formule in de tekst
+	Inline Formula	Formule in de tekst
 	Insert	Invoegen
 	Insert Anyway	Toch invoegen
+	Insert a Citation	Citaat invoegen
+	Insert a Cross-Reference	Kruisverwijzing invoegen
+	Insert a Figure	Figuur invoegen
 	Insert in Document	In document invoegen
 	Insert “{new}”	“{new}” invoegen
 	Inserted as a suggested change: accept or reject it beside the text or in the Review panel.	Ingevoegd als voorgestelde wijziging: accepteer of wijs die af naast de tekst of in het paneel Review.
@@ -393,7 +407,6 @@
 	Japanese	Japans
 	Journals	Tijdschriften
 	Keep Both	Beide behouden
-	Keep mine	Mijn versie behouden
 	Keep the New Project	Het nieuwe project behouden
 	Kept beside a file of the same name: {n}.	Bewaard naast een bestand met dezelfde naam: {n}.
 	Keyboard	Toetsenbord
@@ -402,6 +415,7 @@
 	Korean	Koreaans
 	Label	Label
 	Label {key}	Label {key}
+	Labels	Labels
 	Lambda, capital	Lambda, hoofdletter
 	Leave Confidential unticked: TeXCraft keeps no secret. Tick the scopes api, read_api and read_user.	Laat Confidential uitgevinkt: TeXCraft bewaart geen geheim. Vink de scopes api, read_api en read_user aan.
 	Leave Focus Mode	Focusmodus verlaten
@@ -431,6 +445,7 @@
 	Make Again	Opnieuw maken
 	Make Key	Sleutel maken
 	Make LaTeX	LaTeX maken
+	Make Link	Link maken
 	Make a fine-grained one on GitHub under Settings › Developer settings › Personal access tokens, for this repository. Contents read-only opens it; committing needs Contents read and write, and opening a pull request Pull requests read and write. A classic token needs the repo scope.	Maak er een met fijnmazige rechten op GitHub onder Settings › Developer settings › Personal access tokens, voor deze repository. Contents read-only opent hem; committen vereist Contents read and write, en een pull request openen Pull requests read and write. Een klassiek token heeft de scope repo nodig.
 	Make one in GitLab under Preferences › Access tokens. The read_api scope opens projects; committing needs the api scope.	Maak er een in GitLab onder Preferences › Access tokens. De scope read_api opent projecten; committen vereist de scope api.
 	Make this change in the file (one undoable edit)	Deze wijziging in het bestand maken (één bewerking die ongedaan kan worden)
@@ -440,7 +455,6 @@
 	Markdown (.md)	Markdown (.md)
 	Marks outside the bleed that show where to trim.	Tekens buiten de afloop die aangeven waar moet worden gesneden.
 	Match Case	Hoofdlettergevoelig
-	Math	Wiskunde
 	Maximize	Maximaliseren
 	Menu	Menu
 	Menu bar	Menubalk
@@ -449,7 +463,6 @@
 	Merged with your changes: {files}.	Samengevoegd met uw wijzigingen: {files}.
 	Merged {remote} into the project: {files}.	{remote} samengevoegd in het project: {files}.
 	Message deleted	Melding verwijderd
-	Mine	Van mij
 	Minimize	Minimaliseren
 	Miscellaneous	Diversen
 	Misspelled words in the text are underlined; commands, math and verbatim text are skipped.	Verkeerd gespelde woorden in de tekst worden onderstreept; commando's, wiskunde en letterlijke tekst worden overgeslagen.
@@ -481,11 +494,17 @@
 	No answer: {error}	Geen antwoord: {error}
 	No borders	Geen randen
 	No comments or suggestions	Geen opmerkingen of voorstellen
+	No entry matches. The project's .bib files have the entries to cite.	Geen vermelding komt overeen. De .bib-bestanden van het project bevatten de vermeldingen om te citeren.
 	No explanation: {error}	Geen uitleg: {error}
 	No file is open	Er is geen bestand open
 	No file matches.	Geen bestand komt overeen.
+	No grammar check: {error}	Geen grammaticacontrole: {error}
+	No headings in this file yet.	Nog geen koppen in dit bestand.
 	No image	Geen afbeelding
-	No misspelled words in this file.	Geen verkeerd gespelde woorden in dit bestand.
+	No image matches.	Geen afbeelding komt overeen.
+	No label matches.	Geen label komt overeen.
+	No label {key} in the project's files.	Geen label {key} in de bestanden van het project.
+	No misspelled words or grammar problems in this file.	Geen verkeerd gespelde woorden of grammaticaproblemen in dit bestand.
 	No project matches: type its whole address to open it.	Geen project komt overeen: typ het volledige adres om het te openen.
 	No recent projects	Geen recente projecten
 	No reference was drafted: {error}	Er is geen referentie ontworpen: {error}
@@ -520,8 +539,8 @@
 	Nothing was made: {error}	Er is niets gemaakt: {error}
 	Nothing was taken in from the branch {branch} yet: choose for each file below first.	Er is nog niets overgenomen van de branch {branch}: kies eerst voor elk bestand hieronder.
 	Now {width}: kept unless you move the slider.	Nu {width}: blijft zo tenzij u de schuifregelaar verplaatst.
-	Numbered equation	Genummerde vergelijking
-	Numbered list	Genummerde lijst
+	Numbered Equation	Genummerde vergelijking
+	Numbered List	Genummerde lijst
 	Omega, capital	Omega, hoofdletter
 	On a page of floats	Op een pagina met zwevende objecten
 	On this computer: nothing leaves it, and no token is needed.	Op deze computer: niets verlaat hem, en er is geen token nodig.
@@ -562,27 +581,31 @@
 	Opening the retex user manual (PDF) in your browser.	De gebruikershandleiding van retex (pdf) wordt in uw browser geopend.
 	Opening {address} in your browser.	{address} wordt in uw browser geopend.
 	Operators	Operatoren
+	Other Heading	Andere kop
 	Otherwise the build goes on and reports every error.	Anders gaat de build door en meldt hij elke fout.
 	Outdated: the passage changed since. Reject it, or suggest again.	Verouderd: de passage is sindsdien gewijzigd. Wijs het af, of stel opnieuw voor.
+	Outdent Item	Inspringing van item verkleinen
 	Outline	Overzicht
 	Output files	Uitvoerbestanden
 	Owner (you, or a group)	Eigenaar (u, of een groep)
 	Owner (you, or an organisation)	Eigenaar (u, of een organisatie)
 	PDF	PDF
+	PDF Only	Alleen pdf
 	PDF and build log	Pdf en buildlog
 	PDF documents	Pdf-documenten
 	PDF for	Pdf voor
 	PDF for print	Pdf voor drukwerk
 	PDF for print (PDF/X)	Pdf voor drukwerk (PDF/X)
 	PDF for the screen	Pdf voor het scherm
-	PDF only	Alleen pdf
 	PDF/X standard	PDF/X-standaard
 	PDF/X-4 keeps colour profiles and transparency; PDF/X-1a is CMYK only, for older print workflows.	PDF/X-4 behoudt kleurprofielen en transparantie; PDF/X-1a is alleen CMYK, voor oudere drukprocessen.
+	PPTX Presentation (.pptx)	PPTX-presentatie (.pptx)
 	Page {n}	Pagina {n}
 	Page {n} of {count}	Pagina {n} van {count}
 	Page {n} of {count}. Escape leaves the presentation.	Pagina {n} van {count}. Escape verlaat de presentatie.
 	Page {n} of {total}	Pagina {n} van {total}
-	Paragraph	Alinea
+	Paragraph Heading	Alineakop
+	Paragraph style	Alineastijl
 	Paste	Plakken
 	Pause before building	Pauze voor het bouwen
 	Personal access token	Persoonlijk toegangstoken
@@ -592,13 +615,11 @@
 	Portuguese	Portugees
 	Portuguese (Brazil)	Portugees (Brazilië)
 	Posters	Posters
-	PowerPoint Presentation (.pptx)	PowerPoint-presentatie (.pptx)
 	Preamble	Preambule
 	Present	Presenteren
 	Previous Match	Vorige overeenkomst
 	Previous Page	Vorige pagina
 	Previous page	Vorige pagina
-	Print	Drukwerk
 	Private	Privé
 	Project Files	Projectbestanden
 	Project address	Projectadres
@@ -620,17 +641,19 @@
 	Pulled {remote}: no file of the project changed.	{remote} gepulld: geen bestand van het project is gewijzigd.
 	Pulled {remote}: {files}.	{remote} gepulld: {files}.
 	Pulling…	Bezig met pullen…
+	Punctuation and capitals	Interpunctie en hoofdletters
 	Push	Pushen
 	Pushed to {remote}.	Gepusht naar {remote}.
 	Pushing…	Bezig met pushen…
 	Put each redirect URI on a line of its own. Leave Confidential unticked: TeXCraft keeps no secret. Tick the scopes api, read_api and read_user.	Zet elke omleidings-URI op een eigen regel. Laat Confidential uitgevinkt: TeXCraft bewaart geen geheim. Vink de scopes api, read_api en read_user aan.
 	Put the PDF back in the main window	De pdf terugzetten in het hoofdvenster
 	Put the caret in a cell first.	Zet de cursor eerst in een cel.
+	Put the caret in a list item after the first to indent it.	Zet de cursor in een lijstitem na het eerste om het te laten inspringen.
+	Put the caret in a list item to outdent it.	Zet de cursor in een lijstitem om de inspringing ervan te verkleinen.
 	Put the caret in a paragraph or a heading to make it a heading.	Zet de cursor in een alinea of een kop om er een kop van te maken.
 	Put the caret in a paragraph, or in a list of the other kind.	Zet de cursor in een alinea, of in een lijst van de andere soort.
 	Quick Fix	Snelle oplossing
 	Raw log	Onbewerkt log
-	Read-only for now: double-click any part to edit its source.	Voorlopig alleen-lezen: dubbelklik op een deel om de broncode te bewerken.
 	Ready for print	Klaar voor drukwerk
 	Recent	Recent
 	Recent projects	Recente projecten
@@ -651,14 +674,13 @@
 	Remove from recent projects:	Uit recente projecten verwijderen:
 	Remove it	Verwijderen
 	Remove the connection, its token and the agreements given	De koppeling, het token en de gegeven toestemmingen verwijderen
-	Removed	Verwijderd
 	Removed {host}.	{host} verwijderd.
 	Rename	Hernoemen
 	Rename File	Bestand hernoemen
 	Rename Project	Project hernoemen
 	Rename…	Hernoemen…
-	Reopen	Heropenen
 	Reopened	Heropend
+	Repeated and redundant words	Herhaalde en overbodige woorden
 	Replace	Vervangen
 	Replace All	Alles vervangen
 	Replace them with the new ones, keep both (the new ones get another name), or skip the new ones?	Ze vervangen door de nieuwe, beide behouden (de nieuwe krijgen een andere naam), of de nieuwe overslaan?
@@ -695,6 +717,7 @@
 	Right	Rechts
 	Row above	Rij erboven
 	Row below	Rij eronder
+	Rules of this kind are checked.	Regels van deze soort worden gecontroleerd.
 	Russian	Russisch
 	SVG Image (.svg)	SVG-afbeelding (.svg)
 	Save	Opslaan
@@ -730,11 +753,11 @@
 	Search the raw log	Het onbewerkte log doorzoeken
 	Section	Sectie
 	Sections	Secties
-	Sections of the shown file appear here.	Secties van het getoonde bestand verschijnen hier.
 	See and change the shortcut of every command.	De sneltoets van elk commando bekijken en wijzigen.
 	Select All	Alles selecteren
 	Select some text first.	Selecteer eerst wat tekst.
 	Select text and choose Edit › Comment, or turn on Suggest to propose changes.	Selecteer tekst en kies Bewerken › Opmerking, of zet Voorstellen aan om wijzigingen voor te stellen.
+	Select text in one paragraph and one style to make it a link.	Selecteer tekst in één alinea en één stijl om er een link van te maken.
 	Select the text to rewrite first.	Selecteer eerst de tekst om te herschrijven.
 	Send	Versturen
 	Send the section at the caret for review; the remarks arrive as comments	De sectie bij de cursor ter beoordeling versturen; de opmerkingen komen binnen als opmerkingen
@@ -784,7 +807,6 @@
 	Source: {text}	Broncode: {text}
 	Spanish	Spaans
 	Spelling language	Spellingstaal
-	Standard	Standaard
 	Standard editing keys, or Vim's modes and commands.	Standaard bewerkingstoetsen, of de modi en commando's van Vim.
 	Start Page	Startpagina
 	Start from a template	Beginnen met een sjabloon
@@ -793,6 +815,7 @@
 	Stop Suggesting	Voorstellen stoppen
 	Stop at the first error	Stoppen bij de eerste fout
 	Stopped: nothing was made.	Gestopt: er is niets gemaakt.
+	Style and readability	Stijl en leesbaarheid
 	Subsection	Subsectie
 	Subsubsection	Subsubsectie
 	Suggest	Voorstellen
@@ -804,7 +827,8 @@
 	Suggesting. Choose the name your suggestions carry in Settings › Review first.	Voorstelmodus. Kies eerst de naam die uw voorstellen dragen in Instellingen › Review.
 	Suggesting: edits are proposed, not made. The PDF shows the text as it is; suggestions are not applied.	Voorstelmodus: bewerkingen worden voorgesteld, niet uitgevoerd. De pdf toont de tekst zoals hij is; voorstellen worden niet toegepast.
 	Suggesting: edits are proposed, not made. The PDF shows the text with the open suggestions applied.	Voorstelmodus: bewerkingen worden voorgesteld, niet uitgevoerd. De pdf toont de tekst met de open voorstellen toegepast.
-	Suggesting: edits become suggestions (Cmd+Shift+E to edit the file)	Voorstelmodus: bewerkingen worden voorstellen (Cmd+Shift+E om het bestand te bewerken)
+	Suggesting: edits become suggestions	Voorstelmodus: bewerkingen worden voorstellen
+	Suggesting: edits become suggestions ({keys} to edit the file)	Voorstelmodus: bewerkingen worden voorstellen ({keys} om het bestand te bewerken)
 	Suggesting: your edits become suggestions; the file does not change until one is accepted.	Voorstelmodus: uw bewerkingen worden voorstellen; het bestand verandert pas als er een wordt geaccepteerd.
 	Suggestion accepted	Voorstel geaccepteerd
 	Suggestion by {name}: {change}{state}	Voorstel van {name}: {change}{state}
@@ -814,6 +838,7 @@
 	Suggestions in this file	Voorstellen in dit bestand
 	Swedish	Zweeds
 	Symbols	Symbolen
+	Symbols…	Symbolen…
 	SyncTeX data	SyncTeX-gegevens
 	System	Systeem
 	System title bar	Titelbalk van het systeem
@@ -822,7 +847,6 @@
 	Table, shown as source	Tabel, getoond als broncode
 	Table, shown as source: {reason}	Tabel, getoond als broncode: {reason}
 	Table.	Tabel.
-	Take theirs	Die van hen nemen
 	TeXCraft can open and commit.	TeXCraft kan openen en committen.
 	TeXCraft can open; committing asks again.	TeXCraft kan openen; committen vraagt opnieuw.
 	TeXCraft cannot sign in to {host} yet: add the server once, and sign in to it as to gitlab.com. Until then, use a personal access token.	TeXCraft kan zich nog niet aanmelden bij {host}: voeg de server eenmaal toe en meld u erbij aan zoals bij gitlab.com. Gebruik tot dan een persoonlijk toegangstoken.
@@ -848,6 +872,7 @@
 	The PDF of an earlier pass, shown while the build goes on: its references may not be resolved yet.	De pdf van een eerdere doorgang, getoond terwijl de build doorgaat: de verwijzingen ervan zijn mogelijk nog niet opgelost.
 	The PDF will show the open suggestions applied.	De pdf zal de open voorstellen toegepast tonen.
 	The PDF will show the text as it is, without suggestions.	De pdf zal de tekst tonen zoals hij is, zonder voorstellen.
+	The address the text links to	Het adres waarnaar de tekst linkt
 	The address, the model or a withdrawal changed what was agreed: the kinds marked are not sent until you agree again.	Het adres, het model of een intrekking heeft veranderd waarmee is ingestemd: de gemarkeerde soorten worden niet verstuurd tot u opnieuw instemt.
 	The answer is in the Ask panel.	Het antwoord staat in het paneel Vragen.
 	The bibliography file it goes in	Het bibliografiebestand waar het in komt
@@ -857,6 +882,8 @@
 	The branch {branch} of {project} does not take your commits: it is protected, or your role cannot push to it. Your changes go to a new branch instead, with a merge request into {branch}.	De branch {branch} van {project} neemt uw commits niet aan: hij is beschermd, of uw rol kan er niet naar pushen. Uw wijzigingen gaan in plaats daarvan naar een nieuwe branch, met een merge request naar {branch}.
 	The branches could not be listed: type the branch, or leave it empty for the default one.	De branches konden niet worden opgevraagd: typ de branch, of laat het leeg voor de standaardbranch.
 	The build message, its help and the source lines around it (and the preamble when the message is in it).	De buildmelding, de hulp erbij en de bronregels eromheen (en de preambule als de melding daarin staat).
+	The caret is in body text already.	De cursor staat al in platte tekst.
+	The caret is not on a grammar problem.	De cursor staat niet op een grammaticaprobleem.
 	The caret is not on a misspelled word.	De cursor staat niet op een verkeerd gespeld woord.
 	The change comes back as a suggested change. It may add text, but it is not offered if it drops or alters a label, reference, citation or formula.	De wijziging komt terug als voorgestelde wijziging. Ze mag tekst toevoegen, maar wordt niet aangeboden als ze een label, verwijzing, citaat of formule weglaat of wijzigt.
 	The comparison is too long: only its start is shown.	De vergelijking is te lang: alleen het begin wordt getoond.
@@ -878,19 +905,23 @@
 	The folder that holds the project's files	De map met de bestanden van het project
 	The folder to move it to (empty for the top level)	De map om het naartoe te verplaatsen (leeg voor het hoogste niveau)
 	The folder to write the project's files to	De map om de bestanden van het project naartoe te schrijven
+	The footnote's text	De tekst van de voetnoot
 	The formatted view cannot show this faithfully yet, so it shows its source.	De opgemaakte weergave kan dit nog niet getrouw tonen, dus toont ze de broncode.
+	The formula in LaTeX, such as x^2 + \\alpha	De formule in LaTeX, zoals x^2 + \\alpha
 	The formula's source, while it is typeset. Double-click to edit it.	De broncode van de formule, terwijl die wordt gezet. Dubbelklik om te bewerken.
 	The formula's source: this version typesets formulas in the desktop app only. Double-click to edit it.	De broncode van de formule: deze versie zet formules alleen in de desktopapp. Dubbelklik om te bewerken.
 	The key's secret half is kept in the preferences file. There are no accounts: the name and key are all a comment carries.	De geheime helft van de sleutel wordt in het voorkeurenbestand bewaard. Er zijn geen accounts: de naam en de sleutel zijn alles wat een opmerking meedraagt.
 	The language of menus and messages.	De taal van menu's en meldingen.
 	The last build made no file of this kind: compile the project first.	De laatste build maakte geen bestand van dit soort: compileer eerst het project.
 	The last build reported no messages of this kind.	De laatste build meldde niets van dit soort.
-	The menus are in the menu bar at the top of the screen; Control+F2 reaches it from the keyboard.	De menu's staan in de menubalk bovenaan het scherm; Control+F2 bereikt die met het toetsenbord.
+	The menus are in the menu bar at the top of the screen; Ctrl+F2 reaches it from the keyboard.	De menu's staan in de menubalk bovenaan het scherm; Ctrl+F2 bereikt die met het toetsenbord.
 	The merge request could not be opened: {why}	De merge request kon niet worden geopend: {why}
 	The message is copied.	De melding is gekopieerd.
 	The messages are copied.	De meldingen zijn gekopieerd.
+	The model found no grammar problems.	Het model vond geen grammaticaproblemen.
 	The model is answering…	Het model antwoordt…
 	The model is changing the selection…	Het model wijzigt de selectie…
+	The model is checking the grammar…	Het model controleert de grammatica…
 	The model is drafting the entry…	Het model ontwerpt de vermelding…
 	The model is explaining it…	Het model legt het uit…
 	The model is reviewing the section…	Het model beoordeelt de sectie…
@@ -905,7 +936,8 @@
 	The project and its files are removed from this browser. This cannot be undone.	Het project en zijn bestanden worden uit deze browser verwijderd. Dit kan niet ongedaan worden gemaakt.
 	The project has no history yet: save it in a folder to start one.	Het project heeft nog geen geschiedenis: sla het op in een map om er een te beginnen.
 	The project has no history yet: save it to start one.	Het project heeft nog geen geschiedenis: sla het op om er een te beginnen.
-	The project has no images: add one with File › Add Files.	Het project heeft geen afbeeldingen: voeg er een toe met Bestand › Bestanden toevoegen.
+	The project has no images yet: drop an image file on the view, or add one with Add Files, to make a figure of it.	Het project heeft nog geen afbeeldingen: zet een afbeeldingsbestand neer op de weergave, of voeg er een toe met Bestanden toevoegen, om er een figuur van te maken.
+	The project has no images: add one with {menu} › {command}.	Het project heeft geen afbeeldingen: voeg er een toe met {menu} › {command}.
 	The project is in {project}: its remote, origin, from now on. Push and Pull are in the History panel.	Het project staat in {project}: vanaf nu zijn remote, origin. Pushen en Pullen staan in het paneel Geschiedenis.
 	The project is renamed {name}.	Het project heet nu {name}.
 	The project is saved as {name}.	Het project is opgeslagen als {name}.
@@ -915,9 +947,11 @@
 	The push did not work: {why}	Het pushen is mislukt: {why}
 	The raw log is copied.	Het onbewerkte log is gekopieerd.
 	The rewrite is a suggested change: accept or reject it beside the text or in the Review panel.	De herschrijving is een voorgestelde wijziging: accepteer of wijs die af naast de tekst of in het paneel Review.
+	The rule {rule} is off: turn it on again in Settings › Editor.	De regel {rule} staat uit: schakel die weer in via Instellingen › Editor.
 	The section at the caret.	De sectie bij de cursor.
 	The selected part of the PDF has no text to copy: its font does not say which characters it draws.	Het geselecteerde deel van de pdf heeft geen tekst om te kopiëren: het lettertype zegt niet welke tekens het tekent.
 	The selected text and a few lines around it.	De geselecteerde tekst en enkele regels eromheen.
+	The selected text, or the paragraph at the caret, and the document's language.	De geselecteerde tekst, of de alinea bij de cursor, en de taal van het document.
 	The size of the source text, in points.	De grootte van de brontekst, in punten.
 	The system's title bar above the window, in place of the window's buttons in the top bar.	De titelbalk van het systeem boven het venster, in plaats van de vensterknoppen in de bovenbalk.
 	The table editor shows a table float holding one tabular with its caption and label; this one holds more, so it is shown as its source.	De tabeleditor toont een zwevende tabel met één tabular met bijschrift en label; deze bevat meer en wordt daarom als broncode getoond.
@@ -940,6 +974,7 @@
 	There is no fold at the caret.	Er is geen vouw bij de cursor.
 	There is no other occurrence.	Er is geen andere vindplaats.
 	There is no problem on this line.	Er is geen probleem op deze regel.
+	There is no such replacement for this problem.	Er is geen dergelijke vervanging voor dit probleem.
 	There is nothing to fold at the caret.	Er is niets in te vouwen bij de cursor.
 	There is nothing to fold in this file.	Er is niets in te vouwen in dit bestand.
 	Theses	Scripties
@@ -957,6 +992,7 @@
 	This folder is in a git repository of its own: saving does not commit, Commit does.	Deze map staat in een eigen git-repository: opslaan commit niet, Committen wel.
 	This folder no longer exists.	Deze map bestaat niet meer.
 	This formula has an error: {message}	Deze formule bevat een fout: {message}
+	This grammar problem is ignored until TeXCraft closes.	Dit grammaticaprobleem wordt genegeerd tot TeXCraft sluit.
 	This image cannot be shown: {e}	Deze afbeelding kan niet worden getoond: {e}
 	This is already the main document.	Dit is al het hoofddocument.
 	This is the table's first cell.	Dit is de eerste cel van de tabel.
@@ -966,6 +1002,7 @@
 	This link proposes another application for {host}, which your organisation provides: its own is kept.	Deze link stelt een andere applicatie voor {host} voor, die uw organisatie levert: die van de organisatie blijft behouden.
 	This link proposes to add the GitHub Enterprise Server {host}, with TeXCraft's application there ({id}), so that you can sign in to it.	Deze link stelt voor de GitHub Enterprise Server {host} toe te voegen, met de applicatie van TeXCraft daar ({id}), zodat u zich erbij kunt aanmelden.
 	This link proposes to add the GitLab server {host}, with TeXCraft's application there ({id}), so that you can sign in to it.	Deze link stelt voor de GitLab-server {host} toe te voegen, met de applicatie van TeXCraft daar ({id}), zodat u zich erbij kunt aanmelden.
+	This problem was found by AI, not by a rule: ignore it instead.	Dit probleem is gevonden door AI, niet door een regel: negeer het in plaats daarvan.
 	This project was not opened from GitLab or GitHub: use Open from GitLab or GitHub… first.	Dit project is niet geopend vanuit GitLab of GitHub: gebruik eerst Openen vanuit GitLab of GitHub….
 	This typesetting engine exports only the PDF.	Deze zetengine exporteert alleen de pdf.
 	This window cannot open the system's file manager.	Dit venster kan het bestandsbeheer van het systeem niet openen.
@@ -978,12 +1015,19 @@
 	Translate to…	Vertalen naar…
 	Try Again	Opnieuw proberen
 	Turkish	Turks
+	Turn Off This Rule	Deze regel uitschakelen
+	Turn On	Inschakelen
+	Turned off from the text's menu (Turn Off This Rule).	Uitgeschakeld via het menu van de tekst (Deze regel uitschakelen).
 	Turned off, the project's sources are never sent; the choice is kept in its .texcraft folder.	Uitgeschakeld worden de bronbestanden van het project nooit verstuurd; de keuze wordt bewaard in de map .texcraft ervan.
 	Type a line number, from 1.	Typ een regelnummer, vanaf 1.
 	Type part of a file's path	Typ een deel van het pad van een bestand
+	Type part of a key, an author or a title	Typ een deel van een sleutel, een auteur of een titel
+	Type part of a label or of what it labels	Typ een deel van een label of van wat het labelt
+	Type part of the image's path	Typ een deel van het pad van de afbeelding
 	Type to find a project, or paste its address	Typ om een project te vinden, of plak het adres
 	Type to find a repository, or paste its address	Typ om een repository te vinden, of plak het adres
 	Typesetting engine: {engine}	Zetengine: {engine}
+	Typing an opening bracket, parenthesis or brace adds the closing one, and \\begin{…} adds its \\end{…}.	Een openingshaak, -haakje of -accolade typen voegt de sluitende toe, en \\begin{…} voegt de bijbehorende \\end{…} toe.
 	Unchanged	Ongewijzigd
 	Unchanged lines left out	Ongewijzigde regels weggelaten
 	Unfold lines {from}–{to}, {what}	Regels {from}–{to} uitvouwen, {what}
@@ -1025,7 +1069,7 @@
 	Whole Word	Heel woord
 	Width, as a share of the line	Breedte, als deel van de regel
 	Withdraw Suggestion	Voorstel intrekken
-	Word Document (.docx)	Word-document (.docx)
+	Word choice and usage	Woordkeuze en gebruik
 	Write LaTeX, see the PDF as you type.	Schrijf LaTeX, zie de pdf terwijl u typt.
 	Xi, capital	Xi, hoofdletter
 	You signed in to GitLab to read only. To commit, GitLab asks you to let TeXCraft write too (the api scope); your message is kept.	U bent bij GitLab aangemeld om alleen te lezen. Om te committen vraagt GitLab u TeXCraft ook te laten schrijven (de scope api); uw bericht blijft bewaard.
@@ -1058,13 +1102,11 @@
 	a table of the three methods' accuracy and speed	een tabel van de nauwkeurigheid en snelheid van de drie methoden
 	active {when}	actief {when}
 	acute	accent aigu
-	added	toegevoegd
 	added here and on the branch, differently	hier en op de branch verschillend toegevoegd
 	aleph	alef
 	alpha	alfa
 	and {n} more	en nog {n}
 	angle	hoek
-	answered	beantwoord
 	approximately	ongeveer
 	asterisk	asterisk
 	bar	streep
@@ -1076,10 +1118,8 @@
 	breve	breve
 	bullet	opsommingsteken
 	calligraphic	kalligrafisch
-	cancelled	geannuleerd
 	centred dot	gecentreerde punt
 	centred dots	gecentreerde punten
-	changed	gewijzigd
 	changed here, deleted on the branch	hier gewijzigd, op de branch verwijderd
 	changed on the same lines here and on the branch	op dezelfde regels gewijzigd hier en op de branch
 	check	hatsjek
@@ -1087,7 +1127,6 @@
 	circled plus	plus in cirkel
 	circled times	maal in cirkel
 	compiled	gecompileerd
-	compiling	bezig met compileren
 	composition	samenstelling
 	congruent	congruent
 	contains as member	bevat als element
@@ -1098,7 +1137,6 @@
 	default branch {branch}	standaardbranch {branch}
 	defined as	gedefinieerd als
 	degree	graad
-	deleted	verwijderd
 	deleted here, changed on the branch	hier verwijderd, op de branch gewijzigd
 	delta	delta
 	diagonal dots	diagonale punten
@@ -1119,7 +1157,6 @@
 	equilibrium	evenwicht
 	equivalent	equivalent
 	eta	èta
-	failed	mislukt
 	filled square	gevuld vierkant
 	folder not found	map niet gevonden
 	for all	voor alle
@@ -1170,8 +1207,6 @@
 	maps to	beeldt af op
 	minus or plus	min of plus
 	models	modelleert
-	modified	gewijzigd
-	moved	verplaatst
 	mu	mu
 	much greater than	veel groter dan
 	much less than	veel kleiner dan
@@ -1183,6 +1218,7 @@
 	not an element of	geen element van
 	not closed	niet afgesloten
 	not equal	niet gelijk aan
+	not in the project yet	nog niet in het project
 	not text, and changed here and on the branch	geen tekst, en hier en op de branch gewijzigd
 	nu	nu
 	omega	omega
@@ -1261,7 +1297,6 @@
 	upsilon	ypsilon
 	vector	vector
 	vertical dots	verticale punten
-	waiting	wachtend
 	wide hat	breed dakje
 	wide tilde	brede tilde
 	xi	xi
@@ -1270,8 +1305,6 @@
 	{a}, {b} and {n} more	{a}, {b} en nog {n}
 	{bib} is new: name it in the document's \\bibliography or \\addbibresource to use it.	{bib} is nieuw: noem het in \\bibliography of \\addbibresource van het document om het te gebruiken.
 	{change}; not a text file, so its lines are not compared.	{change}; geen tekstbestand, dus de regels worden niet vergeleken.
-	{count} errors	{count} fouten
-	{count} warnings	{count} waarschuwingen
 	{files} brought in.	{files} overgenomen.
 	{file} formatted	{file} opgemaakt
 	{host} (GitHub Enterprise Server)	{host} (GitHub Enterprise Server)
@@ -1283,6 +1316,7 @@
 	{image} is in a new figure: give it a caption with Edit Figure….	{image} staat in een nieuwe figuur: geef die een bijschrift met Figuur bewerken….
 	{i} of {n}	{i} van {n}
 	{i} of {n}+	{i} van {n}+
+	{key}, {n} of {total}	{key}, {n} van {total}
 	{kind} (changed)	{kind} (gewijzigd)
 	{kind} is not agreed to for this connection and model: agree in Settings › AI.	Voor {kind} is niet ingestemd voor deze koppeling en dit model: stem in via Instellingen › AI.
 	{kind} is switched off: switch it on in Settings › AI.	{kind} is uitgeschakeld: schakel het in via Instellingen › AI.
@@ -1296,8 +1330,6 @@
 	{name} replied: {text}	{name} antwoordde: {text}
 	{name} resolved a comment	{name} heeft een opmerking opgelost
 	{name}: {means}	{name}: {means}
-	{n} packages	{n} pakketten
-	{n} problems	{n} problemen
 	{n}+ matches	{n}+ overeenkomsten
 	{path}, {n} of {total}	{path}, {n} van {total}
 	{project} was made and set as the folder's remote (origin), but the push did not work: {why} Push again from the History panel.	{project} is gemaakt en ingesteld als remote (origin) van de map, maar het pushen is mislukt: {why} Push opnieuw vanuit het paneel Geschiedenis.
@@ -1305,6 +1337,7 @@
 	{publisher} · from the {source} · licence {licence}	{publisher} · uit de {source} · licentie {licence}
 	{remote} has these commits already.	{remote} heeft deze commits al.
 	{source} · licence {licence}	{source} · licentie {licence}
+	{style}, paragraph style	{style}, alineastijl
 	{time} · {size} to {destination} · {model} · {outcome}	{time} · {size} naar {destination} · {model} · {outcome}
 	{w} × {h} pixels	{w} × {h} pixels
 	{w} × {h} pt	{w} × {h} pt
@@ -1312,6 +1345,35 @@
 	“{word}” is not in the dictionary	“{word}” staat niet in het woordenboek
 	Opening the user guide in your browser.	De gebruikershandleiding wordt in uw browser geopend.
 	What is sent, and when: the user guide's AI page	Wat er wordt verzonden en wanneer: de AI-pagina van de gebruikershandleiding
+button	Commit	Committen
+button	Pull	Pullen
+comment	, resolved	, opgelost
+comment	Deleted	Verwijderd
+comment	Reopen	Heropenen
+comments	Mine	Van mij
+file	Keep mine	Mijn versie behouden
+file	Take theirs	Die van hen nemen
+file	added	toegevoegd
+file	changed	gewijzigd
+file	deleted	verwijderd
+file	modified	gewijzigd
+file	moved	verplaatst
+keys	Standard	Standaard
+line	Added	Toegevoegd
+line	Removed	Verwijderd
+messages	Print	Drukwerk
+noun	Comment	Opmerking
+pdf	Print	Drukwerk
+pdf	compiling	bezig met compileren
+request	answered	beantwoord
+request	cancelled	geannuleerd
+request	failed	mislukt
+request	waiting	wachtend
+severity	Hint	Hint
+suggestion	, accepted	, geaccepteerd
+suggestion	, outdated	, verouderd
+suggestion	, rejected	, afgewezen
+suggestion	Reopen	Heropenen
 
 # Counts
 @plural	; {n} overlapped another and is outdated|; {n} overlapped others and are outdated	; {n} overlapte een ander en is verouderd|; {n} overlapten andere en zijn verouderd
@@ -1321,6 +1383,7 @@
 @plural	Failed with {n} error|Failed with {n} errors	Mislukt met {n} fout|Mislukt met {n} fouten
 @plural	Folded {n} region|Folded {n} regions	{n} gebied ingevouwen|{n} gebieden ingevouwen
 @plural	Replaced {n} match|Replaced {n} matches	{n} overeenkomst vervangen|{n} overeenkomsten vervangen
+@plural	The model found {n} grammar problem: it is underlined.|The model found {n} grammar problems: they are underlined.	Het model vond {n} grammaticaprobleem: het is onderstreept.|Het model vond {n} grammaticaproblemen: ze zijn onderstreept.
 @plural	The review left {n} comment.|The review left {n} comments.	De review liet {n} opmerking achter.|De review liet {n} opmerkingen achter.
 @plural	Unfolded {n} region|Unfolded {n} regions	{n} gebied uitgevouwen|{n} gebieden uitgevouwen
 @plural	{n} already in the project|{n} already in the project	{n} al in het project|{n} al in het project
@@ -1332,6 +1395,7 @@
 @plural	{n} commit to push|{n} commits to push	{n} commit om te pushen|{n} commits om te pushen
 @plural	{n} completion|{n} completions	{n} aanvulling|{n} aanvullingen
 @plural	{n} day ago|{n} days ago	{n} dag geleden|{n} dagen geleden
+@plural	{n} error|{n} errors	{n} fout|{n} fouten
 @plural	{n} file in conflict with the branch|{n} files in conflict with the branch	{n} bestand in conflict met de branch|{n} bestanden in conflict met de branch
 @plural	{n} file in conflict|{n} files in conflict	{n} bestand in conflict|{n} bestanden in conflict
 @plural	{n} file is already in the project|{n} files are already in the project	{n} bestand staat al in het project|{n} bestanden staan al in het project
@@ -1345,7 +1409,9 @@
 @plural	{n} match|{n} matches	{n} overeenkomst|{n} overeenkomsten
 @plural	{n} minute ago|{n} minutes ago	{n} minuut geleden|{n} minuten geleden
 @plural	{n} open comment|{n} open comments	{n} open opmerking|{n} open opmerkingen
+@plural	{n} package|{n} packages	{n} pakket|{n} pakketten
 @plural	{n} past the limit of 5,000 files or 500 MB|{n} past the limit of 5,000 files or 500 MB	{n} boven de limiet van 5.000 bestanden of 500 MB|{n} boven de limiet van 5.000 bestanden of 500 MB
+@plural	{n} problem|{n} problems	{n} probleem|{n} problemen
 @plural	{n} remark was dropped: the words it quoted are not in the text.|{n} remarks were dropped: the words they quoted are not in the text.	{n} opmerking is weggelaten: de woorden die ze citeerde staan niet in de tekst.|{n} opmerkingen zijn weggelaten: de woorden die ze citeerden staan niet in de tekst.
 @plural	{n} request sent|{n} requests sent	{n} verzoek verstuurd|{n} verzoeken verstuurd
 @plural	{n} result|{n} results	{n} resultaat|{n} resultaten
@@ -1355,6 +1421,8 @@
 @plural	{n} suggestion|{n} suggestions	{n} voorstel|{n} voorstellen
 @plural	{n} that could not be read or added|{n} that could not be read or added	{n} dat niet kon worden gelezen of toegevoegd|{n} die niet konden worden gelezen of toegevoegd
 @plural	{n} unsafe name|{n} unsafe names	{n} onveilige naam|{n} onveilige namen
+@plural	{n} warning|{n} warnings	{n} waarschuwing|{n} waarschuwingen
+@plural	{n} was dropped: the words it quoted are not in the text.|{n} were dropped: the words they quoted are not in the text.	{n} is weggelaten: de woorden die het citeerde staan niet in de tekst.|{n} zijn weggelaten: de woorden die ze citeerden staan niet in de tekst.
 
 # Units
 unit	{n} ms	{n} ms
@@ -1376,10 +1444,13 @@ unit	{n} s	{n} s
 @id	build.stop	Compileren stoppen
 @id	build.suggestions	Voorstellen in de pdf tonen
 @id	edit.accept_all	Alle voorstellen accepteren
+@id	edit.ai_grammar	Grammatica controleren met AI
 @id	edit.ai_make	Maken met AI…
 @id	edit.ai_reference	Referentie toevoegen met AI…
 @id	edit.ai_review	Deze sectie laten beoordelen door AI
+@id	edit.body	Platte tekst
 @id	edit.bold	Vet
+@id	edit.chapter	Hoofdstuk
 @id	edit.cite	Citaat
 @id	edit.comment	Opmerking
 @id	edit.copy	Kopiëren
@@ -1390,7 +1461,15 @@ unit	{n} s	{n} s
 @id	edit.find	Zoeken
 @id	edit.fold	Invouwen
 @id	edit.fold_all	Alles invouwen
+@id	edit.footnote	Voetnoot
 @id	edit.goto_line	Naar regel gaan…
+@id	edit.grammar.ignore	Grammaticaprobleem negeren
+@id	edit.grammar.replace	Grammaticavervanging overnemen
+@id	edit.grammar.rule_off	Deze regel uitschakelen
+@id	edit.heading_1	Kop 1
+@id	edit.heading_2	Kop 2
+@id	edit.heading_3	Kop 3
+@id	edit.indent	Item laten inspringen
 @id	edit.insert_symbol	Symbool invoegen
 @id	edit.instruct	AI vragen dit te wijzigen…
 @id	edit.italic	Cursief
@@ -1399,6 +1478,7 @@ unit	{n} s	{n} s
 @id	edit.math_display	Losstaande formule
 @id	edit.math_inline	Formule in de tekst
 @id	edit.next_comment	Volgende opmerking
+@id	edit.outdent	Inspringing van item verkleinen
 @id	edit.paragraph	Alineakop
 @id	edit.paste	Plakken
 @id	edit.previous_comment	Vorige opmerking
@@ -1536,7 +1616,7 @@ unit	{n} s	{n} s
 @msg	A file of the project's history is missing ({id}).	Er ontbreekt een bestand uit de geschiedenis van het project ({id}).
 @msg	A file's id cannot be computed: {e}	De id van een bestand kan niet worden berekend: {e}
 @msg	A folder's git repository cannot be reached in the browser.	De git-repository van een map is in de browser niet bereikbaar.
-@msg	A project's name cannot be a dot or two.	De naam van een project kan geen punt of twee punten zijn.
+@msg	A project's name cannot be “.” or “..”.	De naam van een project kan niet “.” of “..” zijn.
 @msg	A project's name cannot have a slash or a line break.	De naam van een project mag geen schuine streep of regeleinde bevatten.
 @msg	A project's name has at most {MAX_NAME} characters.	De naam van een project heeft hoogstens {MAX_NAME} tekens.
 @msg	A prompt is at most {MAX_PROMPT_CHARS} characters.	Een prompt heeft hoogstens {MAX_PROMPT_CHARS} tekens.
@@ -1571,20 +1651,24 @@ unit	{n} s	{n} s
 @msg	Export to {value} failed: {e}	Exporteren naar {value} mislukt: {e}
 @msg	Folders on disk are not available in the browser.	Mappen op schijf zijn niet beschikbaar in de browser.
 @msg	Git's remotes, push and pull are for project folders on the desktop: in the browser, use Save Project to GitLab or GitHub.	De remotes, push en pull van Git zijn voor projectmappen op de desktop: gebruik in de browser Project opslaan in GitLab of GitHub.
-@msg	GitHub has no {what}, or the access token cannot see it (a fine-grained token sees only the repositories it was given): check the address.	GitHub heeft geen {what}, of het toegangstoken kan het niet zien (een token met fijnmazige rechten ziet alleen de repository's die het heeft gekregen): controleer het adres.
+@msg	GitHub cannot find what was asked for ({what}), or the access token cannot see it (a fine-grained token sees only the repositories it was given): check the address.	GitHub kan niet vinden wat er gevraagd werd ({what}), of het toegangstoken kan het niet zien (een token met fijnmazige rechten ziet alleen de repository's die het heeft gekregen): controleer het adres.
 @msg	GitHub lets only the application's server revoke its tokens, and TeXCraft has none: remove TeXCraft's access on GitHub, under Settings › Applications › Authorized OAuth Apps.	GitHub laat alleen de server van de applicatie zijn tokens intrekken, en TeXCraft heeft er geen: verwijder de toegang van TeXCraft op GitHub, onder Settings › Applications › Authorized OAuth Apps.
-@msg	GitHub refused {what}: a fine-grained access token needs access to this repository with the Contents permission (read-only to open it, read and write to commit) and Pull requests (read and write) to open a pull request; a classic token needs the repo scope. Your access to the repository must allow it too.	GitHub weigerde {what}: een toegangstoken met fijnmazige rechten heeft toegang tot deze repository nodig met het recht Contents (read-only om te openen, read and write om te committen) en Pull requests (read and write) om een pull request te openen; een klassiek token heeft de scope repo nodig. Uw toegang tot de repository moet het ook toestaan.
+@msg	GitHub refused a request ({what}): a fine-grained access token needs access to this repository with the Contents permission (read-only to open it, read and write to commit) and Pull requests (read and write) to open a pull request; a classic token needs the repo scope. Your access to the repository must allow it too.	GitHub weigerde een verzoek ({what}): een toegangstoken met fijnmazige rechten heeft toegang tot deze repository nodig met het recht Contents (read-only om te openen, read and write om te committen) en Pull requests (read and write) om een pull request te openen; een klassiek token heeft de scope repo nodig. Uw toegang tot de repository moet het ook toestaan.
 @msg	GitHub's device code has no {k}	De apparaatcode van GitHub heeft geen {k}
 @msg	GitHub's verification page is not on HTTPS	De verificatiepagina van GitHub gebruikt geen HTTPS
 @msg	GitLab came back with no code: sign in again.	GitLab kwam terug zonder code: meld u opnieuw aan.
 @msg	GitLab did not let TeXCraft in: {why}	GitLab liet TeXCraft niet toe: {why}
-@msg	GitLab refused {what}: the access token needs the read_api scope to open a project and the api scope to commit, and your role in the project must allow it.	GitLab weigerde {what}: het toegangstoken heeft de scope read_api nodig om een project te openen en de scope api om te committen, en uw rol in het project moet het toestaan.
+@msg	GitLab refused a request ({what}): the access token needs the read_api scope to open a project and the api scope to commit, and your role in the project must allow it.	GitLab weigerde een verzoek ({what}): het toegangstoken heeft de scope read_api nodig om een project te openen en de scope api om te committen, en uw rol in het project moet het toestaan.
 @msg	GitLab's answer is not for the sign-in this page started: sign in again.	Het antwoord van GitLab hoort niet bij de aanmelding die deze pagina begon: meld u opnieuw aan.
+@msg	Give `rule` (a Harper rule's key) or `group`, not both.	Geef `rule` (de sleutel van een Harper-regel) of `group` op, niet beide.
 @msg	Give a personal access token for {instance}: TeXCraft keeps it only while it runs, never on disk.	Geef een persoonlijk toegangstoken op voor {instance}: TeXCraft bewaart het alleen zolang het draait, nooit op schijf.
 @msg	Give a personal access token: the forge's API needs one to open a project and commit to it.	Geef een persoonlijk toegangstoken op: de API van de forge heeft er een nodig om een project te openen en ernaar te committen.
 @msg	Give the application's ID, as the server shows it once the application is registered.	Geef de ID van de applicatie op, zoals de server die toont zodra de applicatie is geregistreerd.
 @msg	Give the project a name.	Geef het project een naam.
 @msg	Give the title or DOI in at most {MAX_DESCRIPTION_CHARS} characters.	Geef de titel of DOI in hoogstens {MAX_DESCRIPTION_CHARS} tekens.
+@msg	Grammar checking is not in this build; Check Grammar with AI is available.	Grammaticacontrole zit niet in deze build; Grammatica controleren met AI is beschikbaar.
+@msg	Grammar checking is off (Settings › Editor).	Grammaticacontrole staat uit (Instellingen › Editor).
+@msg	Grammar is checked offline in English only, and this document is in {lang}: Check Grammar with AI works in any language.	Grammatica wordt offline alleen in het Engels gecontroleerd, en de taal van dit document is {lang}: Grammatica controleren met AI werkt in elke taal.
 @msg	Homework or exercise sheet	Huiswerk of oefenblad
 @msg	IEEE conference paper	Conferentieartikel van de IEEE
 @msg	IEEE journal article	Tijdschriftartikel van de IEEE
@@ -1605,8 +1689,8 @@ unit	{n} s	{n} s
 @msg	Monthly Notices of the RAS article	Artikel in Monthly Notices of the RAS
 @msg	Name a model: one line, as the endpoint lists it.	Noem een model: één regel, zoals het endpoint het vermeldt.
 @msg	Nature article	Artikel in Nature
+@msg	No branch is checked out (HEAD is detached), so no branch can be set to follow a remote one.	Er is geen branch uitgecheckt (HEAD is losgekoppeld), dus er kan geen branch worden ingesteld om een branch van een remote te volgen.
 @msg	No branch is checked out (HEAD is detached): check out a branch with git first.	Er is geen branch uitgecheckt (HEAD is losgekoppeld): check eerst een branch uit met git.
-@msg	No branch is checked out (HEAD is detached): there is no branch to follow a remote's.	Er is geen branch uitgecheckt (HEAD is losgekoppeld): er is geen branch die die van een remote kan volgen.
 @msg	No build is running, or the engine cannot stop it.	Er loopt geen build, of de engine kan die niet stoppen.
 @msg	No sign-in is running.	Er loopt geen aanmelding.
 @msg	No sign-in was waiting on this page: sign in again.	Er wachtte geen aanmelding op deze pagina: meld u opnieuw aan.
@@ -1621,6 +1705,8 @@ unit	{n} s	{n} s
 @msg	Projects are kept by name only in the browser.	Projecten worden in de browser alleen op naam bewaard.
 @msg	Projects in the browser are not stored in folders.	Projecten in de browser worden niet in mappen opgeslagen.
 @msg	Protected branch update failed for refs/heads/{name}.	Bijwerken van beschermde branch mislukt voor refs/heads/{name}.
+@msg	Return at once; the outcome arrives later, in the Open dialog. A lookup asked while one runs replaces any other waiting.	Meteen terugkeren; de uitkomst komt later binnen, in het dialoogvenster Openen. Een opzoeking die wordt gevraagd terwijl er een loopt, vervangt elke andere die wacht.
+@msg	Return at once; the outcome arrives later, in the window's status line. Default: wait for it (not in the browser).	Meteen terugkeren; de uitkomst komt later binnen, in de statusregel van het venster. Standaard: erop wachten (niet in de browser).
 @msg	Save the project first.	Sla het project eerst op.
 @msg	Save the project first: a commit holds the files as saved.	Sla het project eerst op: een commit bevat de bestanden zoals ze zijn opgeslagen.
 @msg	Save the project first: {doing}.	Sla het project eerst op: {doing}.
@@ -1634,7 +1720,7 @@ unit	{n} s	{n} s
 @msg	Sign in to {instance} (forge.sign_in with its instance), or give a personal access token for it: TeXCraft keeps a token only while it runs, never on disk.	Meld u aan bij {instance} (forge.sign_in met de instance), of geef er een persoonlijk toegangstoken voor op: TeXCraft bewaart een token alleen zolang het draait, nooit op schijf.
 @msg	Sign in to {name} (forge.sign_in), or give a personal access token for {instance}: TeXCraft keeps a token only while it runs, never on disk.	Meld u aan bij {name} (forge.sign_in), of geef een persoonlijk toegangstoken op voor {instance}: TeXCraft bewaart een token alleen zolang het draait, nooit op schijf.
 @msg	Signed out here, but GitLab could not be told to revoke the token: {e}	Hier afgemeld, maar GitLab kon niet worden gevraagd het token in te trekken: {e}
-@msg	Signed out of {value} here, but {value} could not be told to revoke the token: {e}	Hier afgemeld bij {value}, maar {value} kon niet worden gevraagd het token in te trekken: {e}
+@msg	Signed out of {name} here, but {name} could not be told to revoke the token: {e}	Hier afgemeld bij {name}, maar {name} kon niet worden gevraagd het token in te trekken: {e}
 @msg	Signing in to GitHub was refused on GitHub's page.	Aanmelden bij GitHub is geweigerd op de pagina van GitHub.
 @msg	Signing in took too long: the browser did not come back from GitLab. Sign in again.	Aanmelden duurde te lang: de browser kwam niet terug van GitLab. Meld u opnieuw aan.
 @msg	Signing in was cancelled.	Het aanmelden is geannuleerd.
@@ -1644,7 +1730,8 @@ unit	{n} s	{n} s
 @msg	TeX Live has no package {package}	TeX Live heeft geen pakket {package}
 @msg	TeX Live package {package}	TeX Live-pakket {package}
 @msg	TeXCraft cannot wait for GitLab's answer on {addr} ({e}): another program, or another TeXCraft signing in, uses it. Try again, or use a personal access token.	TeXCraft kan niet wachten op het antwoord van GitLab op {addr} ({e}): een ander programma, of een andere TeXCraft die aanmeldt, gebruikt het. Probeer het opnieuw, of gebruik een persoonlijk toegangstoken.
-@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a {value} server, or forge.add_server), or use a personal access token.	TeXCraft heeft geen applicatie op deze server: voeg die eerst toe (Instellingen › Accounts › Add a {value} server, of forge.add_server), of gebruik een persoonlijk toegangstoken.
+@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a GitHub Enterprise Server…, or forge.add_server), or use a personal access token.	TeXCraft heeft geen applicatie op deze server: voeg die eerst toe (Instellingen › Accounts › GitHub Enterprise Server toevoegen…, of forge.add_server), of gebruik een persoonlijk toegangstoken.
+@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a GitLab Server…, or forge.add_server), or use a personal access token.	TeXCraft heeft geen applicatie op deze server: voeg die eerst toe (Instellingen › Accounts › GitLab-server toevoegen…, of forge.add_server), of gebruik een persoonlijk toegangstoken.
 @msg	TeXCraft is not signed in to {value}.	TeXCraft is niet aangemeld bij {value}.
 @msg	TeXCraft is signed in to {value} to read only: committing needs permission to write. Sign in again allowing commits (forge.sign_in with write), then commit.	TeXCraft is bij {value} aangemeld om alleen te lezen: committen vereist schrijfrechten. Meld u opnieuw aan en sta commits toe (forge.sign_in met write), en commit daarna.
 @msg	TeXCraft is signed in to {value} to read only: this needs permission to write. Sign in again allowing commits (forge.sign_in with write), then try again.	TeXCraft is bij {value} aangemeld om alleen te lezen: dit vereist schrijfrechten. Meld u opnieuw aan en sta commits toe (forge.sign_in met write), en probeer het daarna opnieuw.
@@ -1652,13 +1739,17 @@ unit	{n} s	{n} s
 @msg	TeXCraft stopped waiting for GitLab's answer: {e}	TeXCraft wacht niet langer op het antwoord van GitLab: {e}
 @msg	TeXCraft's own templates	De eigen sjablonen van TeXCraft
 @msg	That is not a valid regular expression: {e}	Dat is geen geldige reguliere expressie: {e}
+@msg	That is not one of the problem's replacements.	Dat is niet een van de vervangingen van het probleem.
 @msg	That is {size} characters of text, more than the {MAX_ASK_CHARS} a question sends at most: ask about the open file instead.	Dat is {size} tekens tekst, meer dan de {MAX_ASK_CHARS} die een vraag hoogstens verstuurt: vraag in plaats daarvan naar het open bestand.
 @msg	The GitLab operation could not start: {e}	De GitLab-bewerking kon niet beginnen: {e}
 @msg	The account cannot make repositories in {path}, or has no such organisation or group.	Het account kan geen repository's maken in {path}, of heeft zo'n organisatie of groep niet.
-@msg	The branch {branch} has new commits that change the same parts of files you changed ({value}): nothing was taken in or committed. Choose for each file whether to keep yours or take the branch's, or commit to a new branch and open a {value}.	De branch {branch} heeft nieuwe commits die dezelfde delen wijzigen van bestanden die u hebt gewijzigd ({value}): er is niets overgenomen of gecommit. Kies voor elk bestand of u uw versie behoudt of die van de branch neemt, of commit naar een nieuwe branch en open een {value}.
+@msg	The branch {branch} has new commits that change the same parts of files you changed ({files}): nothing was taken in or committed. Choose for each file whether to keep yours or take the branch's, or commit to a new branch and open a merge request.	De branch {branch} heeft nieuwe commits die dezelfde delen wijzigen van bestanden die u hebt gewijzigd ({files}): er is niets overgenomen of gecommit. Kies voor elk bestand of u uw versie behoudt of die van de branch neemt, of commit naar een nieuwe branch en open een merge request.
+@msg	The branch {branch} has new commits that change the same parts of files you changed ({files}): nothing was taken in or committed. Choose for each file whether to keep yours or take the branch's, or commit to a new branch and open a pull request.	De branch {branch} heeft nieuwe commits die dezelfde delen wijzigen van bestanden die u hebt gewijzigd ({files}): er is niets overgenomen of gecommit. Kies voor elk bestand of u uw versie behoudt of die van de branch neemt, of commit naar een nieuwe branch en open een pull request.
 @msg	The build was stopped.	De build is gestopt.
 @msg	The caret is in the preamble: nothing is suggested there.	De cursor staat in de preambule: daar wordt niets voorgesteld.
-@msg	The change is not offered: it {value}. Ask again, or select less.	De wijziging wordt niet aangeboden: ze {value}. Vraag het opnieuw, of selecteer minder.
+@msg	The change is not offered: it adds {added}. Ask again, or select less.	De wijziging wordt niet aangeboden: ze voegt {added} toe. Vraag het opnieuw, of selecteer minder.
+@msg	The change is not offered: it drops or alters {dropped} and adds {added}. Ask again, or select less.	De wijziging wordt niet aangeboden: ze laat {dropped} weg of wijzigt het, en voegt {added} toe. Vraag het opnieuw, of selecteer minder.
+@msg	The change is not offered: it drops or alters {dropped}. Ask again, or select less.	De wijziging wordt niet aangeboden: ze laat {dropped} weg of wijzigt het. Vraag het opnieuw, of selecteer minder.
 @msg	The code expired before it was entered on GitHub: sign in again.	De code is verlopen voordat die op GitHub werd ingevoerd: meld u opnieuw aan.
 @msg	The commit is not after the one checked out: the branches have diverged, and need a merge.	De commit komt niet na de uitgecheckte: de branches zijn uiteengelopen en moeten worden samengevoegd.
 @msg	The connection has no place for its token.	De koppeling heeft geen plaats voor haar token.
@@ -1677,6 +1768,7 @@ unit	{n} s	{n} s
 @msg	The formula is not closed.	De formule is niet afgesloten.
 @msg	The formulas could not be typeset.	De formules konden niet worden gezet.
 @msg	The formulas could not be typeset: {message}	De formules konden niet worden gezet: {message}
+@msg	The grammar checker stopped before it was done.	De grammaticacontrole stopte voordat ze klaar was.
 @msg	The kept sign-in cannot be read ({e}): sign in again.	De bewaarde aanmelding kan niet worden gelezen ({e}): meld u opnieuw aan.
 @msg	The last build has no message at {path}:{line}.	De laatste build heeft geen melding op {path}:{line}.
 @msg	The last build has no message {i}.	De laatste build heeft geen melding {i}.
@@ -1694,6 +1786,8 @@ unit	{n} s	{n} s
 @msg	The next words are suggested at most once every {value} seconds.	De volgende woorden worden hoogstens eens per {value} seconden voorgesteld.
 @msg	The old token could not be removed from the keychain: {e}	Het oude token kon niet uit de sleutelhanger worden verwijderd: {e}
 @msg	The passage changed while the model answered, so its rewrite is not offered.	De passage is gewijzigd terwijl het model antwoordde, dus de herschrijving wordt niet aangeboden.
+@msg	The passage changed while the model read it: check it again.	De passage is gewijzigd terwijl het model die las: controleer ze opnieuw.
+@msg	The passage is longer than the {MAX_GRAMMAR_CHARS} characters checked at once: select a shorter one.	De passage is langer dan de {MAX_GRAMMAR_CHARS} tekens die in één keer worden gecontroleerd: selecteer een kortere.
 @msg	The print build wrote no {value}: see the Print messages in the build log.	De drukwerkbuild schreef geen {value}: zie de meldingen bij Drukwerk in het buildlog.
 @msg	The project has a remote already, origin ({url}): push to it (git.push), or change it (git.set_remote).	Het project heeft al een remote, origin ({url}): push ernaartoe (git.push), of wijzig hem (git.set_remote).
 @msg	The project has no commit yet to merge into.	Het project heeft nog geen commit om in samen te voegen.
@@ -1715,7 +1809,7 @@ unit	{n} s	{n} s
 @msg	The project has no text file to ask about.	Het project heeft geen tekstbestand om naar te vragen.
 @msg	The project has too many files and folders to open: {value} lists only part of them.	Het project heeft te veel bestanden en mappen om te openen: {value} somt er maar een deel van op.
 @msg	The project is not kept in the browser.	Het project wordt niet in de browser bewaard.
-@msg	The project is too large to open: its files add up to more than {value} MB (at least {value} MB).	Het project is te groot om te openen: de bestanden zijn samen groter dan {value} MB (minstens {value} MB).
+@msg	The project is too large to open: its files add up to more than {limit} MB (at least {size} MB).	Het project is te groot om te openen: de bestanden zijn samen groter dan {limit} MB (minstens {size} MB).
 @msg	The project's folder has a name git cannot store.	De map van het project heeft een naam die git niet kan opslaan.
 @msg	The project's folder is inside a git repository without files (a bare one).	De map van het project staat in een git-repository zonder bestanden (een bare repository).
 @msg	The project's folder is not inside its repository's folder.	De map van het project staat niet in de map van zijn repository.
@@ -1734,7 +1828,9 @@ unit	{n} s	{n} s
 @msg	The review could not be saved: {e}	De review kon niet worden opgeslagen: {e}
 @msg	The review could not be written: {e}	De review kon niet worden geschreven: {e}
 @msg	The review is changed but could not be saved: {e}	De review is gewijzigd maar kon niet worden opgeslagen: {e}
-@msg	The rewrite is not offered: it {value}. Rewrite a smaller passage, or try again.	De herschrijving wordt niet aangeboden: ze {value}. Herschrijf een kortere passage, of probeer het opnieuw.
+@msg	The rewrite is not offered: it adds {added}. Rewrite a smaller passage, or try again.	De herschrijving wordt niet aangeboden: ze voegt {added} toe. Herschrijf een kortere passage, of probeer het opnieuw.
+@msg	The rewrite is not offered: it drops or alters {dropped} and adds {added}. Rewrite a smaller passage, or try again.	De herschrijving wordt niet aangeboden: ze laat {dropped} weg of wijzigt het, en voegt {added} toe. Herschrijf een kortere passage, of probeer het opnieuw.
+@msg	The rewrite is not offered: it drops or alters {dropped}. Rewrite a smaller passage, or try again.	De herschrijving wordt niet aangeboden: ze laat {dropped} weg of wijzigt het. Herschrijf een kortere passage, of probeer het opnieuw.
 @msg	The section is longer than the {MAX_REVIEW_CHARS} characters reviewed at once: review a shorter one.	De sectie is langer dan de {MAX_REVIEW_CHARS} tekens die in één keer worden beoordeeld: laat een kortere beoordelen.
 @msg	The server answered with an error ({status}): try again later.	De server antwoordde met een fout ({status}): probeer het later opnieuw.
 @msg	The server could not be reached: {why}	De server kon niet worden bereikt: {why}
@@ -1766,10 +1862,13 @@ unit	{n} s	{n} s
 @msg	There is no commit {commit} in the project's history.	Er is geen commit {commit} in de geschiedenis van het project.
 @msg	There is no commit {id} in the repository.	Er is geen commit {id} in de repository.
 @msg	There is no file to make a project from: everything was left out or the source is empty.	Er is geen bestand om een project van te maken: alles is weggelaten of de bron is leeg.
+@msg	There is no grammar problem with that id in the file (it may be fixed).	Er is geen grammaticaprobleem met die id in het bestand (misschien is het opgelost).
+@msg	There is no group “{group}”: there are {value}.	Er is geen groep “{group}”: de groepen zijn {value}.
 @msg	There is no project named {from} in this browser.	Er is geen project met de naam {from} in deze browser.
 @msg	There is no project named {name} in this browser.	Er is geen project met de naam {name} in deze browser.
 @msg	There is no spelling dictionary for {lang}: {hint}.	Er is geen spellingwoordenboek voor {lang}: {hint}.
 @msg	There is no such fix on that line.	Er is geen zo'n oplossing op die regel.
+@msg	There is no text to check there.	Daar staat geen tekst om te controleren.
 @msg	There is no text to review there.	Daar is geen tekst om te beoordelen.
 @msg	There is no usable spelling dictionary for {lang}: {name} could not be read ({reason}).	Er is geen bruikbaar spellingwoordenboek voor {lang}: {name} kon niet worden gelezen ({reason}).
 @msg	There is no version {id} in the project's history.	Er is geen versie {id} in de geschiedenis van het project.
@@ -1792,6 +1891,7 @@ unit	{n} s	{n} s
 @msg	This is not an application's ID: it has spaces or characters an ID does not have.	Dit is geen ID van een applicatie: het bevat spaties of tekens die een ID niet heeft.
 @msg	This page cannot keep the sign-in while it goes to GitLab: {e}	Deze pagina kan de aanmelding niet bewaren terwijl ze naar GitLab gaat: {e}
 @msg	This page did not say its address, which GitLab sends the browser back to.	Deze pagina gaf haar adres niet op, waarnaar GitLab de browser terugstuurt.
+@msg	This problem has no replacement to take: change the text yourself.	Dit probleem heeft geen vervanging om over te nemen: wijzig de tekst zelf.
 @msg	This project is on a forge already: commit to it instead.	Dit project staat al op een forge: commit er in plaats daarvan naartoe.
 @msg	This project was not opened from GitLab or GitHub.	Dit project is niet geopend vanuit GitLab of GitHub.
 @msg	This project was not opened from GitLab or GitHub: use Open from GitLab or GitHub… first.	Dit project is niet geopend vanuit GitLab of GitHub: gebruik eerst Openen vanuit GitLab of GitHub….
@@ -1805,11 +1905,13 @@ unit	{n} s	{n} s
 @msg	Type something to find.	Typ iets om te zoeken.
 @msg	You have a repository named {name} on {value} already: choose another name.	U hebt al een repository met de naam {name} op {value}: kies een andere naam.
 @msg	Your prompt for {value} lacks {lacks}, so the app's own was sent: fix it in Settings › AI › Prompts.	Uw prompt voor {value} mist {lacks}, dus is die van de app verstuurd: verhelp dit in Instellingen › AI › Prompts.
+@msg	`id` is a grammar problem's id, as grammar.check gives it.	`id` is de id van een grammaticaprobleem, zoals grammar.check die geeft.
 @msg	`{bib}` is not a .bib file.	`{bib}` is geen .bib-bestand.
 @msg	`{commit}` is not a commit id (40 hexadecimal digits).	`{commit}` is geen commit-id (40 hexadecimale cijfers).
 @msg	`{id}` is not a commit id (40 hexadecimal digits).	`{id}` is geen commit-id (40 hexadecimale cijfers).
 @msg	`{image}` is not among the project's files	`{image}` hoort niet bij de bestanden van het project
 @msg	`{image}` is not an image `\\includegraphics` takes (png, jpg, jpeg, gif, webp, pdf, eps or svg)	`{image}` is geen afbeelding die `\\includegraphics` aanneemt (png, jpg, jpeg, gif, webp, pdf, eps of svg)
+@msg	`{path}` is inside a file	`{path}` ligt binnen een bestand
 @msg	`{path}` is not a .tex file	`{path}` is geen .tex-bestand
 @msg	`{path}` is not in the project at commit {commit} nor before it.	`{path}` staat niet in het project bij commit {commit}, en ook niet daarvoor.
 @msg	`{path}` is not in the project at commit {commit}.	`{path}` staat niet in het project bij commit {commit}.
@@ -1830,19 +1932,19 @@ unit	{n} s	{n} s
 @msg	a rule is drawn in the middle of a row	er wordt midden in een rij een lijn getekend
 @msg	a symbolic link	een symbolische link
 @msg	a table keeps one row and one column at least	een tabel houdt minstens één rij en één kolom
-@msg	added the formula {item}	voegt de formule {item} toe
 @msg	an image path cannot hold braces, % or line ends	een afbeeldingspad mag geen accolades, % of regeleinden bevatten
 @msg	branch in {path} (its repository is empty)	branch in {path} (de repository is leeg)
 @msg	branch {name} in {path}	branch {name} in {path}
 @msg	branches of {path}	branches van {path}
-@msg	changed or dropped the formula {item}	wijzigt of verwijdert de formule {item}
 @msg	commit {parent} in {path}	commit {parent} in {path}
 @msg	file {blob} {path}	bestand {blob} {path}
 @msg	file {id} comes in an encoding not known: {other}	bestand {id} heeft een onbekende codering: {other}
 @msg	file {id} has no contents	bestand {id} heeft geen inhoud
 @msg	file {id} in {path}	bestand {id} in {path}
+@msg	file {id}: {e}	bestand {id}: {e}
 @msg	files of {path} at {commit}	bestanden van {path} bij {commit}
 @msg	install the Hunspell dictionary {name} (.aff and .dic) to check it	installeer het Hunspell-woordenboek {name} (.aff en .dic) om het te controleren
+@msg	instantiating retex: {e}	retex instantiëren: {e}
 @msg	it answered with the status {status}	het antwoordde met de status {status}
 @msg	it does not start with {expected}	het begint niet met {expected}
 @msg	it is not a git server that speaks the smart HTTP protocol (its answer is {value}, not {expected})	het is geen git-server die het smart-HTTP-protocol spreekt (het antwoord is {value}, niet {expected})
@@ -1850,10 +1952,19 @@ unit	{n} s	{n} s
 @msg	larger than {value} MB	groter dan {value} MB
 @msg	line {value} is past the end	regel {value} ligt voorbij het einde
 @msg	making the repository {name}	de repository {name} wordt gemaakt
+@msg	no library	geen bibliotheek
 @msg	no main document	geen hoofddocument
+@msg	no mirror answered	geen enkele mirror antwoordde
+@msg	no random source for a new id: {e}	geen willekeurige bron voor een nieuwe id: {e}
+@msg	no random source for a new key: {e}	geen willekeurige bron voor een nieuwe sleutel: {e}
+@msg	no repository answered	geen enkele repository antwoordde
+@msg	no response	geen antwoord
 @msg	no template folder	geen sjabloonmap
+@msg	no window	geen venster
 @msg	none is installed	er is er geen geïnstalleerd
 @msg	not UTF-8 text	geen UTF-8-tekst
+@msg	read: {read}; write: {write}	lezen: {read}; schrijven: {write}
+@msg	reading {rel}: {e}	{rel} lezen: {e}
 @msg	retex did not typeset this formula.	retex heeft deze formule niet gezet.
 @msg	retex wrote no file	retex heeft geen bestand geschreven
 @msg	row {value} has more cells than the table has columns	rij {value} heeft meer cellen dan de tabel kolommen heeft
@@ -1877,42 +1988,62 @@ unit	{n} s	{n} s
 @msg	the file is damaged	het bestand is beschadigd
 @msg	the first commit to branch {branch}	de eerste commit naar branch {branch}
 @msg	the image is shorter than its size	de afbeelding is korter dan haar grootte
+@msg	the merge request has no number	de merge request heeft geen nummer
 @msg	the new branch {branch} was not made	de nieuwe branch {branch} is niet gemaakt
 @msg	the new branch {name}	de nieuwe branch {name}
 @msg	the package database is not the signed one	de pakketdatabase is niet de ondertekende
 @msg	the package database's signature: {e}	de handtekening van de pakketdatabase: {e}
 @msg	the package database: {e}	de pakketdatabase: {e}
+@msg	the parameter `on` (true or false) is missing	de parameter `on` (true of false) ontbreekt
 @msg	the project lists more than {value} files and folders	het project bevat meer dan {value} bestanden en mappen
+@msg	the pull request has no number	de pull request heeft geen nummer
+@msg	the server does not report whether a push worked (no report-status)	de server meldt niet of een push gelukt is (geen report-status)
 @msg	the server's answer is larger than {value} MB	het antwoord van de server is groter dan {value} MB
+@msg	the suggestion `{id}` is not in `{path}`	het voorstel `{id}` staat niet in `{path}`
+@msg	the table has no column {value}	de tabel heeft geen kolom {value}
+@msg	the table has no row {value}	de tabel heeft geen rij {value}
 @msg	the table is not closed by \\end{tabular}, or has no column specification	de tabel wordt niet afgesloten met \\end{tabular}, of heeft geen kolomspecificatie
 @msg	the table's body holds {what}	de inhoud van de tabel bevat {what}
+@msg	the token endpoint gave no access token	het token-endpoint gaf geen toegangstoken
 @msg	the typesetting engine stopped: {why}	de zetengine is gestopt: {why}
+@msg	the user has no username	de gebruiker heeft geen gebruikersnaam
 @msg	there is no closed figure environment at that position in `{path}`	er is geen afgesloten figure-omgeving op die positie in `{path}`
 @msg	there is no file `{path}` in the project	er is geen bestand `{path}` in het project
 @msg	there is no tabular at that position in `{path}`	er is geen tabular op die positie in `{path}`
-@msg	this is an address on {value}, not {value}.	dit is een adres op {value}, niet {value}.
+@msg	this is an address on {known}, not {chosen}.	dit is een adres op {known}, niet {chosen}.
 @msg	this table stays as source: {value}	deze tabel blijft broncode: {value}
+@msg	unknown command `{id}`	onbekende opdracht `{id}`
 @msg	unknown format `{name}`: pdf, odt, docx, odp, pptx, html, markdown or svg	onbekend formaat `{name}`: pdf, odt, docx, odp, pptx, html, markdown of svg
 @msg	unknown output `{name}`: pdf, pdfx, synctex or log	onbekende uitvoer `{name}`: pdf, pdfx, synctex of log
+@msg	unknown panic	onbekende fatale fout
+@msg	{a} et al.	{a} et al.
 @msg	{branch} cannot be a branch's name.	{branch} kan niet de naam van een branch zijn.
 @msg	{branch}: this is the project's branch; give a new one	{branch}: dit is de branch van het project; geef een nieuwe op
+@msg	{commit} is not a commit id.	{commit} is geen commit-id.
+@msg	{commit} is not a commit's id	{commit} is niet de id van een commit
+@msg	{commit} is not a commit.	{commit} is geen commit.
 @msg	{dir} has no name to give its folder in the project	{dir} heeft geen naam om aan zijn map in het project te geven
 @msg	{dir} is nested more than {MAX_DEPTH} folders deep	{dir} is meer dan {MAX_DEPTH} mappen diep genest
 @msg	{file} cannot be removed: {e}	{file} kan niet worden verwijderd: {e}
 @msg	{file} cannot be written: {e}	{file} kan niet worden geschreven: {e}
 @msg	{folder} is not empty: choose a new or empty folder.	{folder} is niet leeg: kies een nieuwe of lege map.
+@msg	{forge} cannot find what was asked for ({what}), or the access token cannot see it: check the address.	{forge} kan niet vinden wat er gevraagd werd ({what}), of het toegangstoken kan het niet zien: controleer het adres.
+@msg	{forge} is refusing requests for now (too many were made): try again in {minutes} minutes.	{forge} weigert voorlopig verzoeken (er zijn er te veel gedaan): probeer het over {minutes} minuten opnieuw.
 @msg	{id}: a file path leaves its folder	{id}: een bestandspad verlaat zijn map
 @msg	{id}: its main file {main} is not among its files	{id}: het hoofdbestand {main} hoort niet bij de bestanden
 @msg	{ignore} cannot be written: {e}	{ignore} kan niet worden geschreven: {e}
+@msg	{input}: {why}	{input}: {why}
 @msg	{inside} is larger than a template file may be	{inside} is groter dan een sjabloonbestand mag zijn
 @msg	{label} is not agreed to for {to} with this model: agree in Settings › AI (connecting agrees to the kinds switched on; agents cannot agree for the person).	Voor {label} is niet ingestemd voor {to} met dit model: stem in via Instellingen › AI (koppelen stemt in met de ingeschakelde soorten; agents kunnen niet namens de gebruiker instemmen).
 @msg	{label} is switched off: switch it on in Settings › AI to send it.	{label} is uitgeschakeld: schakel het in via Instellingen › AI om het te versturen.
 @msg	{name} cannot be a remote's name: use letters, digits, '-', '_' or '.'.	{name} kan niet de naam van een remote zijn: gebruik letters, cijfers, '-', '_' of '.'.
+@msg	{name}: {why}	{name}: {why}
 @msg	{owner} has a repository named {name} on {value} already: choose another name.	{owner} heeft al een repository met de naam {name} op {value}: kies een andere naam.
 @msg	{package} has no documentation	{package} heeft geen documentatie
 @msg	{path} cannot be read: {e}	{path} kan niet worden gelezen: {e}
 @msg	{path} cannot be resolved	{path} kan niet worden gevonden
 @msg	{path} cannot be written: {e}	{path} kan niet worden geschreven: {e}
+@msg	{path} has `..` after a missing folder	{path} bevat `..` na een ontbrekende map
 @msg	{path} has fewer than {at} characters.	{path} heeft minder dan {at} tekens.
 @msg	{path} has fewer than {end} characters.	{path} heeft minder dan {end} tekens.
 @msg	{path} in the zip file would expand {value} times, more than files do: the zip file is refused as a likely zip bomb.	{path} in het zipbestand zou {value} keer uitzetten, meer dan bestanden doen: het zipbestand wordt geweigerd als waarschijnlijke zipbom.
@@ -1920,16 +2051,18 @@ unit	{n} s	{n} s
 @msg	{path} was removed from the project but could not be deleted from its folder: {e}	{path} is uit het project verwijderd maar kon niet uit de map worden gewist: {e}
 @msg	{path} was removed from the project but could not be moved to the trash: {e}	{path} is uit het project verwijderd maar kon niet naar de prullenbak worden verplaatst: {e}
 @msg	{path} was removed from the project but could not be read in its folder: {e}	{path} is uit het project verwijderd maar kon niet in de map worden gelezen: {e}
+@msg	{path} was removed from the project but stays in its folder: its last version is not in the project's history, and an agent cannot move it to the trash.	{path} is uit het project verwijderd maar blijft in de map staan: de laatste versie staat niet in de geschiedenis van het project, en een agent kan het niet naar de prullenbak verplaatsen.
 @msg	{source} has no file name	{source} heeft geen bestandsnaam
 @msg	{source} is larger than TeXCraft reads ({max} bytes)	{source} is groter dan TeXCraft leest ({max} bytes)
 @msg	{source} is larger than a project file may be, or cannot be read	{source} is groter dan een projectbestand mag zijn, of kan niet worden gelezen
+@msg	{text} is no command	{text} is geen commando
+@msg	{url}: HTTP {value}	{url}: HTTP {value}
 @msg	{value} answered with an error ({status}): try again later.	{value} antwoordde met een fout ({status}): probeer het later opnieuw.
 @msg	{value} could not be reached: {why}	{value} kon niet worden bereikt: {why}
 @msg	{value} did not accept the access token: check that it is the whole token, and that it has not expired or been revoked.	{value} accepteerde het toegangstoken niet: controleer of het het hele token is en of het niet is verlopen of ingetrokken.
 @msg	{value} did not accept the sign-in ({why}): sign in again.	{value} accepteerde de aanmelding niet ({why}): meld u opnieuw aan.
 @msg	{value} did not answer this page: it cannot be reached from here, or it does not answer web pages (it does not let other sites' pages use its API). Ask its administrator, or use the desktop app.	{value} antwoordde deze pagina niet: het is van hieruit niet bereikbaar, of het antwoordt geen webpagina's (het laat pagina's van andere sites zijn API niet gebruiken). Vraag het de beheerder, of gebruik de desktopapp.
 @msg	{value} does not answer as {what} ({why}): check the address.	{value} antwoordt niet als {what} ({why}): controleer het adres.
-@msg	{value} has no {what}, or the access token cannot see it: check the address.	{value} heeft geen {what}, of het toegangstoken kan het niet zien: controleer het adres.
 @msg	{value} is not TeX Live {year}	{value} is niet TeX Live {year}
 @msg	{value} is not a name this computer can store.	{value} is geen naam die deze computer kan opslaan.
 @msg	{value} is not agreed to for {destination}: agree in Settings › AI.	Voor {value} is niet ingestemd voor {destination}: stem in via Instellingen › AI.
@@ -1937,11 +2070,11 @@ unit	{n} s	{n} s
 @msg	{value} is provided by your organisation, with its own application: it cannot be changed here.	{value} wordt geleverd door uw organisatie, met een eigen applicatie: het kan hier niet worden gewijzigd.
 @msg	{value} is provided by your organisation: it cannot be removed here.	{value} wordt geleverd door uw organisatie: het kan hier niet worden verwijderd.
 @msg	{value} is refusing requests for now (too many were made): try again in {s} seconds.	{value} weigert voorlopig verzoeken (er zijn er te veel gedaan): probeer het over {s} seconden opnieuw.
-@msg	{value} is refusing requests for now (too many were made): try again in {value} minutes.	{value} weigert voorlopig verzoeken (er zijn er te veel gedaan): probeer het over {value} minuten opnieuw.
 @msg	{value} is refusing requests for now (too many were made): try again later.	{value} weigert voorlopig verzoeken (er zijn er te veel gedaan): probeer het later opnieuw.
 @msg	{value} refused the request ({status}): {message}	{value} weigerde het verzoek ({status}): {message}
 @msg	{value} refused the sign-in: {why}	{value} weigerde de aanmelding: {why}
 @msg	{value}. You can close this tab.	{value}. U kunt dit tabblad sluiten.
 @msg	{value}: not the archive the package database describes	{value}: niet het archief dat de pakketdatabase beschrijft
 @msg	“{language}” is not a language tag: give one such as en-GB or fr, or `auto`.	“{language}” is geen taalcode: geef er een op zoals en-GB of fr, of `auto`.
+@msg	“{rule}” is not one of Harper's rules: give its key, as grammar.check gives it (`rule`).	“{rule}” is geen van de regels van Harper: geef de sleutel ervan op, zoals grammar.check die geeft (`rule`).
 @msg	“{w}” is not a word that can go in a word list: one word of letters, at most {MAX_WORD_CHARS}.	“{w}” is geen woord dat in een woordenlijst kan: één woord van letters, hoogstens {MAX_WORD_CHARS}.

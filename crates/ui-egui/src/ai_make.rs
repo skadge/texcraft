@@ -14,10 +14,10 @@ use serde_json::{Value, json};
 use texcraft_engine::ai::{Made, MakeKind, Preview, Referenced, UNVERIFIED};
 use texcraft_engine::project::ProjectPath;
 
+use crate::App;
 use crate::ai::Kind;
-use crate::dialogs::{Dialog, button_row, title};
+use crate::dialogs::{Dialog, actions, title};
 use crate::theme::Tokens;
-use crate::{App, widgets};
 
 /// The kinds offered, with their names and an example description.
 const KINDS: [(MakeKind, &str, &str); 4] = [
@@ -122,8 +122,7 @@ pub(crate) fn make_dialog(app: &mut App, ctx: &egui::Context) {
     };
     let Some(Dialog::AiMake(form)) = &mut app.view.dialog else { return };
     let mut act = MakeAct::None;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-ai-make")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
-        ui.set_width(PREVIEW_WIDTH + 16.0);
+    let modal = crate::sheet::show(ctx, &t, "texcraft-ai-make", PREVIEW_WIDTH + 16.0, crate::sheet::Leave::Close, |ui| {
         title(ui, &t, tl!("Make with AI"));
         let running = matches!(made, Some(Made::Running));
         ui.add_enabled_ui(!running, |ui| {
@@ -170,7 +169,7 @@ pub(crate) fn make_dialog(app: &mut App, ctx: &egui::Context) {
         }
         ui.add_space(t.unit * 3.0);
         let ready = !form.description.trim().is_empty() && !busy;
-        button_row(ui, |ui| {
+        actions(ui, |ui| {
             let primary =
                 |label: &str| egui::Button::new(RichText::new(label).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
             match &made {
@@ -207,7 +206,7 @@ pub(crate) fn make_dialog(app: &mut App, ctx: &egui::Context) {
             }
         });
     });
-    if modal.should_close() {
+    if modal.close {
         act = MakeAct::Close;
     }
     match act {
@@ -276,7 +275,9 @@ fn done(ui: &mut egui::Ui, t: &Tokens, form: &mut MakeForm, latex: &str, package
             match form.preview.as_ref().map(|(_, t)| t) {
                 Some(Ok(texture)) => {
                     let size = texture.size_vec2() / 2.0;
-                    let scale = (PREVIEW_WIDTH / size.x).min(PREVIEW_HEIGHT / size.y).min(1.5);
+                    // No wider than the dialog (a phone's is narrower than the preview).
+                    let width = (ui.available_width() - 16.0).clamp(80.0, PREVIEW_WIDTH);
+                    let scale = (width / size.x).min(PREVIEW_HEIGHT / size.y).min(1.5);
                     egui::Frame::new()
                         .fill(egui::Color32::WHITE)
                         .stroke(t.hairline())
@@ -357,8 +358,7 @@ pub(crate) fn reference_dialog(app: &mut App, ctx: &egui::Context) {
     let mut close = false;
     let mut stop = false;
     let mut another = false;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-ai-reference")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
-        ui.set_width(520.0);
+    let modal = crate::sheet::show(ctx, &t, "texcraft-ai-reference", 520.0, crate::sheet::Leave::Close, |ui| {
         title(ui, &t, tl!("Add a Reference with AI"));
         egui::Frame::new().fill(t.accent_soft).corner_radius(t.corner()).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -433,7 +433,7 @@ pub(crate) fn reference_dialog(app: &mut App, ctx: &egui::Context) {
             Some(Referenced::Cancelled) | None => {}
         }
         ui.add_space(t.unit * 3.0);
-        button_row(ui, |ui| {
+        actions(ui, |ui| {
             let primary =
                 |label: &str| egui::Button::new(RichText::new(label).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
             if running {
@@ -460,7 +460,7 @@ pub(crate) fn reference_dialog(app: &mut App, ctx: &egui::Context) {
             });
         });
     });
-    if modal.should_close() {
+    if modal.close {
         close = true;
     }
     if another && let Some(Dialog::AiReference(f)) = &mut app.view.dialog {

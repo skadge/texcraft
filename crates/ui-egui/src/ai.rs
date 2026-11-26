@@ -357,8 +357,7 @@ pub(crate) fn instruct_dialog(app: &mut App, ctx: &egui::Context) {
     let Some(Dialog::AiInstruct(form)) = &mut app.view.dialog else { return };
     let mut send = false;
     let mut close = false;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-ai-instruct")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
-        ui.set_width(480.0);
+    let modal = crate::sheet::show(ctx, &t, "texcraft-ai-instruct", 480.0, crate::sheet::Leave::Close, |ui| {
         crate::dialogs::title(ui, &t, tl!("Ask AI to Change This"));
         let label = ui.label(RichText::new(tl!("How to change the selection")).color(t.text_muted));
         let edit = egui::TextEdit::singleline(&mut form.text)
@@ -390,7 +389,7 @@ pub(crate) fn instruct_dialog(app: &mut App, ctx: &egui::Context) {
             }
         }
         ui.add_space(t.unit * 3.0);
-        crate::dialogs::button_row(ui, |ui| {
+        crate::dialogs::actions(ui, |ui| {
             let primary = egui::Button::new(RichText::new(tl!("Send")).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
             if ui.add_enabled(!form.text.trim().is_empty(), primary.min_size(egui::vec2(88.0, 30.0))).clicked() {
                 send = true;
@@ -400,7 +399,7 @@ pub(crate) fn instruct_dialog(app: &mut App, ctx: &egui::Context) {
             }
         });
     });
-    if modal.should_close() {
+    if modal.close {
         close = true;
     }
     if send {
@@ -939,10 +938,10 @@ fn requests(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
             let bytes: u64 = s["sent"].as_array().map(|a| a.iter().filter_map(|i| i["bytes"].as_u64()).sum()).unwrap_or_default();
             let end = records.iter().find(|r| r["phase"] == "end" && r["run"] == s["run"]);
             let outcome = match end.map(|e| e["outcome"]["status"].as_str().unwrap_or_default()) {
-                Some("done") => tl!("answered"),
-                Some("cancelled") => tl!("cancelled"),
-                Some(_) => tl!("failed"),
-                None => tl!("waiting"),
+                Some("done") => crate::i18n::tc("request", "answered"),
+                Some("cancelled") => crate::i18n::tc("request", "cancelled"),
+                Some(_) => crate::i18n::tc("request", "failed"),
+                None => crate::i18n::tc("request", "waiting"),
             };
             let at = s["at_ms"]
                 .as_i64()

@@ -368,7 +368,7 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
     let t = app.tokens;
     ui.set_min_width(220.0);
     let mut chosen = None;
-    for spec in cmd::all().iter().filter(|c| c.menu.first() == Some(&menu)) {
+    for spec in cmd::all().iter().filter(|c| c.menu.first() == Some(&menu) && ui_cmd::in_menus(app, c.id)) {
         let mut label = crate::forge::label(app, spec.id).unwrap_or_else(|| crate::i18n::tid(spec.id, spec.label)).to_owned();
         if spec.id == "build.auto" && app.session.settings.auto_compile {
             label = format!("{label} ✓");
@@ -552,19 +552,15 @@ fn rename_field(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
 
 fn layout_switch(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
-    // Right to left: the last entry is drawn first.
-    for (layout, icon, label) in [
-        (Layout::PreviewOnly, "file-text", tl!("PDF only")),
-        (Layout::EditorOnly, "code", tl!("Editor only")),
-        (Layout::Split, "columns-2", tl!("Editor and PDF")),
+    // Right to left: the last entry is drawn first. Named as their commands are, in the menus and
+    // the shortcuts list.
+    for (layout, icon, id, label) in [
+        (Layout::PreviewOnly, "file-text", "view.layout.preview", tn!("PDF Only")),
+        (Layout::EditorOnly, "code", "view.layout.editor", tn!("Editor Only")),
+        (Layout::Split, "columns-2", "view.layout.split", tn!("Editor and PDF")),
     ] {
         let shown = if app.view.pdf_window { Layout::EditorOnly } else { app.view.layout };
-        if widgets::icon_toggle(ui, &t, icon, label, shown == layout).clicked() {
-            let id = match layout {
-                Layout::Split => "view.layout.split",
-                Layout::EditorOnly => "view.layout.editor",
-                Layout::PreviewOnly => "view.layout.preview",
-            };
+        if widgets::icon_toggle(ui, &t, icon, crate::i18n::tid(id, label), shown == layout).clicked() {
             ui_cmd::run(app, id);
         }
     }

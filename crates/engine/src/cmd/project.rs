@@ -82,6 +82,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "project.download_zip",
+            label: "Download Project as Zip",
+            menu: &["File"],
+            shortcut: None,
+            params: zip_schema,
+            enabled: always,
+            run: download_zip,
+            changes: false,
+        },
+        CommandSpec {
             id: "project.inspect",
             label: "Describe Project",
             menu: &[],
@@ -109,6 +119,58 @@ fn stored(s: &Session) -> Result<()> {
     } else {
         Err("This build of TeXCraft has nowhere to keep projects.".to_owned())
     }
+}
+
+fn zip_schema() -> Value {
+    json!({"type": "object", "properties": {"path": {"type": "string", "description": "Where to write the zip file. In the browser, the name of the file to download (by default the project's name, with `.zip`)."}}, "additionalProperties": false})
+}
+
+/// The project's files as a zip, its review's threads in `.texcraft/review/` as a project folder
+/// keeps them: a copy to keep elsewhere, which opens again as the same project (Import a Zip File,
+/// or unzipped as a folder).
+fn zip_project(s: &mut Session) -> Result<Vec<u8>> {
+    let zipped = |e: craft_zip::Error| format!("The project could not be zipped: {e}");
+    let mut zip = craft_zip::Writer::new();
+    for (path, contents) in s.project.files() {
+        zip.add(path.as_str(), contents.as_bytes(), craft_zip::Compression::Deflated).map_err(zipped)?;
+    }
+    let threads = s.review.files(&s.project).map_err(|e| format!("The review could not be zipped: {e}"))?;
+    for (file, text) in &threads {
+        zip.add(&format!(".texcraft/review/{file}"), text.as_bytes(), craft_zip::Compression::Deflated).map_err(zipped)?;
+    }
+    zip.finish().map_err(zipped)
+}
+
+/// Writes the project as a zip file (`zip_project`) to `path`; in the browser, hands it to the
+/// shell to download.
+fn download_zip(s: &mut Session, p: &Value) -> Result<Value> {
+    let data = zip_project(s)?;
+    let files = s.project.len();
+    let name = match s.dir.as_ref().and_then(|d| d.file_name()) {
+        Some(name) => format!("{}.zip", name.to_string_lossy()),
+        None => "project.zip".to_owned(),
+    };
+    let path = p.get("path").and_then(Value::as_str).map(str::to_owned);
+    write_zip(s, name, path, data, files)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn write_zip(s: &mut Session, name: String, path: Option<String>, data: Vec<u8>, files: usize) -> Result<Value> {
+    let name = path.as_deref().and_then(|p| Path::new(p).file_name()).map_or(name, |n| n.to_string_lossy().into_owned());
+    let bytes = data.len();
+    s.hand_out(name.clone(), data);
+    Ok(json!({"path": name, "files": files, "bytes": bytes, "download": true}))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn write_zip(s: &mut Session, _: String, path: Option<String>, data: Vec<u8>, files: usize) -> Result<Value> {
+    let path = PathBuf::from(path.ok_or("the parameter `path` (a string) is missing: where to write the zip file")?);
+    let path = match &s.roots {
+        Some(roots) => roots.check(&path, Access::Write)?,
+        None => path,
+    };
+    std::fs::write(&path, &data).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    Ok(json!({"path": path.display().to_string(), "files": files, "bytes": data.len()}))
 }
 
 fn has_dir(s: &Session) -> Result<()> {
@@ -231,7 +293,7 @@ pub(super) fn save_to(s: &mut Session, dir: &Path) -> Result<Value> {
 fn rename(s: &mut Session, params: &Value) -> Result<Value> {
     let name = crate::library::check_name(string(params, "name")?)?;
     if name == "." || name == ".." {
-        return Err("A project's name cannot be a dot or two.".to_owned());
+        return Err("A project's name cannot be “.” or “..”.".to_owned());
     }
     let old = s.dir.clone().ok_or("The project has no name yet: use Save Project As.")?;
     let new = match &mut s.library {

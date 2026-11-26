@@ -143,19 +143,30 @@ impl std::fmt::Display for Error {
             ),
             Error::Forbidden { forge: Service::GitLab, what } => write!(
                 f,
-                "GitLab refused {what}: the access token needs the read_api scope to open a project and the api scope to commit, and your role in the project must allow it."
+                "GitLab refused a request ({what}): the access token needs the read_api scope to open a project and the api scope to commit, and your role in the project must allow it."
             ),
             Error::Forbidden { forge: Service::GitHub, what } => write!(
                 f,
-                "GitHub refused {what}: a fine-grained access token needs access to this repository with the Contents permission (read-only to open it, read and write to commit) and Pull requests (read and write) to open a pull request; a classic token needs the repo scope. Your access to the repository must allow it too."
+                "GitHub refused a request ({what}): a fine-grained access token needs access to this repository with the Contents permission (read-only to open it, read and write to commit) and Pull requests (read and write) to open a pull request; a classic token needs the repo scope. Your access to the repository must allow it too."
             ),
             Error::NotFound { forge: Service::GitHub, what } => write!(
                 f,
-                "GitHub has no {what}, or the access token cannot see it (a fine-grained token sees only the repositories it was given): check the address."
+                "GitHub cannot find what was asked for ({what}), or the access token cannot see it (a fine-grained token sees only the repositories it was given): check the address."
             ),
-            Error::NotFound { forge, what } => write!(f, "{} has no {what}, or the access token cannot see it: check the address.", forge.name()),
+            Error::NotFound { forge, what } => {
+                write!(
+                    f,
+                    "{forge} cannot find what was asked for ({what}), or the access token cannot see it: check the address.",
+                    forge = forge.name()
+                )
+            }
             Error::RateLimited { forge, retry_after: Some(s) } if *s >= 120 => {
-                write!(f, "{} is refusing requests for now (too many were made): try again in {} minutes.", forge.name(), s.div_ceil(60))
+                write!(
+                    f,
+                    "{forge} is refusing requests for now (too many were made): try again in {minutes} minutes.",
+                    forge = forge.name(),
+                    minutes = s.div_ceil(60)
+                )
             }
             Error::RateLimited { forge, retry_after: Some(s) } => {
                 write!(f, "{} is refusing requests for now (too many were made): try again in {s} seconds.", forge.name())
@@ -169,19 +180,26 @@ impl std::fmt::Display for Error {
             Error::Invalid(why) => write!(f, "The forge's answer could not be read: {why}"),
             Error::TooLarge { bytes } => write!(
                 f,
-                "The project is too large to open: its files add up to more than {} MB (at least {} MB).",
-                MAX_PROJECT / (1024 * 1024),
-                bytes / (1024 * 1024)
+                "The project is too large to open: its files add up to more than {limit} MB (at least {size} MB).",
+                limit = MAX_PROJECT / (1024 * 1024),
+                size = bytes / (1024 * 1024)
             ),
             Error::TooManyFiles { forge } => {
                 write!(f, "The project has too many files and folders to open: {} lists only part of them.", forge.name())
             }
-            Error::Conflict { forge, branch, files } => write!(
-                f,
-                "The branch {branch} has new commits that change the same parts of files you changed ({}): nothing was taken in or committed. Choose for each file whether to keep yours or take the branch's, or commit to a new branch and open a {}.",
-                files.iter().map(|c| format!("{}: {}", c.path, c.kind.as_str())).collect::<Vec<_>>().join(", "),
-                forge.merge_request()
-            ),
+            Error::Conflict { forge, branch, files } => {
+                let files = files.iter().map(|c| format!("{}: {}", c.path, c.kind.as_str())).collect::<Vec<_>>().join(", ");
+                match forge {
+                    Service::GitLab => write!(
+                        f,
+                        "The branch {branch} has new commits that change the same parts of files you changed ({files}): nothing was taken in or committed. Choose for each file whether to keep yours or take the branch's, or commit to a new branch and open a merge request."
+                    ),
+                    Service::GitHub => write!(
+                        f,
+                        "The branch {branch} has new commits that change the same parts of files you changed ({files}): nothing was taken in or committed. Choose for each file whether to keep yours or take the branch's, or commit to a new branch and open a pull request."
+                    ),
+                }
+            }
             Error::CannotPush { forge: Service::GitLab, branch } => write!(
                 f,
                 "Nothing was committed: the branch {branch} is protected, or your role in the project cannot push to it. Commit to a new branch and open a merge request instead."

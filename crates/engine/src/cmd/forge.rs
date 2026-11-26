@@ -133,7 +133,7 @@ fn open_schema() -> Value {
         "service": {"enum": ["gitlab", "github"], "description": "The forge's kind, for an address that does not say it (github.com's are GitHub's, gitlab.com's GitLab's): a bare owner/repository, or a GitHub Enterprise Server. Default: gitlab."},
         "token": {"type": "string", "description": "A personal access token. GitLab: the read_api scope (api to commit). GitHub: a fine-grained token with Contents read-only (read and write to commit) and Pull requests read and write for new_branch, or a classic token with the repo scope. Kept for this session only. May be left out when one was given for the same instance in this session."},
         "ref": {"type": "string", "description": "The branch; the project's default branch if left out."},
-        "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_forge` (the window's status line). Default: wait for it (not in the browser, which always works so)."}
+        "background": {"type": "boolean", "description": "Return at once; the outcome arrives later, in the window's status line. Default: wait for it (not in the browser, which always works so)."}
     }, "required": ["url"], "additionalProperties": false})
 }
 
@@ -146,7 +146,7 @@ fn commit_schema() -> Value {
         "token": {"type": "string", "description": "A personal access token that can commit (GitLab: the api scope; GitHub: Contents read and write); may be left out when one was given for the project's instance in this session."},
         "resolve": {"type": "object", "additionalProperties": {"enum": ["mine", "theirs"]}, "description": RESOLVE},
         "new_branch": {"type": "string", "description": "Commit to this new branch, from the base (no merge needed), and open a merge request (GitHub: a pull request) of it into the project's branch; the project then follows the new branch. For a protected branch, one the user cannot push to, or conflicts left to the forge."},
-        "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_forge`. Default: wait for it (not in the browser)."}
+        "background": {"type": "boolean", "description": "Return at once; the outcome arrives later, in the window's status line. Default: wait for it (not in the browser)."}
     }, "required": ["message"], "additionalProperties": false})
 }
 
@@ -154,7 +154,7 @@ fn pull_schema() -> Value {
     json!({"type": "object", "properties": {
         "token": {"type": "string", "description": "A personal access token that can read the project (GitLab: read_api; GitHub: Contents read-only); may be left out when one was given for the project's instance in this session."},
         "resolve": {"type": "object", "additionalProperties": {"enum": ["mine", "theirs"]}, "description": RESOLVE},
-        "background": {"type": "boolean", "description": "Return at once; the outcome comes from `Session::poll_forge`. Default: wait for it (not in the browser)."}
+        "background": {"type": "boolean", "description": "Return at once; the outcome arrives later, in the window's status line. Default: wait for it (not in the browser)."}
     }, "additionalProperties": false})
 }
 

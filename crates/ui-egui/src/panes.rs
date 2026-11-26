@@ -36,13 +36,12 @@ pub(crate) fn tabs(app: &mut App, ui: &mut egui::Ui) {
         let half = bar.width() / 2.0;
         let state = build(app);
         let (pdf_name, mark) = match state {
-            Build::Running => (format!("{}, {}", tl!("PDF"), tl!("compiling")), None),
-            Build::Errors(n) => (
-                format!("{}, {}", tl!("PDF"), tl!("{count} errors").replace("{count}", &n.to_string())),
-                Some(("circle-exclamation-point", t.error, n)),
-            ),
+            Build::Running => (format!("{}, {}", tl!("PDF"), crate::i18n::tc("pdf", "compiling")), None),
+            Build::Errors(n) => {
+                (format!("{}, {}", tl!("PDF"), crate::i18n::trn(n, "{n} error", "{n} errors")), Some(("circle-exclamation-point", t.error, n)))
+            }
             Build::Warnings(n) => (
-                format!("{}, {}", tl!("PDF"), tl!("{count} warnings").replace("{count}", &n.to_string())),
+                format!("{}, {}", tl!("PDF"), crate::i18n::trn(n, "{n} warning", "{n} warnings")),
                 Some(("triangle-exclamation-point", t.warning, n)),
             ),
             Build::Done => (format!("{}, {}", tl!("PDF"), tl!("compiled")), Some(("circle-check", t.success, 0))),

@@ -24,27 +24,36 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, room: egui::Rect) {
     ui.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = t.unit * 1.5;
         let (icon, color, text) = state(app);
-        let (rect, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
-        match icon {
-            None => widgets::spinner(ui, rect.center(), 5.5, t.accent),
-            Some(name) => icons::paint(ui, rect, name, 14.0, color),
+        // The start page has no build to speak of (nor the last project's): only messages.
+        let build_state = app.view.status.is_none() && icon.is_some();
+        if !(app.start && build_state) {
+            let (rect, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
+            match icon {
+                None => widgets::spinner(ui, rect.center(), 5.5, t.accent),
+                Some(name) => icons::paint(ui, rect, name, 14.0, color),
+            }
+            let rich = egui::RichText::new(&text).font(t.small()).color(if icon.is_some() { color } else { t.text_muted });
+            // A phone's bar has the build's state alone, cut short when longer than the bar.
+            let label = if app.view.narrow { ui.add(egui::Label::new(rich).truncate()) } else { ui.label(rich) };
+            announce(ui, &label, &text);
         }
-        let label = ui.label(egui::RichText::new(&text).font(t.small()).color(if icon.is_some() { color } else { t.text_muted }));
-        announce(ui, &label, &text);
         // At the bar's end, made in the order they read: the caret, the language, the comments,
         // the engine, and focus mode's way out.
         widgets::right_aligned(ui, "status-end", |ui| {
             ui.spacing_mut().item_spacing.x = t.unit * 4.0;
             let small = |s: String| egui::RichText::new(s).font(t.small()).color(t.text_muted);
-            // The file's language, the comments and the caret belong to the editor, not the start page.
-            if !app.start {
+            // The file's language, the comments and the caret belong to the editor, not the start
+            // page; a phone has no room for them (nor for the engine's name).
+            if !app.start && !app.view.narrow {
                 if let Some((line, col)) = app.view.cursor {
                     ui.label(small(tl!("Ln {line}, Col {col}").replace("{line}", &line.to_string()).replace("{col}", &col.to_string())));
                 }
                 ui.label(small("LaTeX".to_owned()));
                 crate::review::status(app, ui);
             }
-            ui.label(small(app.session.backend_name()));
+            if !app.view.narrow {
+                ui.label(small(app.session.backend_name()));
+            }
             if app.view.focus_mode && !app.start {
                 leave_focus_mode(app, ui);
             }

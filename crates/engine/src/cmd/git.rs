@@ -130,7 +130,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-const BACKGROUND: &str = "Return at once; the outcome comes from `Session::poll_forge`. Default: wait for it (not in the browser).";
+const BACKGROUND: &str = "Return at once; the outcome arrives later, in the window's status line. Default: wait for it (not in the browser).";
 const TOKEN: &str = "A personal access token for the server (GitLab: the api scope to push, read_api or read_repository to pull; GitHub: Contents read and write); may be left out when one was given or a sign-in made for the server in this session. Kept for this session only.";
 
 fn set_remote_schema() -> Value {
