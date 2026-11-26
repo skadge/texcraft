@@ -160,8 +160,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     // A short paper of TeXCraft's to explore (`templates/builtin/example`), made a project as a
     // template is: in a folder the user picks, or in the browser under a name.
     ui("help.example", "Open the Example Project…", "Help", None),
-    // Shows the hint above the editor that says where the formatted view, the build log and the
-    // guide are, or dismisses it.
+    // Shows the one-line hint above the editor that points at the formatted view, or dismisses it.
     ui("help.first_steps", "First Steps", "Help", None),
     ui("help.about", "About TeXCraft", "Help", None),
 ];

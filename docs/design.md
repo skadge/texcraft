@@ -34,6 +34,7 @@ Two themes, light and dark, following the system by default. Neutrals are slight
 | `text` | `#1B1E23` | `#E7E9EC` | Body text |
 | `text_muted` | `#5B626C` | `#A2A8B1` | Secondary text, inactive icons |
 | `accent` | `#2557D6` | `#7AA7FF` | Primary action, selection, focus |
+| `accent_muted` | `#4A5B8B` | `#8FA3CC` | The accent, quieter: marks that point without calling (the tip of the day) |
 | `on_accent` | `#FFFFFF` | `#0D1830` | Text on the accent |
 | `accent_soft` | accent at 10 % | accent at 16 % | Selected rows, active toggles |
 | `error` | `#B0261A` | `#FF8A80` | Errors |

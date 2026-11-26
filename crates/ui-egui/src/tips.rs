@@ -187,44 +187,53 @@ pub(crate) fn current(app: &App) -> Option<&'static Tip> {
     tips.get(usize::try_from(i).ok()?).copied()
 }
 
-/// The card, when tips are on.
+/// The card, when tips are on: a quiet strip of two lines. Its title in the muted accent with
+/// Previous, Next and Hide at its end, then the tip with its action after it, as a link would be.
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     if !app.prefs.show_tips {
         return;
     }
     let Some(tip) = current(app) else { return };
     let mut run: Option<(&'static str, Value)> = None;
-    let frame = egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner_large()).inner_margin(egui::Margin::symmetric(16, 12));
+    let frame = egui::Frame::new().fill(t.surface).stroke(t.hairline()).corner_radius(t.corner_large()).inner_margin(egui::Margin {
+        left: 12,
+        right: 4,
+        top: 2,
+        bottom: 8,
+    });
     // A region of its own, named, so a screen reader can find it and skip it.
     let region = egui::UiBuilder::new().accessibility_role(egui::accesskit::Role::Region).accessibility_label(tl!("Tip of the day"));
     ui.scope_builder(region, |ui| {
         frame.show(ui, |ui| {
             ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing = vec2(t.unit * 1.5, 0.0);
+            // In reading order: the title, Previous, Next and Hide, the tip, its action.
             ui.horizontal(|ui| {
-                let (icon, _) = ui.allocate_exact_size(vec2(18.0, 18.0), egui::Sense::hover());
-                crate::icons::paint(ui, icon, "info", 16.0, t.accent);
-                ui.label(RichText::new(tl!("Tip of the day")).font(t.strong()));
+                let (icon, _) = ui.allocate_exact_size(vec2(t.icon_size, t.icon_size), egui::Sense::hover());
+                crate::icons::paint(ui, icon, "info", t.icon_size - 2.0, t.accent_muted);
+                let title = egui::FontId::new(t.small_size, crate::fonts::semibold());
+                ui.label(RichText::new(tl!("Tip of the day")).font(title).color(t.accent_muted));
+                crate::widgets::right_aligned(ui, "tip-buttons", |ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    if crate::widgets::icon_button(ui, t, "chevron-left", tl!("Previous Tip"), true).clicked() {
+                        app.tips.offset -= 1;
+                    }
+                    if crate::widgets::icon_button(ui, t, "chevron-right", tl!("Next Tip"), true).clicked() {
+                        app.tips.offset += 1;
+                    }
+                    // Settings › Appearance turns them on again, as the status line then says.
+                    if crate::widgets::icon_button(ui, t, "x", tl!("Hide Tips"), true).clicked() {
+                        set_shown(app, false);
+                    }
+                });
             });
-            ui.add_space(t.unit);
-            ui.horizontal_wrapped(|ui| ui.label(RichText::new(crate::i18n::t(tip.text)).color(t.text)));
-            ui.add_space(t.unit * 2.0);
-            // In reading order: the tip's own action, then Previous and Next, then the switch.
             ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = t.unit * 2.0;
-                if let Some(action) = &tip.action
-                    && ui.button(crate::i18n::t(action.label)).clicked()
-                {
-                    run = Some((action.command, (action.params)()));
-                }
-                if ui.button(tl!("Previous Tip")).clicked() {
-                    app.tips.offset -= 1;
-                }
-                if ui.button(tl!("Next Tip")).clicked() {
-                    app.tips.offset += 1;
-                }
-                let mut on = app.prefs.show_tips;
-                if ui.checkbox(&mut on, tl!("Show tips at startup")).changed() {
-                    set_shown(app, on);
+                ui.label(RichText::new(crate::i18n::t(tip.text)).color(t.text));
+                if let Some(action) = &tip.action {
+                    let link = egui::Button::new(RichText::new(crate::i18n::t(action.label)).color(t.accent)).frame(false);
+                    if ui.add(link).clicked() {
+                        run = Some((action.command, (action.params)()));
+                    }
                 }
             });
         });
