@@ -91,7 +91,8 @@ fn a_project_opened_from_gitlab_is_edited_and_committed_through_the_dialogs() {
     type_into(&mut h, "Project", "https://gitlab.example/group/paper");
     type_into(&mut h, "Personal access token", TOKEN);
     h.run();
-    assert!(h.query_by_label_contains("it is never stored").is_some(), "the dialog does not say the token is not kept");
+    assert!(h.query_by_label_contains("Remember in this tab").is_some(), "the dialog does not offer to keep the token");
+    assert!(h.query_by_label_contains("the token is kept while the page is open only").is_some(), "the dialog does not say where the token is kept");
     h.get_by_role_and_label(Role::Button, "Import").click();
     assert!(settle(&mut h), "the GitLab operation did not end");
     assert!(h.query_by_label_contains("Opened group/paper from GitLab").is_some(), "the status line does not say it opened");

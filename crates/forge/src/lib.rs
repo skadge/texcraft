@@ -48,7 +48,8 @@ pub const MAX_PROJECT: u64 = 200 * 1024 * 1024;
 pub const PARALLEL: usize = 8;
 
 /// A personal access token. It is only ever sent to the forge it was given for: it is never
-/// printed ([`std::fmt::Debug`] hides it), stored or logged.
+/// printed ([`std::fmt::Debug`] hides it) or logged, and kept only in the secrets store the shell
+/// gives when the user asks (the system's keychain, the browser tab's session storage).
 #[derive(Clone, PartialEq, Eq)]
 pub struct Token(String);
 

@@ -108,8 +108,9 @@ pub(crate) struct State {
     revision: u64,
     /// A server being checked (`forge.check_server` in the background).
     checking: Option<Pending<Probed>>,
-    /// The git servers whose credential is kept in the store (Import a Project's Remember on
-    /// this computer), by host, kept in the preferences by the shell (no secret in them).
+    /// The servers whose token is kept in the store (Remember on this computer: gitlab.com,
+    /// github.com, a server added, Overleaf's git server, any git server), by host, kept in the
+    /// preferences by the shell (no secret in them).
     git_hosts: Vec<String>,
     /// Goes up when `git_hosts` changes.
     git_revision: u64,
@@ -663,6 +664,19 @@ impl Session {
         for instance in instances {
             self.load_grant(&instance);
         }
+        self.prune_git_hosts();
+    }
+
+    /// Drops the hosts listed as kept whose token the store no longer has (the browser tab that
+    /// kept it was closed, the keychain's entry was removed), so that none is listed as kept
+    /// without being so. A store that cannot be read keeps the list as it is.
+    fn prune_git_hosts(&mut self) {
+        let secrets = self.forge_auth.secrets.clone();
+        let before = self.forge_auth.git_hosts.len();
+        self.forge_auth.git_hosts.retain(|h| !matches!(secrets.get(&git_handle(h)), Ok(None)));
+        if self.forge_auth.git_hosts.len() != before {
+            self.forge_auth.git_revision += 1;
+        }
     }
 
     /// Reads the sign-in to `instance` the store holds, if it holds one and none is read yet.
@@ -744,6 +758,10 @@ impl Session {
         hosts.sort();
         hosts.dedup();
         self.forge_auth.git_hosts = hosts;
+        // Against the store the shell gave; the session's own (none given yet) knows nothing.
+        if self.forge_auth.secrets.lasting() {
+            self.prune_git_hosts();
+        }
     }
 
     /// The git servers whose credential the store keeps, to keep in the preferences (no secret
@@ -753,7 +771,6 @@ impl Session {
     }
 
     /// The token the store keeps for git server `host`, if it keeps one.
-    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn kept_git_token(&self, host: &str) -> Option<Token> {
         if !self.forge_auth.git_hosts.iter().any(|h| h.eq_ignore_ascii_case(host)) {
             return None;
@@ -768,9 +785,9 @@ impl Session {
         }
     }
 
-    /// Keeps `token` for git server `host` in the store (the keychain on the desktop). Says why
-    /// when the store could not keep it.
-    #[cfg(not(target_arch = "wasm32"))]
+    /// Keeps `token` for git server `host` in the store (the keychain on the desktop, the tab's
+    /// session storage in the browser), in place of any kept before. Says why when the store
+    /// could not keep it.
     pub(crate) fn keep_git_token(&mut self, host: &str, token: &Token) -> std::result::Result<(), String> {
         let host = host.to_ascii_lowercase();
         if !is_host(&host) {

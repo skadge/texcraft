@@ -294,6 +294,17 @@ pub struct App {
     zip_into: Option<std::path::PathBuf>,
     /// The git servers' credentials last put in the preferences, by revision.
     git_hosts_kept: u64,
+    /// The import under way, or failed, shown as a card on the start page.
+    importing: Option<import::Importing>,
+    /// Settings › Accounts' Replace…: the server and the new token being typed.
+    token_replace: Option<TokenReplace>,
+}
+
+/// Settings › Accounts' Replace… of a token kept: for `host`, the new `token` typed.
+pub(crate) struct TokenReplace {
+    pub host: String,
+    pub token: String,
+    pub focus: bool,
 }
 
 impl App {
@@ -406,6 +417,8 @@ impl App {
             documents: None,
             zip_into: None,
             git_hosts_kept: 0,
+            importing: None,
+            token_replace: None,
         };
         app.remember_project();
         app

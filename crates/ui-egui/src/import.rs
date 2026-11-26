@@ -428,6 +428,8 @@ struct Info {
     parent: Option<PathBuf>,
     /// Where a remembered credential is kept.
     kept: &'static str,
+    /// A token is kept for the forge page's server (Remember on this computer, earlier).
+    kept_token: bool,
     /// The largest history a clone takes, in words.
     limit: String,
     /// The window's clock.
@@ -486,6 +488,7 @@ fn info(app: &App, ctx: &egui::Context) -> Info {
         _ => (None, false, false),
     };
     let parent = app.prefs.clone_folder.as_ref().map(PathBuf::from).or_else(|| app.documents.clone());
+    let kept_token = crate::import::forge_form(&app.view.dialog).is_some_and(|f| app.session.has_kept_token(&crate::forge::instance_of_form(f)));
     Info {
         browser,
         narrow: crate::sheet::narrow(ctx, &app.tokens),
@@ -497,6 +500,7 @@ fn info(app: &App, ctx: &egui::Context) -> Info {
         known,
         parent,
         kept: app.session.git_token_kept(),
+        kept_token,
         limit: texcraft_engine::project::size_words(texcraft_engine::forge::MAX_PROJECT),
         now: ctx.input(|i| i.time),
     }
@@ -595,6 +599,7 @@ fn perform(app: &mut App, act: Act) {
         Act::Close => app.view.dialog = None,
         Act::Import => start(app),
         Act::StopImport => {
+            app.importing = None;
             if let Some(done) = app.run("project.cancel_clone", json!({}))
                 && done["cancelled"] == true
             {
@@ -716,12 +721,20 @@ fn start(app: &mut App) {
     let params = match &form.page {
         Page::Forge(f, _) if browser => {
             let token = if f.use_token { f.token.trim() } else { "" };
-            let params = json!({"url": qualified(f), "service": f.service.id(), "token": token, "ref": f.branch.trim(), "background": true});
-            let service = f.service;
+            let mut params = json!({"url": qualified(f), "service": f.service.id(), "token": token, "ref": f.branch.trim(), "background": true});
+            if !token.is_empty() {
+                params["remember"] = json!(remember);
+            }
+            let (service, name) = (f.service, texcraft_engine::repository_name(&qualified(f)));
             crate::forge::set_opening(app, service);
-            if app.run("forge.open", params).is_some() {
-                app.view.status = Some((crate::forge::opening(service).to_owned(), false));
-                app.view.dialog = None;
+            match app.session.execute("forge.open", &params) {
+                Ok(v) if v["started"] == true => begin(app, name, true),
+                Ok(v) => crate::forge::opened(app, &v),
+                Err(e) => {
+                    if let Some(Dialog::Import(form)) = app.view.dialog.as_mut() {
+                        form.error = Some((ImportProblem::Other, e));
+                    }
+                }
             }
             return;
         }
@@ -733,7 +746,7 @@ fn start(app: &mut App) {
                     return;
                 }
             };
-            let mut params = json!({"url": url, "folder": folder, "service": f.service.id(), "background": true});
+            let mut params = json!({"url": url, "folder": folder, "service": f.service.id(), "background": true, "open": false});
             if !f.branch.trim().is_empty() {
                 params["branch"] = json!(f.branch.trim());
             }
@@ -744,7 +757,7 @@ fn start(app: &mut App) {
             params
         }
         Page::Overleaf(p) => {
-            let mut params = json!({"url": texcraft_engine::typed_address(&p.address), "folder": folder, "background": true});
+            let mut params = json!({"url": texcraft_engine::typed_address(&p.address), "folder": folder, "background": true, "open": false});
             if !p.token.trim().is_empty() {
                 params["token"] = json!(p.token.trim());
                 params["remember"] = json!(remember);
@@ -752,7 +765,7 @@ fn start(app: &mut App) {
             params
         }
         Page::Git(p) => {
-            let mut params = json!({"url": texcraft_engine::typed_address(&p.address), "folder": folder, "background": true});
+            let mut params = json!({"url": texcraft_engine::typed_address(&p.address), "folder": folder, "background": true, "open": false});
             if !p.branch.trim().is_empty() {
                 params["branch"] = json!(p.branch.trim());
             }
@@ -767,12 +780,48 @@ fn start(app: &mut App) {
         }
         _ => return,
     };
-    if let Err(e) = app.session.execute("project.clone", &params) {
-        let problem = app.session.import_problem().unwrap_or(ImportProblem::Other);
-        if let Some(Dialog::Import(form)) = app.view.dialog.as_mut() {
-            form.error = Some((problem, e));
+    let name = PathBuf::from(&folder).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    match app.session.execute("project.clone", &params) {
+        Ok(v) if v["started"] == true => begin(app, name, false),
+        Ok(v) => cloned(app, &v),
+        Err(e) => {
+            let problem = app.session.import_problem().unwrap_or(ImportProblem::Other);
+            if let Some(Dialog::Import(form)) = app.view.dialog.as_mut() {
+                form.error = Some((problem, e));
+            }
         }
     }
+}
+
+/// An import under way, or one that failed, shown as a card on the start page until it ends.
+pub(crate) struct Importing {
+    /// The project's name: the new folder's, or the repository's in the browser.
+    name: String,
+    /// The dialog's page as it was, for Try Again.
+    form: Option<Box<ImportForm>>,
+    /// The project open when the import began: another one open since means the user went on to
+    /// something else, and the import does not take its place.
+    before: Option<PathBuf>,
+    /// Through the forge's API (the browser), not a clone.
+    browser: bool,
+    /// Why it failed, in words.
+    error: Option<String>,
+}
+
+/// The import started: the dialog closes, and its card appears at once on the start page.
+fn begin(app: &mut App, name: String, browser: bool) {
+    let form = match app.view.dialog.take() {
+        Some(Dialog::Import(mut form)) => {
+            form.error = None;
+            Some(form)
+        }
+        other => {
+            app.view.dialog = other;
+            None
+        }
+    };
+    app.importing = Some(Importing { name, form, before: app.session.dir().cloned(), browser, error: None });
+    app.start = true;
 }
 
 /// The forge page's address with its server when it names none.
@@ -783,10 +832,33 @@ fn qualified(f: &OpenForm) -> String {
     if bare && f.instance != public && !f.instance.is_empty() { format!("{}/{text}", f.instance) } else { text.to_owned() }
 }
 
-/// A clone ended: the project is open; the dialog closes and the status line says where.
+/// A clone ended: the project opens, unless another was opened meanwhile (then it joins the recent
+/// projects); its card leaves the start page, and the status line says where it went.
 pub(crate) fn cloned(app: &mut App, done: &Value) {
     if matches!(app.view.dialog, Some(Dialog::Import(_))) {
         app.view.dialog = None;
+    }
+    let importing = app.importing.take();
+    let folder = done["folder"].as_str().unwrap_or_default().to_owned();
+    let mut done = done.clone();
+    if done["opened"] == false {
+        let elsewhere = importing.as_ref().is_some_and(|i| !app.start || app.session.dir() != i.before.as_ref());
+        if elsewhere {
+            app.prefs.recent.retain(|p| *p != folder);
+            app.prefs.recent.insert(0, folder.clone());
+            app.prefs.recent.truncate(crate::prefs::RECENT_MAX);
+            app.prefs_changed = true;
+            let said = tl!("Imported {name} ({branch}) into {folder}: it is in the recent projects.")
+                .replace("{name}", done["name"].as_str().unwrap_or_default())
+                .replace("{branch}", done["branch"].as_str().unwrap_or_default())
+                .replace("{folder}", &folder);
+            app.view.status = Some((said, false));
+            return;
+        }
+        let Some(opened) = app.run("project.open", json!({"path": folder})) else { return };
+        if let Some(note) = opened.get("note") {
+            done["note"] = note.clone();
+        }
     }
     app.start = false;
     app.pdf = crate::pdf_view::PdfView::default();
@@ -815,9 +887,25 @@ pub(crate) fn failed(app: &mut App, was: Option<&str>, e: &str) -> bool {
         }
         Some("clone") => {
             let problem = app.session.import_problem().unwrap_or(ImportProblem::Other);
+            if let Some(importing) = app.importing.as_mut() {
+                importing.error = Some(e.to_owned());
+                if let Some(form) = importing.form.as_mut() {
+                    form.error = Some((problem, e.to_owned()));
+                }
+                return true;
+            }
             match app.view.dialog.as_mut() {
                 Some(Dialog::Import(form)) => form.error = Some((problem, e.to_owned())),
                 _ => app.view.status = Some((e.to_owned(), true)),
+            }
+            true
+        }
+        Some("open") if app.importing.as_ref().is_some_and(|i| i.browser) => {
+            if let Some(importing) = app.importing.as_mut() {
+                importing.error = Some(e.to_owned());
+                if let Some(form) = importing.form.as_mut() {
+                    form.error = Some((ImportProblem::Other, e.to_owned()));
+                }
             }
             true
         }
@@ -1164,7 +1252,7 @@ fn row<R>(ui: &mut egui::Ui, t: &Tokens, narrow: bool, label: &str, add: impl Fn
 }
 
 /// A line under a field: muted, or a success or an error with its icon; announced when it changes.
-fn hint(ui: &mut egui::Ui, t: &Tokens, text: &str, tone: Tone) {
+pub(crate) fn hint(ui: &mut egui::Ui, t: &Tokens, text: &str, tone: Tone) {
     if text.is_empty() {
         return;
     }
@@ -1193,7 +1281,7 @@ fn hint(ui: &mut egui::Ui, t: &Tokens, text: &str, tone: Tone) {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Tone {
+pub(crate) enum Tone {
     Plain,
     Good,
     Bad,
@@ -1202,7 +1290,6 @@ enum Tone {
 
 /// A source's page: its fields, Into, the error and the footer.
 fn page(ui: &mut egui::Ui, t: &Tokens, form: &mut ImportForm, info: &Info, acts: &mut Vec<Act>) {
-    let narrow = info.narrow;
     let running = info.running.is_some();
     let focus = std::mem::take(&mut form.focus_field);
     let mut ready = false;
@@ -1231,20 +1318,11 @@ fn page(ui: &mut egui::Ui, t: &Tokens, form: &mut ImportForm, info: &Info, acts:
         }
         _ => {}
     });
+    if token_typed {
+        ui.add_enabled_ui(!running, |ui| remember_row(ui, t, &mut form.remember, info));
+    }
     if needs_folder {
         ui.add_enabled_ui(!running, |ui| {
-            if token_typed {
-                row(ui, t, narrow, "", |ui, _| {
-                    let label = tl!("Remember on this computer");
-                    ui.checkbox(&mut form.remember, label);
-                    let kept = if info.kept == "keychain" {
-                        tl!("Kept in the system's keychain, so that Sync works later too.")
-                    } else {
-                        tl!("Kept while TeXCraft runs.")
-                    };
-                    ui.label(RichText::new(kept).font(t.small()).color(t.text_muted));
-                });
-            }
             ready &= into_row(ui, t, &mut form.into, info, acts);
         });
         let note = tl!("TeXCraft makes a git clone in this folder: the whole history, up to {limit}, so that Sync works at once.")
@@ -1259,6 +1337,27 @@ fn page(ui: &mut egui::Ui, t: &Tokens, form: &mut ImportForm, info: &Info, acts:
         }
     }
     footer(ui, t, ready, running, info, enter, acts);
+}
+
+/// Remember on this computer (ticked by default), and where the token goes and how it is removed.
+fn remember_row(ui: &mut egui::Ui, t: &Tokens, remember: &mut bool, info: &Info) {
+    row(ui, t, info.narrow, "", |ui, _| {
+        let label = if info.browser { tl!("Remember in this tab") } else { tl!("Remember on this computer") };
+        ui.checkbox(remember, label);
+        let kept = match (*remember, info.kept) {
+            (true, "keychain") => tl!(
+                "Kept in the system's keychain, so that Sync, push, pull and later imports need no token. Settings › Accounts lists it, with Replace… and Forget."
+            ),
+            (true, "tab") => {
+                tl!("Kept in this tab's session storage until the tab is closed. Settings › Accounts lists it, with Replace… and Forget.")
+            }
+            (true, _) if info.browser => tl!("This page has no storage for it: the token is kept while the page is open only."),
+            (true, _) => tl!("This computer has no keychain TeXCraft can use: the token is kept while TeXCraft runs only."),
+            (false, _) if info.browser => tl!("Kept while this page is open, then forgotten."),
+            (false, _) => tl!("Kept while TeXCraft runs, then forgotten."),
+        };
+        ui.label(RichText::new(kept).font(t.small()).color(t.text_muted));
+    });
 }
 
 /// Cancel and Import, or while a clone runs its progress and Cancel.
@@ -1390,7 +1489,16 @@ fn forge_fields(ui: &mut egui::Ui, t: &Tokens, f: &mut OpenForm, source: Source,
                 .desired_width(f32::INFINITY)
                 .margin(vec2(8.0, 6.0));
             let r = ui.add(edit).labelled_by(label);
-            crate::forge::token_note(ui, t, info.browser, f.service);
+            let host = texcraft_engine::forge::servers::host_of(&crate::forge::instance_of_form(f)).to_owned();
+            let kept = match (info.kept_token && f.token.trim().is_empty(), info.browser) {
+                (true, true) => {
+                    tl!("A token for {host} is kept in this tab: leave this empty to use it, or type another to replace it.").replace("{host}", &host)
+                }
+                (true, false) => tl!("A token for {host} is kept on this computer: leave this empty to use it, or type another to replace it.")
+                    .replace("{host}", &host),
+                (false, _) => String::new(),
+            };
+            crate::forge::token_note(ui, t, &kept, f.service);
             r
         });
         if token.changed() {
@@ -1421,7 +1529,8 @@ fn forge_fields(ui: &mut egui::Ui, t: &Tokens, f: &mut OpenForm, source: Source,
         responses.push(branch);
     }
     let enter = responses.iter().any(|r| r.lost_focus()) && ui.input(|i| i.key_pressed(Key::Enter));
-    let ready = !f.address.trim().is_empty() && (signed_in || (f.use_token && !f.token.trim().is_empty())) && !f.instance.is_empty();
+    let key = signed_in || (f.use_token && !f.token.trim().is_empty()) || info.kept_token;
+    let ready = !f.address.trim().is_empty() && key && !f.instance.is_empty();
     (ready, enter)
 }
 
@@ -1638,4 +1747,114 @@ fn git_fields(ui: &mut egui::Ui, t: &Tokens, p: &mut GitPage, info: &Info, focus
     let enter = responses.iter().any(|r| r.lost_focus()) && ui.input(|i| i.key_pressed(Key::Enter));
     let ready = matches!(&state, Checked::Found { branches, .. } if !branches.is_empty());
     (ready, enter)
+}
+
+/// What was chosen on the import's card.
+enum CardAct {
+    Cancel,
+    TryAgain,
+    Dismiss,
+}
+
+/// The import's card, first among the recent projects (`size` as theirs): a spinner, the name,
+/// "Importing…" and the phase (a live region, said at each phase), Cancel; or, when it failed, why
+/// in words with Try Again (the dialog's page as it was) and Dismiss. Nothing when no import runs.
+pub(crate) fn card_of_import(app: &mut App, ui: &mut egui::Ui, t: &Tokens, size: egui::Vec2) {
+    let Some(importing) = &app.importing else { return };
+    let phase = if importing.browser {
+        app.session.forge_busy().map(|_| tl!("Receiving the files…"))
+    } else {
+        app.session.clone_phase().map(|phase| match phase {
+            ClonePhase::Connecting => tl!("Asking the server for the project…"),
+            ClonePhase::Receiving => tl!("Receiving the history…"),
+            ClonePhase::Writing => tl!("Writing the files…"),
+        })
+    };
+    let name = importing.name.clone();
+    let error = importing.error.clone();
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    ui.painter().rect_filled(rect, t.corner_large(), t.surface);
+    let border = if error.is_some() { t.error } else { t.accent };
+    ui.painter().rect_stroke(rect, t.corner_large(), egui::Stroke::new(1.0, border), egui::StrokeKind::Inside);
+    let state = if error.is_some() { tl!("Import failed") } else { tl!("Importing…") };
+    let group = format!("{name}, {state}");
+    let mut chosen = None;
+    let builder = egui::UiBuilder::new()
+        .max_rect(rect.shrink(12.0))
+        .layout(egui::Layout::top_down(egui::Align::Min))
+        .accessibility_role(egui::accesskit::Role::Group)
+        .accessibility_label(&group);
+    ui.scope_builder(builder, |ui| {
+        ui.spacing_mut().item_spacing.y = t.unit * 2.0;
+        let (page, _) = ui.allocate_exact_size(vec2(ui.available_width(), 120.0), Sense::hover());
+        match &error {
+            None => {
+                widgets::spinner(ui, page.center(), 14.0, t.accent);
+                ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
+            }
+            Some(_) => icons::paint(ui, page, "circle-exclamation-point", 28.0, t.error),
+        }
+        ui.add(egui::Label::new(RichText::new(&name).font(t.strong())).truncate());
+        match &error {
+            None => {
+                let text = match phase {
+                    Some(phase) => format!("{state} {phase}"),
+                    None => state.to_owned(),
+                };
+                let said = ui.add(egui::Label::new(RichText::new(&text).font(t.small()).color(t.text_muted)).wrap());
+                crate::status::announce(ui, &said, &text);
+                let r = ui.button(tl!("Cancel"));
+                let label = format!("{}: {name}", tl!("Cancel"));
+                r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &label));
+                if r.clicked() {
+                    chosen = Some(CardAct::Cancel);
+                }
+            }
+            Some(e) => {
+                let words = crate::i18n::msg(e);
+                egui::ScrollArea::vertical().id_salt("import-card-error").max_height(64.0).show(ui, |ui| {
+                    let said = ui.add(egui::Label::new(RichText::new(&words).font(t.small()).color(t.error)).wrap());
+                    crate::status::announce(ui, &said, &words);
+                });
+                ui.horizontal_wrapped(|ui| {
+                    let r = ui.button(tl!("Try Again"));
+                    let label = format!("{}: {name}", tl!("Try Again"));
+                    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &label));
+                    if r.clicked() {
+                        chosen = Some(CardAct::TryAgain);
+                    }
+                    let r = ui.button(tl!("Dismiss"));
+                    let label = format!("{}: {name}", tl!("Dismiss"));
+                    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &label));
+                    if r.clicked() {
+                        chosen = Some(CardAct::Dismiss);
+                    }
+                });
+            }
+        }
+    });
+    match chosen {
+        Some(CardAct::Cancel) => stop(app),
+        Some(CardAct::TryAgain) => {
+            if let Some(importing) = app.importing.take() {
+                match importing.form {
+                    Some(form) => app.view.dialog = Some(Dialog::Import(form)),
+                    None => open_at(app, None, ""),
+                }
+            }
+        }
+        Some(CardAct::Dismiss) => app.importing = None,
+        None => {}
+    }
+}
+
+/// Cancel on the import's card: the clone (or the browser's opening) stops, the folder it made is
+/// removed, and the card goes.
+fn stop(app: &mut App) {
+    let Some(importing) = app.importing.take() else { return };
+    let command = if importing.browser { "forge.cancel_open" } else { "project.cancel_clone" };
+    if let Some(done) = app.run(command, json!({})) {
+        let said = if done["removed"] == true { tl!("Import stopped: the folder it made is removed.") } else { tl!("Import stopped.") };
+        app.view.status = Some((said.to_owned(), false));
+    }
 }

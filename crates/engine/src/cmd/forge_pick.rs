@@ -119,7 +119,7 @@ fn projects_schema() -> Value {
     json!({"type": "object", "properties": {
         "service": {"enum": ["gitlab", "github"], "description": SERVICE},
         "instance": {"type": "string", "description": INSTANCE},
-        "query": {"type": "string", "description": "Part of the project's path (owner/name, group/name, or a word of it); empty lists the most recently active."},
+        "query": {"type": "string", "description": "Part of the project's path (owner/name, group/name, or a word of it); empty lists the most recently active. The outcome's `total` says how many projects the account reaches, when known (`total_more`: more than that)."},
         "token": {"type": "string", "description": TOKEN},
         "background": {"type": "boolean", "description": BACKGROUND}
     }, "additionalProperties": false})
@@ -161,7 +161,32 @@ fn project_json(instance: &str, p: &ProjectSummary) -> Value {
     })
 }
 
-fn found_json(service: Service, instance: &str, query: &str, projects: &[ProjectSummary], truncated: bool, searched: bool) -> Value {
+/// How many projects the account reaches, when it is known: GitHub's listing of the user's
+/// repositories (with whether it was cut at its cap), or GitLab's answer to an empty query when it
+/// was not cut.
+fn total_of(
+    service: Service,
+    query: &str,
+    projects: &[ProjectSummary],
+    truncated: bool,
+    listing: Option<&Listed<ProjectSummary>>,
+) -> Option<(usize, bool)> {
+    match (service, listing) {
+        (Service::GitHub, Some(l)) => Some((l.items.len(), l.truncated)),
+        (Service::GitLab, _) if query.is_empty() && !truncated => Some((projects.len(), false)),
+        _ => None,
+    }
+}
+
+fn found_json(
+    service: Service,
+    instance: &str,
+    query: &str,
+    projects: &[ProjectSummary],
+    truncated: bool,
+    searched: bool,
+    total: Option<(usize, bool)>,
+) -> Value {
     json!({
         "operation": "projects",
         "service": service.id(),
@@ -170,6 +195,8 @@ fn found_json(service: Service, instance: &str, query: &str, projects: &[Project
         "projects": projects.iter().map(|p| project_json(instance, p)).collect::<Vec<_>>(),
         "truncated": truncated,
         "searched": searched,
+        "total": total.map(|(n, _)| n),
+        "total_more": total.is_some_and(|(_, more)| more),
     })
 }
 
@@ -206,7 +233,8 @@ fn projects(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(listing) = &listing {
         let matched: Vec<ProjectSummary> = listing::matching(&listing.items, &query).into_iter().cloned().collect();
         if !matched.is_empty() || !listing::worth_searching(&query) {
-            return Ok(found_json(service, &instance, &query, &matched, listing.truncated, false));
+            let total = total_of(service, &query, &matched, listing.truncated, Some(listing));
+            return Ok(found_json(service, &instance, &query, &matched, listing.truncated, false, total));
         }
     }
     let (connect, clients, renewed) = (s.forge_transport.clone(), s.forge_auth_clients(), Renewed::default());
@@ -229,11 +257,12 @@ fn projects(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// What a lookup of projects found: its listing kept, and the key, in words.
 fn found_projects(s: &mut Session, found: Found, service: Service, instance: &str, key: Key, query: &str) -> Value {
+    let total = total_of(service, query, &found.projects, found.truncated, found.listing.as_ref().or(kept(s, instance, &Who::of(&key))));
     if let Some(listing) = found.listing {
         s.forge_lookups.kept = Some(Kept { instance: instance.to_owned(), who: Who::of(&key), at: oauth::now(), listing });
     }
     s.keep_key(instance, key);
-    found_json(service, instance, query, &found.projects, found.truncated, found.searched)
+    found_json(service, instance, query, &found.projects, found.truncated, found.searched, total)
 }
 
 fn branches(s: &mut Session, p: &Value) -> Result<Value> {

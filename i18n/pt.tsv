@@ -355,7 +355,6 @@
 	German	Alemão
 	Get the Desktop App	Obter a aplicação de computador
 	Git Address	Endereço git
-	Git servers	Servidores git
 	Git token	Token git
 	GitHub (github.com)	GitHub (github.com)
 	GitHub Status	Estado do GitHub
@@ -458,8 +457,6 @@
 	Keep Both	Manter ambos
 	Keep the New Project	Manter o projeto novo
 	Kept beside a file of the same name: {n}.	Guardados ao lado de um ficheiro com o mesmo nome: {n}.
-	Kept in the system's keychain, so that Sync works later too.	Guardado no porta-chaves do sistema, para que Sincronizar também funcione mais tarde.
-	Kept while TeXCraft runs.	Guardado enquanto o TeXCraft está em execução.
 	Keyboard	Teclado
 	Keyboard Shortcuts	Atalhos de teclado
 	Keyboard shortcuts	Atalhos de teclado
@@ -933,8 +930,6 @@
 	TeXCraft can open; committing asks again.	O TeXCraft pode abrir; para fazer commit volta a perguntar.
 	TeXCraft cannot sign in to {host} yet: add the server once, and sign in to it as to gitlab.com. Until then, use a personal access token.	O TeXCraft ainda não consegue iniciar sessão em {host}: adicione o servidor uma vez e inicie sessão nele como no gitlab.com. Até lá, use um token de acesso pessoal.
 	TeXCraft has no application on this server yet: add it to sign in, or use a personal access token.	O TeXCraft ainda não tem aplicação neste servidor: adicione-a para iniciar sessão, ou use um token de acesso pessoal.
-	TeXCraft keeps the token only while it runs: it is never written to disk.	O TeXCraft só guarda o token enquanto está em execução: nunca é escrito no disco.
-	TeXCraft keeps the token only while this page is open: it is never stored.	O TeXCraft só guarda o token enquanto esta página está aberta: nunca é armazenado.
 	TeXCraft makes a git clone in this folder: the whole history, up to {limit}, so that Sync works at once.	O TeXCraft faz um clone git nesta pasta: todo o histórico, até {limit}, para que Sincronizar funcione de imediato.
 	TeXCraft makes a new project on GitLab and commits this project's files to it, as one commit; the versions kept in this browser stay here. The project then commits to it.	O TeXCraft cria um projeto novo no GitLab e faz commit dos ficheiros deste projeto nele, num único commit; as versões guardadas neste navegador ficam aqui. A partir daí, o projeto faz commit nele.
 	TeXCraft makes a new project on GitLab, sets it as this folder's remote (origin), and pushes the project's whole history to it. Changes not committed yet are committed first.	O TeXCraft cria um projeto novo no GitLab, define-o como remoto desta pasta (origin) e envia-lhe todo o histórico do projeto. As alterações ainda sem commit são primeiro incluídas num commit.
@@ -1428,7 +1423,6 @@
 	{host} is a GitHub Enterprise Server.	{host} é um GitHub Enterprise Server.
 	{host} is a GitLab server (version {version}).	{host} é um servidor GitLab (versão {version}).
 	{host} is a GitLab server.	{host} é um servidor GitLab.
-	{host}: a token is kept in the keychain.	{host}: há um token guardado no porta-chaves.
 	{image} is in a new figure: give it a caption with Edit Figure….	{image} está numa figura nova: dê-lhe uma legenda com Editar figura….
 	{i} of {n}	{i} de {n}
 	{i} of {n}+	{i} de {n}+
@@ -1815,12 +1809,10 @@ unit	{n} s	{n} s
 @msg	GitLab refused a request ({what}): the access token needs the read_api scope to open a project and the api scope to commit, and your role in the project must allow it.	O GitLab recusou um pedido ({what}): o token de acesso precisa do âmbito read_api para abrir um projeto e do âmbito api para fazer commit, e a sua função no projeto tem de o permitir.
 @msg	GitLab's answer is not for the sign-in this page started: sign in again.	A resposta do GitLab não corresponde ao início de sessão que esta página começou: inicie sessão de novo.
 @msg	Give `rule` (a Harper rule's key) or `group`, not both.	Indique `rule` (a chave de uma regra do Harper) ou `group`, não ambos.
-@msg	Give a personal access token for {instance}: TeXCraft keeps it only while it runs, never on disk.	Indique um token de acesso pessoal para {instance}: o TeXCraft só o guarda enquanto está em execução, nunca no disco.
 @msg	Give a personal access token: the forge's API needs one to open a project and commit to it.	Indique um token de acesso pessoal: a API da forja precisa de um para abrir um projeto e fazer commit nele.
 @msg	Give the application's ID, as the server shows it once the application is registered.	Indique o ID da aplicação, tal como o servidor o mostra depois de a aplicação ser registada.
 @msg	Give the project a name.	Dê um nome ao projeto.
 @msg	Give the title or DOI in at most {MAX_DESCRIPTION_CHARS} characters.	Indique o título ou DOI em no máximo {MAX_DESCRIPTION_CHARS} caracteres.
-@msg	Give your {value} git authentication token for this project (token): TeXCraft keeps it only while it runs, never on disk.	Indique o seu token de autenticação git de {value} para este projeto (token): o TeXCraft guarda-o só enquanto está a correr, nunca no disco.
 @msg	Grammar checking is not in this build; Check Grammar with AI is available.	Esta versão não inclui verificação gramatical; Verificar gramática com IA está disponível.
 @msg	Grammar checking is off (Settings › Editor).	A verificação gramatical está desligada (Definições › Editor).
 @msg	Grammar is checked offline in English only, and this document is in {lang}: Check Grammar with AI works in any language.	A gramática só é verificada offline em inglês, e este documento está em {lang}: Verificar gramática com IA funciona em qualquer idioma.
@@ -1876,8 +1868,6 @@ unit	{n} s	{n} s
 @msg	Scientific poster (tikzposter)	Póster científico (tikzposter)
 @msg	Select at most {MAX_REWRITE_CHARS} characters to rewrite at once.	Selecione no máximo {MAX_REWRITE_CHARS} caracteres para reescrever de uma vez.
 @msg	Select the text to rewrite first.	Selecione primeiro o texto a reescrever.
-@msg	Sign in to {instance} (forge.sign_in with its instance), or give a personal access token for it: TeXCraft keeps a token only while it runs, never on disk.	Inicie sessão em {instance} (forge.sign_in com a respetiva instância), ou forneça um token de acesso pessoal para essa instância: o TeXCraft só guarda um token enquanto está em execução, nunca no disco.
-@msg	Sign in to {name} (forge.sign_in), or give a personal access token for {instance}: TeXCraft keeps a token only while it runs, never on disk.	Inicie sessão em {name} (forge.sign_in), ou forneça um token de acesso pessoal para {instance}: o TeXCraft só guarda um token enquanto está em execução, nunca no disco.
 @msg	Signed out here, but GitLab could not be told to revoke the token: {e}	Sessão terminada aqui, mas não foi possível pedir ao GitLab que revogasse o token: {e}
 @msg	Signed out of {name} here, but {name} could not be told to revoke the token: {e}	Sessão em {name} terminada aqui, mas não foi possível pedir a {name} que revogasse o token: {e}
 @msg	Signing in to GitHub was refused on GitHub's page.	O início de sessão no GitHub foi recusado na página do GitHub.
@@ -2426,3 +2416,47 @@ unit	{n} s	{n} s
 @msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	Os ficheiros com mais de {limit} não foram carregados: ficam na pasta do projeto, inalterados, e não fazem parte das suas compilações.
 @msg	Apply this fix everywhere in this file ({n} places)	Aplicar esta correção em todo o ficheiro ({n} sítios)
 	Back to Settings	Voltar às definições
+
+# Import a Project: the import's card, the list being fetched, the tokens kept
+	Kept while this page is open; a token kept for this server (Settings › Accounts) is replaced by it.	Guardado enquanto esta página estiver aberta; substitui o token guardado para este servidor (Definições › Contas).
+	Kept while TeXCraft runs; a token kept for this server (Settings › Accounts) is replaced by it.	Guardado enquanto o TeXCraft estiver aberto; substitui o token guardado para este servidor (Definições › Contas).
+	Replaced the token kept for {host}.	O token guardado para {host} foi substituído.
+	Tokens kept in this tab	Tokens guardados neste separador
+	Kept in this tab's session storage until the tab is closed; never in the preferences.	Guardados no armazenamento de sessão deste separador até ser fechado; nunca nas preferências.
+	Tokens kept on this computer	Tokens guardados neste computador
+	Kept in the system's keychain; never in the preferences.	Guardados no porta-chaves do sistema; nunca nas preferências.
+	Tokens kept while TeXCraft runs	Tokens guardados enquanto o TeXCraft estiver aberto
+	This computer has no keychain TeXCraft can use: tokens are kept while it runs only.	Este computador não tem um porta-chaves que o TeXCraft possa usar: os tokens só são guardados enquanto estiver aberto.
+	Push, pull, Sync and the next import from these servers use them without asking. {place}	Enviar, receber, Sincronizar e a próxima importação destes servidores usam-nos sem perguntar. {place}
+	Replace…	Substituir…
+	New token for {host}	Novo token para {host}
+	Keep	Guardar
+	Remember in this tab	Lembrar neste separador
+	Kept in the system's keychain, so that Sync, push, pull and later imports need no token. Settings › Accounts lists it, with Replace… and Forget.	Guardado no porta-chaves do sistema, para que Sincronizar, enviar, receber e as próximas importações não precisem de token. Definições › Contas mostra-o, com Substituir… e Esquecer.
+	Kept in this tab's session storage until the tab is closed. Settings › Accounts lists it, with Replace… and Forget.	Guardado no armazenamento de sessão deste separador até ser fechado. Definições › Contas mostra-o, com Substituir… e Esquecer.
+	This page has no storage for it: the token is kept while the page is open only.	Esta página não tem onde o guardar: o token só é guardado enquanto a página estiver aberta.
+	This computer has no keychain TeXCraft can use: the token is kept while TeXCraft runs only.	Este computador não tem um porta-chaves que o TeXCraft possa usar: o token só é guardado enquanto o TeXCraft estiver aberto.
+	Kept while this page is open, then forgotten.	Guardado enquanto esta página estiver aberta, depois esquecido.
+	Kept while TeXCraft runs, then forgotten.	Guardado enquanto o TeXCraft estiver aberto, depois esquecido.
+	A token for {host} is kept in this tab: leave this empty to use it, or type another to replace it.	Há um token para {host} guardado neste separador: deixe isto vazio para o usar, ou escreva outro para o substituir.
+	A token for {host} is kept on this computer: leave this empty to use it, or type another to replace it.	Há um token para {host} guardado neste computador: deixe isto vazio para o usar, ou escreva outro para o substituir.
+	Imported {name} ({branch}) into {folder}: it is in the recent projects.	{name} ({branch}) foi importado para {folder}: está nos projetos recentes.
+	Receiving the files…	A receber os ficheiros…
+	Import failed	A importação falhou
+	Importing…	A importar…
+	Kept in the system's keychain, so that Sync, push and pull ask no more. Settings › Accounts lists it, with Replace… and Forget.	Guardado no porta-chaves do sistema, para que Sincronizar, enviar e receber não voltem a pedir. Definições › Contas mostra-o, com Substituir… e Esquecer.
+	Fetching your projects…	A obter os seus projetos…
+	Fetching your repositories…	A obter os seus repositórios…
+	Still fetching your projects…	Ainda a obter os seus projetos…
+	Still fetching your repositories…	Ainda a obter os seus repositórios…
+	Your list could not be fetched:	Não foi possível obter a sua lista:
+@plural	More than {n} repository: type to find the others|More than {n} repositories: type to find the others	Mais de {n} repositório: escreva para encontrar os outros|Mais de {n} repositórios: escreva para encontrar os outros
+@plural	{n} repository|{n} repositories	{n} repositório|{n} repositórios
+@plural	{n} project|{n} projects	{n} projeto|{n} projetos
+@plural	Your {n} most recently active project is listed: type to find the others|Your {n} most recently active projects are listed: type to find the others	O seu {n} projeto ativo mais recente está na lista: escreva para encontrar os outros|Os seus {n} projetos ativos mais recentes estão na lista: escreva para encontrar os outros
+@plural	{n} project found|{n} projects found	{n} projeto encontrado|{n} projetos encontrados
+@plural	{n} repository found|{n} repositories found	{n} repositório encontrado|{n} repositórios encontrados
+@msg	Give a personal access token for {instance} (remember keeps it for next time).	Indique um token de acesso pessoal para {instance} (remember guarda-o para a próxima vez).
+@msg	Give your {value} git authentication token for this project (token); git.keep_credential keeps it for next time.	Indique o seu token de autenticação git do {value} para este projeto (token); git.keep_credential guarda-o para a próxima vez.
+@msg	Sign in to {instance} (forge.sign_in with its instance), or give a personal access token for it (remember keeps it for next time).	Inicie sessão em {instance} (forge.sign_in com a sua instância), ou indique um token de acesso pessoal para ela (remember guarda-o para a próxima vez).
+@msg	Sign in to {name} (forge.sign_in), or give a personal access token for {instance} (remember keeps it for next time).	Inicie sessão em {name} (forge.sign_in), ou indique um token de acesso pessoal para {instance} (remember guarda-o para a próxima vez).
