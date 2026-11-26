@@ -4,13 +4,17 @@ use texcraft_compile::Unavailable;
 use texcraft_engine::Session;
 use texcraft_ui_egui::App;
 
+fn session() -> Session {
+    Session::with_backend(Box::new(Unavailable("No engine in this test.".into())))
+}
+
 fn app() -> App {
-    App::new(Session::with_backend(Box::new(Unavailable("No engine in this test.".into()))))
+    crate::support::app(session())
 }
 
 #[test]
 fn compiling_without_an_engine_says_why_instead_of_showing_success() {
-    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app());
+    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), App::new(session()));
     // Compiling automatically (the default), the pill's click still compiles now.
     harness.get_by_label("Auto-Compile: compile now").click();
     // The build runs on a thread, and its spinner repaints until it ends: step until it has.

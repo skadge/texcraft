@@ -8,7 +8,7 @@ use texcraft_ui_egui::App;
 fn edited() -> Result<App, String> {
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
     s.execute("file.write", &json!({"path": "main.tex", "text": "changed"}))?;
-    Ok(App::new(s))
+    Ok(crate::support::app(s))
 }
 
 #[test]

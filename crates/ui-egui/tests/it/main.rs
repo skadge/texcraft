@@ -53,6 +53,7 @@ mod search;
 mod shortcuts;
 mod start_page;
 mod suggest;
+mod support;
 mod system_menu;
 mod tables;
 mod unsaved;

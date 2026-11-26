@@ -8,7 +8,8 @@ use texcraft_ui_egui::{App, ui_cmd};
 fn searching_the_gallery_narrows_the_templates_to_those_that_match() {
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
     s.set_template_store(std::env::temp_dir().join(format!("texcraft-gallery-{}", std::process::id())));
-    let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 820.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), App::new(s));
+    let mut harness =
+        Harness::builder().with_size(egui::vec2(1200.0, 820.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), crate::support::app(s));
     harness.run();
     ui_cmd::run(harness.state_mut(), "project.from_template");
     harness.run();
