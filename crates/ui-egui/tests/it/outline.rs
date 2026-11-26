@@ -27,7 +27,8 @@ fn harness() -> Harness<'static, App> {
     let prefs = Prefs { auto_compile: false, side: "outline".to_owned(), ..Prefs::default() };
     let mut h = Harness::builder()
         .with_size(egui::vec2(1400.0, 900.0))
-        .with_max_steps(60)
+        // Opening an entry scrolls the editor to its line, which takes six frames to settle.
+        .with_max_steps(10)
         .build_ui_state(|ui, app: &mut App| app.frame(ui), App::with_prefs(s, prefs));
     for _ in 0..3 {
         h.run();
