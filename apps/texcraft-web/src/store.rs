@@ -35,6 +35,10 @@ const VERSIONS: &str = "versions";
 const BLOBS: &str = "blobs";
 
 fn why(e: JsValue) -> String {
+    // A DOMException thrown at once (a put the quota refuses) keeps its name.
+    if let Some(e) = e.dyn_ref::<web_sys::DomException>() {
+        return described(e);
+    }
     e.dyn_ref::<js_sys::Error>().map(|e| String::from(e.message())).or_else(|| e.as_string()).unwrap_or_else(|| format!("{e:?}"))
 }
 
@@ -50,6 +54,12 @@ fn object(fields: &[(&str, JsValue)]) -> Object {
     obj
 }
 
+/// A storage error with its kind first (`QuotaExceededError: …`), which says a full disk from the
+/// others (`texcraft_engine::library::out_of_room`).
+fn described(e: &web_sys::DomException) -> String {
+    format!("{}: {}", e.name(), e.message())
+}
+
 /// The request's result, once it succeeded.
 async fn request(req: &IdbRequest) -> Result<JsValue, String> {
     let promise = Promise::new(&mut |resolve, reject| {
@@ -63,7 +73,7 @@ async fn request(req: &IdbRequest) -> Result<JsValue, String> {
         let failed = req.clone();
         req.set_onerror(Some(
             Closure::once_into_js(move || {
-                let error = failed.error().ok().flatten().map_or_else(|| "unknown error".to_owned(), |e| e.message());
+                let error = failed.error().ok().flatten().map_or_else(|| "unknown error".to_owned(), |e| described(&e));
                 let _ = reject.call1(&JsValue::NULL, &JsValue::from_str(&error));
             })
             .unchecked_ref(),
@@ -83,7 +93,7 @@ async fn committed(tx: &IdbTransaction) -> Result<(), String> {
         ));
         let failed = tx.clone();
         let on_failure = Closure::once_into_js(move || {
-            let error = failed.error().map_or_else(|| "the write was cancelled".to_owned(), |e| e.message());
+            let error = failed.error().map_or_else(|| "the write was cancelled".to_owned(), |e| described(&e));
             let _ = reject.call1(&JsValue::NULL, &JsValue::from_str(&error));
         });
         tx.set_onerror(Some(on_failure.unchecked_ref()));
