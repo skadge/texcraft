@@ -2466,3 +2466,26 @@ unit	{n} s	{n} s
 	{engine}: chosen in Settings › Building	{engine}: scelto in Impostazioni › Compilazione
 @msg	The branch moved since TeXCraft's last version: a new version is made instead.	Il ramo si è spostato dall'ultima versione di TeXCraft: viene creata invece una nuova versione.
 @msg	The history moved since TeXCraft's last version: a new version is made instead.	La cronologia è cambiata dall'ultima versione di TeXCraft: viene creata invece una nuova versione.
+
+# Package downloads in the browser (W8)
+	Downloading the LaTeX package {name} ({size})…	Download del pacchetto LaTeX {name} ({size})…
+	Downloading the LaTeX package {name}…	Download del pacchetto LaTeX {name}…
+	Downloading the list of TeX Live packages…	Download dell'elenco dei pacchetti TeX Live…
+	Package server	Server dei pacchetti
+	TeXCraft's server	Server di TeXCraft
+	Another server	Altro server
+	The LaTeX packages a document needs and the browser's own TeX files lack are downloaded from this server, once. Off: the build goes on without them.	I pacchetti LaTeX di cui un documento ha bisogno e che mancano ai file TeX del browser vengono scaricati una volta da questo server. Disattivato: la compilazione prosegue senza di essi.
+	The https:// address of a TeX Live mirror laid out by year, then snapshot, whose server lets this site read it. Press Enter to use it.	L'indirizzo https:// di un mirror di TeX Live organizzato per anno e poi per istantanea, il cui server consente a questo sito di leggerlo. Premere Invio per usarlo.
+unit	{n} kB	{n} kB
+unit	{n} MB	{n} MB
+@id	build.package_server	Server dei pacchetti
+@msg	`{url}` is not a package server: give its https:// address, `default` or `off`.	`{url}` non è un server di pacchetti: indicare il suo indirizzo https://, `default` o `off`.
+@msg	Downloaded the LaTeX package {p} ({value}).	Pacchetto LaTeX {p} scaricato ({value}).
+@msg	Downloaded the list of TeX Live packages ({value}).	Elenco dei pacchetti TeX Live scaricato ({value}).
+@msg	The LaTeX package {p} was not downloaded: {why}	Il pacchetto LaTeX {p} non è stato scaricato: {why}
+@msg	The list of TeX Live packages was not downloaded: {why}	L'elenco dei pacchetti TeX Live non è stato scaricato: {why}
+@msg	The TeX package server answered with an error (HTTP {code}); the build continues without the missing package.	Il server dei pacchetti TeX ha risposto con un errore (HTTP {code}); la compilazione prosegue senza il pacchetto mancante.
+@msg	The TeX package server could not be reached ({why}); the build continues without the missing package.	Il server dei pacchetti TeX non è raggiungibile ({why}); la compilazione prosegue senza il pacchetto mancante.
+@msg	The TeX package server has no TeX Live {year}.	Il server dei pacchetti TeX non ha TeX Live {year}.
+@msg	The TeX package server is busy; the build continues without the missing package, and asks again later.	Il server dei pacchetti TeX è occupato; la compilazione prosegue senza il pacchetto mancante e lo richiederà più tardi.
+@msg	The TeX package server is not available right now; the build continues without the missing package.	Il server dei pacchetti TeX non è disponibile al momento; la compilazione prosegue senza il pacchetto mancante.

@@ -2466,3 +2466,26 @@ unit	{n} s	{n} s
 	{engine}: chosen in Settings › Building	{engine}: gekozen in Instellingen › Bezig met bouwen
 @msg	The branch moved since TeXCraft's last version: a new version is made instead.	De branch is verplaatst sinds de laatste versie van TeXCraft: er wordt in plaats daarvan een nieuwe versie gemaakt.
 @msg	The history moved since TeXCraft's last version: a new version is made instead.	De geschiedenis is veranderd sinds de laatste versie van TeXCraft: er wordt in plaats daarvan een nieuwe versie gemaakt.
+
+# Package downloads in the browser (W8)
+	Downloading the LaTeX package {name} ({size})…	Het LaTeX-pakket {name} wordt gedownload ({size})…
+	Downloading the LaTeX package {name}…	Het LaTeX-pakket {name} wordt gedownload…
+	Downloading the list of TeX Live packages…	De lijst met TeX Live-pakketten wordt gedownload…
+	Package server	Pakketserver
+	TeXCraft's server	Server van TeXCraft
+	Another server	Andere server
+	The LaTeX packages a document needs and the browser's own TeX files lack are downloaded from this server, once. Off: the build goes on without them.	LaTeX-pakketten die een document nodig heeft en die de TeX-bestanden van de browser missen, worden één keer van deze server gedownload. Uit: het compileren gaat zonder ze verder.
+	The https:// address of a TeX Live mirror laid out by year, then snapshot, whose server lets this site read it. Press Enter to use it.	Het https://-adres van een TeX Live-spiegel, ingedeeld per jaar en dan per momentopname, waarvan de server deze site toestaat hem te lezen. Druk op Enter om het te gebruiken.
+unit	{n} kB	{n} kB
+unit	{n} MB	{n} MB
+@id	build.package_server	Pakketserver
+@msg	`{url}` is not a package server: give its https:// address, `default` or `off`.	`{url}` is geen pakketserver: geef het https://-adres, `default` of `off`.
+@msg	Downloaded the LaTeX package {p} ({value}).	Het LaTeX-pakket {p} is gedownload ({value}).
+@msg	Downloaded the list of TeX Live packages ({value}).	De lijst met TeX Live-pakketten is gedownload ({value}).
+@msg	The LaTeX package {p} was not downloaded: {why}	Het LaTeX-pakket {p} is niet gedownload: {why}
+@msg	The list of TeX Live packages was not downloaded: {why}	De lijst met TeX Live-pakketten is niet gedownload: {why}
+@msg	The TeX package server answered with an error (HTTP {code}); the build continues without the missing package.	De TeX-pakketserver antwoordde met een fout (HTTP {code}); het compileren gaat verder zonder het ontbrekende pakket.
+@msg	The TeX package server could not be reached ({why}); the build continues without the missing package.	De TeX-pakketserver was niet bereikbaar ({why}); het compileren gaat verder zonder het ontbrekende pakket.
+@msg	The TeX package server has no TeX Live {year}.	De TeX-pakketserver heeft geen TeX Live {year}.
+@msg	The TeX package server is busy; the build continues without the missing package, and asks again later.	De TeX-pakketserver is bezet; het compileren gaat verder zonder het ontbrekende pakket en vraagt het later opnieuw.
+@msg	The TeX package server is not available right now; the build continues without the missing package.	De TeX-pakketserver is nu niet beschikbaar; het compileren gaat verder zonder het ontbrekende pakket.

@@ -58,6 +58,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "build.package_server",
+            label: "Package Server",
+            menu: &[],
+            shortcut: None,
+            params: package_server_schema,
+            enabled: always,
+            run: package_server,
+            changes: true,
+        },
+        CommandSpec {
             id: "build.clean",
             label: "Delete Build Files",
             menu: &["Build"],
@@ -214,6 +224,23 @@ fn options(s: &mut Session, p: &Value) -> Result<Value> {
     }
     s.set_build_options(o);
     serde_json::to_value(o).map_err(|e| e.to_string())
+}
+
+fn package_server_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "server": {"type": "string", "description": format!("Where the browser build downloads the TeX Live packages its own TeX files lack: `default` ({}), `off`, or the https:// address of another mirror with the same layout (by TeX Live year, then snapshot). The desktop build uses retex's own settings.", texcraft_compile::packages::DEFAULT_SERVER)}
+    }, "additionalProperties": false})
+}
+
+/// Sets the package server when given, and returns it.
+fn package_server(s: &mut Session, p: &Value) -> Result<Value> {
+    if let Some(v) = p.get("server") {
+        let text = v.as_str().ok_or("`server` must be a string: default, off or an https:// address")?;
+        let server = texcraft_compile::packages::PackageServer::parse(text)?;
+        s.set_package_server(server);
+    }
+    let server = &s.settings.package_server;
+    Ok(json!({"server": String::from(server.clone()), "url": server.base()}))
 }
 
 fn can_clean(s: &Session) -> Result<()> {
