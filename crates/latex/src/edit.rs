@@ -463,7 +463,7 @@ fn context<'a>(text: &str, frames: &[Frame<'a>]) -> Option<(Context<'a>, Vec<(&'
                 found = Context::Item(body);
                 break;
             }
-            Frame::Environment { name, .. } if *name == "document" || view::CONTAINERS.contains(name) => break,
+            Frame::Environment { name, .. } if *name == "document" || view::shown_as_text(text, name) => break,
             Frame::Environment { .. } => return None,
         }
     }
@@ -476,7 +476,7 @@ fn paragraph_at(blocks: &[Block], at: usize) -> Option<&Block> {
     for b in blocks {
         match &b.kind {
             BlockKind::Paragraph(_) if b.range.start <= at && at <= b.range.end => return Some(b),
-            BlockKind::Container { blocks, .. } => {
+            BlockKind::Container { blocks, .. } | BlockKind::Theorem { blocks, .. } => {
                 if let Some(p) = paragraph_at(blocks, at) {
                     return Some(p);
                 }

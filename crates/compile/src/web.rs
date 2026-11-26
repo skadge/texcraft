@@ -337,6 +337,7 @@ impl WebWorker {
                     let written =
                         records::Written { pdf: bytes(get(&msg, "pdf")), synctex: bytes(get(&msg, "synctex")), pdfx: bytes(get(&msg, "pdfx")) };
                     let mut outcome = records::outcome(id, &output, dir.as_deref(), &options, written, seconds);
+                    outcome.aux = get(&msg, "aux").as_string().map(Arc::from);
                     // TeX's own log, with the files it opened: the output has only the messages.
                     if let (Some(log), Some(job)) = (get(&msg, "log").as_string(), &self.sources) {
                         crate::places::place_where_started(&mut outcome.diagnostics, &log, &job.files, &job.main, dir.as_deref());

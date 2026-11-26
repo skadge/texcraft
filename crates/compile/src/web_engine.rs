@@ -691,6 +691,21 @@ impl Engine {
         if let Some(log) = self.fs.read(&format!("{cwd}/{job}.log")) {
             fields.push(("log", String::from_utf8_lossy(&log).into_owned().into()));
         }
+        // The `.aux` files, for the numbers the formatted view shows: the job's own (the newest,
+        // wherever retex keeps it), then those beside it (`\include`'s).
+        let files = self.fs.files(&cwd);
+        let own = files.iter().filter(|(p, _)| p.ends_with(&format!("/{job}.aux"))).max_by_key(|(_, t)| *t).map(|(p, _)| p.clone());
+        if let Some(own) = own {
+            let folder = own.rsplit_once('/').map_or(String::new(), |(f, _)| format!("{f}/"));
+            let mut text = self.fs.read(&own).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default();
+            for (p, _) in files.iter().filter(|(p, _)| p.ends_with(".aux") && p.starts_with(&folder) && *p != own) {
+                if let Some(b) = self.fs.read(p) {
+                    text.push('\n');
+                    text.push_str(&String::from_utf8_lossy(&b));
+                }
+            }
+            fields.push(("aux", text.into()));
+        }
         let mut transfer = Vec::new();
         let pdfx = pdfx.iter().find(|p| self.fs.read(p).is_some()).cloned().unwrap_or_default();
         for (key, path) in [("pdf", &pdf), ("synctex", &synctex), ("pdfx", &pdfx)] {

@@ -12,10 +12,12 @@
 
 use std::ops::Range;
 
+pub mod auxfile;
 pub mod edit;
 pub mod figure;
 pub mod fold;
 pub mod keep;
+pub mod numbers;
 pub mod passage;
 pub mod prose;
 pub mod refs;

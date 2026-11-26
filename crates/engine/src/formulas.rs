@@ -257,6 +257,10 @@ fn find_block(text: &str, block: &Block, out: &mut Vec<Found>) {
             }
         }
         BlockKind::Container { blocks, .. } => blocks.iter().for_each(|b| find_block(text, b, out)),
+        BlockKind::Theorem { title, blocks, .. } => {
+            find_inlines(text, title, out);
+            blocks.iter().for_each(|b| find_block(text, b, out));
+        }
         BlockKind::Figure { caption, .. } => find_inlines(text, caption, out),
         BlockKind::Table(t) => {
             t.cells.iter().flatten().for_each(|c| find_inlines(text, c, out));
@@ -264,7 +268,7 @@ fn find_block(text: &str, block: &Block, out: &mut Vec<Found>) {
                 find_inlines(text, &f.caption, out);
             }
         }
-        BlockKind::Preamble | BlockKind::Source | BlockKind::UnsupportedTable(_) => {}
+        BlockKind::Preamble | BlockKind::Source | BlockKind::UnsupportedTable(_) | BlockKind::Include { .. } => {}
     }
 }
 

@@ -1,5 +1,6 @@
 //! Integration tests for texcraft-latex.
 
+mod auxfile;
 mod edit;
 mod figure;
 mod fold;

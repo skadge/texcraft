@@ -115,6 +115,9 @@ pub fn signature(name: &str) -> &'static [Spec] {
         "tabular*" | "tabularx" => &[R, O, R],
         "minipage" => &[O, O, O, R],
         "thebibliography" => &[R],
+        // Theorem-like environments: `\begin{theorem}[Pythagoras]`.
+        "theorem" | "lemma" | "proposition" | "corollary" | "definition" | "example" | "remark" | "conjecture" | "claim" | "exercise" | "problem"
+        | "assumption" | "observation" | "notation" | "hypothesis" | "fact" | "question" | "proof" => &[O],
         _ => &[],
     }
 }

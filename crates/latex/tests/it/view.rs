@@ -117,3 +117,34 @@ fn what_the_view_does_not_know_keeps_its_source() {
     assert_eq!(sources, ["\\foo{bar}"]);
     assert!(matches!(blocks.last(), Some(Block { kind: BlockKind::Source, range }) if text[range.clone()].starts_with("\\begin{tikzpicture}")));
 }
+
+#[test]
+fn an_input_alone_is_the_file_in_place_and_one_in_a_sentence_stays_a_chip() {
+    let blocks = view("\\section{Intro}\n\\input{sections/intro}\n\\include{b}\n\nText \\input{c} here.\n");
+    let included: Vec<&str> =
+        blocks.iter().filter_map(|b| if let BlockKind::Include { name, .. } = &b.kind { Some(name.as_str()) } else { None }).collect();
+    assert_eq!(included, ["sections/intro", "b"]);
+    assert!(inlines(&blocks).iter().any(|i| matches!(&i.kind, InlineKind::Chip { kind: ChipKind::File, key, .. } if key == "c")));
+}
+
+#[test]
+fn a_theorem_shows_its_name_title_and_label_and_its_body_as_text() {
+    let text = "\\newtheorem{thm}{Theorem}[section]\n\\newtheorem{lem}[thm]{Lemma}\n\\begin{document}\n\\begin{thm}[Pythagoras]\\label{t:p}\nThe \\emph{square}.\n\\end{thm}\n\\begin{lem} [Small] Easy.\\end{lem}\n\\begin{proof}Clear.\\end{proof}\n\\end{document}\n";
+    let blocks = view(text);
+    let theorems: Vec<_> = blocks
+        .iter()
+        .filter_map(|b| if let BlockKind::Theorem { kind, title, label, blocks } = &b.kind { Some((kind, title, label, blocks)) } else { None })
+        .collect();
+    assert_eq!(theorems.len(), 3, "{blocks:#?}");
+    let (kind, title, label, body) = theorems[0];
+    assert_eq!((kind.name.as_str(), kind.within.as_deref(), label.as_deref()), ("Theorem", Some("section"), Some("t:p")));
+    assert!(matches!(&title[..], [Inline { kind: InlineKind::Text { text, .. }, .. }] if text == "Pythagoras"));
+    assert!(texts(&inlines(body)).iter().any(|(t, s)| t == "square" && s.italic), "the body is formatted text");
+    let (lemma, small, ..) = theorems[1];
+    assert_eq!((lemma.counter.as_str(), lemma.within.as_deref()), ("thm", Some("section")), "a shared counter is reset as its owner is");
+    assert!(
+        matches!(&small[..], [Inline { kind: InlineKind::Text { text, .. }, .. }] if text == "Small"),
+        "an undeclared optional argument is read too"
+    );
+    assert!(!theorems[2].0.numbered, "a proof has no number");
+}

@@ -222,8 +222,9 @@ impl Backend for Retex {
         let seconds = started.elapsed().as_secs_f64();
         let symbols = outcome.outputs.symbols().cloned();
         let synctex = outcome.outputs.synctex().map(|s| Arc::new(s.to_vec()));
+        let aux = aux_of(outcome.outputs.written());
         let preflight = (job.options.output == Output::Print).then(|| preflight(&outcome.outputs, job.options.pdfx, &src, main_dir.as_deref()));
-        let base = Outcome { symbols, synctex, seconds, output: job.options.output, preflight, ..Outcome::unavailable(job.id, "") };
+        let base = Outcome { symbols, synctex, aux, seconds, output: job.options.output, preflight, ..Outcome::unavailable(job.id, "") };
         if outcome.cancelled {
             return Outcome { status: Status::Cancelled, log: "The build was stopped.".to_owned(), ..base };
         }
@@ -244,6 +245,18 @@ impl Backend for Retex {
         crate::places::place_where_started(&mut outcome.diagnostics, &outcome.log, &job.files, &job.main, main_dir.as_deref());
         outcome
     }
+}
+
+/// The `.aux` files among those a build wrote, one after another: the main document's (the
+/// shortest name) first.
+pub(crate) fn aux_of(written: &[(String, Vec<u8>)]) -> Option<Arc<str>> {
+    let mut aux: Vec<&(String, Vec<u8>)> = written.iter().filter(|(name, _)| name.ends_with(".aux")).collect();
+    if aux.is_empty() {
+        return None;
+    }
+    aux.sort_by_key(|(name, _)| (name.matches('/').count(), name.len()));
+    let text: String = aux.iter().map(|(_, bytes)| String::from_utf8_lossy(bytes).into_owned() + "\n").collect();
+    Some(Arc::from(text))
 }
 
 /// Builds `job` in process in `dir` (its own copy of the project, apart from the shown build's)

@@ -102,6 +102,21 @@ pub enum BlockKind {
         name: String,
         blocks: Vec<Block>,
     },
+    /// A theorem-like environment (`theorem`, `lemma`, `definition`, `proof`, those of
+    /// `\newtheorem`): its name as the document prints it, the optional argument's text, the key
+    /// of the first `\label` in it, and its body.
+    Theorem {
+        kind: TheoremKind,
+        title: Vec<Inline>,
+        label: Option<String>,
+        blocks: Vec<Block>,
+    },
+    /// A paragraph of nothing but `\input{name}` or `\include{name}`: the file is shown in its
+    /// place. `name` is as written.
+    Include {
+        command: String,
+        name: String,
+    },
     /// Display math; `source` is the math without its delimiters.
     Formula {
         source: Range<usize>,
@@ -168,18 +183,128 @@ pub struct Item {
 /// Text environments shown formatted, under their name.
 pub(crate) const CONTAINERS: &[&str] = &["abstract", "quote", "quotation", "verse", "center", "flushleft", "flushright"];
 
+/// A theorem-like environment: how the document prints its name and numbers it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TheoremKind {
+    pub env: String,
+    /// As printed: "Theorem", "Lemma", "Proof".
+    pub name: String,
+    /// `\newtheorem*` and `proof` are not numbered.
+    pub numbered: bool,
+    /// The counter it numbers with (its own, or the one named in `\newtheorem{lemma}[theorem]…`).
+    pub counter: String,
+    /// The counter that resets it and prefixes its number (`\newtheorem{theorem}{Theorem}[section]`).
+    pub within: Option<String>,
+}
+
+/// The theorem-like environments a document has without declaring them: amsthm's `proof`, and the
+/// usual names (declared in a package or a file the view does not read), each numbered by itself.
+const USUAL_THEOREMS: &[&str] = &[
+    "theorem",
+    "lemma",
+    "proposition",
+    "corollary",
+    "definition",
+    "example",
+    "remark",
+    "conjecture",
+    "claim",
+    "exercise",
+    "problem",
+    "assumption",
+    "observation",
+    "notation",
+    "hypothesis",
+    "fact",
+    "question",
+];
+
+/// The theorem-like environments `\newtheorem` declares in `text`, in order.
+pub fn theorems(text: &str) -> Vec<TheoremKind> {
+    let mut out = Vec::new();
+    let mut rest = text;
+    while let Some(at) = rest.find("\\newtheorem") {
+        rest = &rest[at + "\\newtheorem".len()..];
+        // The rest of the line holds the declaration; a comment before it does not count.
+        let line_start = text.len() - rest.len() - "\\newtheorem".len();
+        let line = text[..line_start].rsplit('\n').next().unwrap_or_default();
+        if line.contains('%') {
+            continue;
+        }
+        if rest.starts_with(|c: char| c.is_ascii_alphabetic()) {
+            continue;
+        }
+        let (star, mut s) = match rest.strip_prefix('*') {
+            Some(r) => (true, r),
+            None => (false, rest),
+        };
+        let mut take = |open: char, close: char| -> Option<String> {
+            let t = s.trim_start();
+            let inner = t.strip_prefix(open)?;
+            let end = inner.find(close)?;
+            s = &inner[end + 1..];
+            Some(inner[..end].trim().to_owned())
+        };
+        let Some(env) = take('{', '}') else { continue };
+        let shared = take('[', ']');
+        let Some(name) = take('{', '}') else { continue };
+        let within = if shared.is_none() { take('[', ']') } else { None };
+        let name: String = name.chars().filter(|c| !matches!(c, '{' | '}')).collect();
+        let counter = shared.clone().unwrap_or_else(|| env.clone());
+        // A shared counter is reset as the theorem that owns it is.
+        let within = within.or_else(|| out.iter().find(|k: &&TheoremKind| Some(&k.env) == shared.as_ref()).and_then(|k| k.within.clone()));
+        out.push(TheoremKind { env, name, numbered: !star, counter, within });
+    }
+    out
+}
+
+/// How `env` is shown when it is theorem-like: declared in `declared`, or one of the usual names.
+pub fn theorem_kind(env: &str, declared: &[TheoremKind]) -> Option<TheoremKind> {
+    if let Some(k) = declared.iter().find(|k| k.env == env) {
+        return Some(k.clone());
+    }
+    let capital = |s: &str| {
+        let mut c = s.chars();
+        c.next().map(|f| f.to_uppercase().chain(c).collect::<String>()).unwrap_or_default()
+    };
+    match env {
+        "proof" => Some(TheoremKind { env: env.to_owned(), name: "Proof".to_owned(), numbered: false, counter: String::new(), within: None }),
+        _ if USUAL_THEOREMS.contains(&env) => {
+            Some(TheoremKind { env: env.to_owned(), name: capital(env), numbered: true, counter: env.to_owned(), within: None })
+        }
+        _ => None,
+    }
+}
+
+/// Whether the body of `env` is shown as formatted text (a container or a theorem) in `text`.
+pub(crate) fn shown_as_text(text: &str, env: &str) -> bool {
+    CONTAINERS.contains(&env) || theorem_kind(env, &theorems(text)).is_some()
+}
+
 /// The view of `text`.
 pub fn view(text: &str) -> Vec<Block> {
     build(text, &tree::parse(text))
 }
 
+/// The view of `text`, with the theorem-like environments another file declares (the main
+/// file's preamble, for a file it includes).
+pub fn view_with(text: &str, declared: &[TheoremKind]) -> Vec<Block> {
+    build_with(text, &tree::parse(text), declared)
+}
+
 /// The view of `text` from its tree.
 pub fn build(text: &str, tree: &[Node]) -> Vec<Block> {
+    build_with(text, tree, &[])
+}
+
+fn build_with(text: &str, tree: &[Node], declared: &[TheoremKind]) -> Vec<Block> {
+    let mut known = theorems(text);
+    known.extend(declared.iter().filter(|d| !known.iter().any(|k| k.env == d.env)).cloned().collect::<Vec<_>>());
     let document = tree.iter().position(|n| matches!(&n.kind, Kind::Environment { name, .. } if name == "document"));
     let Some((at, Some(Node { kind: Kind::Environment { body, .. }, range }))) = document.map(|i| (i, tree.get(i))) else {
-        return View::new(text, tree, &[]).flow(tree);
+        return View::new(text, tree, &[], known).flow(tree);
     };
-    let view = View::new(text, tree, body);
+    let view = View::new(text, tree, body, known);
     let mut blocks = Vec::new();
     if !text[..range.start].trim().is_empty() {
         blocks.push(Block { kind: BlockKind::Preamble, range: 0..range.start });
@@ -198,6 +323,8 @@ struct View<'a> {
     text: &'a str,
     /// The bodies of `\title`, `\author` and `\date`.
     titles: [Option<&'a [Node]>; 3],
+    /// The theorem-like environments declared.
+    theorems: Vec<TheoremKind>,
 }
 
 /// The last required argument.
@@ -218,6 +345,65 @@ pub fn heading_level(name: &str) -> Option<u8> {
         _ => return None,
     };
     Some(level)
+}
+
+/// Calls `f` with each block of `blocks` and of the blocks inside them, in reading order.
+pub fn walk<'b>(blocks: &'b [Block], f: &mut dyn FnMut(&'b Block)) {
+    for b in blocks {
+        f(b);
+        match &b.kind {
+            BlockKind::List { items, .. } => items.iter().for_each(|i| walk(&i.blocks, f)),
+            BlockKind::Container { blocks, .. } | BlockKind::Theorem { blocks, .. } => walk(blocks, f),
+            _ => {}
+        }
+    }
+}
+
+/// The inline runs a block shows itself (not those of the blocks inside it), footnotes' and
+/// links' included.
+pub fn inlines_of(b: &Block) -> Vec<&Inline> {
+    fn add<'i>(inlines: &'i [Inline], out: &mut Vec<&'i Inline>) {
+        for i in inlines {
+            out.push(i);
+            if let InlineKind::Footnote(inner) | InlineKind::Link { text: inner, .. } = &i.kind {
+                add(inner, out);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    match &b.kind {
+        BlockKind::Title { title, author, date } => [title, author, date].into_iter().for_each(|i| add(i, &mut out)),
+        BlockKind::Heading { content, label, .. } => {
+            add(content, &mut out);
+            out.extend(label.iter());
+        }
+        BlockKind::Paragraph(inlines) => add(inlines, &mut out),
+        BlockKind::List { items, .. } => items.iter().filter_map(|i| i.label.as_ref()).for_each(|l| add(l, &mut out)),
+        BlockKind::Theorem { title, .. } => add(title, &mut out),
+        BlockKind::Figure { caption, label, .. } => {
+            add(caption, &mut out);
+            out.extend(label.iter());
+        }
+        BlockKind::Table(t) => {
+            t.cells.iter().flatten().for_each(|c| add(c, &mut out));
+            if let Some(f) = &t.float {
+                add(&f.caption, &mut out);
+                out.extend(f.label.iter());
+            }
+        }
+        BlockKind::Preamble
+        | BlockKind::Container { .. }
+        | BlockKind::Formula { .. }
+        | BlockKind::UnsupportedTable(_)
+        | BlockKind::Source
+        | BlockKind::Include { .. } => {}
+    }
+    out
+}
+
+/// Whether `\name` cites (rather than refers to a label).
+pub fn is_citation(name: &str) -> bool {
+    chip_kind(name) == Some(ChipKind::Citation)
 }
 
 fn chip_kind(name: &str) -> Option<ChipKind> {
@@ -382,6 +568,16 @@ impl Flow {
             *text = text.trim_end().to_owned();
         }
         para.retain(|i| !matches!(&i.kind, InlineKind::Text { text, .. } if text.is_empty()));
+        // `\input` and `\include` alone (one or more, apart from white space): the files in place.
+        let file = |i: &Inline| matches!(&i.kind, InlineKind::Chip { kind: ChipKind::File, .. });
+        if para.iter().any(file) && para.iter().all(|i| file(i) || matches!(&i.kind, InlineKind::Text { text, .. } if text.trim().is_empty())) {
+            for i in para {
+                if let InlineKind::Chip { command, key, .. } = i.kind {
+                    self.blocks.push(Block { kind: BlockKind::Include { command, name: key }, range: i.range });
+                }
+            }
+            return;
+        }
         if let (Some(first), Some(last)) = (para.first(), para.last()) {
             let range = first.range.start..last.range.end;
             self.blocks.push(Block { kind: BlockKind::Paragraph(para), range });
@@ -404,7 +600,7 @@ impl Flow {
 }
 
 impl<'a> View<'a> {
-    fn new(text: &'a str, top: &'a [Node], body: &'a [Node]) -> Self {
+    fn new(text: &'a str, top: &'a [Node], body: &'a [Node], theorems: Vec<TheoremKind>) -> Self {
         let mut titles = [None; 3];
         for n in top.iter().chain(body) {
             if let Kind::Command { name, args, .. } = &n.kind
@@ -414,7 +610,7 @@ impl<'a> View<'a> {
                 titles[slot] = Some(arg.body.as_slice());
             }
         }
-        View { text, titles }
+        View { text, titles, theorems }
     }
 
     fn src(&self, range: &Range<usize>) -> &'a str {
@@ -471,10 +667,40 @@ impl<'a> View<'a> {
             Kind::Math { display: true, env, body, closed } => BlockKind::Formula { source: body.clone(), env: env.clone(), closed: *closed },
             Kind::Verbatim { .. } if self.src(&range).starts_with("\\begin") => BlockKind::Source,
             Kind::Environment { name, .. } if table::GRID_ENVIRONMENTS.contains(&name.as_str()) => self.grid(n, None),
-            Kind::Environment { name, body, end, .. } => self.environment(name, body, end.is_some()),
+            Kind::Environment { name, args, body, end, .. } => match theorem_kind(name, &self.theorems) {
+                Some(kind) if end.is_some() => self.theorem(kind, args, body),
+                _ => self.environment(name, body, end.is_some()),
+            },
             _ => return None,
         };
         Some(Block { kind, range })
+    }
+
+    /// A theorem-like environment: its optional argument (parsed, or the `[…]` its body starts
+    /// with when the parser does not know the environment), its first label and its body.
+    fn theorem(&self, kind: TheoremKind, args: &[Arg], body: &[Node]) -> BlockKind {
+        let mut body = body;
+        let mut title = args.iter().find(|a| a.optional).map(|a| self.inlines(&a.body, Style::default()));
+        let mut rest: Vec<Node> = Vec::new();
+        if title.is_none()
+            && let Some(Node { kind: Kind::Text, range }) = body.first()
+        {
+            let src = self.src(range);
+            let lead = src.len() - src.trim_start().len();
+            if src.trim_start().starts_with('[')
+                && let Some(close) = src.find(']')
+            {
+                let inner = range.start + lead + 1..range.start + close;
+                title = Some(vec![text_inline(typography(self.src(&inner)).trim(), Style::default(), inner)]);
+                rest.push(Node { kind: Kind::Text, range: range.start + close + 1..range.end });
+                rest.extend(body.iter().skip(1).cloned());
+            }
+        }
+        if !rest.is_empty() {
+            body = &rest;
+        }
+        let label = first_label(self.text, body);
+        BlockKind::Theorem { kind, title: title.unwrap_or_default(), label, blocks: self.flow(body) }
     }
 
     /// A `tabular` node as a grid, or why it stays as source.
@@ -714,6 +940,15 @@ impl<'a> View<'a> {
         out.push(Inline { kind: InlineKind::Source, range: n.range.start..end });
         next
     }
+}
+
+/// The key of the first `\label` among `nodes` (and in their groups).
+pub(crate) fn first_label(text: &str, nodes: &[Node]) -> Option<String> {
+    nodes.iter().find_map(|n| match &n.kind {
+        Kind::Command { name, args, .. } if name == "label" => required(args).and_then(|a| text.get(a.inner.clone())).map(|k| k.trim().to_owned()),
+        Kind::Group { body, .. } => first_label(text, body),
+        _ => None,
+    })
 }
 
 /// The nodes of `nodes` that show in `r` (a cell's text): text clipped to it, and the body of a

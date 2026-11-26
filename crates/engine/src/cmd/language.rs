@@ -15,6 +15,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         spec("language.definition", "Go to Definition", at_schema, definition),
         spec("language.lint", "Hints", path_schema, lint),
         spec("language.formulas", "Typeset Formulas", path_schema, formulas),
+        spec("language.numbers", "Numbers and References", path_schema, numbers),
         spec("language.fixes", "Quick Fixes", line_schema, fixes),
         CommandSpec {
             id: "language.fix",
@@ -236,6 +237,13 @@ fn lint(s: &mut Session, p: &Value) -> Result<Value> {
         .map(|l| json!({"line": l.line + 1, "column": l.column + 1, "end_line": l.end_line + 1, "end_column": l.end_column + 1, "severity": l.severity, "message": l.message}))
         .collect();
     Ok(json!({"hints": hints}))
+}
+
+/// What the formatted view shows for the file's cross-references, citations and numbered parts,
+/// from the last build's `.aux` and the document's counting.
+fn numbers(s: &mut Session, p: &Value) -> Result<Value> {
+    let path = path_param(p, "path")?;
+    crate::numbering::report(s, &path)
 }
 
 /// The file's formulas typeset as the formatted view draws them, after waiting for the batch:

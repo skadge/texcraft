@@ -14,6 +14,7 @@ pub mod find;
 mod formulas;
 pub mod grammar;
 mod language;
+pub mod numbering;
 pub mod spelling;
 pub use grammar::{GrammarOptions, GrammarProblem};
 pub use spelling::{Misspelling, SpellingOptions};
@@ -175,6 +176,8 @@ pub struct Session {
     history: Option<texcraft_history::History>,
     /// The formulas of the file last asked for, and the engine that typesets them.
     formulas: formulas::State,
+    /// What the last build that wrote an `.aux` numbered, and the document's numbers from it.
+    numbering: numbering::State,
     /// The export running on its own thread (`build.export` with `background`).
     #[cfg(not(target_arch = "wasm32"))]
     export: Option<std::sync::mpsc::Receiver<Result<Value>>>,
@@ -256,6 +259,7 @@ impl Session {
             on_disk: std::collections::BTreeSet::new(),
             history: None,
             formulas: formulas::State::default(),
+            numbering: numbering::State::default(),
             #[cfg(not(target_arch = "wasm32"))]
             export: None,
             #[cfg(target_arch = "wasm32")]
@@ -855,6 +859,7 @@ impl Session {
         self.last = None;
         self.pdf = None;
         self.pdfx = None;
+        self.numbering = numbering::State::default();
         self.saved_outputs.clear();
     }
 
@@ -958,6 +963,9 @@ impl Session {
         // citations from the build.
         let symbols = outcome.symbols.clone();
         self.language().build_finished(main.as_ref(), symbols);
+        if let Some(aux) = &outcome.aux {
+            self.numbering.built(aux);
+        }
         // A build that wrote a PDF brings its SyncTeX data; a failed one keeps the last PDF's.
         if outcome.pdf.is_some() {
             self.sync = outcome.synctex.as_deref().and_then(|d| sync::Sync::parse(d));
