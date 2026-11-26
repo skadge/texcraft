@@ -227,7 +227,7 @@ fn tab_crosses_the_window_in_reading_order_and_f6_takes_the_keyboard_out_of_the_
         (Role::Button, "Settings"),
         (Role::Button, "Add Files…"),
         (Role::TreeItem, "main.tex"),
-        (Role::TreeItem, "Introduction"),
+        (Role::TreeItem, "1  Introduction"),
         (Role::Tab, "main.tex"),
         (Role::RadioButton, "Source"),
         (Role::Button, "Bold"),

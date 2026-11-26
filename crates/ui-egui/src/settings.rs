@@ -89,7 +89,8 @@ pub(crate) fn choose_tab(app: &mut App, name: &str) {
 fn sections(app: &mut App, ui: &mut egui::Ui, t: &Tokens, list: bool) {
     for (i, (label, icon)) in TABS.iter().enumerate() {
         let selected = !list && app.view.settings_tab == i;
-        let row = widgets::Row { depth: 0, icon, label: crate::i18n::t(label), selected, disclosure: None, tag: None, icon_color: None };
+        let row =
+            widgets::Row { depth: 0, icon, label: crate::i18n::t(label), selected, disclosure: None, tag: None, icon_color: None, muted: false };
         let r = widgets::row(ui, t, &row);
         // A tab of a tab list, or a button opening its page; not a tree's item.
         let role = if list { egui::accesskit::Role::Button } else { egui::accesskit::Role::Tab };

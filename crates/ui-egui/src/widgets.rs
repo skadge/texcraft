@@ -312,6 +312,8 @@ pub struct Row<'a> {
     /// A muted word after the label (such as "main").
     pub tag: Option<&'a str>,
     pub icon_color: Option<Color32>,
+    /// Its label in the muted colour: a row that is there for context.
+    pub muted: bool,
 }
 
 pub fn row(ui: &mut Ui, t: &Tokens, row: &Row<'_>) -> Response {
@@ -346,10 +348,11 @@ pub fn row_sensing(ui: &mut Ui, t: &Tokens, row: &Row<'_>, sense: Sense) -> Resp
     icons::paint(ui, icon_rect, row.icon, t.icon_size, icon_color);
     x += t.icon_size + 2.0 * t.unit;
     let font = if row.selected { t.strong() } else { t.body() };
-    let galley = ui.painter().layout_no_wrap(row.label.to_owned(), font, t.text);
+    let color = if row.muted { t.text_muted } else { t.text };
+    let galley = ui.painter().layout_no_wrap(row.label.to_owned(), font, color);
     let text_pos = egui::pos2(x, rect.center().y - galley.size().y / 2.0);
     let label_right = text_pos.x + galley.size().x;
-    ui.painter().galley(text_pos, galley, t.text);
+    ui.painter().galley(text_pos, galley, color);
     if let Some(tag) = row.tag {
         ui.painter().text(egui::pos2(label_right + 2.0 * t.unit, rect.center().y), Align2::LEFT_CENTER, tag, t.small(), t.text_muted);
     }

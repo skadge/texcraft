@@ -37,6 +37,7 @@ mod languages;
 mod log_copy;
 mod menu_bar;
 mod narrow;
+mod outline;
 mod output_log;
 mod paste;
 mod pdf_preview;
