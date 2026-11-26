@@ -2,6 +2,7 @@
 
 mod ai;
 mod ai_make_ask;
+mod all_commands;
 mod carets;
 mod catalogs;
 mod closing;
@@ -29,6 +30,7 @@ mod formatted_toolbar;
 mod frame;
 mod gallery;
 mod goto_file;
+mod hidden_messages;
 mod history;
 mod image_drop;
 mod insert;

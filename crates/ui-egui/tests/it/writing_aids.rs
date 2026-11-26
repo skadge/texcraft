@@ -11,7 +11,10 @@ use texcraft_engine::{Session, SpellingOptions};
 use texcraft_ui_egui::prefs::Prefs;
 use texcraft_ui_egui::{App, ui_cmd};
 
-/// Knows a few English words; offers "word" for "wrod".
+/// What the fake dictionary offers for "wrod", best first.
+const OFFERED: [&str; 8] = ["word", "wordy", "words", "wore", "worn", "wood", "wild", "wold"];
+
+/// Knows a few English words; offers [`OFFERED`] for "wrod".
 struct Fake;
 
 impl Dictionary for Fake {
@@ -22,7 +25,8 @@ impl Dictionary for Fake {
         ["the", "is", "here", "let", "be", "word"].contains(&word.to_lowercase().as_str())
     }
     fn suggest(&self, word: &str, _: &str, _: usize) -> Vec<String> {
-        if word == "wrod" { vec!["word".to_owned()] } else { Vec::new() }
+        // More than a popup offers, whatever is asked for.
+        if word == "wrod" { OFFERED.iter().map(|w| (*w).to_owned()).collect() } else { Vec::new() }
     }
 }
 
@@ -105,4 +109,37 @@ fn a_grammar_problem_is_underlined_apart_and_its_replacement_from_the_menu_keeps
     h.run();
     h.run();
     assert_eq!(text(&mut h), "It is \\textbf{here}: this is a mistake.\n");
+}
+
+/// Issue #17: a misspelled word's popup is small: a few spellings, as words, then Add to
+/// Dictionary and Ignore, with no sentence about the word; the keyboard goes through it.
+#[test]
+fn a_misspelled_words_popup_offers_a_few_spellings_and_add_to_dictionary_from_the_keyboard() {
+    use egui_kittest::kittest::NodeT as _;
+    let mut h = harness("The wrod is here.\n").unwrap();
+    h.run();
+    ui_cmd::run(h.state_mut(), "edit.spelling.next");
+    h.run();
+    // F7 said what the word is on the status line; the popup adds no sentence of its own.
+    let sentences = |h: &Harness<'_, App>| {
+        h.query_all_by_role(egui::accesskit::Role::Label).filter(|n| n.accesskit_node().label().is_some_and(|l| l.contains("dictionary"))).count()
+    };
+    let before = sentences(&h);
+    ui_cmd::run(h.state_mut(), "edit.quick_fix");
+    h.run();
+    h.run();
+    let offered = OFFERED.iter().filter(|w| h.query_by_label(w).is_some()).count();
+    assert!(offered > 0 && offered < OFFERED.len(), "the popup offers {offered} spellings");
+    assert!(h.query_by_label("Add to Dictionary").is_some() && h.query_by_label("Ignore").is_some(), "Add to Dictionary or Ignore is missing");
+    assert_eq!(sentences(&h), before, "the popup still says the word is not in the dictionary");
+    // Down past the spellings, to Add to Dictionary.
+    for _ in 0..offered {
+        h.key_press(egui::Key::ArrowDown);
+        h.run();
+    }
+    h.key_press(egui::Key::Enter);
+    h.run();
+    h.run();
+    let ui = h.state_mut().control("ui.inspect", &json!({}));
+    assert!(ui["result"]["status"]["text"].as_str().is_some_and(|t| t.starts_with("Added “wrod”")), "{ui}");
 }

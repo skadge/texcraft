@@ -126,7 +126,6 @@
 	Change as asked	Wijzigen zoals gevraagd
 	Change to “{text}”	Wijzigen in “{text}”
 	Changed on the branch but kept as you edited them: {files}.	Gewijzigd op de branch maar behouden zoals u ze bewerkte: {files}.
-	Changes that are not saved are lost.	Wijzigingen die niet zijn opgeslagen, gaan verloren.
 	Check Grammar with AI	Grammatica controleren met AI
 	Check Server	Server controleren
 	Check comments	Opmerkingen controleren
@@ -2193,3 +2192,47 @@ unit	{n} s	{n} s
 	References	Verwijzingen
 	in {file}	in {file}
 	in {file}, the file shown	in {file}, het getoonde bestand
+	Add to Project	Aan project toevoegen
+	All Commands	Alle opdrachten
+	Commands	Opdrachten
+	Don't Keep	Niet bewaren
+	Download PDF	PDF downloaden
+	Folding	Invouwen
+	Go To	Ga naar
+	Hidden in all projects.	Verborgen in alle projecten.
+	Hidden in this project.	Verborgen in dit project.
+	Hidden messages	Verborgen meldingen
+	Hide Like This	Zulke verbergen
+	Hide Them	Verbergen
+	Hide the messages of this kind, here or in all projects	De meldingen van deze soort verbergen, hier of in alle projecten
+	In All Projects	In alle projecten
+	In This Project	In dit project
+	Keep in This Browser	Bewaren in deze browser
+	Keep the changes to {project} in this browser?	De wijzigingen in {project} in deze browser bewaren?
+	List	Lijst
+	Messages like this are hidden in all projects: Settings › Building shows them again.	Meldingen van deze soort zijn verborgen in alle projecten: Instellingen › Bezig met bouwen toont ze weer.
+	Messages like this are hidden in this project until TeXCraft closes: it has no folder to keep the choice in.	Meldingen van deze soort zijn verborgen in dit project tot TeXCraft sluit: het heeft geen map om de keuze in te bewaren.
+	Messages like this are hidden in this project: Settings › Building shows them again.	Meldingen van deze soort zijn verborgen in dit project: Instellingen › Bezig met bouwen toont ze weer.
+	Messages like this are shown again.	Meldingen van deze soort worden weer getoond.
+	Messages of the kinds hidden in Settings › Building	Meldingen van de soorten die verborgen zijn in Instellingen › Bezig met bouwen
+	No command matches.	Geen opdracht komt overeen.
+	No kind of message is hidden. In the build log, Hide Like This hides a warning's kind, here or in all projects.	Geen soort melding is verborgen. In het bouwlogboek verbergt Zulke verbergen de soort van een waarschuwing, hier of in alle projecten.
+	Save Project to GitLab or GitHub	Project op GitLab of GitHub opslaan
+	Saving writes them to the project's folder on this computer; changes not saved are lost.	Opslaan schrijft ze naar de map van het project op deze computer; niet opgeslagen wijzigingen gaan verloren.
+	Show Again	Weer tonen
+	Spelling and Grammar	Spelling en grammatica
+	TeXCraft keeps your projects in this browser's storage; changes not kept there are lost.	TeXCraft bewaart uw projecten in de opslag van deze browser; wijzigingen die daar niet bewaard zijn, gaan verloren.
+	Text Style	Tekststijl
+	The changes are kept in this browser. Commit them, then try again.	De wijzigingen zijn in deze browser bewaard. Commit ze en probeer het dan opnieuw.
+	The changes are saved. Commit them, then try again.	De wijzigingen zijn opgeslagen. Commit ze en probeer het dan opnieuw.
+	There is no PDF yet: compile the project first.	Er is nog geen PDF: compileer eerst het project.
+	Type part of a command's name	Typ een deel van de naam van een opdracht
+	{command}, {n} of {total}	{command}, {n} van {total}
+@plural	{n} hidden message|{n} hidden messages	{n} verborgen melding|{n} verborgen meldingen
+@id	build.hidden_messages	Verborgen meldingen
+@id	build.hide_messages	Meldingen van deze soort verbergen
+@id	build.show_messages	Meldingen weer tonen
+@id	view.commands	Alle opdrachten…
+@msg	Errors are not hidden: fix them instead.	Fouten worden niet verborgen: los ze op.
+@msg	Name the kind of message to hide, on one line.	Noem de soort melding om te verbergen, op één regel.
+@msg	Name the kind of message, or the `index` of one of the last build's.	Noem de soort melding, of de `index` van een melding van de laatste build.

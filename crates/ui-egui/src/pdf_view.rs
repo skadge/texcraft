@@ -242,6 +242,10 @@ pub(crate) struct PdfView {
     pub copied: Option<String>,
     /// Presentation mode: the page shown, the whole window for it.
     presenting: Option<usize>,
+    /// The pages' scroll offset in the last frame.
+    offset: egui::Vec2,
+    /// The middle button was pressed over the pages and is held: the pointer drags them.
+    panning: bool,
     /// When the presentation started (egui time), once drawn.
     presenting_since: Option<f64>,
 }
@@ -281,6 +285,8 @@ impl Default for PdfView {
             copied: None,
             presenting: None,
             presenting_since: None,
+            offset: egui::Vec2::ZERO,
+            panning: false,
         }
     }
 }
@@ -398,6 +404,11 @@ impl PdfView {
         self.fit
     }
 
+    /// How far the pages are scrolled, right and down, in points.
+    pub fn offset(&self) -> egui::Vec2 {
+        self.offset
+    }
+
     pub fn set_fit(&mut self, fit: Fit) {
         self.fit = match fit {
             Fit::Zoom(z) => Fit::Zoom(z.clamp(MIN_ZOOM, MAX_ZOOM)),
@@ -476,6 +487,14 @@ impl PdfView {
         }
         let widest = self.sizes.iter().map(|s| s[0]).fold(1.0_f32, f32::max);
         let tallest = self.sizes.iter().map(|s| s[1]).fold(1.0_f32, f32::max);
+        // Ctrl with the wheel (Cmd on a Mac), or a pinch, zooms around the pointer.
+        let pointer = ui.input(|i| i.pointer.hover_pos()).filter(|p| rect.contains(*p) && ui.ctx().layer_id_at(*p) == Some(ui.layer_id()));
+        let pinch = if pointer.is_some() { ui.input(|i| i.zoom_delta()) } else { 1.0 };
+        let before = self.zoom;
+        let anchor = pointer.filter(|_| (pinch - 1.0).abs() > 1e-4 && before > 0.0);
+        if anchor.is_some() {
+            self.set_fit(Fit::Zoom(before * pinch));
+        }
         self.zoom = match self.fit {
             Fit::Width => (rect.width() - 2.0 * PAGE_GAP) / widest,
             Fit::Page => ((rect.height() - 2.0 * PAGE_GAP) / tallest).min((rect.width() - 2.0 * PAGE_GAP) / widest),
@@ -484,14 +503,35 @@ impl PdfView {
         .clamp(MIN_ZOOM, MAX_ZOOM);
         let zoom = self.zoom;
         let pixels = ui.ctx().pixels_per_point() * zoom;
-        let mut tops = Vec::with_capacity(self.sizes.len());
-        let mut y = PAGE_GAP;
-        for s in &self.sizes {
-            tops.push(y);
-            y += s[1] * zoom + PAGE_GAP;
-        }
+        let (tops, y) = layout(&self.sizes, zoom);
         let total = egui::vec2((widest * zoom + 2.0 * PAGE_GAP).max(rect.width()), y);
         let mut area = egui::ScrollArea::both().auto_shrink([false, false]);
+        if let Some(p) = anchor
+            && (zoom - before).abs() > f32::EPSILON
+        {
+            let at = p - rect.min;
+            let (old_tops, _) = layout(&self.sizes, before);
+            let old_width = (widest * before + 2.0 * PAGE_GAP).max(rect.width());
+            let content = self.offset + at;
+            // The point under the pointer, in the page's points, stays under it.
+            let page = old_tops.iter().rposition(|top| *top <= content.y).unwrap_or(0);
+            let y = old_tops.get(page).map_or(content.y, |top| tops[page] + (content.y - top) / before * zoom);
+            let x = (total.x - widest * zoom) / 2.0 + (content.x - (old_width - widest * before) / 2.0) / before * zoom;
+            area = area.scroll_offset((egui::vec2(x, y) - at).max(egui::Vec2::ZERO));
+        }
+        // The middle button held down drags the pages, when they are larger than the pane.
+        let (middle, pressed, moved) =
+            ui.input(|i| (i.pointer.middle_down(), i.pointer.button_pressed(egui::PointerButton::Middle), i.pointer.delta()));
+        if pressed && pointer.is_some() {
+            self.panning = true;
+        }
+        self.panning &= middle;
+        if self.panning {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+            if moved != egui::Vec2::ZERO {
+                area = area.scroll_offset((self.offset - moved).max(egui::Vec2::ZERO));
+            }
+        }
         if let Some(page) = self.scroll_to.take()
             && let Some(top) = tops.get(page)
         {
@@ -523,6 +563,7 @@ impl PdfView {
         let shadow = egui::Shadow { offset: [0, 2], blur: 10, spread: 0, color: t.shadow };
         let sizes = self.sizes.clone();
         area.show_viewport(ui, |ui, viewport| {
+            self.offset = viewport.min.to_vec2();
             let (outer, _) = ui.allocate_exact_size(total, egui::Sense::hover());
             // The pages to draw: those in view, then those half a pane above and below it.
             let span = |i: usize| egui::Rangef::new(tops[i], tops[i] + sizes[i][1] * zoom);
@@ -641,13 +682,17 @@ impl PdfView {
     /// Escape clears it; Ctrl+C (Cmd+C) copies it while the page has the keyboard.
     fn select(&mut self, ui: &mut egui::Ui, t: &Tokens, i: usize, page: egui::Rect, zoom: f32, r: &egui::Response) {
         let at = |p: egui::Pos2| ((p - page.min) / zoom).to_pos2();
+        // The middle button pans instead ([`PdfView::show`]).
+        let primary = !ui.input(|i| i.pointer.middle_down());
         if r.drag_started()
+            && primary
             && let Some(start) = ui.input(|input| input.pointer.press_origin())
         {
             let start = at(start);
             self.selection = self.page_glyphs(i).and_then(|g| texcraft_preview::glyph_at(&g, start.x, start.y)).map(|g| (i, g, g));
             r.request_focus();
         } else if r.dragged()
+            && primary
             && let Some((page_selected, _, head)) = &mut self.selection
             && *page_selected == i
             && let Some(p) = r.interact_pointer_pos()
@@ -761,6 +806,17 @@ impl PdfView {
 }
 
 /// What a link says: where it goes.
+/// Where each page's top is at `zoom`, from the top of the pages, and the height of them all.
+fn layout(sizes: &[[f32; 2]], zoom: f32) -> (Vec<f32>, f32) {
+    let mut tops = Vec::with_capacity(sizes.len());
+    let mut y = PAGE_GAP;
+    for s in sizes {
+        tops.push(y);
+        y += s[1] * zoom + PAGE_GAP;
+    }
+    (tops, y)
+}
+
 fn link_label(target: &Target) -> String {
     match target {
         Target::Page { page, .. } => tl!("Link to page {n}").replace("{n}", &(page + 1).to_string()),

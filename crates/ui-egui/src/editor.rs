@@ -985,7 +985,11 @@ fn problems(app: &mut App, path: &ProjectPath, ctx: &egui::Context) -> Vec<crate
         .collect();
     let b = &app.editor.source.doc.buffer;
     if let Some(outcome) = app.session.last_outcome() {
-        for d in outcome.diagnostics.iter().filter(|d| d.file.as_deref() == Some(path.as_str()) && d.severity >= Severity::Warning) {
+        for d in outcome
+            .diagnostics
+            .iter()
+            .filter(|d| d.file.as_deref() == Some(path.as_str()) && d.severity >= Severity::Warning && !app.session.is_hidden(d))
+        {
             let Some(line) = d.line.map(|l| (l.saturating_sub(1) as usize).min(last)) else { continue };
             let text: Vec<char> = b.line(line).chars().collect();
             let span = d
@@ -1056,7 +1060,11 @@ fn markers(app: &mut App, path: &ProjectPath) -> Markers {
         }
     }
     let Some(outcome) = app.session.last_outcome() else { return out };
-    for d in outcome.diagnostics.iter().filter(|d| d.file.as_deref() == Some(path.as_str()) && d.severity >= Severity::Warning) {
+    for d in outcome
+        .diagnostics
+        .iter()
+        .filter(|d| d.file.as_deref() == Some(path.as_str()) && d.severity >= Severity::Warning && !app.session.is_hidden(d))
+    {
         let Some(line) = d.line.map(|l| l.saturating_sub(1)) else { continue };
         match out.get(&line) {
             Some((s, _)) if *s >= d.severity => {}
@@ -1066,7 +1074,7 @@ fn markers(app: &mut App, path: &ProjectPath) -> Markers {
         }
     }
     // Where TeX noticed a problem that starts elsewhere: marked too, saying where it starts.
-    for d in outcome.diagnostics.iter().filter(|d| d.severity >= Severity::Warning) {
+    for d in outcome.diagnostics.iter().filter(|d| d.severity >= Severity::Warning && !app.session.is_hidden(d)) {
         let (Some(noticed), Some(file)) = (&d.noticed, &d.file) else { continue };
         let Some(line) = noticed.line.filter(|_| noticed.file == path.as_str()).map(|l| l.saturating_sub(1)) else { continue };
         if out.get(&line).is_none_or(|(s, _)| *s < d.severity) {
@@ -1367,6 +1375,14 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     }
     if let Some(fix) = out.apply_fix {
         app.editor.source.apply_fix(&fix);
+    }
+    if let Some((id, problem)) = out.popup_action {
+        if problem.spelling {
+            let word = crate::spell::word_of(app, &problem);
+            crate::spell::keep(app, id, &word, &json!({}));
+        } else if let Some(mark) = &problem.grammar {
+            crate::grammar::act(app, mark, &problem, id, &json!({}));
+        }
     }
     if let Some(line) = out.explain {
         crate::ai::explain(app, json!({"path": path.as_str(), "line": line + 1}));

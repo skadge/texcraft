@@ -117,6 +117,9 @@ pub(crate) struct Output {
     pub fixes_for: Option<usize>,
     /// Apply this fix.
     pub apply_fix: Option<texcraft_engine::Fix>,
+    /// Run this command of a spelling or grammar popup (Add to Dictionary, Ignore, Turn Off This
+    /// Rule) on its problem.
+    pub popup_action: Option<(&'static str, Problem)>,
     /// Explain the build's message on this line (from 0) with AI.
     pub explain: Option<usize>,
     /// Cancel the AI request in flight.
@@ -180,6 +183,33 @@ pub(crate) struct ProblemPopup {
     /// For a build message, when a model is connected: its explanation, if asked for, and whether
     /// a request is in flight. The editor pane sets it every frame.
     pub ai: Option<(Option<texcraft_engine::ai::Explanation>, Option<String>)>,
+}
+
+/// Replacements a spelling or grammar popup offers, at most.
+pub(crate) const POPUP_FIXES: usize = 5;
+
+/// The fixes a popup lists: a spelling or grammar problem's first [`POPUP_FIXES`], the others'
+/// all.
+fn shown_fixes(popup: &ProblemPopup) -> Vec<texcraft_engine::Fix> {
+    let fixes = popup.fixes.clone().unwrap_or_default();
+    if popup.problem.spelling || popup.problem.grammar.is_some() { fixes.into_iter().take(POPUP_FIXES).collect() } else { fixes }
+}
+
+/// The commands a spelling or grammar popup offers after its replacements, with their labels.
+fn popup_actions(problem: &Problem) -> Vec<(&'static str, &'static str)> {
+    if problem.spelling {
+        return vec![("edit.spelling.add", tl!("Add to Dictionary")), ("edit.spelling.ignore", tl!("Ignore"))];
+    }
+    match &problem.grammar {
+        Some(mark) => {
+            let mut v = vec![("edit.grammar.ignore", tl!("Ignore"))];
+            if mark.rule.is_some() {
+                v.push(("edit.grammar.rule_off", tl!("Turn Off This Rule")));
+            }
+            v
+        }
+        None => Vec::new(),
+    }
 }
 
 /// How a passage of the review is drawn. Struck and underlined text tell a suggestion apart
@@ -253,6 +283,7 @@ pub(crate) struct SourceEditor {
     /// Where the popup was last drawn, so the pointer can move into it.
     popup_rect: Option<Rect>,
     apply_fix: Option<texcraft_engine::Fix>,
+    popup_action: Option<(&'static str, Problem)>,
     /// What the popup's AI part asked for: explain (the message's line) or cancel.
     ai_act: Option<Option<usize>>,
     /// A line just gone to (from the PDF, the log, the outline) and when, flashed for a moment.
@@ -314,6 +345,7 @@ impl Default for SourceEditor {
             popup: None,
             popup_rect: None,
             apply_fix: None,
+            popup_action: None,
             ai_act: None,
             flash: None,
             completion: None,
@@ -960,6 +992,7 @@ impl SourceEditor {
             out.fixes_for = Some(popup.problem.line);
         }
         out.apply_fix = self.apply_fix.take();
+        out.popup_action = self.popup_action.take();
         match self.ai_act.take() {
             Some(Some(line)) => out.explain = Some(line),
             Some(None) => out.cancel_ai = true,
@@ -1845,12 +1878,20 @@ impl SourceEditor {
     fn popup_key(&mut self, key: egui::Key) -> bool {
         use egui::Key as K;
         let Some(popup) = self.popup.as_mut().filter(|p| p.pinned) else { return false };
-        let n = popup.fixes.as_ref().map_or(0, Vec::len);
+        let fixes = shown_fixes(popup);
+        let actions = popup_actions(&popup.problem);
+        let n = fixes.len() + actions.len();
         match key {
             K::ArrowDown if n > 0 => popup.selected = (popup.selected + 1) % n,
             K::ArrowUp if n > 0 => popup.selected = (popup.selected + n - 1) % n,
             K::Enter | K::Tab if n > 0 => {
-                self.apply_fix = popup.fixes.as_ref().and_then(|f| f.get(popup.selected)).cloned();
+                match fixes.get(popup.selected) {
+                    Some(fix) => self.apply_fix = Some(fix.clone()),
+                    None => {
+                        let action = actions.get(popup.selected - fixes.len()).map(|(id, _)| *id);
+                        self.popup_action = action.map(|id| (id, popup.problem.clone()));
+                    }
+                }
                 self.popup = None;
             }
             K::Escape => self.popup = None,
@@ -1879,6 +1920,9 @@ impl SourceEditor {
                 self.popup_rect = None;
                 return;
             }
+        }
+        if popup.problem.spelling || popup.problem.grammar.is_some() {
+            return self.paint_compact_popup(ctx, t, id);
         }
         let mut chosen = None;
         let mut close = false;
@@ -1947,6 +1991,82 @@ impl SourceEditor {
         if let Some(fix) = chosen {
             self.apply_fix = Some(fix);
             self.popup = None;
+            ctx.memory_mut(|m| m.request_focus(id));
+        } else if close {
+            self.popup = None;
+        }
+    }
+
+    /// A misspelled word's or a grammar problem's popup, small so it stays out of the way: the
+    /// grammar problem's message in a line of small text (a misspelling needs none: the
+    /// underline says it), up to [`POPUP_FIXES`] replacements, then Add to Dictionary and Ignore
+    /// (Ignore and Turn Off This Rule). The message is announced all the same.
+    fn paint_compact_popup(&mut self, ctx: &egui::Context, t: &Tokens, id: egui::Id) {
+        let Some(popup) = &self.popup else { return };
+        let fixes = shown_fixes(popup);
+        let actions = popup_actions(&popup.problem);
+        let mut chosen = None;
+        let mut action = None;
+        let mut close = false;
+        let row = |ui: &mut egui::Ui, text: &str, selected: bool| {
+            let button = egui::Button::selectable(selected, egui::RichText::new(text).color(t.text)).min_size(vec2(ui.available_width(), 24.0));
+            ui.add(button)
+        };
+        let area = egui::Area::new(id.with("problem")).order(egui::Order::Foreground).fixed_pos(popup.at).show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).fill(t.raised).stroke(t.hairline()).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
+                ui.set_min_width(140.0);
+                ui.set_max_width(280.0);
+                ui.spacing_mut().item_spacing.y = 0.0;
+                // Said, not shown, for a misspelling; shown small for grammar, whose rule needs it.
+                let (spot, _) = ui.allocate_exact_size(vec2(0.0, 0.0), Sense::hover());
+                let said = ui.interact(spot, id.with("problem-said"), Sense::hover());
+                crate::status::announce(ui, &said, &popup.problem.message);
+                if popup.problem.grammar.is_some() {
+                    let message = egui::RichText::new(&popup.problem.message).font(t.small()).color(t.text_muted);
+                    egui::Frame::new().inner_margin(egui::Margin::symmetric(6, 4)).show(ui, |ui| ui.add(egui::Label::new(message).wrap()));
+                }
+                match &popup.fixes {
+                    None => {
+                        ui.label(egui::RichText::new(tl!("Looking for fixes…")).font(t.small()).color(t.text_muted));
+                    }
+                    Some(_) if fixes.is_empty() && popup.problem.spelling => {
+                        egui::Frame::new()
+                            .inner_margin(egui::Margin::symmetric(6, 4))
+                            .show(ui, |ui| ui.label(egui::RichText::new(tl!("No spellings to offer")).font(t.small()).color(t.text_muted)));
+                    }
+                    Some(_) => {}
+                }
+                for (i, fix) in fixes.iter().enumerate() {
+                    let text = match fix.edits.first().map(|e| e.text.as_str()) {
+                        Some(word) if !word.is_empty() => word,
+                        _ => fix.title.as_str(),
+                    };
+                    if row(ui, text, popup.pinned && i == popup.selected).clicked() {
+                        chosen = Some(fix.clone());
+                    }
+                }
+                if !fixes.is_empty() {
+                    ui.add_space(t.unit);
+                    ui.separator();
+                    ui.add_space(t.unit);
+                }
+                for (i, (command, label)) in actions.iter().enumerate() {
+                    if row(ui, label, popup.pinned && fixes.len() + i == popup.selected).clicked() {
+                        action = Some(*command);
+                    }
+                }
+                if popup.pinned && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    close = true;
+                }
+            });
+        });
+        self.popup_rect = Some(area.response.rect);
+        if let Some(fix) = chosen {
+            self.apply_fix = Some(fix);
+            self.popup = None;
+            ctx.memory_mut(|m| m.request_focus(id));
+        } else if let Some(command) = action {
+            self.popup_action = self.popup.take().map(|p| (command, p.problem));
             ctx.memory_mut(|m| m.request_focus(id));
         } else if close {
             self.popup = None;

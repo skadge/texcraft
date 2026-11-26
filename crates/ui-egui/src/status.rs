@@ -107,10 +107,11 @@ fn state(app: &App) -> (Option<&'static str>, egui::Color32, String) {
         Status::Built if o.errors() > 0 => {
             (Some("circle-exclamation-point"), t.error, trn(o.errors(), "Compiled with {n} error", "Compiled with {n} errors"))
         }
-        Status::Built if o.warnings() > 0 => (
+        // Warnings of a kind the user hid are not counted.
+        Status::Built if app.session.warnings_shown() > 0 => (
             Some("triangle-exclamation-point"),
             t.warning,
-            trn(o.warnings(), "Compiled with {n} warning", "Compiled with {n} warnings") + &seconds(o.seconds),
+            trn(app.session.warnings_shown(), "Compiled with {n} warning", "Compiled with {n} warnings") + &seconds(o.seconds),
         ),
         Status::Built => (Some("circle-check"), t.success, tl!("Compiled").to_owned() + &seconds(o.seconds)),
     }

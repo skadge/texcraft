@@ -53,6 +53,8 @@ pub(crate) enum Dialog {
     Settings,
     About,
     GoToFile(crate::goto_file::Palette),
+    /// All Commands: every command, searchable.
+    Commands(crate::commands::Palette),
     /// The formatted view's picker of a citation, a cross-reference or a figure's image.
     Choose(Box<crate::insert_pick::Chooser>),
     ForgeOpen(crate::forge::OpenForm),
@@ -86,6 +88,7 @@ impl Dialog {
             Dialog::Settings => "settings",
             Dialog::About => "about",
             Dialog::GoToFile(_) => "go_to_file",
+            Dialog::Commands(_) => "commands",
             Dialog::Choose(_) => "choose",
             Dialog::ForgeOpen(_) => "forge_open",
             Dialog::ForgeCommit(_) => "forge_commit",
@@ -113,6 +116,7 @@ fn own_window(app: &mut App, ctx: &egui::Context) -> bool {
         Some(Dialog::AiInstruct(_)) => crate::ai::instruct_dialog,
         Some(Dialog::Drop(_)) => crate::drop::dialog,
         Some(Dialog::GoToFile(_)) => crate::goto_file::show,
+        Some(Dialog::Commands(_)) => crate::commands::show,
         Some(Dialog::Choose(_)) => crate::insert_pick::show,
         Some(Dialog::ForgeServer(_) | Dialog::ForgeProposal(_)) => crate::forge_server::dialog,
         Some(Dialog::ForgeSave(_)) => crate::forge_save::dialog,
@@ -130,16 +134,19 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     }
     let project = app.project_name();
     let engine = app.session.backend_name();
+    let keeping = Keeping { browser: app.session.library().is_some(), forge: app.session.forge().map(|l| l.address.service) };
+    let mut commit = false;
     let Some(dialog) = app.view.dialog.as_mut() else { return };
     let t = app.tokens;
     let mut outcome = Outcome::Open;
     let shown = crate::sheet::show(ctx, &t, "texcraft-dialog", 400.0, crate::sheet::Leave::Close, |ui| match dialog {
         Dialog::Prompt(p) => outcome = prompt(ui, &t, p),
         Dialog::Confirm(c) => outcome = confirm(ui, &t, c),
-        Dialog::Unsaved(next) => outcome = unsaved(ui, &t, &project, next),
+        Dialog::Unsaved(next) => (outcome, commit) = unsaved(ui, &t, &project, next, keeping),
         Dialog::Shortcuts
         | Dialog::Settings
         | Dialog::GoToFile(_)
+        | Dialog::Commands(_)
         | Dialog::Choose(_)
         | Dialog::ForgeOpen(_)
         | Dialog::ForgeCommit(_)
@@ -157,6 +164,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     });
     if shown.close || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         outcome = Outcome::Cancel;
+    }
+    if commit && matches!(app.view.dialog.take(), Some(Dialog::Unsaved(_))) {
+        keep_and_commit(app);
+        return;
     }
     match outcome {
         Outcome::Open => {}
@@ -251,26 +262,78 @@ fn why(next: &Next) -> &'static str {
     }
 }
 
-fn unsaved(ui: &mut egui::Ui, t: &Tokens, project: &str, next: &Next) -> Outcome {
-    title(ui, t, &tl!("Save the changes to {project}?").replace("{project}", project));
-    ui.horizontal_wrapped(|ui| ui.label(format!("{} {}", why(next), tl!("Changes that are not saved are lost."))));
+/// Where the project's changes go: the browser's storage or the project's folder, and the forge
+/// it was opened from, if any.
+#[derive(Debug, Clone, Copy)]
+struct Keeping {
+    browser: bool,
+    forge: Option<texcraft_engine::forge::Service>,
+}
+
+/// The unsaved-changes question. In the browser, keeping is storing the project in the browser
+/// (nothing leaves it); on the desktop, saving is writing the project's folder. Neither sends the
+/// changes to a forge: for a project opened from one, committing is a choice of its own. Returns
+/// the outcome, and whether Commit was chosen.
+fn unsaved(ui: &mut egui::Ui, t: &Tokens, project: &str, next: &Next, keeping: Keeping) -> (Outcome, bool) {
+    let (question, how, keep, drop) = if keeping.browser {
+        (
+            tl!("Keep the changes to {project} in this browser?"),
+            tl!("TeXCraft keeps your projects in this browser's storage; changes not kept there are lost."),
+            tl!("Keep in This Browser"),
+            tl!("Don't Keep"),
+        )
+    } else {
+        (
+            tl!("Save the changes to {project}?"),
+            tl!("Saving writes them to the project's folder on this computer; changes not saved are lost."),
+            tl!("Save"),
+            tl!("Don't Save"),
+        )
+    };
+    title(ui, t, &question.replace("{project}", project));
+    ui.horizontal_wrapped(|ui| ui.label(format!("{} {how}", why(next))));
     let mut outcome = Outcome::Open;
+    let mut commit = false;
     ui.add_space(t.unit * 4.0);
     actions(ui, |ui| {
-        let save = egui::Button::new(RichText::new(tl!("Save")).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
+        let save = egui::Button::new(RichText::new(keep).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
         if ui.add(save.min_size(egui::vec2(88.0, 30.0))).clicked() {
             outcome = Outcome::Run;
+        }
+        // Only for a project opened from a forge: committing sends the changes there.
+        if let Some(service) = keeping.forge {
+            let label = crate::forge::say(service, tl!("Commit to GitLab…"), tl!("Commit to GitHub…"));
+            if ui.add(egui::Button::new(label).min_size(egui::vec2(88.0, 30.0))).clicked() {
+                commit = true;
+            }
         }
         if ui.add(egui::Button::new(tl!("Cancel")).min_size(egui::vec2(80.0, 30.0))).clicked() {
             outcome = Outcome::Cancel;
         }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-            if ui.add(egui::Button::new(RichText::new(tl!("Don't Save")).color(t.error)).min_size(egui::vec2(96.0, 30.0))).clicked() {
+            if ui.add(egui::Button::new(RichText::new(drop).color(t.error)).min_size(egui::vec2(96.0, 30.0))).clicked() {
                 outcome = Outcome::Discard;
             }
         });
     });
-    outcome
+    (outcome, commit)
+}
+
+/// Commit to GitLab or GitHub, chosen in the unsaved-changes question: the changes are kept
+/// first, so nothing is lost, then the commit dialog opens. What was about to happen does not;
+/// the status line says so.
+fn keep_and_commit(app: &mut App) {
+    let browser = app.session.library().is_some();
+    if app.session.dir().is_some() && app.run("project.save", serde_json::json!({})).is_none() {
+        return;
+    }
+    crate::forge::ask_commit(app);
+    let said = if browser {
+        tl!("The changes are kept in this browser. Commit them, then try again.")
+    } else {
+        tl!("The changes are saved. Commit them, then try again.")
+    };
+    app.view.status = Some((said.to_owned(), false));
 }
 
 /// The dialog's title: at the top of its box, or of a phone's sheet ([`crate::sheet::title`]).

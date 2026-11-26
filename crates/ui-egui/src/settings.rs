@@ -465,6 +465,39 @@ fn building(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         Some(r)
     });
     output(app, ui, t, options);
+    hidden_messages(app, ui, t);
+}
+
+/// The kinds of build message hidden from the log (Hide Like This), this project's then every
+/// project's, each with Show Again.
+fn hidden_messages(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    let project = app.session.hidden_for_project();
+    let user = app.session.hidden_for_user().to_vec();
+    ui.add_space(t.unit * 3.0);
+    ui.label(RichText::new(tl!("Hidden messages")).font(t.strong()));
+    if project.is_empty() && user.is_empty() {
+        let none = tl!("No kind of message is hidden. In the build log, Hide Like This hides a warning's kind, here or in all projects.");
+        ui.label(RichText::new(none).font(t.small()).color(t.text_muted));
+        return;
+    }
+    let mut show = None;
+    for (kinds, scope, help) in [(&project, "project", tl!("Hidden in this project.")), (&user, "user", tl!("Hidden in all projects."))] {
+        for kind in kinds {
+            setting(ui, t, kind, help, |ui| {
+                // Named after its label, then the kind it shows again.
+                let r = ui.button(tl!("Show Again"));
+                if r.clicked() {
+                    show = Some((kind.clone(), scope));
+                }
+                let _ = r.accessible_name(format!("{}: {kind}", tl!("Show Again")));
+                None
+            });
+        }
+    }
+    if let Some((kind, scope)) = show {
+        app.run("build.show_messages", json!({"kind": kind, "scope": scope}));
+        app.prefs_changed = true;
+    }
 }
 
 /// The kind of PDF a build makes, and for print its standard, bleed and crop marks.

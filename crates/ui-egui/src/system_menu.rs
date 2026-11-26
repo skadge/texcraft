@@ -8,11 +8,10 @@
 
 use craft_menu::{CommandRef, Gate, Item, ItemRole, Layout, LayoutOptions, Menu, MenuBar, MenuRole, NativeMenu, Node};
 use serde_json::json;
-use texcraft_engine::cmd;
 
 use crate::App;
 use crate::i18n::t;
-use crate::ui_cmd::{self, MENUS, UI_COMMANDS};
+use crate::ui_cmd::{self, Entry, MENUS};
 
 /// The id of the disabled entry that stands for an empty Open Recent; it runs nothing.
 const NO_RECENT: &str = "project.no_recent";
@@ -33,36 +32,33 @@ impl App {
     /// tagged for the macOS app menu; quitting is the layout's own Quit, which asks the window to
     /// close, so unsaved changes are asked about first.
     pub fn menu_tree(&self) -> MenuBar {
-        let mut menus = Vec::with_capacity(MENUS.len());
-        for title in MENUS {
-            let mut children: Vec<Node> = Vec::new();
-            for spec in cmd::all().iter().filter(|c| c.menu.first() == Some(title) && ui_cmd::in_menus(self, c.id)) {
-                let label = crate::forge::label(self, spec.id).unwrap_or_else(|| crate::i18n::tid(spec.id, spec.label));
-                children.push(Item::new(spec.id, label).enabled((spec.enabled)(&self.session).is_ok()).into());
-            }
-            if *title == "File" {
-                children.push(Node::Separator);
-                children.push(self.recent_submenu());
-            }
-            let mut last_group = "";
-            for c in UI_COMMANDS.iter().filter(|c| c.menu == *title) {
-                if !last_group.is_empty() && c.group != last_group {
-                    children.push(Node::Separator);
-                }
-                if *title == "Edit" && c.group == "settings" && last_group != "settings" && crate::ai::offered(self) {
-                    children.push(self.rewrite_submenu());
-                    children.push(Node::Separator);
-                }
-                last_group = c.group;
-                children.push(Item::new(c.id, crate::i18n::tid(c.id, c.label)).enabled(ui_cmd::enabled(self, c.id).is_ok()).into());
-            }
-            menus.push(Menu::new(t(title), craft_menu::tidy(children)).role(role(title)));
-        }
+        let menus = MENUS.iter().map(|title| Menu::new(t(title), craft_menu::tidy(self.nodes(ui_cmd::menu(title)))).role(role(title))).collect();
         let mut bar = MenuBar { menus, documents: Vec::new() };
         bar.tag_item(&"help.about".into(), ItemRole::About);
         bar.tag_item(&"app.settings".into(), ItemRole::Settings);
         craft_menu::apply_keymap(&mut bar, &self.keys.keymap);
         bar
+    }
+
+    /// `entries` ([`ui_cmd::MENU_BAR`]) as the system's menu nodes, those that apply here.
+    fn nodes(&self, entries: &[Entry]) -> Vec<Node> {
+        let mut children = Vec::new();
+        for entry in entries {
+            match entry {
+                Entry::Command(id) if ui_cmd::in_menus(self, id) => {
+                    let (label, enabled) = ui_cmd::menu_entry(self, id);
+                    children.push(Item::new(*id, label).enabled(enabled.is_ok()).into());
+                }
+                Entry::Submenu(title, inner) if ui_cmd::any_shown(self, inner) => {
+                    children.push(Node::submenu(t(title), craft_menu::tidy(self.nodes(inner))));
+                }
+                Entry::Separator => children.push(Node::Separator),
+                Entry::Recent => children.push(self.recent_submenu()),
+                Entry::Rewrite if crate::ai::offered(self) => children.push(self.rewrite_submenu()),
+                _ => {}
+            }
+        }
+        children
     }
 
     /// Open Recent: the recent projects by folder name, the open one checked and the ones gone

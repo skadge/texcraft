@@ -12,8 +12,8 @@ use crate::source::Problem;
 /// Lines checked beyond those in view, above and below, so a short scroll shows marks at once.
 const MARGIN_LINES: usize = 40;
 
-/// Spellings offered for a word.
-const SUGGESTIONS: usize = 6;
+/// Spellings offered for a word: a few, so the popup and the menu stay small.
+const SUGGESTIONS: usize = crate::source::POPUP_FIXES;
 
 /// Whether `path` is checked: LaTeX sources.
 pub(crate) fn checked(path: &ProjectPath) -> bool {
@@ -59,7 +59,7 @@ pub(crate) fn problems(app: &mut App, path: &ProjectPath) -> Vec<Problem> {
 }
 
 /// The word a problem underlines, as the buffer has it.
-fn word_of(app: &App, p: &Problem) -> String {
+pub(crate) fn word_of(app: &App, p: &Problem) -> String {
     app.editor.source.doc.buffer.slice(p.start, p.end)
 }
 

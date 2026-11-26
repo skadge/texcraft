@@ -70,6 +70,8 @@ pub struct Prefs {
     pub show_tips: bool,
     /// The first-steps hint above the editor was dismissed (it shows with the first project).
     pub first_steps_seen: bool,
+    /// The kinds of build message hidden in every project (Hide Messages Like This).
+    pub hidden_messages: Vec<String>,
 }
 
 /// The name and key a person's comments carry (docs/collaboration-roadmap.md, R1). No accounts:
@@ -124,6 +126,7 @@ impl Default for Prefs {
             forge_servers: Vec::new(),
             spelling: texcraft_engine::SpellingOptions::default(),
             grammar: texcraft_engine::GrammarOptions::default(),
+            hidden_messages: Vec::new(),
             words: Vec::new(),
             recent_symbols: Vec::new(),
             ai_complete: false,

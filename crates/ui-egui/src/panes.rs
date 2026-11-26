@@ -19,7 +19,7 @@ fn build(app: &App) -> Build {
     if app.session.is_building() {
         return Build::Running;
     }
-    match app.session.last_outcome().map(|o| (o.errors(), o.warnings())) {
+    match app.session.last_outcome().map(|o| (o.errors(), app.session.warnings_shown())) {
         Some((e, _)) if e > 0 => Build::Errors(e),
         Some((_, w)) if w > 0 => Build::Warnings(w),
         Some(_) if app.pdf.has_pdf() => Build::Done,

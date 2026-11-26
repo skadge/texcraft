@@ -14,7 +14,7 @@ use texcraft_compile::Unavailable;
 use texcraft_engine::{Session, cmd};
 use texcraft_ui_egui::App;
 use texcraft_ui_egui::prefs::Prefs;
-use texcraft_ui_egui::ui_cmd::{self, MENUS, UI_COMMANDS};
+use texcraft_ui_egui::ui_cmd::{self, MENU_BAR, MENUS, UI_COMMANDS};
 
 fn app(prefs: Prefs) -> Result<App, String> {
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
@@ -66,10 +66,10 @@ fn default_chord(shortcut: Option<&str>) -> Option<Chord> {
     shortcut.and_then(|s| Binding::parse(s).ok()).map(|b| b.trigger.chord)
 }
 
-/// Every in-window menu and entry is in the tree, in order, with the shortcut and enabled state
-/// the window's menus show; the view's commands with a button of their own stay out.
+/// The tree is the menus' one definition ([`MENU_BAR`]): each command that applies here is in
+/// it once, with the shortcut and enabled state the window's menus show.
 #[test]
-fn the_tree_has_the_window_menus_entries_shortcuts_and_enabled_states() {
+fn the_tree_has_each_menu_entry_once_with_its_shortcut_and_enabled_state() {
     let app = app(Prefs::default()).unwrap();
     let tree = app.menu_tree();
     let titles: Vec<&str> = tree.menus.iter().map(|m| m.title.as_str()).collect();
@@ -78,24 +78,27 @@ fn the_tree_has_the_window_menus_entries_shortcuts_and_enabled_states() {
     assert_eq!(roles, [MenuRole::File, MenuRole::Edit, MenuRole::Other, MenuRole::Help]);
 
     let session = app.session();
-    for spec in cmd::all().iter().filter(|c| c.menu.first().is_some_and(|m| MENUS.contains(m))) {
-        // The browser's own entries (Download Project as Zip) are not a desktop window's.
-        if !ui_cmd::in_menus(&app, spec.id) {
-            assert!(tree.find(&spec.id.into()).is_none(), "{} is in the desktop's menus", spec.id);
-            continue;
+    let mut seen = std::collections::HashSet::new();
+    for (_, entries) in MENU_BAR {
+        for id in ui_cmd::commands_in(entries) {
+            assert!(seen.insert(id), "{id} is in the menus twice");
+            let spec = cmd::find(id);
+            let shortcut = match spec {
+                Some(c) => c.shortcut,
+                None => UI_COMMANDS.iter().find(|c| c.id == id).unwrap_or_else(|| panic!("{id} is not a command")).shortcut,
+            };
+            // The browser's own entries (Download Project as Zip), the forge's for a project on
+            // one, AI's without a model: not in this window's menus.
+            if !ui_cmd::in_menus(&app, id) {
+                assert!(tree.find(&id.into()).is_none(), "{id} is in the menus where it cannot apply");
+                continue;
+            }
+            let item = tree.find(&id.into()).unwrap_or_else(|| panic!("{id} is missing"));
+            assert_eq!(item.shortcut, default_chord(shortcut), "{id} shortcut");
+            if let Some(spec) = spec {
+                assert_eq!(item.enabled, (spec.enabled)(session).is_ok(), "{id} enabled");
+            }
         }
-        let item = tree.find(&spec.id.into()).unwrap_or_else(|| panic!("{} is missing", spec.id));
-        assert_eq!(item.enabled, (spec.enabled)(session).is_ok(), "{} enabled", spec.id);
-        assert_eq!(item.shortcut, default_chord(spec.shortcut), "{} shortcut", spec.id);
-    }
-    for c in UI_COMMANDS {
-        let item = tree.find(&c.id.into());
-        if !MENUS.contains(&c.menu) {
-            assert!(item.is_none(), "{} has its own button and is not in the menus", c.id);
-            continue;
-        }
-        let item = item.unwrap_or_else(|| panic!("{} is missing", c.id));
-        assert_eq!(item.shortcut, default_chord(c.shortcut), "{} shortcut", c.id);
     }
     // Nothing is selected yet: Copy can't run, Paste can.
     assert!(tree.find(&"edit.copy".into()).is_some_and(|i| !i.enabled));

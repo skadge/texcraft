@@ -93,7 +93,7 @@
       <p>When you cannot commit to the branch (it is protected, or your role does not allow it), or you prefer not to, the commit dialog offers <span class="ui">Commit to a new branch and open a merge request</span> (on GitHub, a pull request). Your changes go to the new branch, the request is opened into the original branch, and its link is shown. The project then follows the new branch, so later commits add to the same request.</p>
 
       <h2 id="push-pull">Push and pull for project folders <span class="tag">Desktop only</span></h2>
-      <p>A project folder is a git repository (<a href="projects.html#history">History</a>). When it has a remote on GitLab, GitHub or one of your servers, the <span class="ui">History</span> section shows it with its state: "2 commits to push", "1 commit to pull", up to date, or not pushed yet. <span class="ui">Push</span> and <span class="ui">Pull</span> are there and in the <span class="ui">File</span> menu.</p>
+      <p>A project folder is a git repository (<a href="projects.html#history">History</a>). When it has a remote on GitLab, GitHub or one of your servers, the <span class="ui">History</span> section shows it with its state: "2 commits to push", "1 commit to pull", up to date, or not pushed yet. <span class="ui">Push</span> and <span class="ui">Pull</span> are there and in All Commands (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>).</p>
       <dl>
         <dt>Push</dt>
         <dd>Sends the commits of the branch you are on. Save (and commit) first. If the remote's branch has commits you do not have, the push is refused before anything is sent: pull first, then push. A refusal by the server (a protected branch, for example) is shown with its reason.</dd>
@@ -104,7 +104,7 @@
       <p class="not-yet"><strong>Not yet:</strong> SSH itself, other branches than the one checked out, force pushes, and settling a conflict inside a file (merge it with git, or keep one side). For those, use git alongside TeXCraft: the repository is an ordinary one.</p>
 
       <h2 id="save-to">Save Project to GitHub or GitLab</h2>
-      <p>A project that is on no server yet can get a repository of its own: <span class="ui">File › Save Project to GitHub…</span> or <span class="ui">Save Project to GitLab…</span> (also in the History section while the folder has no remote). The dialog asks for the server, the owner (you, or one of your organisations or groups), the name (suggested from the folder's), who can see it (<span class="ui">Private</span>, the default, or <span class="ui">Public</span>) and an optional description.</p>
+      <p>A project that is on no server yet can get a repository of its own: <span class="ui">File › Save Project to GitLab or GitHub › Save Project to GitHub…</span> or <span class="ui">Save Project to GitLab…</span> (also in the History section while the folder has no remote). The dialog asks for the server, the owner (you, or one of your organisations or groups), the name (suggested from the folder's), who can see it (<span class="ui">Private</span>, the default, or <span class="ui">Public</span>) and an optional description.</p>
       <ul>
         <li>On the desktop, TeXCraft makes the repository, sets it as the folder's <code>origin</code>, and pushes the whole history. Unsaved changes are saved and committed first.</li>
         <li>In the browser, the files go in as the repository's first commit (the versions kept in the browser stay there), and the project is then linked to it as if opened from it.</li>

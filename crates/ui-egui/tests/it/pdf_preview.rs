@@ -152,3 +152,66 @@ fn longer_labels_send_the_pages_and_the_zoom_to_a_row_of_their_own_rather_than_o
     assert!(!export.intersects(zoom_out) && !export.intersects(pages), "the page tools are drawn over Export: {export:?} {zoom_out:?}");
     assert!(zoom_out.top() >= export.bottom(), "the page tools did not move under the buttons");
 }
+
+fn scroll(harness: &mut Harness<'_, App>) -> egui::Vec2 {
+    let inspect = harness.state_mut().control("ui.inspect", &json!({}));
+    let at = |i: usize| inspect["result"]["preview"]["scroll"][i].as_f64().unwrap_or_default() as f32;
+    egui::vec2(at(0), at(1))
+}
+
+/// Issue #19: Ctrl (Cmd on a Mac) with the wheel zooms the PDF, keeping the point under the
+/// pointer where it was.
+#[test]
+fn ctrl_and_the_wheel_zoom_around_the_pointer() {
+    let mut harness = built();
+    ui_cmd::run(harness.state_mut(), "view.actual_size");
+    settle(&mut harness);
+    let page = harness.get_by_label("Page 1 of 2").rect();
+    // A point a third of the way into the page, and what of the page is under it.
+    let pointer = page.min + page.size() / 3.0;
+    let before = zoom(&mut harness) as f32;
+    let under = (pointer - page.min) / before;
+    harness.hover_at(pointer);
+    settle(&mut harness);
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, 60.0),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
+        modifiers: egui::Modifiers::COMMAND,
+    };
+    harness.event(wheel);
+    settle(&mut harness);
+    let after = zoom(&mut harness) as f32;
+    assert!(after > before * 1.05, "the zoom went from {before} to {after}");
+    let page = harness.get_by_label("Page 1 of 2").rect();
+    let now = (pointer - page.min) / after;
+    assert!((now - under).length() < 4.0, "the point under the pointer moved from {under:?} to {now:?}");
+}
+
+/// Issue #18: the middle button dragged over pages larger than the pane moves them with it.
+#[test]
+fn the_middle_button_drags_the_pages() {
+    let mut harness = built();
+    harness.get_by_label("Fit width").click();
+    settle(&mut harness);
+    harness.get_by_label("400 %").click();
+    settle(&mut harness);
+    let page = harness.get_by_label("Page 1 of 2").rect();
+    let start = harness.get_by_label("Zoom In").rect().center() + egui::vec2(0.0, 300.0);
+    let start = egui::pos2(start.x.max(page.left() + 10.0), start.y);
+    let before = scroll(&mut harness);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Middle, pressed, modifiers: egui::Modifiers::NONE };
+    harness.event(egui::Event::PointerMoved(start));
+    harness.event(button(start, true));
+    settle(&mut harness);
+    let end = start - egui::vec2(120.0, 150.0);
+    for step in 1..=3 {
+        harness.event(egui::Event::PointerMoved(start + (end - start) * step as f32 / 3.0));
+        settle(&mut harness);
+    }
+    harness.event(button(end, false));
+    settle(&mut harness);
+    let after = scroll(&mut harness);
+    assert!(after.x > before.x + 60.0 && after.y > before.y + 60.0, "the pages did not follow the pointer: {before:?} to {after:?}");
+}

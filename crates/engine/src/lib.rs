@@ -13,6 +13,7 @@ pub mod file_access;
 pub mod find;
 mod formulas;
 pub mod grammar;
+pub mod hidden;
 mod language;
 pub mod numbering;
 pub mod spelling;
@@ -73,6 +74,9 @@ pub struct Settings {
     /// Grammar checking: on, the rules and groups switched off (`grammar.options`, `grammar.rule`).
     #[serde(default)]
     pub grammar: GrammarOptions,
+    /// The kinds of build message hidden in every project (`build.hide_messages`, [`hidden`]).
+    #[serde(default)]
+    pub hidden_messages: Vec<String>,
 }
 
 impl Default for Settings {
@@ -84,6 +88,7 @@ impl Default for Settings {
             with_suggestions: false,
             spelling: SpellingOptions::default(),
             grammar: GrammarOptions::default(),
+            hidden_messages: Vec::new(),
         }
     }
 }
@@ -211,6 +216,8 @@ pub struct Session {
     ai: ai::State,
     /// Spell checking: the dictionary, the word lists and each file's words.
     spelling: spelling::State,
+    /// The build messages hidden by kind for this project.
+    hidden: hidden::State,
     grammar: grammar::State,
     /// Where each kind of build output was last saved (`build.save_output`).
     saved_outputs: std::collections::BTreeMap<&'static str, PathBuf>,
@@ -279,6 +286,7 @@ impl Session {
             git_http: cmd::git::default_http(),
             ai: ai::State::default(),
             spelling: spelling::State::default(),
+            hidden: hidden::State::default(),
             grammar: grammar::State::default(),
             saved_outputs: std::collections::BTreeMap::new(),
         }

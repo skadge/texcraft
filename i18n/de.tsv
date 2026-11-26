@@ -126,7 +126,6 @@
 	Change as asked	Wie gewünscht ändern
 	Change to “{text}”	Ändern in „{text}“
 	Changed on the branch but kept as you edited them: {files}.	Im Branch geändert, aber so behalten, wie Sie sie bearbeitet haben: {files}.
-	Changes that are not saved are lost.	Nicht gespeicherte Änderungen gehen verloren.
 	Check Grammar with AI	Grammatik mit KI prüfen
 	Check Server	Server prüfen
 	Check comments	Kommentare prüfen
@@ -2193,3 +2192,47 @@ unit	{n} s	{n} s
 	References	Verweise
 	in {file}	in {file}
 	in {file}, the file shown	in {file}, der angezeigten Datei
+	Add to Project	Zum Projekt hinzufügen
+	All Commands	Alle Befehle
+	Commands	Befehle
+	Don't Keep	Nicht behalten
+	Download PDF	PDF herunterladen
+	Folding	Falten
+	Go To	Gehe zu
+	Hidden in all projects.	In allen Projekten ausgeblendet.
+	Hidden in this project.	In diesem Projekt ausgeblendet.
+	Hidden messages	Ausgeblendete Meldungen
+	Hide Like This	Solche ausblenden
+	Hide Them	Ausblenden
+	Hide the messages of this kind, here or in all projects	Meldungen dieser Art ausblenden, hier oder in allen Projekten
+	In All Projects	In allen Projekten
+	In This Project	In diesem Projekt
+	Keep in This Browser	In diesem Browser behalten
+	Keep the changes to {project} in this browser?	Die Änderungen an {project} in diesem Browser behalten?
+	List	Liste
+	Messages like this are hidden in all projects: Settings › Building shows them again.	Meldungen dieser Art sind in allen Projekten ausgeblendet: Einstellungen › Build läuft zeigt sie wieder.
+	Messages like this are hidden in this project until TeXCraft closes: it has no folder to keep the choice in.	Meldungen dieser Art sind in diesem Projekt ausgeblendet, bis TeXCraft geschlossen wird: Es hat keinen Ordner, der die Wahl behält.
+	Messages like this are hidden in this project: Settings › Building shows them again.	Meldungen dieser Art sind in diesem Projekt ausgeblendet: Einstellungen › Build läuft zeigt sie wieder.
+	Messages like this are shown again.	Meldungen dieser Art werden wieder angezeigt.
+	Messages of the kinds hidden in Settings › Building	Meldungen der Arten, die in Einstellungen › Build läuft ausgeblendet sind
+	No command matches.	Kein Befehl passt.
+	No kind of message is hidden. In the build log, Hide Like This hides a warning's kind, here or in all projects.	Keine Art von Meldung ist ausgeblendet. Im Build-Protokoll blendet Solche ausblenden die Art einer Warnung aus, hier oder in allen Projekten.
+	Save Project to GitLab or GitHub	Projekt auf GitLab oder GitHub speichern
+	Saving writes them to the project's folder on this computer; changes not saved are lost.	Speichern schreibt sie in den Ordner des Projekts auf diesem Computer; nicht gespeicherte Änderungen gehen verloren.
+	Show Again	Wieder anzeigen
+	Spelling and Grammar	Rechtschreibung und Grammatik
+	TeXCraft keeps your projects in this browser's storage; changes not kept there are lost.	TeXCraft behält Ihre Projekte im Speicher dieses Browsers; Änderungen, die dort nicht behalten werden, gehen verloren.
+	Text Style	Textstil
+	The changes are kept in this browser. Commit them, then try again.	Die Änderungen sind in diesem Browser behalten. Committen Sie sie und versuchen Sie es dann erneut.
+	The changes are saved. Commit them, then try again.	Die Änderungen sind gespeichert. Committen Sie sie und versuchen Sie es dann erneut.
+	There is no PDF yet: compile the project first.	Es gibt noch kein PDF: Kompilieren Sie zuerst das Projekt.
+	Type part of a command's name	Geben Sie einen Teil des Befehlsnamens ein
+	{command}, {n} of {total}	{command}, {n} von {total}
+@plural	{n} hidden message|{n} hidden messages	{n} ausgeblendete Meldung|{n} ausgeblendete Meldungen
+@id	build.hidden_messages	Ausgeblendete Meldungen
+@id	build.hide_messages	Meldungen dieser Art ausblenden
+@id	build.show_messages	Meldungen wieder anzeigen
+@id	view.commands	Alle Befehle…
+@msg	Errors are not hidden: fix them instead.	Fehler werden nicht ausgeblendet: Beheben Sie sie.
+@msg	Name the kind of message to hide, on one line.	Nennen Sie die Art der auszublendenden Meldung, in einer Zeile.
+@msg	Name the kind of message, or the `index` of one of the last build's.	Nennen Sie die Art der Meldung oder den `index` einer Meldung des letzten Builds.
