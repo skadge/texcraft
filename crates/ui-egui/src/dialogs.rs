@@ -53,6 +53,8 @@ pub(crate) enum Dialog {
     Settings,
     About,
     GoToFile(crate::goto_file::Palette),
+    /// The formatted view's picker of a citation, a cross-reference or a figure's image.
+    Choose(Box<crate::insert_pick::Chooser>),
     ForgeOpen(crate::forge::OpenForm),
     ForgeCommit(crate::forge::CommitForm),
     ForgeResolve(crate::forge::ResolveForm),
@@ -84,6 +86,7 @@ impl Dialog {
             Dialog::Settings => "settings",
             Dialog::About => "about",
             Dialog::GoToFile(_) => "go_to_file",
+            Dialog::Choose(_) => "choose",
             Dialog::ForgeOpen(_) => "forge_open",
             Dialog::ForgeCommit(_) => "forge_commit",
             Dialog::ForgeResolve(_) => "forge_resolve",
@@ -110,6 +113,7 @@ fn own_window(app: &mut App, ctx: &egui::Context) -> bool {
         Some(Dialog::AiInstruct(_)) => crate::ai::instruct_dialog,
         Some(Dialog::Drop(_)) => crate::drop::dialog,
         Some(Dialog::GoToFile(_)) => crate::goto_file::show,
+        Some(Dialog::Choose(_)) => crate::insert_pick::show,
         Some(Dialog::ForgeServer(_) | Dialog::ForgeProposal(_)) => crate::forge_server::dialog,
         Some(Dialog::ForgeSave(_)) => crate::forge_save::dialog,
         Some(Dialog::ForgeOpen(_) | Dialog::ForgeCommit(_) | Dialog::ForgeResolve(_) | Dialog::ForgeMergeRequest(_)) => crate::forge::dialog,
@@ -139,6 +143,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             Dialog::Shortcuts
             | Dialog::Settings
             | Dialog::GoToFile(_)
+            | Dialog::Choose(_)
             | Dialog::ForgeOpen(_)
             | Dialog::ForgeCommit(_)
             | Dialog::ForgeResolve(_)
@@ -169,6 +174,11 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                 }
                 _ => app.view.status = Some((tl!("Type a line number, from 1.").to_owned(), true)),
             },
+            // The formatted view's link, footnote and formula: an edit of the text.
+            Some(Dialog::Prompt(p)) if p.command.starts_with("edit.") => {
+                let params = (p.params)(p.value.trim());
+                crate::ui_cmd::run_with(app, p.command, &params);
+            }
             Some(Dialog::Prompt(p)) => {
                 let params = (p.params)(p.value.trim());
                 if let Some(done) = app.run(p.command, params) {

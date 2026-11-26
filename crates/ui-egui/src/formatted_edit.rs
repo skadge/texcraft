@@ -34,8 +34,8 @@ pub(crate) struct Editing {
     composer: Composer,
     /// Edits after one that changed the text in the same frame: made on the next frame's view.
     pending: Vec<Edit>,
-    /// A toolbar or menu command for the next frame's view.
-    commands: Vec<String>,
+    /// A toolbar or menu command for the next frame's view, with its parameters.
+    commands: Vec<(String, serde_json::Value)>,
     /// The caret's line, to tell lines apart that meet at one source offset.
     caret_line: Option<usize>,
     /// The horizontal position kept by Up and Down, on screen.
@@ -51,6 +51,10 @@ pub(crate) struct Editing {
     pub toolbar_focused: bool,
     /// The caret was in a table cell last frame: Tab moves between cells.
     in_cell: bool,
+    /// The caret was in a list item last frame: Tab and Shift+Tab nest it.
+    in_item: bool,
+    /// Shift+F10 or the Menu key: open the context menu next frame.
+    menu_by_key: bool,
     /// The view asked for the keyboard itself (its caret is where it wants it).
     ours: bool,
     was_focused: bool,
@@ -67,7 +71,7 @@ pub(crate) fn caret_byte(app: &App) -> usize {
 /// Before the view is drawn: the keyboard's edits of this frame (and those left from the last).
 pub(crate) fn begin(app: &mut App, ctx: &egui::Context, id: egui::Id, focused: bool) -> Vec<Edit> {
     let e = &mut app.editor.formatted.editing;
-    let tab = e.in_cell;
+    let tab = e.in_cell || e.in_item;
     ctx.memory_mut(|m| {
         m.set_focus_lock_filter(id, egui::EventFilter { tab, horizontal_arrows: true, vertical_arrows: true, escape: false });
     });
@@ -88,17 +92,74 @@ pub(crate) fn begin(app: &mut App, ctx: &egui::Context, id: egui::Id, focused: b
 }
 
 /// Runs an `edit.*` command on the formatted view's selection, when the view is shown and the
-/// command acts on it; `None` otherwise.
-pub(crate) fn command(app: &mut App, id: &str) -> Option<bool> {
+/// command acts on it; `None` otherwise. Those that need something first (a citation's key, a
+/// link's address) ask for it, then run again with it.
+pub(crate) fn command(app: &mut App, id: &str, params: &serde_json::Value) -> Option<bool> {
     let path = app.session.current()?.clone();
     if !app.editor.formatted.shows(&path) {
         return None;
     }
+    let has = |k: &str| params.get(k).and_then(serde_json::Value::as_str).is_some();
     match id {
-        "edit.bold" | "edit.italic" | "edit.section" | "edit.subsection" | "edit.subsubsection" | "edit.paragraph" | "edit.itemize"
-        | "edit.enumerate" | "edit.undo" | "edit.redo" | "edit.select_all" | "edit.cut" | "edit.copy" => {
-            app.editor.formatted.editing.commands.push(id.to_owned());
+        "edit.bold" | "edit.italic" | "edit.code" | "edit.section" | "edit.subsection" | "edit.subsubsection" | "edit.paragraph" | "edit.chapter"
+        | "edit.body" | "edit.heading_1" | "edit.heading_2" | "edit.heading_3" | "edit.itemize" | "edit.enumerate" | "edit.indent"
+        | "edit.outdent" | "edit.table" | "edit.undo" | "edit.redo" | "edit.select_all" | "edit.cut" | "edit.copy" => {}
+        "edit.cite" | "edit.ref" if !has("key") => {
+            crate::insert_pick::open(app, if id == "edit.cite" { crate::insert_pick::Kind::Citation } else { crate::insert_pick::Kind::Reference });
+            return Some(true);
         }
+        "edit.figure" if !has("image") => {
+            crate::insert_pick::open(app, crate::insert_pick::Kind::Image);
+            return Some(true);
+        }
+        "edit.figure" => {
+            let image = params["image"].as_str().unwrap_or_default().to_owned();
+            app.figure_for_drop(&image);
+            app.editor.formatted.editing.focus = true;
+            return Some(true);
+        }
+        "edit.link" if !has("url") => {
+            let text = selected_text(app);
+            ask(
+                app,
+                (tl!("Link"), tl!("The address the text links to"), tl!("Make Link")),
+                "edit.link",
+                "https://".to_owned(),
+                move |v| serde_json::json!({"url": v, "text": text}),
+            );
+            return Some(true);
+        }
+        "edit.footnote" if !has("text") => {
+            ask(
+                app,
+                (tl!("Footnote"), tl!("The footnote's text"), tl!("Add Footnote")),
+                "edit.footnote",
+                String::new(),
+                |v| serde_json::json!({"text": v}),
+            );
+            return Some(true);
+        }
+        "edit.math_inline" | "edit.math_display" | "edit.equation" if !has("latex") => {
+            let title = match id {
+                "edit.math_inline" => tl!("Inline Formula"),
+                "edit.math_display" => tl!("Displayed Formula"),
+                _ => tl!("Numbered Equation"),
+            };
+            let command = match id {
+                "edit.math_inline" => "edit.math_inline",
+                "edit.math_display" => "edit.math_display",
+                _ => "edit.equation",
+            };
+            ask(
+                app,
+                (title, tl!("The formula in LaTeX, such as x^2 + \\alpha"), tl!("Insert")),
+                command,
+                selected_text(app),
+                |v| serde_json::json!({"latex": v}),
+            );
+            return Some(true);
+        }
+        "edit.cite" | "edit.ref" | "edit.link" | "edit.footnote" | "edit.math_inline" | "edit.math_display" | "edit.equation" => {}
         "edit.paste" => {
             if let Err(reason) = crate::ui_cmd::enabled(app, id) {
                 app.view.status = Some((reason, false));
@@ -106,12 +167,42 @@ pub(crate) fn command(app: &mut App, id: &str) -> Option<bool> {
             }
             // The clipboard's text comes back as a paste, which the view takes with the keyboard.
             app.ctx.send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+            app.editor.formatted.editing.focus = true;
+            return Some(true);
         }
         _ => return None,
     }
+    app.editor.formatted.editing.commands.push((id.to_owned(), params.clone()));
     app.editor.formatted.editing.focus = true;
     app.ctx.request_repaint();
     Some(true)
+}
+
+/// Asks for one line, then runs `command` with the parameters `params` makes of it.
+fn ask(
+    app: &mut App,
+    (title, label, action): (&'static str, &'static str, &'static str),
+    command: &'static str,
+    value: String,
+    params: impl Fn(&str) -> serde_json::Value + 'static,
+) {
+    let prompt = crate::dialogs::Prompt { title, label, value, action, command, params: Box::new(params), focus: true };
+    app.view.dialog = Some(crate::dialogs::Dialog::Prompt(prompt));
+}
+
+/// The source of the selection, when it is all text (a formula's source to start from, a link's
+/// text): the characters it shows.
+fn selected_text(app: &App) -> String {
+    let d = &app.editor.source.doc;
+    let r = d.selection.primary();
+    d.buffer.slice(r.start(), r.end())
+}
+
+/// The cross-reference command: `\cref` where the main document loads cleveref, else `\ref`.
+pub(crate) fn ref_command(app: &App) -> &'static str {
+    let project = app.session.project();
+    let main = project.main().and_then(|m| project.text(m).ok()).unwrap_or_default();
+    if texcraft_latex::refs::loads(main, "cleveref") { "cref" } else { "ref" }
 }
 
 /// What the frame's edits work on.
@@ -154,13 +245,19 @@ pub(crate) fn finish(
         set_selection(app, &f, a, h);
     }
     pointer(app, &ctx, &f);
+    context_menu(app, ui, &f, response, focused);
     let commands = std::mem::take(&mut app.editor.formatted.editing.commands);
-    for c in commands {
+    if !commands.is_empty() && !focused {
+        // A toolbar button took the keyboard as it was pressed: the text takes it back.
+        app.editor.formatted.editing.focus = true;
+        ctx.request_repaint();
+    }
+    for (c, params) in commands {
         if app.editor.source.doc.buffer.version() != version {
-            app.editor.formatted.editing.commands.push(c);
+            app.editor.formatted.editing.commands.push((c, params));
             continue;
         }
-        run_command(app, &ctx, &f, &c);
+        run_command(app, &ctx, &f, &c, &params);
     }
     for edit in edits {
         if app.editor.source.doc.buffer.version() != version {
@@ -181,6 +278,8 @@ pub(crate) fn finish(
         return;
     };
     app.editor.formatted.editing.in_cell = focused && lines.get(h.line).is_some_and(|d| d.cell.is_some());
+    let in_item = focused && crate::formatted_bar::here(app).list.is_some();
+    app.editor.formatted.editing.in_item = in_item;
     if focused {
         offer_primary(app, &ctx, &f, (a, h));
     }
@@ -316,31 +415,72 @@ fn input(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, edit: Edit) {
     }
 }
 
-fn run_command(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, id: &str) {
+fn run_command(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, id: &str, params: &serde_json::Value) {
+    let at = caret_byte(app);
+    let param = |k: &str| params.get(k).and_then(serde_json::Value::as_str).unwrap_or_default().to_owned();
+    let names = crate::formatted_bar::heading_commands(app);
+    let heading = match id {
+        "edit.heading_1" => Some(names[0]),
+        "edit.heading_2" => Some(names[1]),
+        "edit.heading_3" => Some(names[2]),
+        "edit.chapter" | "edit.section" | "edit.subsection" | "edit.subsubsection" | "edit.paragraph" => Some(id.trim_start_matches("edit.")),
+        _ => None,
+    };
+    if let Some(name) = heading {
+        let here = texcraft_latex::edit::here(f.text, at);
+        if id.starts_with("edit.heading_") && here.heading.is_some() && here.heading == texcraft_latex::view::heading_level(name) {
+            return;
+        }
+        match edit::set_heading(f.text, at, name) {
+            Some(changes) => {
+                let at = edit::map_offset(&changes, at);
+                commit(app, f, &changes, (at, at), EditKind::Other);
+            }
+            None => say(app, tl!("Put the caret in a paragraph or a heading to make it a heading.")),
+        }
+        return;
+    }
     match id {
         "edit.bold" => style(app, f, "textbf"),
         "edit.italic" => style(app, f, "textit"),
-        "edit.section" | "edit.subsection" | "edit.subsubsection" | "edit.paragraph" => {
-            let at = caret_byte(app);
-            let name = id.trim_start_matches("edit.");
-            match edit::set_heading(f.text, at, name) {
-                Some(changes) => {
-                    let at = map(&changes, at);
-                    commit(app, f, &changes, (at, at), EditKind::Other);
-                }
-                None => say(app, tl!("Put the caret in a paragraph or a heading to make it a heading.")),
+        "edit.code" => style(app, f, "texttt"),
+        "edit.body" => match edit::set_body(f.text, at) {
+            Some(changes) => {
+                let at = edit::map_offset(&changes, at);
+                commit(app, f, &changes, (at, at), EditKind::Other);
             }
-        }
+            None => say(app, tl!("The caret is in body text already.")),
+        },
         "edit.itemize" | "edit.enumerate" => {
-            let at = caret_byte(app);
-            match edit::set_list(f.text, at, id.trim_start_matches("edit.")) {
+            let name = id.trim_start_matches("edit.");
+            let here = texcraft_latex::edit::here(f.text, at);
+            let same = matches!(
+                (here.list.map(|l| l.0), name),
+                (Some(texcraft_latex::view::ListKind::Bullets), "itemize") | (Some(texcraft_latex::view::ListKind::Numbers), "enumerate")
+            );
+            if same {
+                // Pressed again: the item leaves the list.
+                structure(app, f, edit::outdent(f.text, at), tl!("Put the caret in a list item to outdent it."));
+                return;
+            }
+            match edit::set_list(f.text, at, name) {
                 Some(changes) => {
-                    let at = map(&changes, at);
+                    let at = edit::map_offset(&changes, at);
                     commit(app, f, &changes, (at, at), EditKind::Other);
                 }
                 None => say(app, tl!("Put the caret in a paragraph, or in a list of the other kind.")),
             }
         }
+        "edit.indent" => structure(app, f, edit::indent(f.text, at), tl!("Put the caret in a list item after the first to indent it.")),
+        "edit.outdent" => structure(app, f, edit::outdent(f.text, at), tl!("Put the caret in a list item to outdent it.")),
+        "edit.cite" => insert_atom(app, f, &format!("\\cite{{{}}}", param("key"))),
+        "edit.ref" => insert_atom(app, f, &format!("\\{}{{{}}}", ref_command(app), param("key"))),
+        "edit.footnote" => insert_after_selection(app, f, &format!("\\footnote{{{}}}", edit::escape(&param("text")))),
+        "edit.link" => link(app, f, &param("url"), &param("text")),
+        "edit.math_inline" => replace(app, f, &format!("\\({}\\)", param("latex")), EditKind::Other),
+        "edit.math_display" => replace(app, f, &format!("\\[ {} \\]", param("latex")), EditKind::Other),
+        "edit.equation" => new_block(app, f, &format!("\\begin{{equation}}\n  {}\n\\end{{equation}}", param("latex")), None),
+        "edit.table" => new_block(app, f, TABLE, Some("Heading")),
         "edit.undo" | "edit.redo" => undo(app, id == "edit.redo"),
         "edit.select_all" => select_all(app, f),
         "edit.copy" | "edit.cut" => copy(app, ctx, f, id == "edit.cut"),
@@ -348,23 +488,79 @@ fn run_command(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, id: &str) {
     }
 }
 
-fn say(app: &mut App, message: &str) {
-    app.view.status = Some((message.to_owned(), false));
+/// A new table: a header row and a row under it, ruled, with its caption and label.
+const TABLE: &str = "\\begin{table}[htbp]\n  \\centering\n  \\begin{tabular}{ll}\n    \\hline\n    Heading & Heading \\\\\n    \\hline\n    Text & Text \\\\\n    \\hline\n  \\end{tabular}\n  \\caption{Caption}\n  \\label{tab:new}\n\\end{table}";
+
+/// A structural edit (a list item nested or lifted), or why it cannot be made here.
+fn structure(app: &mut App, f: &Frame<'_>, e: Option<edit::SourceEdit>, why: &str) {
+    match e {
+        Some(e) => {
+            commit(app, f, &e.changes, (e.caret, e.caret), EditKind::Other);
+        }
+        None => say(app, why),
+    }
 }
 
-/// Where byte `at` of the text goes once `changes` are made (after what they insert there).
-fn map(changes: &[Change], at: usize) -> usize {
-    let mut delta: isize = 0;
-    for c in changes {
-        if c.range.start > at || (c.range.start == at && c.range.end > at) {
-            break;
-        }
-        if at < c.range.end {
-            return c.range.start.saturating_add_signed(delta);
-        }
-        delta += c.text.len() as isize - (c.range.end - c.range.start) as isize;
+/// `source` (a citation, a reference) at the caret, the selection kept before it; after a word,
+/// with a no-break space before it, as LaTeX writes them.
+fn insert_atom(app: &mut App, f: &Frame<'_>, source: &str) {
+    let Some((a, h)) = selection(app, f) else { return };
+    let end = f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app));
+    let after_word = f.text.get(..end).and_then(|s| s.chars().next_back()).is_some_and(char::is_alphanumeric);
+    let inserted = if after_word { format!("~{source}") } else { source.to_owned() };
+    let caret = end + inserted.len();
+    commit(app, f, &[Change { range: end..end, text: inserted }], (caret, caret), EditKind::Other);
+}
+
+/// `source` after the selection (or at the caret), the caret after it.
+fn insert_after_selection(app: &mut App, f: &Frame<'_>, source: &str) {
+    let Some((a, h)) = selection(app, f) else { return };
+    let end = f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app));
+    let caret = end + source.len();
+    commit(app, f, &[Change { range: end..end, text: source.to_owned() }], (caret, caret), EditKind::Other);
+}
+
+/// A link: the selected text (in one run) made the link's text, or the address at the caret.
+fn link(app: &mut App, f: &Frame<'_>, url: &str, text: &str) {
+    let Some((a, h)) = selection(app, f) else { return };
+    if a == h {
+        let source = if text.is_empty() { format!("\\url{{{url}}}") } else { format!("\\href{{{url}}}{{{}}}", edit::escape(text)) };
+        replace(app, f, &source, EditKind::Other);
+        return;
     }
-    at.saturating_add_signed(delta)
+    match f.doc.pieces(f.text, a, h).as_slice() {
+        [one] => {
+            let open = format!("\\href{{{url}}}{{");
+            let changes = [Change { range: one.start..one.start, text: open.clone() }, Change { range: one.end..one.end, text: "}".to_owned() }];
+            let caret = one.end + open.len() + 1;
+            commit(app, f, &changes, (caret, caret), EditKind::Other);
+        }
+        _ => say(app, tl!("Select text in one paragraph and one style to make it a link.")),
+    }
+}
+
+/// A block (a table, an equation) on lines of its own after the block holding the caret; the
+/// first `select` of it selected, else the caret at its start.
+fn new_block(app: &mut App, f: &Frame<'_>, source: &str, select: Option<&str>) {
+    let caret = caret_byte(app);
+    let blocks = texcraft_latex::view::view(f.text);
+    let at = blocks.iter().find(|b| b.range.end >= caret).map_or(f.text.len(), |b| b.range.end);
+    let before = f.text.get(..at).unwrap_or_default();
+    let lead = if before.is_empty() || before.ends_with("\n\n") {
+        ""
+    } else if before.ends_with('\n') {
+        "\n"
+    } else {
+        "\n\n"
+    };
+    let inserted = format!("{lead}{source}\n");
+    let start = at + lead.len();
+    let sel = select.and_then(|s| source.find(s).map(|i| (start + i, start + i + s.len()))).unwrap_or((start, start));
+    commit(app, f, &[Change { range: at..at, text: inserted }], sel, EditKind::Other);
+}
+
+fn say(app: &mut App, message: &str) {
+    app.view.status = Some((message.to_owned(), false));
 }
 
 fn type_text(app: &mut App, f: &Frame<'_>, s: &str) {
@@ -441,6 +637,11 @@ fn delete(app: &mut App, f: &Frame<'_>, back: bool) {
         set_selection(app, f, Pos { line: h.line, at: v }, Pos { line: h.line, at: v });
         return;
     }
+    // At a heading's or a list item's start: it becomes body text, or goes one level out.
+    if back && let Some(e) = edit::backspace_at_start(f.text, caret_byte(app)) {
+        commit(app, f, &e.changes, (e.caret, e.caret), EditKind::Other);
+        return;
+    }
     // At a line's edge: the paragraph break goes, joining two paragraphs.
     let gap = if back { h.line.checked_sub(1).and_then(|l| f.doc.gap_after(f.text, l)) } else { f.doc.gap_after(f.text, h.line) };
     if let Some(gap) = gap {
@@ -458,7 +659,16 @@ fn key_press(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, key: egui::Key, 
         K::Backspace => delete(app, f, true),
         K::Delete => delete(app, f, false),
         K::Enter => enter(app, f, edit),
-        K::Tab => next_cell(app, f, m.shift),
+        K::Tab if f.lines.get(selection(app, f).map_or(0, |s| s.1.line)).is_some_and(|d| d.cell.is_some()) => next_cell(app, f, m.shift),
+        K::Tab => {
+            let at = caret_byte(app);
+            if m.shift {
+                structure(app, f, edit::outdent(f.text, at), tl!("Put the caret in a list item to outdent it."));
+            } else {
+                structure(app, f, edit::indent(f.text, at), tl!("Put the caret in a list item after the first to indent it."));
+            }
+        }
+        K::F10 if m.shift => app.editor.formatted.editing.menu_by_key = true,
         K::Z if m.command => undo(app, m.shift),
         K::Y if m.command => undo(app, true),
         K::A if m.command => select_all(app, f),
@@ -710,12 +920,12 @@ fn style(app: &mut App, f: &Frame<'_>, name: &str) {
     let changes = edit::toggle_style(f.text, &pieces, name);
     let (Some(start), Some(end)) = (pieces.first().map(|r| r.start), pieces.last().map(|r| r.end)) else { return };
     // The selection keeps the same text: inside the commands added, without those removed.
-    let start = map(&changes, start);
+    let start = edit::map_offset(&changes, start);
     let end = map_before(&changes, end);
     commit(app, f, &changes, (start, end), EditKind::Other);
 }
 
-/// Like [`map`], but before what is inserted at `at`.
+/// Like [`edit::map_offset`], but before what is inserted at `at`.
 fn map_before(changes: &[Change], at: usize) -> usize {
     let mut delta: isize = 0;
     for c in changes {
@@ -812,5 +1022,157 @@ fn accessibility(ui: &mut egui::Ui, response: &egui::Response, path: &ProjectPat
             node.set_value(value);
             node.set_character_lengths(lengths);
         });
+    }
+}
+
+/// The misspelled word at the caret, its bytes and text.
+fn misspelled_at_caret(app: &App) -> Option<(std::ops::Range<usize>, String)> {
+    let r = app.editor.formatted.misspelling_at(caret_byte(app))?;
+    let word = app.editor.source.doc.buffer.text().get(r.clone())?.to_owned();
+    Some((r, word))
+}
+
+/// The spelling commands (`edit.spelling.replace {text?}`, `.add`, `.ignore`) on the formatted
+/// view's caret; false when the view is not shown.
+pub(crate) fn spelling(app: &mut App, id: &str, params: &serde_json::Value) -> bool {
+    let Some(path) = app.session.current().cloned() else { return false };
+    if !app.editor.formatted.shows(&path) {
+        return false;
+    }
+    let Some((range, word)) = misspelled_at_caret(app) else {
+        app.view.status = Some((tl!("The caret is not on a misspelled word.").to_owned(), true));
+        return true;
+    };
+    if id != "edit.spelling.replace" {
+        crate::spell::keep(app, id, &word, params);
+        return true;
+    }
+    let chosen = params
+        .get("text")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .or_else(|| crate::spell::suggestions(app, &word).into_iter().next());
+    let Some(text) = chosen else {
+        app.view.status = Some((tl!("The dictionary has no spelling to offer for “{word}”.").replace("{word}", &word), true));
+        return true;
+    };
+    if !editable(app) {
+        return true;
+    }
+    // The word's source replaced, its spelling escaped as typing is.
+    let source = edit::escape(&text);
+    let d = &mut app.editor.source.doc;
+    let (a, b) = (d.buffer.byte_to_char(range.start), d.buffer.byte_to_char(range.end));
+    let caret = a + source.chars().count();
+    let before = d.selection.clone();
+    d.buffer.seal();
+    if d.buffer.edit(Transaction::replace(a, b, &source), &before, &Selection::single(caret, caret), EditKind::Other).is_ok() {
+        d.selection = Selection::single(caret, caret);
+        d.buffer.seal();
+    }
+    app.editor.formatted.editing.focus = true;
+    true
+}
+
+/// The text's context menu, opened by a right-click or from the keyboard (Shift+F10, the Menu
+/// key, which give its first entry the keyboard): on a misspelled word its spellings, Add to
+/// Dictionary and Ignore first; then the clipboard and Select All. Each entry runs its command;
+/// closed from the keyboard without a choice, it gives the keyboard back to the text.
+fn context_menu(app: &mut App, ui: &mut egui::Ui, f: &Frame<'_>, response: &egui::Response, focused: bool) {
+    let t = app.tokens;
+    let ctx = ui.ctx().clone();
+    let by_key = response.id.with("menu-by-key");
+    let mut menu = egui::Popup::context_menu(response);
+    // A right-click on a line: the caret there first, unless it is in the selection.
+    let clicked = f.lines.iter().enumerate().find_map(|(i, d)| d.response.secondary_clicked().then_some(i).zip(d.response.interact_pointer_pos()));
+    if let Some((i, p)) = clicked
+        && let Some(d) = f.lines.get(i)
+    {
+        let at = Pos { line: i, at: stop_at(d, p) };
+        let inside = selection(app, f).is_some_and(|(a, h)| a.min(h) <= at && at <= a.max(h) && a != h);
+        if !inside {
+            set_selection(app, f, at, at);
+        }
+        menu = menu.open_memory(egui::SetOpenCommand::Bool(true)).at_position(p);
+        app.editor.formatted.editing.focus = true;
+    }
+    let asked = std::mem::take(&mut app.editor.formatted.editing.menu_by_key);
+    if focused && asked {
+        ctx.data_mut(|d| d.insert_temp(by_key, true));
+        let at = selection(app, f).and_then(|(_, h)| {
+            let d = f.lines.get(h.line)?;
+            Some(d.galley.pos_from_cursor(CCursor::new(h.at)).translate(d.origin.to_vec2()).left_bottom())
+        });
+        ctx.data_mut(|d| d.insert_temp(by_key.with("at"), at.unwrap_or(response.rect.left_top())));
+        menu = menu.open_memory(egui::SetOpenCommand::Bool(true));
+    }
+    let keyed = ctx.data(|d| d.get_temp::<bool>(by_key));
+    // Opened from the keyboard, it stays at the caret (there is no pointer to follow).
+    if keyed.is_some()
+        && let Some(at) = ctx.data(|d| d.get_temp::<egui::Pos2>(by_key.with("at")))
+    {
+        menu = menu.at_position(at);
+    }
+    let word = misspelled_at_caret(app).map(|(_, w)| w);
+    let offered = word.as_ref().map(|w| crate::spell::suggestions(app, w));
+    let selected = selection(app, f).is_some_and(|(a, h)| a != h);
+    let mut chosen: Option<(&'static str, serde_json::Value)> = None;
+    let shown = menu.show(|ui| {
+        ui.set_min_width(220.0);
+        let mut focus = keyed == Some(true);
+        if let Some(offered) = &offered {
+            if offered.is_empty() {
+                ui.label(egui::RichText::new(tl!("No spellings to offer")).font(t.small()).color(t.text_muted));
+            }
+            let changes =
+                offered.iter().map(|s| ("edit.spelling.replace", tl!("Change to “{text}”").replace("{text}", s), serde_json::json!({"text": s})));
+            let others = [
+                ("edit.spelling.add", tl!("Add to Dictionary").to_owned(), serde_json::json!({})),
+                ("edit.spelling.ignore", tl!("Ignore").to_owned(), serde_json::json!({})),
+            ];
+            for (id, label, params) in changes.chain(others) {
+                let icon = if id == "edit.spelling.replace" { Some("pencil") } else { crate::top_bar::icon_for(id) };
+                let item = crate::top_bar::item_response(ui, &t, icon, &label, None, Ok(()));
+                if std::mem::take(&mut focus) {
+                    item.request_focus();
+                }
+                if item.clicked() {
+                    chosen = Some((id, params));
+                }
+            }
+            ui.separator();
+        }
+        for (id, label) in
+            [("edit.cut", tl!("Cut")), ("edit.copy", tl!("Copy")), ("edit.paste", tl!("Paste")), ("edit.select_all", tl!("Select All"))]
+        {
+            let enabled = match id {
+                "edit.cut" | "edit.copy" if !selected => Err(tl!("Select some text first.").to_owned()),
+                _ => crate::ui_cmd::enabled(app, id),
+            };
+            let can = enabled.is_ok();
+            let item = crate::top_bar::item_response(ui, &t, crate::top_bar::icon_for(id), label, app.keys.shortcut_text(id), enabled);
+            if focus && can {
+                item.request_focus();
+                focus = false;
+            }
+            if item.clicked() {
+                chosen = Some((id, serde_json::json!({})));
+            }
+        }
+        if chosen.is_some() {
+            ui.close();
+        }
+    });
+    if keyed == Some(true) {
+        ctx.data_mut(|d| d.insert_temp(by_key, false));
+    }
+    if shown.is_none() || chosen.is_some() {
+        ctx.data_mut(|d| d.remove::<bool>(by_key));
+        if keyed.is_some() || chosen.is_some() {
+            app.editor.formatted.editing.focus = true;
+        }
+    }
+    if let Some((id, params)) = chosen {
+        crate::ui_cmd::run_with(app, id, &params);
     }
 }

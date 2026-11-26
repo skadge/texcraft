@@ -60,23 +60,36 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     // bullet points"); the change arrives as a suggestion, as a rewrite does.
     ui("edit.instruct", "Ask AI to Change This…", "Rewrite with AI", "ai", None),
     // Insert holds what the editor's toolbar does, for the keyboard and when the toolbar is narrow.
+    // The paragraph styles: body text, and Heading 1 to 3 as the document's sectioning levels
+    // (`\chapter`, `\section`, `\subsection` in a class with chapters).
+    ui("edit.body", "Body Text", "Insert", "styles", Some("Cmd+Alt+0")),
+    ui("edit.heading_1", "Heading 1", "Insert", "styles", Some("Cmd+Alt+1")),
+    ui("edit.heading_2", "Heading 2", "Insert", "styles", Some("Cmd+Alt+2")),
+    ui("edit.heading_3", "Heading 3", "Insert", "styles", Some("Cmd+Alt+3")),
+    ui("edit.chapter", "Chapter", "Insert", "headings", None),
     ui("edit.section", "Section", "Insert", "headings", None),
     ui("edit.subsection", "Subsection", "Insert", "headings", None),
     ui("edit.subsubsection", "Subsubsection", "Insert", "headings", None),
     ui("edit.paragraph", "Paragraph Heading", "Insert", "headings", None),
     ui("edit.bold", "Bold", "Insert", "style", Some("Cmd+B")),
     ui("edit.italic", "Italic", "Insert", "style", Some("Cmd+I")),
+    ui("edit.code", "Code", "Insert", "style", Some("Cmd+Alt+C")),
     ui("edit.figure", "Figure", "Insert", "float", None),
     ui("edit.table", "Table", "Insert", "float", None),
     ui("edit.math_inline", "Inline Formula", "Insert", "math", Some("Cmd+Shift+M")),
     ui("edit.math_display", "Displayed Formula", "Insert", "math", None),
     ui("edit.equation", "Numbered Equation", "Insert", "math", None),
     ui("edit.symbols", "Symbols…", "Insert", "math", None),
-    ui("edit.ref", "Cross-Reference", "Insert", "refs", None),
-    ui("edit.cite", "Citation", "Insert", "refs", None),
-    ui("edit.link", "Link", "Insert", "refs", None),
-    ui("edit.itemize", "Bulleted List", "Insert", "lists", None),
-    ui("edit.enumerate", "Numbered List", "Insert", "lists", None),
+    // In the formatted view these ask for what they insert (a picker of the project's labels and
+    // bibliography entries, a field); `{key}`, `{url, text?}`, `{text}` give it.
+    ui("edit.ref", "Cross-Reference", "Insert", "refs", Some("Cmd+Alt+R")),
+    ui("edit.cite", "Citation", "Insert", "refs", Some("Cmd+Alt+B")),
+    ui("edit.link", "Link", "Insert", "refs", Some("Cmd+K")),
+    ui("edit.footnote", "Footnote", "Insert", "refs", Some("Cmd+Alt+N")),
+    ui("edit.itemize", "Bulleted List", "Insert", "lists", Some("Cmd+Alt+8")),
+    ui("edit.enumerate", "Numbered List", "Insert", "lists", Some("Cmd+Alt+7")),
+    ui("edit.indent", "Indent Item", "Insert", "lists", Some("Cmd+]")),
+    ui("edit.outdent", "Outdent Item", "Insert", "lists", Some("Cmd+[")),
     // The connected model writes LaTeX (a table, an equation, a TikZ diagram, a figure) or a
     // BibTeX entry; it goes in as a suggested change.
     ui("edit.ai_make", "Make with AI…", "Insert", "ai", None),
@@ -289,7 +302,7 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "edit.ai_reference" => crate::ai_make::open_reference(app),
         "edit.ai_review" => crate::ai_ask::review(app),
         id if id.starts_with("edit.") => {
-            if !crate::editor::edit(app, id) {
+            if !crate::editor::edit_with(app, id, params) {
                 app.view.status = Some((tl!("Open a text file to edit it.").to_owned(), true));
             }
         }
