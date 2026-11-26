@@ -252,7 +252,7 @@ pub(crate) fn styled(name: &str, s: Style) -> Option<Style> {
 }
 
 /// The style after a declaration such as `\bfseries`, which lasts to the end of its group.
-fn declared(name: &str, s: Style) -> Option<Style> {
+pub(crate) fn declared(name: &str, s: Style) -> Option<Style> {
     let style = match name {
         "bfseries" | "bf" => Style { bold: true, ..s },
         "itshape" | "it" | "slshape" | "sl" => Style { italic: true, ..s },

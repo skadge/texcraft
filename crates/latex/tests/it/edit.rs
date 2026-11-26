@@ -388,6 +388,40 @@ fn backspace_at_a_line_start_lifts_a_heading_or_an_item() {
 }
 
 #[test]
+fn declarations_and_emph_set_the_style_to_their_groups_end() {
+    let text = "A {\\bfseries bold \\itshape both} plain \\textit{it \\emph{up}} \\begin{center}\\ttfamily mono\\end{center}";
+    let at = |s: &str| text.find(s).unwrap_or_default() + 1;
+    let bold = edit::here(text, at("old "));
+    assert!(bold.bold && !bold.italic && bold.bold_by == Some(edit::StyledBy::Declaration));
+    let both = edit::here(text, at("oth"));
+    assert!(both.bold && both.italic && both.italic_by == Some(edit::StyledBy::Declaration));
+    assert_eq!(edit::here(text, at("lain")), edit::Here::default(), "a declaration ends with its group");
+    let up = edit::here(text, at("p}}"));
+    assert!(!up.italic && up.italic_by.is_none(), "\\emph in italic text is upright");
+    let it = edit::here(text, at("t \\emph"));
+    assert_eq!(it.italic_by, Some(edit::StyledBy::Command));
+    let mono = edit::here(text, at("ono"));
+    assert!(mono.code && mono.code_by == Some(edit::StyledBy::Declaration), "a declaration in an environment holds to its end");
+}
+
+#[test]
+fn an_edit_in_place_changes_only_the_bytes_between_what_is_kept() -> Result<(), &'static str> {
+    let old = "\\begin{tikzpicture}\n  \\draw (0,0) -- (1,1);\n\\end{tikzpicture}";
+    let new = old.replace("(1,1)", "(2,1)");
+    let c = edit::minimal_change(10, old, &new).ok_or("no change")?;
+    assert_eq!(c.text, "2");
+    assert_eq!(c.range.len(), 1);
+    assert_eq!(edit::apply(&format!("{}{old}", " ".repeat(10)), &[c]), format!("{}{new}", " ".repeat(10)));
+    assert!(edit::minimal_change(0, old, old).is_none());
+    // Characters of several bytes are not split.
+    let c = edit::minimal_change(0, "αβγ", "αδγ").ok_or("no change")?;
+    assert_eq!((c.range, c.text.as_str()), (2..4, "δ"));
+    let c = edit::minimal_change(0, "ab", "abab").ok_or("no change")?;
+    assert_eq!(edit::apply("ab", &[c]), "abab");
+    Ok(())
+}
+
+#[test]
 fn the_caret_knows_its_styles_heading_and_list() {
     let text = "\\section{A \\textit{b}}\n\nSome \\textbf{bold \\texttt{code}} \\emph{e}.\n\n\\begin{itemize}\\item a\\begin{enumerate}\\item b\\end{enumerate}\\end{itemize}";
     let at = |s: &str| text.find(s).unwrap_or_default() + 1;
@@ -397,7 +431,7 @@ fn the_caret_knows_its_styles_heading_and_list() {
     let c = edit::here(text, at("ode"));
     assert!(c.bold && c.code && c.style.mono && c.heading.is_none());
     let e = edit::here(text, at("e}."));
-    assert!(e.style.italic && !e.italic, "\\emph is italic text but not the Italic button's command");
+    assert!(e.italic && e.italic_by == Some(edit::StyledBy::Emph), "\\emph shows Italic pressed, as \\emph");
     assert_eq!(edit::here(text, at("a\\begin")).list, Some((ListKind::Bullets, 1)));
     assert_eq!(edit::here(text, at("b\\end")).list, Some((ListKind::Numbers, 2)));
     assert_eq!(edit::here(text, at("Some")), edit::Here::default());

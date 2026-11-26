@@ -67,7 +67,8 @@ pub(super) fn table_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usiz
         area.show(ui.ctx(), |ui| {
             egui::Frame::popup(ui.style()).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
                 ui.set_max_width(width);
-                toolbar(ui, cx, table, cell_at(table, at));
+                let anchor = cx.edit_anchor.filter(|a| table.range.start < *a && *a < table.range.end).and_then(|a| cell_at(table, a));
+                toolbar(ui, cx, table, cell_at(table, at), anchor);
             });
         });
     }
@@ -97,8 +98,9 @@ fn caption(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, f: &Float) 
     let _ = paragraph(ui, cx, &inlines, range, &para);
 }
 
-/// The toolbar of the table holding the caret; `cell` is the caret's cell.
-fn toolbar(ui: &mut egui::Ui, cx: &mut Cx<'_>, table: &Table, cell: Option<(usize, usize)>) {
+/// The toolbar of the table holding the caret; `cell` is the caret's cell, `anchor` the cell of
+/// the selection's other end.
+fn toolbar(ui: &mut egui::Ui, cx: &mut Cx<'_>, table: &Table, cell: Option<(usize, usize)>, anchor: Option<(usize, usize)>) {
     let t = cx.t;
     let id = toolbar_id(table.range.start);
     let mut bar = ui.new_child(
@@ -158,6 +160,37 @@ fn toolbar(ui: &mut egui::Ui, cx: &mut Cx<'_>, table: &Table, cell: Option<(usiz
         let name = ["none", "all", "booktabs"].get(i).copied().unwrap_or("none");
         action = Some(json!({"op": "borders", "borders": name, "row": row, "column": column}));
     }
+    separator(&mut bar, &t);
+    let header = table.header(cx.text);
+    let r = toggle(&mut bar, &t, tl!("Header row"), header);
+    first.get_or_insert(r.id);
+    if r.on_hover_text(tl!("The first row in bold, with a rule under it")).clicked() {
+        action = Some(json!({"op": "header", "on": !header, "row": 0, "column": 0}));
+    }
+    // Merge the cells of a selection in one row; split the merged cell at the caret.
+    let merged = cell.and_then(|(r, c)| table.rows.get(r)?.cell_at(c)).is_some_and(|(_, c)| c.multicolumn.is_some());
+    match (cell, anchor) {
+        _ if merged => {
+            if widgets::text_button(&mut bar, &t, tl!("Split cell"), true).clicked() {
+                action = Some(json!({"op": "split", "row": row, "column": column}));
+            }
+        }
+        (Some((r, c)), Some((ar, ac))) if r == ar && c != ac => {
+            let (from, to) = (c.min(ac), c.max(ac));
+            if widgets::text_button(&mut bar, &t, tl!("Merge cells"), true).clicked() {
+                action = Some(json!({"op": "merge", "row": r, "column": from, "span": to - from + 1}));
+            }
+        }
+        _ => {
+            let _ = widgets::text_button(&mut bar, &t, tl!("Merge cells"), false).on_hover_text(tl!("Select cells of one row to merge them."));
+        }
+    }
+    separator(&mut bar, &t);
+    for (label, op) in [(tl!("Caption…"), "caption"), (tl!("Label…"), "label")] {
+        if widgets::text_button(&mut bar, &t, label, true).clicked() {
+            cx.table_prompt = Some((op, at));
+        }
+    }
     // Any of its controls holding the keyboard.
     focused |= bar.ctx().memory(|m| m.focused()).is_some_and(|f| bar.ctx().read_response(f).is_some_and(|r| bar.min_rect().contains_rect(r.rect)));
     let rect = bar.min_rect();
@@ -177,6 +210,25 @@ fn toolbar(ui: &mut egui::Ui, cx: &mut Cx<'_>, table: &Table, cell: Option<(usiz
         a["at"] = json!(at);
         cx.table_action = Some(a);
     }
+}
+
+/// A text button that stays highlighted while `on`.
+fn toggle(ui: &mut egui::Ui, t: &crate::theme::Tokens, label: &str, on: bool) -> egui::Response {
+    let galley = ui.painter().layout_no_wrap(label.to_owned(), t.body(), t.text);
+    let size = vec2(galley.size().x + 4.0 * t.unit, t.toolbar_height - 2.0 * t.unit);
+    let (rect, r) = ui.allocate_exact_size(size, Sense::click());
+    r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, on, label));
+    if ui.is_rect_visible(rect) {
+        let base = if on { crate::theme::blend(t.frame, t.accent_soft) } else { t.frame };
+        let fill = widgets::state_fill(t, &r, base);
+        if fill != t.frame {
+            ui.painter().rect_filled(rect, t.corner(), fill);
+        }
+        let color = if on { t.accent } else { t.text };
+        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, label, t.body(), color);
+        widgets::focus_ring(ui, t, &r, rect, t.corner());
+    }
+    r
 }
 
 fn separator(ui: &mut egui::Ui, t: &crate::theme::Tokens) {

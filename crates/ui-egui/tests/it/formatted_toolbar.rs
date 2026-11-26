@@ -245,3 +245,26 @@ fn a_misspelled_word_s_menu_in_the_view_offers_its_spelling() {
     h.run();
     assert!(h.get_by_label("main.tex formatted").accesskit_node().is_focused());
 }
+
+#[test]
+fn italic_is_pressed_in_emph_and_takes_it_off_and_a_declaration_says_why_it_stays() {
+    let original = "Some \\emph{words} and {\\bfseries strong text} here.\n";
+    let mut h = formatted(original, &[]);
+    caret_at(&mut h, 7);
+    assert!(pressed(&h, "Italic"), "Italic is not shown pressed in \\emph");
+    h.get_by_role_and_label(Role::Button, "Italic").click();
+    h.run();
+    h.run();
+    let plain = original.replace("\\emph{words}", "words");
+    assert_eq!(text(&mut h), plain);
+    // In the declaration's group: Bold is pressed, and pressing it changes nothing and says why.
+    h.get_by_label("main.tex formatted").focus();
+    h.run();
+    caret_at(&mut h, "Some words and str".len());
+    assert!(pressed(&h, "Bold"), "Bold is not shown pressed after \\bfseries");
+    h.get_by_role_and_label(Role::Button, "Bold").click();
+    h.run();
+    h.run();
+    assert_eq!(text(&mut h), plain);
+    assert!(h.query_by_label_contains("declaration").is_some(), "the status line does not say why");
+}

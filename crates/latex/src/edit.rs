@@ -764,19 +764,79 @@ pub fn apply(text: &str, changes: &[Change]) -> String {
     out
 }
 
+/// What sets a style at a place: the toolbar's buttons undo a command, and say why they cannot
+/// undo a declaration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StyledBy {
+    /// `\textbf{…}`, `\textit{…}`, `\texttt{…}`: their braces can be taken off.
+    Command,
+    /// `\emph{…}`, which sets italic in upright text.
+    Emph,
+    /// `\bfseries`, `\itshape`, `\ttfamily` and kin, to the end of their group.
+    Declaration,
+}
+
 /// Where source offset `at` stands in the document's structure: the toolbar's state.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Here {
-    /// The style the commands around it give (`\textbf`, `\textit`, `\texttt`…).
+    /// The style the commands and declarations around it give.
     pub style: Style,
-    /// Bold, italic and typewriter given by these commands themselves, which their buttons undo.
+    /// Whether the text there is bold, italic or typewriter (the buttons shown pressed)…
     pub bold: bool,
     pub italic: bool,
     pub code: bool,
+    /// …and what makes it so.
+    pub bold_by: Option<StyledBy>,
+    pub italic_by: Option<StyledBy>,
+    pub code_by: Option<StyledBy>,
     /// The heading's level ([`view::heading_level`]) when it is in a heading.
     pub heading: Option<u8>,
     /// The innermost list around it, and how many lists deep it is (1 for a list in none).
     pub list: Option<(view::ListKind, usize)>,
+}
+
+impl Here {
+    /// The style after command or declaration `name`, `by` it.
+    fn apply(&mut self, name: &str, by: StyledBy) {
+        let before = self.style;
+        let after = match by {
+            StyledBy::Declaration => view::declared(name, before),
+            _ => view::styled(name, before),
+        };
+        let Some(after) = after else { return };
+        // A style a command turns off, or turns on, is set by it; one it leaves is kept.
+        let emph = if by == StyledBy::Command && name == "emph" { StyledBy::Emph } else { by };
+        let set = |on: bool, was: bool, old: Option<StyledBy>| match (on, was) {
+            (false, _) => None,
+            (true, false) => Some(by),
+            (true, true) => old,
+        };
+        self.bold_by = set(after.bold, before.bold, self.bold_by);
+        self.italic_by = match (after.italic, before.italic) {
+            (true, false) => Some(emph),
+            (true, true) if matches!(name, "textit" | "textsl") => Some(StyledBy::Command),
+            (on, was) => set(on, was, self.italic_by),
+        };
+        self.code_by = set(after.mono, before.mono, self.code_by);
+        if by == StyledBy::Command {
+            match name {
+                "textbf" => self.bold_by = Some(StyledBy::Command),
+                "texttt" => self.code_by = Some(StyledBy::Command),
+                _ => {}
+            }
+        }
+        self.style = after;
+        (self.bold, self.italic, self.code) = (after.bold, after.italic, after.mono);
+    }
+
+    /// The declarations in `body` before `at`: they hold to the end of the group.
+    fn declarations(&mut self, body: &[Node], at: usize) {
+        for n in body.iter().take_while(|n| n.range.end <= at) {
+            if let Kind::Command { name, .. } = &n.kind {
+                self.apply(name, StyledBy::Declaration);
+            }
+        }
+    }
 }
 
 /// What encloses source offset `at`.
@@ -787,31 +847,33 @@ pub fn here(text: &str, at: usize) -> Here {
     let mut out = Here::default();
     for f in &frames {
         match f {
-            Frame::Command { name, .. } => {
+            Frame::Command { name, arg, .. } => {
                 if let Some(level) = view::heading_level(name) {
                     out.heading = Some(level);
                 }
-                if let Some(style) = view::styled(name, out.style) {
-                    out.style = style;
-                }
-                match *name {
-                    "textbf" => out.bold = true,
-                    "textit" => out.italic = true,
-                    "texttt" => out.code = true,
-                    _ => {}
-                }
+                out.apply(name, StyledBy::Command);
+                out.declarations(&arg.body, at);
             }
-            Frame::Environment { name, .. } => {
+            Frame::Environment { name, body, .. } => {
                 let kind = match *name {
                     "itemize" => view::ListKind::Bullets,
                     "enumerate" => view::ListKind::Numbers,
                     "description" => view::ListKind::Descriptions,
-                    _ => continue,
+                    _ => {
+                        out.declarations(body, at);
+                        continue;
+                    }
                 };
                 let depth = out.list.map_or(0, |(_, d)| d) + 1;
                 out.list = Some((kind, depth));
+                out.declarations(body, at);
             }
-            Frame::Group(_) | Frame::Math => {}
+            Frame::Group(node) => {
+                if let Kind::Group { body, .. } = &node.kind {
+                    out.declarations(body, at);
+                }
+            }
+            Frame::Math => {}
         }
     }
     out
@@ -846,6 +908,19 @@ pub fn set_body(text: &str, at: usize) -> Option<Vec<Change>> {
         }
         _ => None,
     })
+}
+
+/// The one change that makes `old`, the source at byte `start`, into `new`: only the bytes between
+/// what they share at both ends. `None` when they are the same.
+pub fn minimal_change(start: usize, old: &str, new: &str) -> Option<Change> {
+    if old == new {
+        return None;
+    }
+    let prefix: usize = old.chars().zip(new.chars()).take_while(|(a, b)| a == b).map(|(a, _)| a.len_utf8()).sum();
+    let (old_rest, new_rest) = (old.get(prefix..)?, new.get(prefix..)?);
+    let suffix: usize = old_rest.chars().rev().zip(new_rest.chars().rev()).take_while(|(a, b)| a == b).map(|(a, _)| a.len_utf8()).sum();
+    let text = new_rest.get(..new_rest.len() - suffix)?.to_owned();
+    Some(change(start + prefix..start + old.len() - suffix, text))
 }
 
 /// Where byte `at` of the text goes once `changes` (in order, not overlapping) are made: after

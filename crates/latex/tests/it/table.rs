@@ -184,6 +184,54 @@ fn borders_switch_between_none_all_and_booktabs_and_back() -> R {
 }
 
 #[test]
+fn a_header_row_is_its_cells_in_bold_with_a_rule_under_it() -> R {
+    let text = "\\begin{tabular}{ll}\n  \\hline\n  Name & Value \\\\\n  a & 1 \\\\\n  \\hline\n\\end{tabular}";
+    let t = grid(text)?;
+    assert!(!t.header(text));
+    let on = edited(text, t.set_header(text, true))?;
+    assert_eq!(on, text.replace("Name & Value", "\\textbf{Name} & \\textbf{Value}").replace("\\\\\n  a", "\\\\\n  \\hline\n  a"));
+    let t = grid(&on)?;
+    assert!(t.header(&on));
+    // Off takes the bold away and keeps the rules.
+    let off = edited(&on, t.set_header(&on, false))?;
+    assert_eq!(off, on.replace("\\textbf{Name}", "Name").replace("\\textbf{Value}", "Value"));
+    // Booktabs gets its own rule; a table without rules gets none.
+    let book = edited(BOOKTABS, grid(BOOKTABS)?.set_header(BOOKTABS, true))?;
+    assert_eq!(book.matches("\\midrule").count(), 1, "{book}");
+    let bare = "\\begin{tabular}{ll}\na & b \\\\\nc & d\n\\end{tabular}";
+    let made = edited(bare, grid(bare)?.set_header(bare, true))?;
+    assert_eq!(made, bare.replace("a & b", "\\textbf{a} & \\textbf{b}"));
+    Ok(())
+}
+
+#[test]
+fn cells_merge_into_a_multicolumn_and_split_back_leaving_other_rows_alone() -> R {
+    let text = "\\begin{tabular}{|l|c|r|}\n  a & b & c \\\\\n  d & e & f \\\\\n\\end{tabular}";
+    let t = grid(text)?;
+    let merged = edited(text, t.merge(text, 0, 0, 2))?;
+    assert_eq!(merged, text.replace("a & b & c", "\\multicolumn{2}{|l|}{a b} & c"));
+    let t = grid(&merged)?;
+    assert_eq!((t.rows[0].cells[0].span, t.rows[1].cells.len()), (2, 3));
+    let split = edited(&merged, t.split(&merged, 0, 1))?;
+    assert_eq!(split, text.replace("a & b & c", "a b & & c"));
+    // The middle and last columns: the bar on the right only.
+    let right = edited(text, grid(text)?.merge(text, 1, 1, 2))?;
+    assert!(right.contains("d & \\multicolumn{2}{c|}{e f} \\\\"), "{right}");
+    assert_eq!(grid(text)?.merge(text, 0, 2, 2).map_err(|e| e.describe()), Err("the table has no column 4".to_owned()));
+    Ok(())
+}
+
+#[test]
+fn a_bare_table_is_put_in_a_float_without_changing_its_lines() -> R {
+    let text = "Before.\n\n  \\begin{tabular}{l}\n  a \\\\\n  \\end{tabular}\n\nAfter.\n";
+    let t = table::find(text, text.find("tabular").unwrap_or(0)).ok_or("no table")?.map_err(|e| e.describe())?;
+    let out = apply(text, &t.wrap_in_float(text, "Results.", "tab:r").changes);
+    assert!(out.contains("  \\begin{table}[htbp]\n  \\centering\n  \\begin{tabular}{l}\n  a \\\\\n  \\end{tabular}\n  \\caption{Results.}\n  \\label{tab:r}\n  \\end{table}\n"), "{out}");
+    assert!(out.starts_with("Before.\n\n") && out.ends_with("\n\nAfter.\n"));
+    Ok(())
+}
+
+#[test]
 fn a_package_is_loaded_only_by_usepackage_outside_comments() {
     assert!(table::loads_package("\\usepackage{amsmath, booktabs}\n", "booktabs"));
     assert!(!table::loads_package("% \\usepackage{booktabs}\n\\usepackage{array}", "booktabs"));
@@ -220,6 +268,8 @@ fn hostile_input_never_breaks_the_grid_or_its_edits() -> R {
                     edits.extend([t.insert_column(&text, c, true), t.insert_column(&text, c, false)]);
                 }
                 edits.extend([Borders::None, Borders::All, Borders::Booktabs].map(|b| t.set_borders(&text, b)));
+                edits.extend([t.set_header(&text, true), t.set_header(&text, false), t.merge(&text, 0, 0, 2), t.split(&text, 0, 0)]);
+                edits.push(Ok(t.wrap_in_float(&text, "c", "l")));
                 for e in edits.into_iter().flatten() {
                     assert!(e.changes.windows(2).all(|w| w[0].range.end <= w[1].range.start), "overlap in {text:?}: {:?}", e.changes);
                     assert!(e.changes.iter().all(|c| text.get(c.range.clone()).is_some()), "off the text in {text:?}");

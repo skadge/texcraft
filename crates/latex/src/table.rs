@@ -885,6 +885,118 @@ impl Table {
         Ok(edit)
     }
 
+    /// Whether the first row is a header row: each of its cells with text is all `\textbf{…}`.
+    pub fn header(&self, text: &str) -> bool {
+        let Some(row) = self.rows.first() else { return false };
+        let mut any = false;
+        for c in &row.cells {
+            if text.get(c.content.clone()).is_none_or(|s| s.trim().is_empty()) {
+                continue;
+            }
+            if bold_whole(text, c.content.clone()).is_none() {
+                return false;
+            }
+            any = true;
+        }
+        any
+    }
+
+    /// The first row made a header row (each cell with text in `\textbf{…}`, and a rule under it
+    /// in the table's style when the table has rules and none is there), or a plain row again
+    /// (the `\textbf` taken off, the rules kept).
+    pub fn set_header(&self, text: &str, on: bool) -> Result<TableEdit, EditError> {
+        let row = self.row(0)?;
+        let mut changes = Vec::new();
+        for c in &row.cells {
+            let r = c.content.clone();
+            if text.get(r.clone()).is_none_or(|s| s.trim().is_empty()) {
+                continue;
+            }
+            match (on, bold_whole(text, r.clone())) {
+                (true, None) => {
+                    changes.push(change(r.start..r.start, "\\textbf{"));
+                    changes.push(change(r.end..r.end, "}"));
+                }
+                (false, Some(inner)) => {
+                    changes.push(change(r.start..inner.start, ""));
+                    changes.push(change(inner.end..r.end, ""));
+                }
+                _ => {}
+            }
+        }
+        if on && self.rows.get(1).is_some_and(|next| next.rules.is_empty()) {
+            let kinds: Vec<RuleKind> = self.rules().flat_map(|(_, r)| r.iter().map(|r| r.kind)).collect();
+            if kinds.iter().any(|k| matches!(k, RuleKind::Top | RuleKind::Mid | RuleKind::Bottom)) {
+                changes.extend(self.add_rule(text, 1, "\\midrule"));
+            } else if kinds.contains(&RuleKind::Line) {
+                changes.extend(self.add_rule(text, 1, "\\hline"));
+            }
+        }
+        Ok(sorted(changes))
+    }
+
+    /// The cells of row `r` taking columns `c` to `c + n - 1` merged into one
+    /// `\multicolumn{…}{…}{…}`, their texts joined by spaces; the other rows unchanged.
+    pub fn merge(&self, text: &str, r: usize, c: usize, n: usize) -> Result<TableEdit, EditError> {
+        let row = self.row(r)?;
+        let last = c + n.max(1) - 1;
+        let (first_k, first) = row.cell_at(c).ok_or(EditError::NoColumn(c))?;
+        let (last_k, end) = row.cell_at(last).ok_or(EditError::NoColumn(last))?;
+        if first_k == last_k {
+            return Ok(sorted(Vec::new()));
+        }
+        let span = end.column + end.span - first.column;
+        let joined: Vec<&str> = row
+            .cells
+            .get(first_k..=last_k)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|cell| text.get(cell.content.clone()).map(str::trim))
+            .filter(|s| !s.is_empty())
+            .collect();
+        let barred = |i: usize| self.bars.get(i).is_some_and(|b| !b.is_empty());
+        let letter = match self.columns.get(first.column).map(|col| col.align) {
+            Some(a @ (Align::Left | Align::Center | Align::Right)) => a.letter(),
+            _ => "l",
+        };
+        // LaTeX's own rule: a merged cell's specification has the bar on its left only in the
+        // first column.
+        let spec = format!("{}{letter}{}", if first.column == 0 && barred(0) { "|" } else { "" }, if barred(first.column + span) { "|" } else { "" });
+        let source = format!("\\multicolumn{{{span}}}{{{spec}}}{{{}}}", joined.join(" "));
+        Ok(sorted(vec![change(first.start()..end.end(), source)]))
+    }
+
+    /// The merged cell of row `r` taking column `c` split into its columns: its text in the first,
+    /// the others empty.
+    pub fn split(&self, text: &str, r: usize, c: usize) -> Result<TableEdit, EditError> {
+        let (_, cell) = self.row(r)?.cell_at(c).ok_or(EditError::NoColumn(c))?;
+        let Some(m) = &cell.multicolumn else { return Ok(sorted(Vec::new())) };
+        let content = text.get(cell.content.clone()).unwrap_or_default();
+        let source = format!("{content}{}", " &".repeat(cell.span.saturating_sub(1)));
+        Ok(sorted(vec![change(m.range.clone(), source)]))
+    }
+
+    /// The table, outside any float, put in a `table` float with `caption` and `label` (when not
+    /// empty): lines added before and after it, its own lines unchanged.
+    pub fn wrap_in_float(&self, text: &str, caption: &str, label: &str) -> TableEdit {
+        let indent = self.indent_before(text, self.range.start);
+        let lead = indent.as_ref().map_or(String::new(), |(_, i)| i.clone());
+        let mut after = format!("\n{lead}\\caption{{{caption}}}");
+        if !label.is_empty() {
+            after.push_str(&format!("\n{lead}\\label{{{label}}}"));
+        }
+        after.push_str(&format!("\n{lead}\\end{{table}}"));
+        let begin = format!("\\begin{{table}}[htbp]\n{lead}\\centering\n");
+        let changes = match indent {
+            // On lines of their own before the table's line.
+            Some((line_start, _)) => vec![change(line_start..line_start, format!("{lead}{begin}"))],
+            None => vec![change(self.range.start..self.range.start, format!("\n{begin}"))],
+        };
+        let mut changes = changes;
+        changes.push(change(self.range.end..self.range.end, after));
+        sorted(changes)
+    }
+
     /// A rule at place `i` (above row `i`, or below the last row), on a line of its own.
     fn add_rule(&self, text: &str, i: usize, name: &str) -> Vec<Change> {
         if let Some(row) = self.rows.get(i) {
@@ -908,6 +1020,12 @@ impl Table {
             }
         }
     }
+}
+
+/// Inside the braces of the `\textbf{…}` that is all of `r`.
+fn bold_whole(text: &str, r: Range<usize>) -> Option<Range<usize>> {
+    let open = r.start + "\\textbf".len();
+    (text.get(r.clone())?.starts_with("\\textbf{") && braced_end(text, open) == Some(r.end)).then(|| open + 1..r.end - 1)
 }
 
 /// The start of the spaces and tabs before `at`.
