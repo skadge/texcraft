@@ -304,7 +304,6 @@
 	Fit page	Ajustar página
 	Fit width	Ajustar ancho
 	Fix Grammar and Spelling	Corregir gramática y ortografía
-	Fix all hints in this file	Corregir todas las indicaciones de este archivo
 	Fix them before sending the {standard} to the printer: the Print filter lists them.	Corríjalos antes de enviar el {standard} a la imprenta: el filtro Impresión los muestra.
 	Flesh out these bullet points	Desarrollar estas viñetas
 	Focus mode is off.	El modo concentración está desactivado.
@@ -1386,6 +1385,7 @@ suggestion	Reopen	Reabrir
 # Counts
 @plural	; {n} overlapped another and is outdated|; {n} overlapped others and are outdated	; {n} se solapó con otra y está obsoleta|; {n} se solaparon con otras y están obsoletas
 @plural	Compiled with {n} error|Compiled with {n} errors	Compilado con {n} error|Compilado con {n} errores
+@plural	Apply this fix everywhere in this file ({n} place)|Apply this fix everywhere in this file ({n} places)	Aplicar esta corrección en todo el archivo ({n} lugar)|Aplicar esta corrección en todo el archivo ({n} lugares)
 @plural	Compiled with {n} warning|Compiled with {n} warnings	Compilado con {n} advertencia|Compilado con {n} advertencias
 @plural	Connected: the endpoint offers {n} model.|Connected: the endpoint offers {n} models.	Conectado: el endpoint ofrece {n} modelo.|Conectado: el endpoint ofrece {n} modelos.
 @plural	Failed with {n} error|Failed with {n} errors	Falló con {n} error|Falló con {n} errores
@@ -2245,3 +2245,4 @@ unit	{n} s	{n} s
 @msg	Name the kind of message to hide, on one line.	Indique el tipo de mensaje que ocultar, en una línea.
 @msg	Name the kind of message, or the `index` of one of the last build's.	Indique el tipo de mensaje, o el `index` de un mensaje de la última compilación.
 @msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	Los archivos de más de {limit} no se han cargado: se quedan en la carpeta del proyecto, sin cambios, y no forman parte de sus compilaciones.
+@msg	Apply this fix everywhere in this file ({n} places)	Aplicar esta corrección en todo el archivo ({n} lugares)

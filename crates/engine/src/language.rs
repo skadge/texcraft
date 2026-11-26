@@ -57,6 +57,9 @@ pub struct Fix {
     pub edits: Vec<TextEdit>,
     pub preferred: bool,
     pub problem: Option<String>,
+    /// For a fix that applies the problem's fix to every hint of the same kind in the file: how
+    /// many places it changes; 0 for a fix of one problem.
+    pub everywhere: usize,
 }
 
 pub(crate) struct Language {
@@ -232,30 +235,69 @@ impl Language {
             .map_or_else(|| d.message.clone(), |l| l.message.clone())
     }
 
-    /// The fixes for the problems on `line` (from 0), and the one that fixes every hint of the
-    /// file, if any (last, its `problem` none).
+    /// The fixes for the problems on `line` (from 0), then, for each kind of hint there with a
+    /// fix, one that applies that fix to every hint of the same kind in the file (issue #42), when
+    /// there is more than one: its `everywhere` says how many. A kind is a message: the lint words
+    /// each rule's hints alike. The server's own fix of every hint, of whatever kind, is not
+    /// offered: it changed more than the hint it was offered on.
     pub fn fixes(&mut self, path: &ProjectPath, line: usize) -> Vec<Fix> {
+        use retex_lsp::types::Severity as Level;
         let at = Self::position(line, 0);
-        self.server
-            .code_actions(&self.uri(path), Range::new(at, at))
+        let uri = self.uri(path);
+        let edit = |e: retex_lsp::types::TextEdit| TextEdit {
+            line: e.range.start.line as usize,
+            column: e.range.start.character as usize,
+            end_line: e.range.end.line as usize,
+            end_column: e.range.end.character as usize,
+            text: e.new_text,
+        };
+        let mut fixes: Vec<Fix> = self
+            .server
+            .code_actions(&uri, Range::new(at, at))
             .into_iter()
-            .map(|a| Fix {
-                title: a.title,
-                edits: a
-                    .edits
-                    .into_iter()
-                    .map(|e| TextEdit {
-                        line: e.range.start.line as usize,
-                        column: e.range.start.character as usize,
-                        end_line: e.range.end.line as usize,
-                        end_column: e.range.end.character as usize,
-                        text: e.new_text,
-                    })
-                    .collect(),
-                preferred: a.preferred,
-                problem: a.diagnostic.map(|d| self.problem(path, &d)),
+            .filter_map(|a| {
+                let problem = self.problem(path, a.diagnostic.as_ref()?);
+                Some(Fix {
+                    title: a.title,
+                    edits: a.edits.into_iter().map(edit).collect(),
+                    preferred: a.preferred,
+                    problem: Some(problem),
+                    everywhere: 0,
+                })
             })
-            .collect()
+            .collect();
+        let hints: Vec<retex_lsp::types::Diagnostic> = self
+            .server
+            .diagnostics(&uri)
+            .into_iter()
+            .filter(|d| d.severity == Level::Hint && d.fixes.first().is_some_and(|f| f.uri.is_none()))
+            .collect();
+        let mut kinds = std::collections::BTreeSet::new();
+        for d in hints.iter().filter(|d| d.range.start.line as usize == line) {
+            if !kinds.insert(d.message.as_str()) {
+                continue;
+            }
+            // The first fix of each hint of the kind, one per line, as the server's own did.
+            let mut lines = std::collections::BTreeSet::new();
+            let mut edits: Vec<TextEdit> = hints
+                .iter()
+                .filter(|o| o.message == d.message && lines.insert(o.range.start.line))
+                .filter_map(|o| o.fixes.first().map(|f| edit(f.edit.clone())))
+                .collect();
+            if edits.len() < 2 {
+                continue;
+            }
+            edits.sort_by_key(|e| (e.line, e.column));
+            let n = edits.len();
+            fixes.push(Fix {
+                title: format!("Apply this fix everywhere in this file ({n} places)"),
+                edits,
+                preferred: false,
+                problem: Some(self.problem(path, d)),
+                everywhere: n,
+            });
+        }
+        fixes
     }
 
     /// A build finished: its `symbols` record (when the engine made one) for `main` goes to the

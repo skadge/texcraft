@@ -1027,6 +1027,7 @@ fn problems(app: &mut App, path: &ProjectPath, ctx: &egui::Context) -> Vec<crate
                     }],
                     preferred: i == 0,
                     problem: Some(d.message.clone()),
+                    everywhere: 0,
                 })
                 .collect();
             out.push(crate::source::Problem {
@@ -1355,11 +1356,8 @@ fn source(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         }
     } else if let Some(line) = out.fixes_for {
         let message = app.editor.source.popup.as_ref().map(|p| p.problem.message.clone());
-        let fixes: Vec<texcraft_engine::Fix> =
-            app.session.fixes(path, line).into_iter().filter(|f| f.problem.is_none() || f.problem == message).collect();
-        // "Fix all" only when there is a fix of the problem itself.
-        let own = fixes.iter().any(|f| f.problem.is_some());
-        let fixes = fixes.into_iter().filter(|f| own && (f.problem.is_some() || f.edits.len() > 1)).collect();
+        // The problem's own fixes, and its fix applied to every hint of its kind in the file.
+        let fixes: Vec<texcraft_engine::Fix> = app.session.fixes(path, line).into_iter().filter(|f| f.problem == message).collect();
         if let Some(popup) = app.editor.source.popup.as_mut() {
             popup.fixes = Some(fixes);
         }

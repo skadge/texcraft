@@ -1951,8 +1951,16 @@ impl SourceEditor {
                     Some(fixes) if !fixes.is_empty() => {
                         ui.add_space(t.unit * 2.0);
                         for (i, fix) in fixes.iter().enumerate() {
-                            let all = fix.problem.is_none();
-                            let text = if all { tl!("Fix all hints in this file") } else { fix.title.as_str() };
+                            let all = fix.everywhere > 0;
+                            let text = if all {
+                                crate::i18n::trn(
+                                    fix.everywhere,
+                                    "Apply this fix everywhere in this file ({n} place)",
+                                    "Apply this fix everywhere in this file ({n} places)",
+                                )
+                            } else {
+                                fix.title.clone()
+                            };
                             let selected = popup.pinned && i == popup.selected;
                             let button =
                                 egui::Button::image_and_text(crate::icons::image(if all { "list" } else { "pencil" }, 14.0, t.text_muted), text)

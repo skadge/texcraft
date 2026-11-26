@@ -304,7 +304,6 @@
 	Fit page	Ajustar à página
 	Fit width	Ajustar à largura
 	Fix Grammar and Spelling	Corrigir gramática e ortografia
-	Fix all hints in this file	Corrigir todas as indicações neste ficheiro
 	Fix them before sending the {standard} to the printer: the Print filter lists them.	Corrija-os antes de enviar o {standard} para a gráfica: o filtro Impressão lista-os.
 	Flesh out these bullet points	Desenvolver estes pontos
 	Focus mode is off.	O modo de foco está desligado.
@@ -1386,6 +1385,7 @@ suggestion	Reopen	Reabrir
 # Counts
 @plural	; {n} overlapped another and is outdated|; {n} overlapped others and are outdated	; {n} sobrepôs-se a outra e está desatualizada|; {n} sobrepuseram-se a outras e estão desatualizadas
 @plural	Compiled with {n} error|Compiled with {n} errors	Compilado com {n} erro|Compilado com {n} erros
+@plural	Apply this fix everywhere in this file ({n} place)|Apply this fix everywhere in this file ({n} places)	Aplicar esta correção em todo o ficheiro ({n} sítio)|Aplicar esta correção em todo o ficheiro ({n} sítios)
 @plural	Compiled with {n} warning|Compiled with {n} warnings	Compilado com {n} aviso|Compilado com {n} avisos
 @plural	Connected: the endpoint offers {n} model.|Connected: the endpoint offers {n} models.	Ligado: o endpoint oferece {n} modelo.|Ligado: o endpoint oferece {n} modelos.
 @plural	Failed with {n} error|Failed with {n} errors	Falhou com {n} erro|Falhou com {n} erros
@@ -2245,3 +2245,4 @@ unit	{n} s	{n} s
 @msg	Name the kind of message to hide, on one line.	Indique o tipo de mensagem a ocultar, numa linha.
 @msg	Name the kind of message, or the `index` of one of the last build's.	Indique o tipo de mensagem, ou o `index` de uma mensagem da última compilação.
 @msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	Os ficheiros com mais de {limit} não foram carregados: ficam na pasta do projeto, inalterados, e não fazem parte das suas compilações.
+@msg	Apply this fix everywhere in this file ({n} places)	Aplicar esta correção em todo o ficheiro ({n} sítios)

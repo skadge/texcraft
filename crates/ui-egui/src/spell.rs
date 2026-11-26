@@ -76,6 +76,7 @@ pub(crate) fn fixes(app: &mut App, p: &Problem) -> Vec<texcraft_engine::Fix> {
             edits: vec![texcraft_engine::TextEdit { line: p.line, column, end_line: p.line, end_column, text: s }],
             preferred: i == 0,
             problem: Some(p.message.clone()),
+            everywhere: 0,
         })
         .collect()
 }
@@ -125,6 +126,7 @@ pub(crate) fn run(app: &mut App, id: &str, params: &Value) {
                         }],
                         preferred: true,
                         problem: None,
+                        everywhere: 0,
                     })
                 }),
                 None => fixes.into_iter().next(),

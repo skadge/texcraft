@@ -304,7 +304,6 @@
 	Fit page	Pagina passend
 	Fit width	Breedte passend
 	Fix Grammar and Spelling	Grammatica en spelling verbeteren
-	Fix all hints in this file	Alle hints in dit bestand verhelpen
 	Fix them before sending the {standard} to the printer: the Print filter lists them.	Verhelp ze voordat u de {standard} naar de drukker stuurt: het filter Drukwerk somt ze op.
 	Flesh out these bullet points	Deze opsommingspunten uitwerken
 	Focus mode is off.	Focusmodus staat uit.
@@ -1386,6 +1385,7 @@ suggestion	Reopen	Heropenen
 # Counts
 @plural	; {n} overlapped another and is outdated|; {n} overlapped others and are outdated	; {n} overlapte een ander en is verouderd|; {n} overlapten andere en zijn verouderd
 @plural	Compiled with {n} error|Compiled with {n} errors	Gecompileerd met {n} fout|Gecompileerd met {n} fouten
+@plural	Apply this fix everywhere in this file ({n} place)|Apply this fix everywhere in this file ({n} places)	Deze correctie overal in dit bestand toepassen ({n} plek)|Deze correctie overal in dit bestand toepassen ({n} plekken)
 @plural	Compiled with {n} warning|Compiled with {n} warnings	Gecompileerd met {n} waarschuwing|Gecompileerd met {n} waarschuwingen
 @plural	Connected: the endpoint offers {n} model.|Connected: the endpoint offers {n} models.	Gekoppeld: het endpoint biedt {n} model.|Gekoppeld: het endpoint biedt {n} modellen.
 @plural	Failed with {n} error|Failed with {n} errors	Mislukt met {n} fout|Mislukt met {n} fouten
@@ -2245,3 +2245,4 @@ unit	{n} s	{n} s
 @msg	Name the kind of message to hide, on one line.	Noem de soort melding om te verbergen, op één regel.
 @msg	Name the kind of message, or the `index` of one of the last build's.	Noem de soort melding, of de `index` van een melding van de laatste build.
 @msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	Bestanden groter dan {limit} zijn niet geladen: ze blijven ongewijzigd in de map van het project en horen niet bij de builds.
+@msg	Apply this fix everywhere in this file ({n} places)	Deze correctie overal in dit bestand toepassen ({n} plekken)

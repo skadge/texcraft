@@ -53,6 +53,7 @@ pub(crate) fn problems(app: &mut App, path: &ProjectPath, ctx: &egui::Context) -
                     }],
                     preferred: i == 0,
                     problem: Some(g.message.clone()),
+                    everywhere: 0,
                 })
                 .collect();
             let help = match &g.origin {

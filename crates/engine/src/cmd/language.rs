@@ -171,7 +171,7 @@ fn fix_schema() -> Value {
     json!({"type": "object", "properties": {
         "path": {"type": "string"},
         "line": {"type": "integer", "minimum": 1},
-        "index": {"type": "integer", "minimum": 0, "description": "Which of language.fixes's fixes for the line."}
+        "index": {"type": "integer", "minimum": 0, "description": "Which of language.fixes's fixes for the line. One whose `everywhere` is above 0 applies its problem's fix to every hint of that kind in the file."}
     }, "required": ["path", "line", "index"], "additionalProperties": false})
 }
 
@@ -183,7 +183,11 @@ fn line_of(p: &Value) -> Result<(texcraft_project::ProjectPath, usize)> {
 
 fn fixes(s: &mut Session, p: &Value) -> Result<Value> {
     let (path, line) = line_of(p)?;
-    let fixes: Vec<Value> = s.fixes(&path, line).iter().map(|f| json!({"title": f.title, "problem": f.problem, "preferred": f.preferred})).collect();
+    let fixes: Vec<Value> = s
+        .fixes(&path, line)
+        .iter()
+        .map(|f| json!({"title": f.title, "problem": f.problem, "preferred": f.preferred, "everywhere": f.everywhere}))
+        .collect();
     Ok(json!({"fixes": fixes}))
 }
 

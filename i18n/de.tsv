@@ -304,7 +304,6 @@
 	Fit page	Ganze Seite
 	Fit width	Seitenbreite
 	Fix Grammar and Spelling	Grammatik und Rechtschreibung korrigieren
-	Fix all hints in this file	Alle Hinweise in dieser Datei beheben
 	Fix them before sending the {standard} to the printer: the Print filter lists them.	Beheben Sie sie, bevor Sie das {standard} an die Druckerei senden: Der Filter „Druck“ listet sie auf.
 	Flesh out these bullet points	Diese Stichpunkte ausformulieren
 	Focus mode is off.	Fokusmodus ist aus.
@@ -1386,6 +1385,7 @@ suggestion	Reopen	Wieder öffnen
 # Counts
 @plural	; {n} overlapped another and is outdated|; {n} overlapped others and are outdated	; {n} überlappte einen anderen und ist veraltet|; {n} überlappten andere und sind veraltet
 @plural	Compiled with {n} error|Compiled with {n} errors	Kompiliert mit {n} Fehler|Kompiliert mit {n} Fehlern
+@plural	Apply this fix everywhere in this file ({n} place)|Apply this fix everywhere in this file ({n} places)	Diese Korrektur überall in dieser Datei anwenden ({n} Stelle)|Diese Korrektur überall in dieser Datei anwenden ({n} Stellen)
 @plural	Compiled with {n} warning|Compiled with {n} warnings	Kompiliert mit {n} Warnung|Kompiliert mit {n} Warnungen
 @plural	Connected: the endpoint offers {n} model.|Connected: the endpoint offers {n} models.	Verbunden: Der Endpunkt bietet {n} Modell an.|Verbunden: Der Endpunkt bietet {n} Modelle an.
 @plural	Failed with {n} error|Failed with {n} errors	Fehlgeschlagen mit {n} Fehler|Fehlgeschlagen mit {n} Fehlern
@@ -2245,3 +2245,4 @@ unit	{n} s	{n} s
 @msg	Name the kind of message to hide, on one line.	Nennen Sie die Art der auszublendenden Meldung, in einer Zeile.
 @msg	Name the kind of message, or the `index` of one of the last build's.	Nennen Sie die Art der Meldung oder den `index` einer Meldung des letzten Builds.
 @msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	Dateien über {limit} wurden nicht geladen: Sie bleiben unverändert im Ordner des Projekts und gehören nicht zu seinen Builds.
+@msg	Apply this fix everywhere in this file ({n} places)	Diese Korrektur überall in dieser Datei anwenden ({n} Stellen)

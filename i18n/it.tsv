@@ -304,7 +304,6 @@
 	Fit page	Adatta alla pagina
 	Fit width	Adatta alla larghezza
 	Fix Grammar and Spelling	Correggi grammatica e ortografia
-	Fix all hints in this file	Correggi tutti i suggerimenti in questo file
 	Fix them before sending the {standard} to the printer: the Print filter lists them.	Correggerli prima di inviare il {standard} alla tipografia: il filtro Stampa li elenca.
 	Flesh out these bullet points	Sviluppa questi punti elenco
 	Focus mode is off.	La modalità concentrazione è disattivata.
@@ -1386,6 +1385,7 @@ suggestion	Reopen	Riapri
 # Counts
 @plural	; {n} overlapped another and is outdated|; {n} overlapped others and are outdated	; {n} si sovrapponeva a un altro ed è superato|; {n} si sovrapponevano ad altri e sono superati
 @plural	Compiled with {n} error|Compiled with {n} errors	Compilato con {n} errore|Compilato con {n} errori
+@plural	Apply this fix everywhere in this file ({n} place)|Apply this fix everywhere in this file ({n} places)	Applica questa correzione ovunque in questo file ({n} punto)|Applica questa correzione ovunque in questo file ({n} punti)
 @plural	Compiled with {n} warning|Compiled with {n} warnings	Compilato con {n} avviso|Compilato con {n} avvisi
 @plural	Connected: the endpoint offers {n} model.|Connected: the endpoint offers {n} models.	Connesso: l'endpoint offre {n} modello.|Connesso: l'endpoint offre {n} modelli.
 @plural	Failed with {n} error|Failed with {n} errors	Non riuscito con {n} errore|Non riuscito con {n} errori
@@ -2245,3 +2245,4 @@ unit	{n} s	{n} s
 @msg	Name the kind of message to hide, on one line.	Indica il tipo di messaggio da nascondere, su una riga.
 @msg	Name the kind of message, or the `index` of one of the last build's.	Indica il tipo di messaggio, o l'`index` di un messaggio dell'ultima compilazione.
 @msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	I file più grandi di {limit} non sono stati caricati: restano nella cartella del progetto, invariati, e non fanno parte delle sue compilazioni.
+@msg	Apply this fix everywhere in this file ({n} places)	Applica questa correzione ovunque in questo file ({n} punti)
