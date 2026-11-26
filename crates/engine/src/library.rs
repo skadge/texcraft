@@ -63,6 +63,23 @@ pub enum Change {
     },
 }
 
+impl Change {
+    /// The project the change belongs to.
+    pub fn project(&self) -> &str {
+        match self {
+            Change::Saved(name, _) | Change::Deleted(name) => name,
+            Change::Versions { project, .. } | Change::Thread { project, .. } => project,
+        }
+    }
+}
+
+/// Whether the shell's storage refused a write for lack of room: the browser's IndexedDB says so
+/// with a `QuotaExceededError` (its message differs between browsers).
+pub fn out_of_room(error: &str) -> bool {
+    let error = error.to_ascii_lowercase();
+    error.contains("quotaexceeded") || error.contains("quota") || error.contains("no space") || error.contains("disk is full")
+}
+
 #[derive(Debug, Default)]
 pub struct Library {
     projects: BTreeMap<String, Stored>,
