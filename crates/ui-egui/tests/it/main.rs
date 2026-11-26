@@ -38,6 +38,7 @@ mod output_log;
 mod paste;
 mod pdf_preview;
 mod pdf_window;
+mod phone_dialogs;
 mod progress;
 mod raw_log;
 mod recent;

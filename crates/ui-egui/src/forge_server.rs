@@ -9,9 +9,9 @@ use serde_json::json;
 use texcraft_engine::forge::Service;
 use texcraft_engine::forge::servers::{self, Registration, Server};
 
+use crate::App;
 use crate::dialogs::{Dialog, Outcome, buttons, title};
 use crate::theme::Tokens;
-use crate::{App, widgets};
 
 /// Where the dialog goes back to when it closes.
 pub(crate) enum Back {
@@ -135,18 +135,15 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
     let t = app.tokens;
     let mut outcome = Outcome::Open;
     let mut open_page = None;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-forge-server")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
-        ui.set_width(520.0);
-        match app.view.dialog.as_mut() {
-            Some(Dialog::ForgeServer(form)) => outcome = server_form(ui, &t, form, &mut open_page),
-            Some(Dialog::ForgeProposal(form)) => outcome = proposal_form(ui, &t, form),
-            _ => {}
-        }
+    let modal = crate::sheet::show(ctx, &t, "texcraft-forge-server", 520.0, crate::sheet::Leave::Close, |ui| match app.view.dialog.as_mut() {
+        Some(Dialog::ForgeServer(form)) => outcome = server_form(ui, &t, form, &mut open_page),
+        Some(Dialog::ForgeProposal(form)) => outcome = proposal_form(ui, &t, form),
+        _ => {}
     });
     if let Some(url) = open_page {
         ctx.open_url(egui::OpenUrl::new_tab(url));
     }
-    if modal.should_close() || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+    if modal.close || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         outcome = Outcome::Cancel;
     }
     match outcome {

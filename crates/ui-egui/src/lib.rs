@@ -52,6 +52,7 @@ mod rail;
 mod review;
 mod search;
 mod settings;
+mod sheet;
 mod side;
 mod start;
 mod status;
@@ -149,6 +150,10 @@ pub(crate) struct View {
     pub focus_fallback: Option<egui::Id>,
     /// The Settings dialog's open tab.
     pub settings_tab: usize,
+    /// On a phone, Settings shows the section `settings_tab` (not the list of sections).
+    pub settings_page: bool,
+    /// Give the keyboard to the row of section `settings_tab` (back from its page).
+    pub settings_focus: bool,
     /// Which messages the build log lists.
     pub log_filter: preview::Filter,
     /// The raw log's search.
@@ -295,6 +300,8 @@ impl App {
                 log_filter: preview::Filter::All,
                 log_search: preview::LogSearch::default(),
                 settings_tab: 0,
+                settings_page: false,
+                settings_focus: false,
                 regions: Vec::new(),
                 region_areas: Vec::new(),
                 modal_was_open: false,

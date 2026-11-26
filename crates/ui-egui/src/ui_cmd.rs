@@ -195,6 +195,9 @@ pub(crate) fn enabled(app: &App, id: &str) -> Result<(), String> {
         "view.pdf_window" if cfg!(target_arch = "wasm32") => {
             Err(tl!("In the browser the PDF stays in the page: a web page cannot open a second window of the app.").to_owned())
         }
+        "view.pdf_window" if app.view.narrow && !app.view.pdf_window => {
+            Err(tl!("On a screen this narrow the PDF is a tab beside the source: a window of its own would not help.").to_owned())
+        }
         "view.show_output" if !app.file_manager || app.session.library().is_some() => {
             Err(tl!("This window cannot open the system's file manager.").to_owned())
         }
