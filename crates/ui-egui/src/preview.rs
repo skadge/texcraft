@@ -161,13 +161,16 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(t.unit * 2.0);
         let building = app.session.is_building();
         let auto = app.session.settings.auto_compile;
-        // Compiling automatically, the pill says so; clicking it still compiles now.
+        // Compiling automatically, the pill says so in a neutral shade, with the turning arrows
+        // of the automatic build (a spinner while it runs): the accent is for the action to
+        // take, and here the build happens by itself. Clicking it still compiles now.
         let (label, name, tip) = match (building, auto) {
             (true, _) => (tl!("Compiling…"), tl!("Compiling…"), tl!("Compiling…")),
             (false, true) => (tl!("Auto-Compile"), tl!("Auto-Compile: compile now"), tl!("Compiles as you type; click to compile now")),
             (false, false) => (tl!("Compile"), tl!("Compile"), tl!("Compile")),
         };
-        let (main, menu) = widgets::primary_split(ui, &t, "play", label, name, building);
+        let (icon, tone) = if auto { ("refresh-cw", widgets::Tone::Neutral) } else { ("play", widgets::Tone::Accent) };
+        let (main, menu) = widgets::primary_split(ui, &t, icon, label, name, building, tone);
         app.region(crate::Region::Preview, main.id);
         if main.clicked() {
             app.run("build.compile", json!({}));

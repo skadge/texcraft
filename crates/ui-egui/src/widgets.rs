@@ -187,11 +187,26 @@ pub fn segmented_with(ui: &mut Ui, t: &Tokens, id: &str, options: &[(&str, Optio
     clicked
 }
 
-/// The round primary button with an icon, a label, and a separate menu segment; `name`, its
-/// accessible name, starts with the label. Returns the main part's and the menu part's responses.
-pub fn primary_split(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, name: &str, busy: bool) -> (Response, Response) {
+/// How a [`primary_split`] button stands out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tone {
+    /// Filled with the accent: the action to take (Compile).
+    Accent,
+    /// Outlined on the surface, as a neutral control: the action happens by itself and the
+    /// button is only there to do it now (Auto-Compile).
+    Neutral,
+}
+
+/// The round button with an icon, a label, and a separate menu segment; `name`, its accessible
+/// name, starts with the label. While `busy`, a spinner takes the icon's place and the main part
+/// does not react to clicks. Returns the main part's and the menu part's responses.
+pub fn primary_split(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, name: &str, busy: bool, tone: Tone) -> (Response, Response) {
     let height = t.toolbar_height - 2.0 * t.unit;
-    let text = ui.painter().layout_no_wrap(label.to_owned(), t.strong(), t.on_accent);
+    let (base, ink, line) = match tone {
+        Tone::Accent => (t.accent, t.on_accent, Stroke::NONE),
+        Tone::Neutral => (t.surface, t.text, Stroke::new(1.0, t.control_border)),
+    };
+    let text = ui.painter().layout_no_wrap(label.to_owned(), t.strong(), ink);
     let main_w = 3.0 * t.unit + t.icon_size + 2.0 * t.unit + text.size().x + 3.0 * t.unit;
     let menu_w = 7.0 * t.unit;
     let (outer, _) = ui.allocate_exact_size(vec2(main_w + menu_w, height), Sense::hover());
@@ -202,31 +217,27 @@ pub fn primary_split(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, name: &st
     main.widget_info(|| WidgetInfo::labeled(Role::Button, !busy, name));
     menu.widget_info(|| WidgetInfo::labeled(Role::Button, true, format!("{label} {}", tl!("options"))));
     let round = (height / 2.0) as u8;
-    let fill = |r: &Response| {
-        if r.is_pointer_button_down_on() {
-            blend(t.accent, Color32::from_black_alpha(40))
-        } else if r.hovered() {
-            blend(t.accent, Color32::from_black_alpha(20))
-        } else {
-            t.accent
-        }
+    let fill = |r: &Response| match tone {
+        Tone::Accent if r.is_pointer_button_down_on() => blend(t.accent, Color32::from_black_alpha(40)),
+        Tone::Accent if r.hovered() => blend(t.accent, Color32::from_black_alpha(20)),
+        Tone::Accent => t.accent,
+        Tone::Neutral => state_fill(t, r, base),
     };
     let p = ui.painter();
-    p.rect_filled(main_rect, CornerRadius { nw: round, sw: round, ne: 0, se: 0 }, fill(&main));
-    p.rect_filled(menu_rect, CornerRadius { nw: 0, sw: 0, ne: round, se: round }, fill(&menu));
-    p.line_segment(
-        [menu_rect.left_top() + vec2(0.0, 7.0), menu_rect.left_bottom() - vec2(0.0, 7.0)],
-        Stroke::new(1.0, t.on_accent.gamma_multiply(0.5)),
-    );
+    p.rect(main_rect, CornerRadius { nw: round, sw: round, ne: 0, se: 0 }, fill(&main), line, StrokeKind::Inside);
+    p.rect(menu_rect, CornerRadius { nw: 0, sw: 0, ne: round, se: round }, fill(&menu), line, StrokeKind::Inside);
+    let divider = if tone == Tone::Accent { t.on_accent.gamma_multiply(0.5) } else { t.control_border };
+    p.line_segment([menu_rect.left_top() + vec2(0.0, 7.0), menu_rect.left_bottom() - vec2(0.0, 7.0)], Stroke::new(1.0, divider));
     let icon_rect =
         Rect::from_center_size(egui::pos2(main_rect.left() + 3.0 * t.unit + t.icon_size / 2.0, main_rect.center().y), Vec2::splat(t.icon_size));
     if busy {
-        spinner(ui, icon_rect.center(), t.icon_size / 2.0 - 1.0, t.on_accent);
+        spinner(ui, icon_rect.center(), t.icon_size / 2.0 - 1.0, ink);
     } else {
-        icons::paint(ui, icon_rect, icon, t.icon_size, t.on_accent);
+        icons::paint(ui, icon_rect, icon, t.icon_size, ink);
     }
-    p.galley(egui::pos2(icon_rect.right() + 2.0 * t.unit, main_rect.center().y - text.size().y / 2.0), text, t.on_accent);
-    icons::paint(ui, menu_rect, "chevron-down", t.icon_size - 2.0, t.on_accent);
+    p.galley(egui::pos2(icon_rect.right() + 2.0 * t.unit, main_rect.center().y - text.size().y / 2.0), text, ink);
+    let chevron = if tone == Tone::Accent { ink } else { t.text_muted };
+    icons::paint(ui, menu_rect, "chevron-down", t.icon_size - 2.0, chevron);
     focus_ring(ui, t, &main, main_rect, CornerRadius::same(round));
     focus_ring(ui, t, &menu, menu_rect, CornerRadius::same(round));
     (main, menu)

@@ -114,7 +114,7 @@ Faces come from storytold/craft-fonts through the optional `CRAFT_FONTS_DIR`: In
   - The editor has a gutter with line numbers and markers for errors and warnings.
   - The current line has a soft band.
 - **Preview pane.**
-  - A round Compile button with a menu segment: automatic build, build options, clearing build files.
+  - A round Compile button with a menu segment: automatic build, build options, clearing build files. With the automatic build on it is Auto-Compile, outlined in the neutral style with turning arrows (a spinner while it builds): the accent stays for an action to take.
   - The log button with its count, and Download.
   - Page navigation and zoom on the right.
   - Pages sit on `canvas` with a soft shadow.
