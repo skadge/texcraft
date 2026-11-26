@@ -497,6 +497,10 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
                         ui.add_space(t.reading_size);
                     }
                     draw_blocks(ui, &mut cx, &blocks, 0);
+                    // A finger's drag on the text scrolls the view (#26).
+                    for d in &cx.lines {
+                        crate::touch::scroll(ui, &d.response);
+                    }
                 });
             });
             ui.add_space(page * 4.0);

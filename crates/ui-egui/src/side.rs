@@ -351,12 +351,16 @@ fn folder(app: &App, ui: &mut egui::Ui, node: &Folder, prefix: &str, depth: usiz
         };
         let image = texcraft_engine::cmd::is_image(path);
         let r = widgets::row_sensing(ui, &t, &row, egui::Sense::click_and_drag());
-        if image {
+        // A finger's drag scrolls the list (#26); a mouse's moves the file.
+        let finger = crate::touch::scroll(ui, &r);
+        if finger {
+            // Nothing is moved.
+        } else if image {
             r.dnd_set_drag_payload(ImageDrag(path.clone()));
         } else {
             r.dnd_set_drag_payload(FileDrag(path.clone()));
         }
-        if r.dragged() {
+        if r.dragged() && !finger {
             drag_label(ui, &t, row.icon, path.file_name());
         }
         let comments = crate::review::open_in(app, path);

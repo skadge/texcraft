@@ -61,6 +61,7 @@ mod suggest;
 mod system_menu;
 mod tips;
 mod top_bar;
+mod touch;
 pub mod ui_cmd;
 pub mod widgets;
 mod window;

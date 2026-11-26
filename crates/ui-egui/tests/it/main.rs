@@ -55,6 +55,7 @@ mod start_page;
 mod suggest;
 mod system_menu;
 mod tables;
+mod touch;
 mod unsaved;
 mod vim;
 mod writing_aids;
