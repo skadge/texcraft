@@ -61,6 +61,26 @@
         <li>Drag a file onto a folder to move it there.</li>
       </ul>
 
+      <h2 id="import-project">Importing a project</h2>
+      <!-- screenshot: Import a Project's sources, and its Git Address page with a branch found -->
+      <p><span class="ui">File › Import a Project…</span> (<span class="key">Ctrl+Shift+O</span>, <span class="key">Cmd+Shift+O</span> on a Mac), or <span class="ui">Import…</span> on the start page, brings in a project from wherever it is. Choose where it comes from:</p>
+      <dl>
+        <dt>GitLab, GitHub</dt>
+        <dd>Sign in (or use a personal access token), then type part of the project's name to pick it from your projects, or paste its address; its branch is chosen for you. See <a href="forges.html#open">GitLab and GitHub</a>.</dd>
+        <dt>Overleaf <span class="tag">Desktop only</span></dt>
+        <dd>Paste the project's git clone address (a whole <code>git clone …</code> line is fine) and a git token made in your Overleaf account settings; your password does not work there. See <a href="forges.html#overleaf-import">Importing from Overleaf</a>.</dd>
+        <dt>GitLab Server</dt>
+        <dd>A project on your organisation's GitLab, once the server is added (the card adds it the first time).</dd>
+        <dt>Git Address <span class="tag">Desktop only</span></dt>
+        <dd>Any repository over HTTPS. TeXCraft checks the address as you type: a public repository shows its branches; one that needs signing in asks for a user name and a password or token. An SSH address (<code>git@host:…</code>) is offered in its HTTPS form.</dd>
+        <dt>Folder</dt>
+        <dd>On the desktop, the same as <span class="ui">Open Folder…</span>: the project opens where it is. In the browser, the folder's files are copied into a new project in the browser.</dd>
+        <dt>Zip File</dt>
+        <dd>On the desktop, the zip is unzipped into a new folder and opens there; in the browser it becomes a project kept in the browser. A zip whose files are all in one folder is unwrapped.</dd>
+      </dl>
+      <p>On the desktop, a project from GitLab, GitHub, Overleaf or a git address is a real git clone: <span class="ui">Into</span> says where, in your Documents folder by default, named after the project; <span class="ui">Change…</span> picks another place, which new projects then use. A folder that is there already and not empty is flagged, with a free name to use instead. The clone has the whole history, up to 200 MB, its remote set and its branch following it, so <a href="forges.html#sync">Sync</a> works at once. While it runs, the dialog says how far it is, and <span class="ui">Cancel</span> stops it and removes the folder it made. With a token, <span class="ui">Remember on this computer</span> keeps it in your system's keychain, so Sync works after a restart too; <a href="settings.html#accounts">Settings › Accounts</a> lists those servers, with <span class="ui">Forget</span>.</p>
+      <p>In the browser, Overleaf and git addresses are shown but cannot be used: their servers do not answer web pages. Their card says so, with <span class="ui">Get the Desktop App</span> and <span class="ui">Import a Zip File…</span> (download the project as a zip on its site first).</p>
+
       <h2 id="import">Adding files, folders and zip files</h2>
       <p><span class="ui">File › Add to Project › Add Files…</span> copies files into the project. You can also drop files on the window:</p>
       <ul>
@@ -70,7 +90,7 @@
       </ul>
       <p>When files of the same name are there already, one question covers the whole drop: <span class="ui">Replace</span>, <span class="ui">Keep Both</span> (the new one gets another name, such as <code>figure-2.png</code>) or <span class="ui">Skip</span>.</p>
       <p>Some things are always left out, and the status line says what and why: hidden files and folders (such as <code>.git</code>), the build's leftovers (<code>.aux</code>, <code>.log</code>, <code>.synctex.gz</code>, <code>.toc</code>…), links that point out of the folder, and names in a zip that would land outside the project. An import holds at most 5,000 files and 500 MB, each file at most 64 MB (as when a folder is opened or a project comes from a forge), and a zip that expands suspiciously far is refused whole.</p>
-      <p>On the start page, a dropped folder opens as a project <span class="tag">Desktop only</span>, and a zip file (or, in the browser, a folder) becomes a new project, which you then save where you choose.</p>
+      <p>On the start page, a dropped folder opens as a project <span class="tag">Desktop only</span>, and a zip file (or, in the browser, a folder) becomes a new project, which you then save where you choose. To make a new project of a folder or a zip without dropping it, use <a href="#import-project">Import a Project</a>.</p>
 
       <h2 id="history">History and versions</h2>
       <!-- screenshot: the History section with a version chosen and its changes shown -->
