@@ -176,3 +176,14 @@ fn a_long_document_is_checked_in_the_background_its_findings_growing_as_they_com
     assert!(all > first, "the findings did not grow as the checker went on");
     Ok(())
 }
+
+#[test]
+fn an_indented_line_or_two_spaces_are_not_flagged_as_tex_reads_them_as_one() -> R {
+    // As in an environment's body, indented; and two spaces after a word.
+    let text = "\\begin{abstract}\n  This short note checks what a paper\n  uses: sections  in files.\n\\end{abstract}\n";
+    let mut s = session(text)?;
+    let v = check(&mut s)?;
+    let spaces: Vec<Value> = problems(&v).into_iter().filter(|p| p["rule"] == "Spaces").collect();
+    assert!(spaces.is_empty(), "spaces TeX collapses were flagged: {spaces:?}");
+    Ok(())
+}
