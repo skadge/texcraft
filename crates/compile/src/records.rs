@@ -135,6 +135,10 @@ pub fn parse(line: &str, main_dir: Option<&str>) -> Option<Record> {
             let reason = (!names.is_empty()).then(|| format!("{} changed", names.join(", ")));
             Some(Record::Pass { n: number(&v, "pass")?, reason })
         }
+        "package-download" => {
+            let bytes = v.get("bytes").and_then(Value::as_f64).filter(|n| *n >= 0.0).unwrap_or(0.0) as u64;
+            Some(Record::Event(Event::Package { name: text(&v, "package"), bytes }))
+        }
         "symbols" => Some(Record::Symbols(v)),
         "finished" => Some(Record::Finished { pages: number(&v, "pages").unwrap_or(0) }),
         "print_check" => print_check(&v, main_dir).map(Record::PrintCheck),
@@ -316,6 +320,15 @@ mod tests {
     fn no_pdf_is_a_failed_build() {
         assert_eq!(outcome(1, RUN, None, &Options::default(), Written::default(), 0.0).status, Status::Failed);
         assert_eq!(outcome(1, RUN, None, &Options::default(), pdf(b""), 0.0).status, Status::Failed);
+    }
+
+    #[test]
+    fn a_package_download_is_progress_and_not_the_log() {
+        let run = "{\"type\":\"package-download\",\"package\":\"epigraph\",\"year\":2026,\"bytes\":4321,\"file\":\"epigraph.sty\",\"repository\":\"/tlnet/20261126\"}\n{\"type\":\"package-download\",\"package\":null,\"year\":2026,\"bytes\":0,\"file\":\"texlive.tlpdb\",\"repository\":\"/tlnet/20261126\"}";
+        let events: Vec<_> = run.lines().filter_map(|l| parse(l, None)).collect();
+        assert_eq!(events[0], Record::Event(Event::Package { name: Some("epigraph".into()), bytes: 4321 }));
+        assert_eq!(events[1], Record::Event(Event::Package { name: None, bytes: 0 }), "the database has no package name");
+        assert!(outcome(1, run, None, &Options::default(), pdf(b"%PDF"), 0.0).log.is_empty());
     }
 
     #[test]

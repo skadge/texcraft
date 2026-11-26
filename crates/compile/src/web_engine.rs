@@ -20,6 +20,13 @@
 //!
 //! The messages, both ways, are plain objects: see [`crate::web`].
 //!
+//! Missing packages (W8): retex's module asks for a TeX Live package its tree lacks by opening a
+//! file of its repository, a directory the worker serves (`RETEX_REPOSITORY=/tlnet/<snapshot>`).
+//! Such an open stops the run as a file of the tree does; the worker fetches the file from the
+//! package server ([`crate::packages`]) and starts the run again. What retex unpacks goes to
+//! `/cache/texlive/<year>/`, kept in a cache of its own, per TeX Live year, so a package is
+//! downloaded once, also across TeXCraft's updates.
+//!
 //! Updates (W10): the build names the worker's files and retex's module after their contents
 //! (`cargo xtask version-worker`): the worker finds that name in its own loader's
 //! (`engine-worker-H_loader.js`) and fetches `retex-H.wasm` ([`retex_url`]). The tree's index and
@@ -30,15 +37,16 @@ use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 
+use crate::packages::{self, Answer, Downloads, PackageServer, Plan, Reply};
 use crate::prefetch::{self, Reported};
 use js_sys::{Array, Object, Reflect, Uint8Array, WebAssembly};
 use texcraft_wasi::web::{Ended, Image, Instance};
-use texcraft_wasi::{FileSystem, Platform, Wasi};
+use texcraft_wasi::{FileSystem, Missing, Platform, Wasi};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    Cache, DedicatedWorkerGlobalScope, MessageEvent, Request, RequestCache, RequestInit, Response, ResponseInit, XmlHttpRequest,
+    AbortSignal, Cache, DedicatedWorkerGlobalScope, MessageEvent, Request, RequestCache, RequestInit, Response, ResponseInit, XmlHttpRequest,
     XmlHttpRequestResponseType,
 };
 
@@ -79,6 +87,12 @@ const SYNC_TIMEOUT_MS: u32 = 3000;
 const SIBLINGS_BYTES: u64 = 4 << 20;
 /// Files fetched at once.
 const FETCH_BATCH: usize = 24;
+/// How long the package server may take to say its newest snapshot, in milliseconds.
+const SNAPSHOT_TIMEOUT_MS: u32 = 15_000;
+/// How long it may take for a file of its repository (an archive is up to tens of MB).
+const PACKAGE_TIMEOUT_MS: u32 = 120_000;
+/// The source of a repository file the run stopped for: this, then its path.
+const REPOSITORY_SOURCE: &str = "tlnet:";
 
 fn scope() -> DedicatedWorkerGlobalScope {
     js_sys::global().unchecked_into()
@@ -171,6 +185,7 @@ struct Web {
     fetched: Rc<RefCell<Fetched>>,
     out: Rc<RefCell<Out>>,
     fs: FileSystem,
+    downloads: Rc<RefCell<Downloads>>,
 }
 
 fn fetch_sync(url: &str) -> Option<Vec<u8>> {
@@ -241,7 +256,11 @@ impl Platform for Web {
         let mut lines: Vec<&str> = joined.split('\n').collect();
         out.partial = lines.pop().unwrap_or_default().to_owned();
         for line in lines {
-            if (line.starts_with("{\"type\":\"progress\"") || line.starts_with("{\"type\":\"pass\"")) && out.reported.fresh(line) {
+            if (line.starts_with("{\"type\":\"progress\"")
+                || line.starts_with("{\"type\":\"pass\"")
+                || line.starts_with("{\"type\":\"package-download\""))
+                && out.reported.fresh(line)
+            {
                 post("line", out.job, &[("text", line.into())], &[]);
             }
             if line.starts_with("{\"type\":\"pass\"")
@@ -261,6 +280,19 @@ impl Platform for Web {
     fn opened(&mut self, source: &str) {
         if let Some((path, _)) = locate(source) {
             self.fetched.borrow_mut().opened.insert(path);
+        }
+    }
+
+    /// A file of the package repository: fetched between runs ([`Engine::fetch_repository`]),
+    /// unless the server lacks it or holds requests back.
+    fn missing(&mut self, path: &str) -> Missing {
+        if !path.starts_with(&format!("{}/", packages::REPOSITORY_DIR)) {
+            return Missing::Absent;
+        }
+        match self.downloads.borrow().plan(path, js_sys::Date::now()) {
+            Plan::Fetch(_) => Missing::Fetch(format!("{REPOSITORY_SOURCE}{path}").into()),
+            Plan::Answer(Answer::Unavailable) => Missing::Unavailable,
+            Plan::Answer(_) => Missing::Absent,
         }
     }
 }
@@ -283,13 +315,17 @@ const READ_LISTS: &str = "read-lists";
 /// each project's read list, the site's files its builds read (cache `texcraft-reads-<index>`).
 /// A cache's name holds a hash of what its files depend on: the tree's index (a read list names
 /// the index's files and packs), and for the engine's files the module too. Caches with other
-/// names are from earlier versions, and are deleted. Keeping is best effort: where the browser
-/// has no Cache Storage (or refuses it), each visit fetches again.
+/// names are from earlier versions, and are deleted. The TeX Live packages retex downloaded
+/// (`/cache/texlive/`) are kept apart, by TeX Live year only (cache `texcraft-packages-<year>`):
+/// retex reads what an older module installed, so a new version of TeXCraft does not download
+/// them again. Keeping is best effort: where the browser has no Cache Storage (or refuses it),
+/// each visit fetches again.
 #[derive(Default)]
 struct Kept {
     tree: Option<Cache>,
     engine: Option<Cache>,
     reads: Option<Cache>,
+    packages: Option<Cache>,
     /// The site's files in the cache.
     files: HashSet<String>,
     /// The engine's files in the cache, with their time.
@@ -301,15 +337,16 @@ async fn promise(p: Result<js_sys::Promise, JsValue>) -> Result<JsValue, String>
 }
 
 impl Kept {
-    /// Opens the caches for this module and tree, and deletes the others.
-    async fn open(module: u64, index: u64) -> Kept {
+    /// Opens the caches for this module, tree and TeX Live year, and deletes the others.
+    async fn open(module: u64, index: u64, year: Option<u16>) -> Kept {
         let Ok(storage) = scope().caches() else { return Kept::default() };
         let tree = format!("texcraft-tree-{index:016x}");
         let engine = format!("texcraft-engine-{module:016x}-{index:016x}");
         let reads = format!("texcraft-reads-{index:016x}");
+        let packages = year.map(|y| format!("texcraft-packages-{y}"));
         if let Ok(names) = promise(Ok(storage.keys())).await {
             for name in Array::from(&names).iter().filter_map(|n| n.as_string()) {
-                if name.starts_with("texcraft-") && name != tree && name != engine && name != reads {
+                if name.starts_with("texcraft-") && name != tree && name != engine && name != reads && Some(&name) != packages.as_ref() {
                     log::info!("deleting the old cache {name}");
                     let _ = promise(Ok(storage.delete(&name))).await;
                 }
@@ -319,7 +356,11 @@ impl Kept {
             let storage = storage.clone();
             async move { promise(Ok(storage.open(&name))).await.ok().and_then(|c| c.dyn_into::<Cache>().ok()) }
         };
-        Kept { tree: open(tree).await, engine: open(engine).await, reads: open(reads).await, ..Kept::default() }
+        let packages = match packages {
+            Some(name) => open(name).await,
+            None => None,
+        };
+        Kept { tree: open(tree).await, engine: open(engine).await, reads: open(reads).await, packages, ..Kept::default() }
     }
 
     /// The bytes and the time (header `x-mtime`) of a cached response.
@@ -386,32 +427,49 @@ impl Kept {
         }
     }
 
-    /// Puts the engine's kept files in `fs`.
+    /// Puts the engine's kept files in `fs`: what it made, and the packages it downloaded.
     async fn restore(&mut self, fs: &FileSystem) {
-        let Some(engine) = &self.engine else { return };
-        let Ok(requests) = promise(Ok(engine.keys())).await else { return };
         let prefix = format!("/{ENGINE_FILES}/");
-        for request in Array::from(&requests).iter().filter_map(|r| r.dyn_into::<Request>().ok()) {
-            let url = request.url();
-            let Some(path) = url.find(&prefix).map(|at| url[at + prefix.len() - 1..].to_owned()) else { continue };
-            let Ok(resp) = promise(Ok(engine.match_with_request(&request))).await else { continue };
-            if let Some((bytes, mtime)) = Kept::body(resp).await {
-                fs.add(&path, bytes, mtime);
-                self.made.insert(path, mtime);
+        for cache in [self.engine.clone(), self.packages.clone()].into_iter().flatten() {
+            let Ok(requests) = promise(Ok(cache.keys())).await else { continue };
+            for request in Array::from(&requests).iter().filter_map(|r| r.dyn_into::<Request>().ok()) {
+                let url = request.url();
+                let Some(path) = url.find(&prefix).map(|at| url[at + prefix.len() - 1..].to_owned()) else { continue };
+                let Ok(resp) = promise(Ok(cache.match_with_request(&request))).await else { continue };
+                if let Some((bytes, mtime)) = Kept::body(resp).await {
+                    fs.add(&path, bytes, mtime);
+                    self.made.insert(path, mtime);
+                }
             }
         }
         log::info!("{} of the engine's files restored from an earlier visit", self.made.len());
     }
 
+    /// The cache an engine's file at `path` is kept in: the packages' for retex's TeX Live trees.
+    fn cache_of(&self, path: &str) -> Option<Cache> {
+        if path.starts_with("/cache/texlive/") { self.packages.clone() } else { self.engine.clone() }
+    }
+
+    /// Forgets the engine's files at `paths` (in the cache and in `fs`).
+    async fn forget(&mut self, fs: &FileSystem, paths: &[String]) {
+        for path in paths {
+            fs.remove(path);
+            self.made.remove(path);
+            if let Some(cache) = self.cache_of(path) {
+                let _ = promise(Ok(cache.delete_with_str(&format!("{ENGINE_FILES}{path}")))).await;
+            }
+        }
+    }
+
     /// Keeps the engine's files in `/cache` that are new or changed.
     async fn keep_made(&mut self, fs: &FileSystem) {
-        let Some(engine) = self.engine.clone() else { return };
         for (path, mtime) in fs.files("/cache") {
             if self.made.get(&path) == Some(&mtime) {
                 continue;
             }
+            let Some(cache) = self.cache_of(&path) else { continue };
             let Some(bytes) = fs.read(&path) else { continue };
-            match Kept::put(&engine, &format!("{ENGINE_FILES}{path}"), &bytes, mtime).await {
+            match Kept::put(&cache, &format!("{ENGINE_FILES}{path}"), &bytes, mtime).await {
                 Ok(()) => {
                     self.made.insert(path, mtime);
                 }
@@ -445,6 +503,46 @@ struct Engine {
     names: HashMap<String, (Rc<str>, u64)>,
     /// The classes, packages and styles whose files were fetched ([`prefetch::loads`]'s entries).
     expanded: HashSet<String>,
+    /// The TeX Live year of the tree (`seed/version.txt`), which packages are downloaded for.
+    year: Option<u16>,
+    /// A snapshot an archive was missing from in the last build: retex's database may be stale.
+    stale: Option<String>,
+}
+
+/// The TeX Live year of `seed/version.txt` (`texlive 2026`).
+fn tree_year(text: &str) -> Option<u16> {
+    text.lines().find_map(|l| l.strip_prefix("texlive ")?.trim().parse().ok())
+}
+
+/// Fetches `url` from the package server within `timeout_ms`: its body, its status (with
+/// `Retry-After`, when the server lets the browser show it) or why there is no answer.
+async fn fetch_reply(url: &str, timeout_ms: u32) -> Reply {
+    let init = RequestInit::new();
+    init.set_signal(Some(&AbortSignal::timeout_with_u32(timeout_ms)));
+    let why = |e: JsValue| match e.dyn_ref::<js_sys::Error>() {
+        Some(e) if e.name() == "TimeoutError" || e.name() == "AbortError" => format!("no answer within {} s", timeout_ms / 1000),
+        // A network error, or a server that does not let this site read it (CORS): the browser
+        // does not say which.
+        Some(e) => String::from(e.message()),
+        None => format!("{e:?}"),
+    };
+    let resp: Response = match JsFuture::from(scope().fetch_with_str_and_init(url, &init)).await {
+        Ok(r) => match r.dyn_into() {
+            Ok(r) => r,
+            Err(_) => return Reply::Failed("not a response".to_owned()),
+        },
+        Err(e) => return Reply::Failed(why(e)),
+    };
+    if resp.status() != 200 {
+        return Reply::Status { code: resp.status(), retry_after: resp.headers().get("retry-after").ok().flatten() };
+    }
+    match resp.array_buffer() {
+        Ok(p) => match JsFuture::from(p).await {
+            Ok(buf) => Reply::Ok(Uint8Array::new(&buf).to_vec()),
+            Err(e) => Reply::Failed(why(e)),
+        },
+        Err(e) => Reply::Failed(why(e)),
+    }
 }
 
 async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
@@ -473,7 +571,7 @@ async fn response_bytes(url: &str, request: js_sys::Promise) -> Result<Vec<u8>, 
 impl Engine {
     fn new() -> Engine {
         let fs = FileSystem::new();
-        let web = Web { fetched: Rc::default(), out: Rc::default(), fs: fs.clone() };
+        let web = Web { fetched: Rc::default(), out: Rc::default(), fs: fs.clone(), downloads: Rc::default() };
         Engine {
             module: None,
             fs,
@@ -485,6 +583,8 @@ impl Engine {
             lists: HashMap::new(),
             names: HashMap::new(),
             expanded: HashSet::new(),
+            year: None,
+            stale: None,
         }
     }
 
@@ -535,7 +635,22 @@ impl Engine {
         let module = JsFuture::from(WebAssembly::compile(&Uint8Array::from(wasm.as_slice()).into())).await.map_err(|e| format!("{retex}: {e:?}"))?;
         let index = String::from_utf8(fetch_fresh(&format!("{TREE_SITE}tree/index.txt")).await?).map_err(|_| "tree/index.txt is not UTF-8")?;
         self.web.fetched.borrow_mut().version = format!("?v={:016x}", fnv(index.as_bytes()));
-        self.kept = Kept::open(fnv(&wasm), fnv(index.as_bytes())).await;
+        // The tree's TeX Live year: retex reads it from the tree's `release-texlive.txt` (else
+        // from the LaTeX kernel's date, which can be the year before's), and downloads packages
+        // of that year only.
+        self.year = match fetch_fresh(&format!("{TREE_SITE}seed/version.txt")).await {
+            Ok(text) => tree_year(&String::from_utf8_lossy(&text)),
+            Err(e) => {
+                log::warn!("the tree says no TeX Live year ({e}): no package downloads");
+                None
+            }
+        };
+        if let Some(year) = self.year {
+            self.fs.add("/texlive/release-texlive.txt", format!("TeX Live (https://tug.org/texlive) version {year}\n").into_bytes(), 0);
+        }
+        self.fs.mkdirs(packages::REPOSITORY_DIR, 0);
+        *self.web.downloads.borrow_mut() = Downloads::new(PackageServer::Default, self.year);
+        self.kept = Kept::open(fnv(&wasm), fnv(index.as_bytes()), self.year).await;
         for line in index.lines() {
             let mut parts = line.split(' ');
             let (Some(size), Some(path)) = (parts.next().and_then(|s| s.parse::<u64>().ok()), parts.next()) else { continue };
@@ -637,9 +752,7 @@ impl Engine {
             self.fs.remove(o);
         }
         args.push(main.clone());
-        let key = format!("{}\u{0}{cwd}", args.join("\u{0}"));
-        let mut env: Vec<(String, String)> = ENV.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect();
-        env.push(("PWD".to_owned(), cwd.clone()));
+        let (env, key) = self.environment(msg, &args, &cwd).await;
         let started = js_sys::Date::now();
         let mut stops = 0;
         let mut reruns = 0;
@@ -677,13 +790,14 @@ impl Engine {
                         return Err("the build needed more TeX files than it could fetch".into());
                     }
                     log::info!("build {id}: run {stops} stopped to fetch {source}");
-                    self.fetch_stopped_for(id, &source).await?;
+                    self.fetch_for(id, &source).await?;
                 }
                 Ended::Crashed(why) => return Err(format!("the typesetting engine stopped: {why}")),
             }
         };
         self.fs.remove("/.retex-resume");
-        let out = std::mem::take(&mut *self.web.out.borrow_mut());
+        let mut out = std::mem::take(&mut *self.web.out.borrow_mut());
+        self.after_downloads(&mut out.text);
         let seconds = (js_sys::Date::now() - started) / 1000.0;
         if let Some(output) = output {
             self.exported(id, &cwd, &job, &output, &self.written, &out.text);
@@ -725,6 +839,99 @@ impl Engine {
         post("done", id, &fields, &transfer);
         self.keep().await;
         Ok(())
+    }
+
+    /// The module's environment for a build's runs in `cwd`, and the key of its preamble's
+    /// snapshot, which holds the arguments and the environment it was taken with.
+    async fn environment(&mut self, msg: &JsValue, args: &[String], cwd: &str) -> (Vec<(String, String)>, String) {
+        let mut env: Vec<(String, String)> = ENV.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect();
+        env.push(("PWD".to_owned(), cwd.to_owned()));
+        let server = get(msg, "packages").as_string().and_then(|s| PackageServer::parse(&s).ok()).unwrap_or_default();
+        let repository = self.package_repository(server).await;
+        if let Some(r) = &repository {
+            env.push(("RETEX_REPOSITORY".to_owned(), r.clone()));
+        }
+        let key = format!("{}\u{0}{cwd}\u{0}{}", args.join("\u{0}"), repository.unwrap_or_default());
+        (env, key)
+    }
+
+    /// After a run stopped for `source`: a file of the package repository, or of the tree.
+    async fn fetch_for(&mut self, id: f64, source: &str) -> Result<(), String> {
+        match source.strip_prefix(REPOSITORY_SOURCE) {
+            Some(path) => {
+                self.fetch_repository(path).await;
+                Ok(())
+            }
+            None => self.fetch_stopped_for(id, source).await,
+        }
+    }
+
+    /// Before a build: `RETEX_REPOSITORY` for its runs, `None` when packages are not downloaded
+    /// (downloads off, no TeX Live year, or the server's newest snapshot unknown: asked here when
+    /// retex keeps no package database yet).
+    async fn package_repository(&mut self, server: PackageServer) -> Option<String> {
+        let year = self.year?;
+        self.web.downloads.borrow_mut().set_server(server);
+        let kept_path = packages::kept_repository_path(year);
+        let mut kept = self.fs.read(&kept_path).map(|b| String::from_utf8_lossy(&b).into_owned());
+        // An archive was missing from the snapshot of retex's database: when the server has a
+        // newer one, the database goes, and the next run fetches the newer one's.
+        if let Some(stale) = self.stale.take()
+            && kept.as_deref().and_then(packages::kept_snapshot) == Some(stale.as_str())
+        {
+            let url = self.web.downloads.borrow_mut().recheck_url(js_sys::Date::now());
+            if let Some(url) = url {
+                let reply = fetch_reply(&url, SNAPSHOT_TIMEOUT_MS).await;
+                self.web.downloads.borrow_mut().snapshot_reply(reply, js_sys::Date::now());
+                let newer = self.web.downloads.borrow().current().is_some_and(|c| c != stale);
+                if newer {
+                    log::info!("the package server no longer has snapshot {stale}: TeX Live's package list is fetched again");
+                    let dir = format!("/cache/texlive/{year}");
+                    let gone: Vec<String> =
+                        self.fs.files(&format!("{dir}/tlpdb")).into_iter().map(|(p, _)| p).chain([format!("{dir}/index.bin")]).collect();
+                    self.kept.forget(&self.fs, &gone).await;
+                    kept = None;
+                }
+            }
+        }
+        let url = self.web.downloads.borrow().snapshot_url(kept.as_deref(), js_sys::Date::now());
+        if let Some(url) = url {
+            let reply = fetch_reply(&url, SNAPSHOT_TIMEOUT_MS).await;
+            self.web.downloads.borrow_mut().snapshot_reply(reply, js_sys::Date::now());
+        }
+        self.web.downloads.borrow().repository(kept.as_deref())
+    }
+
+    /// After a run stopped for the repository file at `path`: fetches it (with the database's
+    /// other files, for one of them) and adds what the server gave to the module's files.
+    async fn fetch_repository(&mut self, path: &str) {
+        for file in Downloads::with(path) {
+            let plan = self.web.downloads.borrow().plan(&file, js_sys::Date::now());
+            let Plan::Fetch(url) = plan else { continue };
+            log::info!("fetching {url}");
+            let reply = fetch_reply(&url, PACKAGE_TIMEOUT_MS).await;
+            let answer = self.web.downloads.borrow_mut().reply(&file, &url, reply, js_sys::Date::now());
+            if let Answer::Bytes(bytes) = answer {
+                self.fs.add(&file, bytes, now_ns());
+            }
+        }
+    }
+
+    /// After a build: the downloads' notes at the end of its output (a line of the log for each
+    /// package downloaded, a warning for each refusal), and the repository's files dropped (retex
+    /// unpacked what it needed into `/cache`).
+    fn after_downloads(&mut self, text: &mut String) {
+        let notes = self.web.downloads.borrow_mut().take_notes();
+        for note in notes {
+            if !text.is_empty() && !text.ends_with('\n') {
+                text.push('\n');
+            }
+            text.push_str(&note.record().unwrap_or_else(|| note.text()));
+            text.push('\n');
+        }
+        self.stale = self.web.downloads.borrow_mut().take_missing_from();
+        self.fs.remove(packages::REPOSITORY_DIR);
+        self.fs.mkdirs(packages::REPOSITORY_DIR, 0);
     }
 
     /// Sends an export's files (`{type: "exported", id, names, contents}`: the document, then the

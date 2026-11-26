@@ -19,7 +19,7 @@ fn the_example_project_builds_cleanly_with_its_references_resolved() -> Result<(
     let files =
         FILES.iter().map(|(p, b)| Ok((ProjectPath::new(p).map_err(|e| e.to_string())?, Arc::from(*b)))).collect::<Result<Vec<_>, String>>()?;
     let main = ProjectPath::new("main.tex").map_err(|e| e.to_string())?;
-    let outcome = backend.compile(&Job { files, main, id: 1, options: Options::default(), project: None });
+    let outcome = backend.compile(&Job { files, main, id: 1, options: Options::default(), project: None, packages: Default::default() });
     let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(outcome.status, Status::Built, "{:?}", outcome.diagnostics);
     let problems: Vec<_> = outcome

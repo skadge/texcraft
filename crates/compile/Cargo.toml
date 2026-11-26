@@ -27,7 +27,7 @@ texcraft-wasi = { workspace = true }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
-web-sys = { version = "0.3", features = ["Worker", "MessageEvent", "DedicatedWorkerGlobalScope", "WorkerGlobalScope", "XmlHttpRequest", "XmlHttpRequestResponseType", "Response", "Performance", "Crypto", "CacheStorage", "Cache", "Request", "ResponseInit", "Headers", "RequestInit", "RequestCache", "WorkerLocation"] }
+web-sys = { version = "0.3", features = ["Worker", "MessageEvent", "DedicatedWorkerGlobalScope", "WorkerGlobalScope", "XmlHttpRequest", "XmlHttpRequestResponseType", "Response", "Performance", "Crypto", "CacheStorage", "Cache", "Request", "ResponseInit", "Headers", "RequestInit", "RequestCache", "WorkerLocation", "AbortSignal"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 retex = { workspace = true, optional = true }
