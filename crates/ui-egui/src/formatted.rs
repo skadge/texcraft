@@ -18,8 +18,10 @@ use egui::text::{LayoutJob, TextFormat};
 use egui::{Align, Align2, Color32, FontFamily, FontId, Galley, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2, pos2, vec2};
 use texcraft_engine::project::{Contents, Project, ProjectPath};
 use texcraft_engine::{FormulaBox, FormulaState};
+use texcraft_latex::auxfile::{Aux, CiteStyle, Missing};
 use texcraft_latex::edit::{self, Line, Part};
-use texcraft_latex::view::{Block, BlockKind, ChipKind, Inline, InlineKind, Item, ListKind, Style};
+use texcraft_latex::numbers::Number;
+use texcraft_latex::view::{Block, BlockKind, ChipKind, Inline, InlineKind, Item, ListKind, Style, TheoremKind};
 use texcraft_preview::figure;
 
 use crate::App;
@@ -44,6 +46,41 @@ struct Cache {
     blocks: Arc<Vec<Block>>,
     /// The preamble's summary: the class and how many packages.
     summary: String,
+    /// The theorem-like environments the main file declares, which the blocks were made with.
+    theorems: Vec<TheoremKind>,
+}
+
+/// A file `\input` or `\include` reads, shown in its place: its path, text and view, or why it
+/// cannot be shown.
+type Included = Result<(ProjectPath, Arc<str>, Arc<Vec<Block>>), String>;
+
+/// The files the shown file includes (and those they include), by the name as written, for the
+/// project revision and buffer version they were read at.
+struct Includes {
+    of: (u64, u64),
+    files: Arc<HashMap<String, Included>>,
+}
+
+/// What cross-references, citations and numbered parts show: from the last build's `.aux` and
+/// the document's counting.
+pub(crate) struct Refs {
+    aux: Option<Arc<Aux>>,
+    numbered: Arc<texcraft_engine::numbering::Numbered>,
+    /// The bibliography's entries: each key's author and year.
+    cited: Arc<HashMap<String, String>>,
+}
+
+/// How a chip is shown.
+#[derive(Clone)]
+enum Chip {
+    /// As the PDF shows it ("(3)", "Figure 2", "[1]").
+    Shown,
+    /// Its key, muted, with "?", and why it has no number.
+    Missing(String),
+    /// A `\label`: its icon alone, the key on hover.
+    Label,
+    /// An `\input` in a sentence: its icon and the file's name.
+    File,
 }
 
 /// The misspelled words' bytes, in order.
@@ -69,6 +106,8 @@ pub(crate) struct Formatted {
     grammar: Option<(u64, f64, Misspelled)>,
     /// The bibliography's entries (key, author and year), with the session revision.
     cited: Option<(u64, Arc<HashMap<String, String>>)>,
+    /// The included files shown in place.
+    includes: Option<Includes>,
     /// The caret's keys and pointer.
     pub editing: crate::formatted_edit::Editing,
     /// The toolbar's state: where the caret is.
@@ -237,6 +276,8 @@ struct Cx<'a> {
     footnotes: usize,
     /// The file's formulas, by their first byte, and the document's body size in TeX points.
     typeset: &'a HashMap<usize, FormulaState>,
+    /// The formulas of the included files, by file.
+    typeset_files: &'a HashMap<ProjectPath, HashMap<usize, FormulaState>>,
     body_pt: f32,
     ink: &'a mut Ink,
     /// Out: the lines of text drawn, in order, for the caret.
@@ -269,8 +310,13 @@ struct Cx<'a> {
     misspelled: &'a [Range<usize>],
     /// The grammar problems' bytes, in order.
     grammar: &'a [Range<usize>],
-    /// The project's bibliography: each key's author and year.
-    cited: &'a HashMap<String, String>,
+    /// The last build's numbers and the bibliography.
+    refs: &'a Refs,
+    /// The included files, by the name as written.
+    includes: &'a HashMap<String, Included>,
+    /// The files whose view this one is drawn inside (an included file's, read-only), outermost
+    /// first; empty for the file shown.
+    within: Vec<ProjectPath>,
     /// Out: a cross-reference was followed (Ctrl+click): its key.
     follow: Option<String>,
     /// The source editor open in the view, and its formula's preview.
@@ -280,6 +326,8 @@ struct Cx<'a> {
     close_in_place: bool,
     /// Out: a part was clicked or activated to edit it in place.
     open: Option<InPlace>,
+    /// Out: an included file's Edit Here was pressed.
+    edit_included: Option<ProjectPath>,
 }
 
 /// A line of text as drawn: what its characters stand for, its layout and where it is, the slot
@@ -324,16 +372,18 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     }
     // The view is made from the editor's buffer, which it edits: its text is the file's.
     let version = app.editor.source.doc.buffer.version();
-    let fresh = app.editor.formatted.cache.as_ref().is_some_and(|c| &c.path == path && c.revision == version);
+    let numbered = app.session.numbered();
+    let fresh = app.editor.formatted.cache.as_ref().is_some_and(|c| &c.path == path && c.revision == version && c.theorems == numbered.theorems);
     if !fresh {
         let text: Arc<str> = Arc::from(app.editor.source.doc.buffer.text());
         // The whole file again: files are small, incremental parsing is still to come.
-        let blocks = Arc::new(texcraft_latex::view::view(&text));
+        let blocks = Arc::new(texcraft_latex::view::view_with(&text, &numbered.theorems));
         let summary = match blocks.first() {
             Some(Block { kind: BlockKind::Preamble, range }) => summary(text.get(range.clone()).unwrap_or_default()),
             _ => String::new(),
         };
-        app.editor.formatted.cache = Some(Cache { path: path.clone(), revision: version, text, blocks, summary });
+        let theorems = numbered.theorems.clone();
+        app.editor.formatted.cache = Some(Cache { path: path.clone(), revision: version, text, blocks, summary, theorems });
     }
     let Some(cache) = app.editor.formatted.cache.as_ref() else { return };
     let (text, blocks, summary) = (Arc::clone(&cache.text), Arc::clone(&cache.blocks), cache.summary.clone());
@@ -349,11 +399,20 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             None
         }
     };
-    let found = app.session.formulas(path).unwrap_or_default();
+    let includes = includes(app, path, &blocks, version);
+    // The formulas of the file and of those shown in it, in one batch.
+    let mut files = vec![path.clone()];
+    files.extend(includes.values().filter_map(|i| i.as_ref().ok()).map(|(p, ..)| p.clone()).filter(|p| p != path));
+    files.sort_by(|a, b| (a != path).cmp(&(b != path)).then_with(|| a.cmp(b)));
+    let found = app.session.formulas_of(&files).unwrap_or_default();
     if found.formulas.iter().any(|f| matches!(f.state, FormulaState::Pending)) {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
     }
-    let typeset: HashMap<usize, FormulaState> = found.formulas.into_iter().map(|f| (f.range.start, f.state)).collect();
+    let mut typeset_files: HashMap<ProjectPath, HashMap<usize, FormulaState>> = HashMap::new();
+    for f in found.formulas {
+        typeset_files.entry(f.file).or_default().insert(f.range.start, f.state);
+    }
+    let typeset = typeset_files.remove(path).unwrap_or_default();
     let preview = match app.editor.formatted.in_place.as_ref() {
         Some(InPlace { what: What::Formula { display, env }, buffer, .. }) if !buffer.trim().is_empty() => {
             let (math, display, env) = (buffer.clone(), *display, env.clone());
@@ -371,7 +430,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     let vim = app.editor.source.vim.is_some();
     let misspelled = misspellings(app, ui, path);
     let grammar = grammar_problems(app, ui, path);
-    let cited = cited(app);
+    let refs = Refs { aux: app.session.aux().cloned(), numbered: Arc::clone(&numbered), cited: cited(app) };
     let ink = &mut app.editor.formatted.ink;
     ink.begin();
     let mut cx = Cx {
@@ -390,6 +449,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         align: Align::Min,
         footnotes: 0,
         typeset: &typeset,
+        typeset_files: &typeset_files,
         body_pt: found.body_pt.max(1.0),
         ink,
         lines: Vec::new(),
@@ -406,12 +466,15 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         figure_label: None,
         misspelled: &misspelled,
         grammar: &grammar,
-        cited: &cited,
+        refs: &refs,
+        includes: &includes,
+        within: Vec::new(),
         follow: None,
         in_place: app.editor.formatted.in_place.as_mut(),
         preview: preview.as_ref(),
         close_in_place: false,
         open: None,
+        edit_included: None,
     };
     let page = 6.0 * t.unit;
     app.view.cursor = None;
@@ -450,6 +513,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     let (figure_action, figure_label) = (cx.figure_action.take(), cx.figure_label);
     let follow = cx.follow.take();
     let (close_in_place, open) = (cx.close_in_place, cx.open.take());
+    let edit_included = cx.edit_included.take();
     app.region(crate::Region::Editor, if lines.is_empty() { first.unwrap_or(doc_id) } else { doc_id });
     // Escape on a table's toolbar gives the keyboard back to the cell.
     let e = &mut app.editor.formatted.editing;
@@ -478,6 +542,10 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     }
     if let Some(key) = follow {
         follow_reference(app, &key);
+    }
+    if let Some(file) = edit_included {
+        app.run("file.open", serde_json::json!({"path": file.as_str()}));
+        app.editor.formatted.set(&file, true);
     }
     if let Some(at) = edit_figure {
         crate::figure_dialog::open(app, path, &text, at);
@@ -509,6 +577,51 @@ fn cited(app: &mut App) -> Arc<HashMap<String, String>> {
     let found = Arc::new(found);
     app.editor.formatted.cited = Some((revision, Arc::clone(&found)));
     found
+}
+
+/// The files the view of `path` includes, read again when the project or the buffer changes:
+/// each `\input` and `\include` found (in those files too), by its name as written.
+fn includes(app: &mut App, path: &ProjectPath, blocks: &[Block], version: u64) -> Arc<HashMap<String, Included>> {
+    let of = (app.session.revision(), version);
+    if let Some(found) = app.editor.formatted.includes.as_ref().filter(|i| i.of == of) {
+        return Arc::clone(&found.files);
+    }
+    let theorems = app.session.numbered().theorems.clone();
+    let mut files: HashMap<String, Included> = HashMap::new();
+    let mut seen: HashSet<ProjectPath> = HashSet::from([path.clone()]);
+    let mut todo: Vec<String> = Vec::new();
+    let names = |blocks: &[Block], todo: &mut Vec<String>| {
+        texcraft_latex::view::walk(blocks, &mut |b| {
+            if let BlockKind::Include { name, .. } = &b.kind {
+                todo.push(name.clone());
+            }
+        });
+    };
+    names(blocks, &mut todo);
+    // A file reads at most a few levels of files; one that includes itself stops there.
+    while let Some(name) = todo.pop() {
+        if files.contains_key(&name) || files.len() > 64 {
+            continue;
+        }
+        let found = match app.session.included(&name) {
+            None => Err(name.clone()),
+            Some(file) => match app.session.project().text(&file) {
+                Ok(text) => {
+                    let text: Arc<str> = Arc::from(text);
+                    let blocks = Arc::new(texcraft_latex::view::view_with(&text, &theorems));
+                    if seen.insert(file.clone()) {
+                        names(&blocks, &mut todo);
+                    }
+                    Ok((file, text, blocks))
+                }
+                Err(_) => Err(name.clone()),
+            },
+        };
+        files.insert(name, found);
+    }
+    let files = Arc::new(files);
+    app.editor.formatted.includes = Some(Includes { of, files: Arc::clone(&files) });
+    files
 }
 
 /// Goes to the label `key` names: in this file or another of the project's, its caret there.
@@ -773,6 +886,8 @@ fn gap_before(t: &Tokens, kind: &BlockKind) -> f32 {
         | BlockKind::Formula { .. }
         | BlockKind::Source
         | BlockKind::Container { .. }
+        | BlockKind::Theorem { .. }
+        | BlockKind::Include { .. }
         | BlockKind::Table(_)
         | BlockKind::UnsupportedTable(_) => em,
         _ => em * 0.75,
@@ -797,6 +912,8 @@ fn draw_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, block: &Block, depth: usize) {
         }
         BlockKind::List { kind, items } => list(ui, cx, *kind, items, depth),
         BlockKind::Container { name, blocks } => container(ui, cx, name, blocks, depth),
+        BlockKind::Theorem { kind, title, blocks, .. } => theorem(ui, cx, range, kind, title, blocks, depth),
+        BlockKind::Include { name, .. } => include(ui, cx, range, name, depth),
         BlockKind::Formula { source, env, closed } => formula(ui, cx, range, source, env.as_deref(), *closed),
         BlockKind::Figure { image, caption, label } => fig::card(ui, cx, range, image.as_ref(), caption, label.as_ref()),
         BlockKind::Table(tb) => table::table_block(ui, cx, range, tb),
@@ -832,7 +949,8 @@ enum PieceKind {
     Text,
     /// A line break (`\\`).
     Break,
-    Chip(ChipKind, String),
+    /// A chip: its kind, its command, how it is shown.
+    Chip(ChipKind, String, Chip),
     /// A formula shown as its source: being typeset (true), or this build cannot typeset it.
     Formula(bool),
     /// A typeset formula, drawn over the space its no-break space holds.
@@ -858,6 +976,7 @@ struct Builder<'a> {
     plain: String,
     footnotes: &'a mut usize,
     typeset: &'a HashMap<usize, FormulaState>,
+    refs: &'a Refs,
     /// Screen points per TeX point.
     scale: f32,
     /// The reading face's no-break space at this size: its advance, and how far the baseline is
@@ -970,12 +1089,32 @@ impl Builder<'_> {
                 }
             }
             InlineKind::Chip { kind, command, key } => {
-                self.plain.push_str(key);
+                let (chip, words) = chip(self.refs, *kind, command, key);
                 let font = FontId::new(self.size * 0.8, FontFamily::Proportional);
-                let format = self.atom_format(font, self.t.text);
+                let color = if matches!(chip, Chip::Missing(_)) { self.t.text_muted } else { self.t.text };
+                let format = self.atom_format(font, color);
                 // No-break spaces hold the chip's icon (after the first) and keep it on one line.
-                let shown = format!("\u{a0}{}{}\u{a0}", "\u{a0}".repeat(CHIP_ICON_SLOT), key.replace(' ', "\u{a0}"));
-                self.append(&shown, format, range, PieceKind::Chip(*kind, command.clone()));
+                let icon = if matches!(chip, Chip::Label | Chip::File) { "\u{a0}".repeat(CHIP_ICON_SLOT) } else { String::new() };
+                let shown = match chip {
+                    // What the PDF shows, at the text's size, in a quiet pill.
+                    Chip::Shown => {
+                        let format = TextFormat { font_id: self.format(outer, self.color).font_id, ..format };
+                        self.plain.push_str(&words);
+                        self.append(
+                            &format!("\u{a0}{}\u{a0}", words.replace(' ', "\u{a0}")),
+                            format,
+                            range,
+                            PieceKind::Chip(*kind, command.clone(), chip),
+                        );
+                        return;
+                    }
+                    Chip::Missing(_) => format!("{}\u{a0}?", key.replace(' ', "\u{a0}")),
+                    Chip::Label => String::new(),
+                    Chip::File => key.replace(' ', "\u{a0}"),
+                };
+                self.plain.push_str(&words);
+                let shown = format!("\u{a0}{icon}{shown}\u{a0}");
+                self.append(&shown, format, range, PieceKind::Chip(*kind, command.clone(), chip));
             }
             InlineKind::Footnote(inner) => {
                 *self.footnotes += 1;
@@ -1027,6 +1166,7 @@ fn plain(text: &str, inlines: &[Inline]) -> String {
             InlineKind::Text { text, .. } => out.push_str(text),
             InlineKind::LineBreak => out.push(' '),
             InlineKind::Formula { source, .. } => out.push_str(&collapse(text.get(source.clone()).unwrap_or_default())),
+            InlineKind::Chip { kind: ChipKind::Label, .. } => {}
             InlineKind::Chip { key, .. } => out.push_str(key),
             InlineKind::Footnote(_) => {}
             InlineKind::Link { text: inner, .. } => out.push_str(&plain(text, inner)),
@@ -1061,6 +1201,30 @@ fn piece_at<'p>(galley: &Galley, pieces: &'p [Piece], pos: Vec2) -> Option<&'p P
     pieces.iter().filter(|p| p.chars.start <= at && at <= p.chars.end).find(inside)
 }
 
+/// How a chip is shown and its words (for the paragraph's name): what the PDF shows for a
+/// resolved reference or citation; the key and why it is unresolved otherwise.
+fn chip(refs: &Refs, kind: ChipKind, command: &str, key: &str) -> (Chip, String) {
+    let resolved = match kind {
+        ChipKind::Label => return (Chip::Label, String::new()),
+        ChipKind::File => return (Chip::File, key.to_owned()),
+        ChipKind::Reference => Aux::reference(refs.aux.as_deref(), command, key),
+        ChipKind::Citation => Aux::citation(refs.aux.as_deref(), refs.numbered.cite_style.unwrap_or(CiteStyle::Plain), command, key),
+    };
+    match resolved {
+        Ok(shown) => (Chip::Shown, shown.replace('\u{a0}', " ")),
+        Err(why) => {
+            let words = match why {
+                Missing::NotBuilt => tl!("Not built yet: the number shows after the document is built.").to_owned(),
+                Missing::Unknown(k) if kind == ChipKind::Citation => tl!("No bibliography entry named {key} in the last build.").replace("{key}", &k),
+                Missing::Unknown(k) => tl!("No label named {key} in the last build.").replace("{key}", &k),
+                Missing::Biblatex => tl!("The labels biblatex gives citations are not shown yet.").to_owned(),
+                Missing::Silent => tl!("\\nocite lists the entry in the bibliography; nothing shows in the text.").to_owned(),
+            };
+            (Chip::Missing(words), format!("{key}?"))
+        }
+    }
+}
+
 fn chip_icon(kind: ChipKind) -> &'static str {
     match kind {
         ChipKind::Label => "tag",
@@ -1072,24 +1236,37 @@ fn chip_icon(kind: ChipKind) -> &'static str {
 
 /// What hovering a piece explains.
 fn piece_tip(kind: &PieceKind, text: &str, range: &Range<usize>, cited: &HashMap<String, String>) -> Option<String> {
+    let why = match kind {
+        PieceKind::Chip(_, _, Chip::Missing(why)) => Some(why.clone()),
+        _ => None,
+    };
     let key = || {
         let src = text.get(range.clone()).unwrap_or_default();
         src.split_once('{').map_or(src, |(_, k)| k.trim_end_matches('}')).to_owned()
     };
     Some(match kind {
         PieceKind::Text | PieceKind::Break => return None,
-        PieceKind::Chip(ChipKind::Label, _) => tl!("Label {key}").replace("{key}", &key()),
-        PieceKind::Chip(ChipKind::Reference, command) => {
+        PieceKind::Chip(ChipKind::Label, ..) => tl!("Label {key}").replace("{key}", &key()),
+        PieceKind::Chip(ChipKind::Reference, command, _) => {
             let said = tl!("Reference (\\{command}) to {key}").replace("{command}", command).replace("{key}", &key());
-            format!("{said}. {}", tl!("Ctrl+click to go to it."))
+            match why {
+                Some(why) => format!("{said}. {why} {}", tl!("Ctrl+click to go to it.")),
+                None => format!("{said}. {}", tl!("Ctrl+click to go to it.")),
+            }
         }
-        PieceKind::Chip(ChipKind::Citation, command) => {
+        PieceKind::Chip(ChipKind::Citation, command, _) => {
             let said = tl!("Citation (\\{command}) of {key}").replace("{command}", command).replace("{key}", &key());
             // Each key's entry, as an author-year reader sees it.
             let who: Vec<&str> = key().split(',').filter_map(|k| cited.get(k.trim()).map(String::as_str)).collect();
-            if who.is_empty() { said } else { format!("{said}: {}", who.join("; ")) }
+            let said = if who.is_empty() { said } else { format!("{said}: {}", who.join("; ")) };
+            match why {
+                Some(why) => format!("{said}. {why}"),
+                None => said,
+            }
         }
-        PieceKind::Chip(ChipKind::File, command) => tl!("File read with \\{command}: {key}").replace("{command}", command).replace("{key}", &key()),
+        PieceKind::Chip(ChipKind::File, command, _) => {
+            tl!("File read with \\{command}: {key}").replace("{command}", command).replace("{key}", &key())
+        }
         PieceKind::Formula(true) => tl!("The formula's source, while it is typeset. Click to edit it here.").to_owned(),
         PieceKind::Formula(false) => {
             tl!("The formula's source: this version typesets formulas in the desktop app only. Click to edit it here.").to_owned()
@@ -1123,6 +1300,7 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
         plain: String::new(),
         footnotes: &mut cx.footnotes,
         typeset,
+        refs: cx.refs,
         scale,
         probe: probe(ui, &t, para.size),
     };
@@ -1154,12 +1332,12 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
     // Ctrl+click on a cross-reference goes to its label.
     if r.clicked()
         && ui.input(|i| i.modifiers.command)
-        && let Some(p) = hovered.filter(|p| matches!(p.kind, PieceKind::Chip(ChipKind::Reference, _)))
+        && let Some(p) = hovered.filter(|p| matches!(p.kind, PieceKind::Chip(ChipKind::Reference, ..)))
     {
         let src = cx.text.get(p.range.clone()).unwrap_or_default();
         cx.follow = src.split_once('{').map(|(_, k)| k.trim_end_matches('}').trim().to_owned());
     }
-    let r = match hovered.and_then(|p| piece_tip(&p.kind, cx.text, &p.range, cx.cited)) {
+    let r = match hovered.and_then(|p| piece_tip(&p.kind, cx.text, &p.range, &cx.refs.cited)) {
         Some(tip) => r.on_hover_text_at_pointer(tip),
         None => r,
     };
@@ -1173,7 +1351,7 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
         cx.jump = Some(Jump(hovered.map_or(range.start, |p| p.range.start)));
     }
     let role = para.role;
-    r.widget_info(|| egui::WidgetInfo::labeled(role, true, &plain_text));
+    r.widget_info(|| egui::WidgetInfo::labeled(role, true, plain_text.trim()));
     let mut line = line_of(&pieces, para.empty_at.unwrap_or(range.start));
     if let Some(at) = para.empty_at.filter(|_| line.first_stop().is_none()) {
         // Only what the view adds ("Figure."): the caret stands after it, at `at`.
@@ -1320,12 +1498,14 @@ fn ink(ui: &egui::Ui, cx: &mut Cx<'_>, b: &FormulaBox, rect: Rect, px: f32, colo
 fn paint_pieces(ui: &egui::Ui, t: &Tokens, galley: &Galley, pieces: &[Piece], origin: Pos2, size: f32) {
     for p in pieces {
         let fill = match p.kind {
+            PieceKind::Chip(_, _, Chip::Missing(_)) => blend(t.surface, t.pressed),
             PieceKind::Chip(..) => blend(t.surface, t.accent_soft),
             PieceKind::Formula(_) | PieceKind::FormulaError(_) | PieceKind::Source => blend(t.surface, t.pressed),
             PieceKind::Text | PieceKind::Break | PieceKind::Link(_) | PieceKind::Footnote(_) | PieceKind::Typeset(_) => continue,
         };
         // Chips and formulas are outlined too, so they read as one unit on dark surfaces.
         let stroke = match p.kind {
+            PieceKind::Chip(_, _, Chip::Missing(_)) => Stroke::new(1.0, t.text_muted.gamma_multiply(0.5)),
             PieceKind::Chip(..) => Stroke::new(1.0, t.accent.gamma_multiply(0.35)),
             PieceKind::Formula(_) => formula_outline(t),
             PieceKind::FormulaError(_) => Stroke::new(1.0, t.error),
@@ -1363,7 +1543,7 @@ const CHIP_ICON_SLOT: usize = 5;
 /// The icon in each chip's leading spaces.
 fn paint_chip_icons(ui: &egui::Ui, t: &Tokens, galley: &Galley, pieces: &[Piece], origin: Pos2, size: f32) {
     for p in pieces {
-        let PieceKind::Chip(kind, _) = p.kind else { continue };
+        let PieceKind::Chip(kind, _, Chip::Label | Chip::File) = p.kind else { continue };
         if let Some(r) = span_rects(galley, (p.chars.start + 1, p.chars.start + 1 + CHIP_ICON_SLOT)).first() {
             let r = r.translate(origin.to_vec2());
             crate::icons::paint(ui, r, chip_icon(kind), (size * 0.72).round(), t.accent);
@@ -1509,7 +1689,12 @@ fn title_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, [title,
 fn heading(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, level: u8, content: &[Inline], label: Option<&Inline>) {
     let t = cx.t;
     let size = t.heading_sizes.get(usize::from(level)).copied().unwrap_or(t.reading_size);
-    let mut inlines = content.to_vec();
+    let mut inlines = Vec::new();
+    // Its number, as the PDF sets it before the title: shown, not edited.
+    if let Some(n) = cx.refs.numbered.numbers.one(cx.path.as_str(), range.start) {
+        inlines.push(Inline { kind: InlineKind::Text { text: format!("{n}\u{2002}"), style: Style::default() }, range: range.start..range.start });
+    }
+    inlines.extend(content.iter().cloned());
     if let Some(label) = label {
         inlines.push(Inline {
             kind: InlineKind::Text { text: "\u{2002}".into(), style: Style::default() },
@@ -1697,15 +1882,18 @@ fn formula(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, source: &Ra
     let shown = lines.join("\n");
     let pad = vec2(4.0 * t.unit, 3.0 * t.unit);
     let width = ui.available_width();
-    let tag = match (env, closed) {
-        (_, false) => Some(tl!("not closed").to_owned()),
-        (Some(env), true) => Some(env.to_owned()),
-        (None, true) => None,
+    // Its numbers, row by row, at the right as the PDF sets them; or that it is not closed.
+    let rows: Vec<Option<String>> = match (closed, cx.refs.numbered.numbers.of(cx.path.as_str(), range.start)) {
+        (false, _) => vec![Some(tl!("not closed").to_owned())],
+        (true, Some(Number::Rows(rows))) => rows.clone(),
+        (true, _) => Vec::new(),
     };
-    let color = if closed { t.text_muted } else { t.error };
-    let tag = tag.map(|tag| ui.painter().layout_no_wrap(tag, t.small(), color));
-    // The environment's name sits in the margin on the right, as an equation number would.
-    let margin = tag.as_ref().map_or(0.0, |g| g.size().x + 2.0 * t.unit);
+    let color = if closed { t.text } else { t.error };
+    let font = if closed { t.reading(t.reading_size, false, false) } else { t.small() };
+    let numbers: Vec<Option<Arc<Galley>>> =
+        rows.iter().map(|r| r.as_ref().map(|n| ui.painter().layout_no_wrap(n.clone(), font.clone(), color))).collect();
+    let numbered: Vec<&str> = rows.iter().flatten().map(String::as_str).collect();
+    let margin = numbers.iter().flatten().map(|g| g.size().x + 2.0 * t.unit).fold(0.0, f32::max);
     let room = width - 2.0 * margin;
     let state = cx.typeset.get(&range.start).cloned();
     if let Some(FormulaState::Typeset(b)) = &state {
@@ -1718,12 +1906,9 @@ fn formula(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, source: &Ra
         if ui.is_rect_visible(rect) {
             ink(ui, cx, b, image, scale * fit * ui.ctx().pixels_per_point(), t.text);
         }
-        if let Some(tag) = tag {
-            let at = pos2(rect.right() - tag.size().x, rect.center().y - tag.size().y / 2.0);
-            ui.painter().galley(at, tag, color);
-        }
-        // Named by its source, as a picture of a formula is.
-        let label = collapse(math);
+        paint_numbers(ui, &numbers, rect, image.y_range(), color);
+        // Named by its source, as a picture of a formula is, then its numbers.
+        let label = if numbered.is_empty() { collapse(math) } else { format!("{} {}", collapse(math), numbered.join(" ")) };
         r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, &label));
         let r = r.on_hover_text(tl!("A formula. Click, or press Enter, to edit it here."));
         if focusable(ui, cx, &r, image.expand(t.unit)) || r.clicked() {
@@ -1742,11 +1927,9 @@ fn formula(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, source: &Ra
     if let Some(FormulaState::Failed(_)) = &state {
         error_underline(ui, &t, pill.shrink2(vec2(pad.x / 2.0, 0.0)));
     }
-    if let Some(tag) = tag {
-        let at = pos2(rect.right() - tag.size().x, rect.center().y - tag.size().y / 2.0);
-        ui.painter().galley(at, tag, color);
-    }
+    paint_numbers(ui, &numbers, rect, pill.shrink2(vec2(0.0, pad.y)).y_range(), color);
     let label = tl!("Formula: {text}").replace("{text}", &shown);
+    let label = if numbered.is_empty() { label } else { format!("{label} {}", numbered.join(" ")) };
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Math, true, &label));
     let tip = match &state {
         // Not closed: its tag says so.
@@ -1758,6 +1941,172 @@ fn formula(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, source: &Ra
     if focusable(ui, cx, &r, pill) || r.clicked() {
         edit_here(cx);
     }
+}
+
+/// A display formula's numbers at the right of `rect`, row `i` of `n` in the `i`-th of `n` equal
+/// parts of `rows` (its rows' heights are not known here).
+fn paint_numbers(ui: &egui::Ui, numbers: &[Option<Arc<Galley>>], rect: Rect, rows: egui::Rangef, color: Color32) {
+    let n = numbers.len().max(1) as f32;
+    for (i, g) in numbers.iter().enumerate() {
+        let Some(g) = g else { continue };
+        let y = rows.min + rows.span() * (i as f32 + 0.5) / n;
+        ui.painter().galley(pos2(rect.right() - g.size().x, y - g.size().y / 2.0), Arc::clone(g), color);
+    }
+}
+
+/// A theorem-like environment as the PDF sets it: "Theorem 2 (Title)." in bold (a proof's
+/// "Proof." in italics), its body under it, and a proof's end mark.
+fn theorem(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, kind: &TheoremKind, title: &[Inline], blocks: &[Block], depth: usize) {
+    let t = cx.t;
+    let proof = !kind.numbered && kind.env == "proof";
+    let mut head = kind.name.clone();
+    if kind.numbered
+        && let Some(n) = cx.refs.numbered.numbers.one(cx.path.as_str(), range.start)
+    {
+        head = format!("{head} {n}");
+    }
+    let title = collapse(&plain(cx.text, title));
+    let format = |bold: bool, italic: bool| TextFormat { font_id: t.reading(t.reading_size, bold, italic), color: t.text, ..TextFormat::default() };
+    let mut job = LayoutJob::default();
+    job.append(&head, 0.0, format(!proof, proof));
+    if !title.is_empty() {
+        job.append(&format!(" ({title})"), 0.0, format(false, false));
+    }
+    job.append(".", 0.0, format(!proof, proof));
+    job.wrap.max_width = ui.available_width();
+    let words = if title.is_empty() { format!("{head}.") } else { format!("{head} ({title}).") };
+    let galley = ui.painter().layout_job(job);
+    let (rect, r) = ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::click());
+    ui.painter().galley(rect.min, galley, t.text);
+    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &words));
+    let r = r.on_hover_text(tl!("Double-click, or press Enter, to show its source."));
+    activate(ui, cx, &r, rect, range.start, None);
+    ui.add_space(t.reading_size * 0.35);
+    draw_blocks(ui, cx, blocks, depth);
+    if proof {
+        let mark = ui.painter().layout_no_wrap("∎".to_owned(), t.reading(t.reading_size, false, false), t.text_muted);
+        let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), mark.size().y), Sense::hover());
+        ui.painter().galley(pos2(rect.right() - mark.size().x, rect.top()), mark, t.text_muted);
+    }
+}
+
+/// An `\input` or `\include` shown in place: the file's text under a thin rule with its name and
+/// Edit Here, read-only (its text is edited in its own view); or why it cannot be shown.
+fn include(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, name: &str, depth: usize) {
+    let t = cx.t;
+    let width = ui.available_width();
+    let found = cx.includes.get(name).cloned();
+    let shown = match &found {
+        Some(Ok((file, ..))) if file == cx.path || cx.within.contains(file) => {
+            Err(tl!("{name} includes itself, so it is not shown again here.").replace("{name}", file.as_str()))
+        }
+        Some(Ok(found)) if cx.within.len() < 8 => Ok(found.clone()),
+        Some(Ok((file, ..))) => Err(tl!("{name} is included too deep to be shown here.").replace("{name}", file.as_str())),
+        Some(Err(_)) | None => Err(tl!("{name} is not among the project's files: the build will stop here.").replace("{name}", name)),
+    };
+    // The rule and the file's name, with Edit Here at the right.
+    let top = ui.cursor().top();
+    ui.painter().hline(ui.max_rect().x_range(), top, Stroke::new(1.0, t.separator));
+    ui.add_space(t.unit);
+    let file_name = match &shown {
+        Ok((file, ..)) => file.as_str().to_owned(),
+        Err(_) => name.to_owned(),
+    };
+    ui.horizontal(|ui| {
+        ui.set_width(width);
+        let (icon, _) = ui.allocate_exact_size(Vec2::splat(t.small_size * 1.2), Sense::hover());
+        crate::icons::paint(ui, icon, "file-text", t.small_size, t.text_muted);
+        ui.add_space(t.unit);
+        let label = ui.label(egui::RichText::new(&file_name).font(t.small()).color(t.text_muted));
+        let _ = label.on_hover_text(tl!("Included here with \\input or \\include: its text is shown read-only."));
+        if let Ok((file, ..)) = &shown {
+            ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                let r = crate::widgets::text_button(ui, &t, tl!("Edit Here"), true);
+                let r = r.on_hover_text(tl!("Opens {name} in the formatted view, to edit it.").replace("{name}", file.as_str()));
+                if r.clicked() {
+                    cx.edit_included = Some(file.clone());
+                }
+            });
+        }
+    });
+    ui.add_space(t.unit * 2.0);
+    match shown {
+        Err(why) => {
+            let r = ui.label(egui::RichText::new(why).font(t.reading(t.reading_size * 0.9, false, true)).color(t.text_muted));
+            if r.double_clicked() {
+                cx.jump = Some(Jump(range.start));
+            }
+        }
+        Ok((file, text, blocks)) => {
+            let none = HashMap::new();
+            let typeset = cx.typeset_files.get(&file).unwrap_or(&none);
+            let mut within = cx.within.clone();
+            within.push(cx.path.clone());
+            let mut sub = Cx {
+                t,
+                text: &text,
+                project: cx.project,
+                path: &file,
+                images: &mut *cx.images,
+                preamble_open: false,
+                summary: "",
+                scroll_to: None,
+                jump: None,
+                toggle_preamble: false,
+                first: None,
+                focused: false,
+                align: cx.align,
+                footnotes: cx.footnotes,
+                typeset,
+                typeset_files: cx.typeset_files,
+                body_pt: cx.body_pt,
+                ink: &mut *cx.ink,
+                lines: Vec::new(),
+                caret: None,
+                reveal: None,
+                edit_caret: None,
+                edit_anchor: None,
+                table_prompt: None,
+                focus_toolbar: false,
+                toolbar_focused: false,
+                table_action: None,
+                edit_figure: None,
+                figure_action: None,
+                figure_label: None,
+                misspelled: &[],
+                grammar: &[],
+                refs: cx.refs,
+                includes: cx.includes,
+                within,
+                follow: None,
+                in_place: None,
+                preview: None,
+                close_in_place: false,
+                open: None,
+                edit_included: None,
+            };
+            // Without the preamble of a file that has one: it is the main file's that counts.
+            let body = match blocks.first() {
+                Some(Block { kind: BlockKind::Preamble, .. }) => blocks.get(1..).unwrap_or_default(),
+                _ => &blocks[..],
+            };
+            draw_blocks(ui, &mut sub, body, depth);
+            // What it asks for goes to the view: following a reference, editing a file.
+            cx.footnotes = sub.footnotes;
+            cx.follow = cx.follow.take().or(sub.follow);
+            cx.edit_included = cx.edit_included.take().or(sub.edit_included);
+            // Editing a part of it (a double-click, Enter, a formula) opens it in its own view.
+            if sub.jump.is_some() || sub.open.is_some() || sub.edit_figure.is_some() {
+                cx.edit_included = Some(file.clone());
+            }
+            cx.focused |= sub.focused;
+            if cx.first.is_none() {
+                cx.first = sub.first;
+            }
+        }
+    }
+    ui.add_space(t.unit * 2.0);
+    ui.painter().hline(ui.max_rect().x_range(), ui.cursor().top(), Stroke::new(1.0, t.separator));
 }
 
 /// A project file `\includegraphics` names: as written or with a figure extension, from the

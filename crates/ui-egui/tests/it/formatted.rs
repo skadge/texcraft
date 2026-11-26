@@ -31,14 +31,15 @@ fn the_formatted_view_shows_headings_without_their_commands_and_goes_back_to_the
     let mut harness =
         Harness::builder().with_size(egui::vec2(1200.0, 800.0)).with_step_dt(1.0 / 60.0).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
     harness.run();
-    assert!(harness.query_by_role_and_label(egui::accesskit::Role::Heading, "Methods").is_none(), "shown formatted before asking");
+    // The heading shows its number, as the PDF does.
+    assert!(harness.query_by_role_and_label(egui::accesskit::Role::Heading, "1\u{2002}Methods").is_none(), "shown formatted before asking");
     harness.get_by_label("Formatted").click();
     harness.run();
-    assert!(harness.query_by_role_and_label(egui::accesskit::Role::Heading, "Methods").is_some(), "no heading named Methods");
+    assert!(harness.query_by_role_and_label(egui::accesskit::Role::Heading, "1\u{2002}Methods").is_some(), "no heading named 1 Methods");
     assert!(harness.query_by_label_contains("\\section").is_none(), "the command shows in the formatted view");
     assert!(harness.query_by_label("main.tex source").is_none(), "the source is still shown");
 
-    let at = harness.get_by_role_and_label(egui::accesskit::Role::Heading, "Methods").rect().center();
+    let at = harness.get_by_role_and_label(egui::accesskit::Role::Heading, "1\u{2002}Methods").rect().center();
     double_click(&mut harness, at);
     assert!(harness.query_by_label("main.tex source").is_some(), "a double-click did not go back to the source");
     // The caret is at the heading's command, on the third line.

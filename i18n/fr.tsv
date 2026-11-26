@@ -2088,3 +2088,18 @@ unit	{n} s	{n} s
 # History: what a version changed
 	no files	aucun fichier
 @plural	and {n} other|and {n} others	et {n} autre|et {n} autres
+# The formatted view for readers: numbers from the build, included files
+	Not built yet: the number shows after the document is built.	Pas encore compilé : le numéro apparaît une fois le document compilé.
+	No bibliography entry named {key} in the last build.	Aucune entrée bibliographique nommée {key} dans la dernière compilation.
+	No label named {key} in the last build.	Aucune étiquette nommée {key} dans la dernière compilation.
+	The labels biblatex gives citations are not shown yet.	Les libellés que biblatex donne aux citations ne sont pas encore affichés.
+	\\nocite lists the entry in the bibliography; nothing shows in the text.	\\nocite inscrit l'entrée dans la bibliographie ; rien n'apparaît dans le texte.
+	Figure {n}.	Figure {n}.
+	Table {n}.	Tableau {n}.
+	Double-click, or press Enter, to show its source.	Double-cliquez ou appuyez sur Entrée pour afficher sa source.
+	{name} includes itself, so it is not shown again here.	{name} s'inclut lui-même ; il n'est donc pas affiché à nouveau ici.
+	{name} is included too deep to be shown here.	{name} est inclus trop profondément pour être affiché ici.
+	{name} is not among the project's files: the build will stop here.	{name} ne fait pas partie des fichiers du projet : la compilation s'arrêtera ici.
+	Included here with \\input or \\include: its text is shown read-only.	Inclus ici avec \\input ou \\include : son texte est affiché en lecture seule.
+	Edit Here	Modifier ici
+	Opens {name} in the formatted view, to edit it.	Ouvre {name} dans la vue mise en forme, pour le modifier.

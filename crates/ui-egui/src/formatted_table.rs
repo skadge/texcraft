@@ -83,7 +83,10 @@ pub(super) fn table_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usiz
 fn caption(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, f: &Float) {
     let t = cx.t;
     let mut inlines = vec![Inline {
-        kind: InlineKind::Text { text: format!("{} ", tl!("Table.")), style: Style { bold: true, sans: true, ..Style::default() } },
+        kind: InlineKind::Text {
+            text: format!("{} ", super::fig::float_name(cx, range, tl!("Table."), tl!("Table {n}."))),
+            style: Style { bold: true, sans: true, ..Style::default() },
+        },
         range: range.start..range.start,
     }];
     inlines.extend(f.caption.iter().cloned());

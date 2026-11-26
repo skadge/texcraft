@@ -154,11 +154,23 @@ fn caption_slot(cx: &Cx<'_>, range: &Range<usize>) -> Option<usize> {
     src[at..].starts_with('}').then_some(range.start + at)
 }
 
+/// "Figure 2." as the document numbers it (the last build's number when it has one), or "Figure."
+/// when it has none.
+pub(super) fn float_name(cx: &Cx<'_>, range: &Range<usize>, plain: &str, numbered: &str) -> String {
+    match cx.refs.numbered.numbers.one(cx.path.as_str(), range.start) {
+        Some(n) => numbered.replace("{n}", n),
+        None => plain.to_owned(),
+    }
+}
+
 /// "Figure." and the caption, edited as a line of the view's text, with the label after it.
 fn caption_line(ui: &mut egui::Ui, cx: &mut Cx<'_>, (range, inner, pad): (&Range<usize>, f32, f32), caption: &[Inline], label: Option<&Inline>) {
     let t = cx.t;
     let mut inlines = vec![Inline {
-        kind: InlineKind::Text { text: format!("{} ", tl!("Figure.")), style: Style { bold: true, sans: true, ..Style::default() } },
+        kind: InlineKind::Text {
+            text: format!("{} ", float_name(cx, range, tl!("Figure."), tl!("Figure {n}."))),
+            style: Style { bold: true, sans: true, ..Style::default() },
+        },
         range: range.start..range.start,
     }];
     inlines.extend(caption.iter().cloned());

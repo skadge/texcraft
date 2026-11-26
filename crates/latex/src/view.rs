@@ -559,8 +559,32 @@ struct Flow {
 }
 
 impl Flow {
-    fn flush(&mut self) {
-        let mut para = std::mem::take(&mut self.para);
+    fn flush(&mut self, text: &str) {
+        let para = std::mem::take(&mut self.para);
+        // An `\input` or `\include` on a line of its own: the file in its place, the paragraph's
+        // text before and after it apart.
+        let alone = |r: &Range<usize>| {
+            let before = text.get(..r.start).unwrap_or_default();
+            let after = text.get(r.end..).unwrap_or_default();
+            let line_before = before.rsplit('\n').next().unwrap_or_default();
+            let line_after = after.split('\n').next().unwrap_or_default();
+            line_before.trim().is_empty() && (line_after.trim().is_empty() || line_after.trim_start().starts_with('%'))
+        };
+        let mut part = Vec::new();
+        for i in para {
+            if matches!(&i.kind, InlineKind::Chip { kind: ChipKind::File, .. }) && alone(&i.range) {
+                self.paragraph(std::mem::take(&mut part));
+                if let InlineKind::Chip { command, key, .. } = i.kind {
+                    self.blocks.push(Block { kind: BlockKind::Include { command, name: key }, range: i.range });
+                }
+            } else {
+                part.push(i);
+            }
+        }
+        self.paragraph(part);
+    }
+
+    fn paragraph(&mut self, mut para: Vec<Inline>) {
         if let Some(Inline { kind: InlineKind::Text { text, .. }, .. }) = para.first_mut() {
             *text = text.trim_start().to_owned();
         }
@@ -568,16 +592,6 @@ impl Flow {
             *text = text.trim_end().to_owned();
         }
         para.retain(|i| !matches!(&i.kind, InlineKind::Text { text, .. } if text.is_empty()));
-        // `\input` and `\include` alone (one or more, apart from white space): the files in place.
-        let file = |i: &Inline| matches!(&i.kind, InlineKind::Chip { kind: ChipKind::File, .. });
-        if para.iter().any(file) && para.iter().all(|i| file(i) || matches!(&i.kind, InlineKind::Text { text, .. } if text.trim().is_empty())) {
-            for i in para {
-                if let InlineKind::Chip { command, key, .. } = i.kind {
-                    self.blocks.push(Block { kind: BlockKind::Include { command, name: key }, range: i.range });
-                }
-            }
-            return;
-        }
         if let (Some(first), Some(last)) = (para.first(), para.last()) {
             let range = first.range.start..last.range.end;
             self.blocks.push(Block { kind: BlockKind::Paragraph(para), range });
@@ -623,12 +637,12 @@ impl<'a> View<'a> {
         let mut i = 0;
         while let Some(n) = nodes.get(i) {
             if n.kind == Kind::ParBreak {
-                f.flush();
+                f.flush(self.text);
                 i += 1;
                 continue;
             }
             if let Some(block) = self.block(n, f.style) {
-                f.flush();
+                f.flush(self.text);
                 f.blocks.push(block);
                 i += 1;
                 continue;
@@ -647,7 +661,7 @@ impl<'a> View<'a> {
                 }
             }
         }
-        f.flush();
+        f.flush(self.text);
         f.blocks
     }
 

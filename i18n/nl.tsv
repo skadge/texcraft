@@ -2088,3 +2088,18 @@ unit	{n} s	{n} s
 # History: what a version changed
 	no files	geen bestanden
 @plural	and {n} other|and {n} others	en {n} andere|en {n} andere
+# The formatted view for readers: numbers from the build, included files
+	Not built yet: the number shows after the document is built.	Nog niet gecompileerd: het nummer verschijnt zodra het document is gecompileerd.
+	No bibliography entry named {key} in the last build.	Geen bibliografie-item met de naam {key} in de laatste compilatie.
+	No label named {key} in the last build.	Geen label met de naam {key} in de laatste compilatie.
+	The labels biblatex gives citations are not shown yet.	De aanduidingen die biblatex aan citaten geeft, worden nog niet getoond.
+	\\nocite lists the entry in the bibliography; nothing shows in the text.	\\nocite neemt het item op in de bibliografie; in de tekst verschijnt niets.
+	Figure {n}.	Figuur {n}.
+	Table {n}.	Tabel {n}.
+	Double-click, or press Enter, to show its source.	Dubbelklik of druk op Enter om de broncode te tonen.
+	{name} includes itself, so it is not shown again here.	{name} voegt zichzelf in en wordt hier daarom niet opnieuw getoond.
+	{name} is included too deep to be shown here.	{name} is te diep ingevoegd om hier getoond te worden.
+	{name} is not among the project's files: the build will stop here.	{name} hoort niet bij de bestanden van het project: de compilatie stopt hier.
+	Included here with \\input or \\include: its text is shown read-only.	Hier ingevoegd met \\input of \\include: de tekst wordt alleen-lezen getoond.
+	Edit Here	Hier bewerken
+	Opens {name} in the formatted view, to edit it.	Opent {name} in de opgemaakte weergave om het te bewerken.
