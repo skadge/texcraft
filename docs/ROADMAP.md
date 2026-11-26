@@ -63,7 +63,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | B2 | ✅ 0.2.2 | Fast rebuilds | retex's worker keeps the preamble between builds: under a second after an edit. |
 | B3 | ✅ 0.2.2 | Build log | Errors, warnings and notes tied to their line, with retex's help and fixes. |
 | B4 | ✅ 0.4.0 | Copying build messages | Messages can be selected and copied, one by one or all at once. |
-| B5 | ✅ 0.2.2 | Build options | Engine (from the document, LuaLaTeX, pdfLaTeX), stop at the first error, draft images, delete build files. |
+| B5 | ✅ 0.2.2 | Build options | Engine (from the document, LuaLaTeX, pdfLaTeX), stop at the first error, draft images, delete build files. ✅ (#52): "from the document" is TeXCraft's choice before the build, on the desktop and in the browser: pdfLaTeX for a `% !TEX program = pdflatex` line or a pdfTeX primitive LuaLaTeX lacks (`\pdfmapfile`, `\pdfstrcmp`…) outside engine tests, said with why in the Compile menu, the build log and `build.result`. |
 | B6 | ✅ 0.2.2 | Source and PDF navigation | Double-click in the PDF opens the source line; Show in PDF marks the caret's line. |
 | B7 | ✅ 0.5.0 | Progress beside the PDF | The page being built also in the PDF pane's header. |
 | B8 | ✅ 0.6.0 | A better preview | Pages drawn in the background, zoom presets, links, text selection, presentation mode. Selection is on one page at a time; presentations fill the window, not the screen. ✅ 0.17.0: pages side by side (as many as fit, Two Pages), page thumbnails, a Fit button back to the last fit (#39, #41). |

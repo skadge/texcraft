@@ -2426,3 +2426,7 @@ unit	{n} s	{n} s
 @msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	I file più grandi di {limit} non sono stati caricati: restano nella cartella del progetto, invariati, e non fanno parte delle sue compilazioni.
 @msg	Apply this fix everywhere in this file ({n} places)	Applica questa correzione ovunque in questo file ({n} punti)
 	Back to Settings	Torna alle impostazioni
+	{engine}: the main file asks for it ({comment})	{engine}: il file principale lo richiede ({comment})
+	{engine}: the document uses {command} ({place})	{engine}: il documento usa {command} ({place})
+	LuaLaTeX: nothing in the document asks for pdfLaTeX	LuaLaTeX: nulla nel documento richiede pdfLaTeX
+	{engine}: chosen in Settings › Building	{engine}: scelto in Impostazioni › Compilazione

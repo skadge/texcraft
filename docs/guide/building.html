@@ -43,6 +43,7 @@
       <p>The <span class="ui">Compile</span> button at the top of the PDF pane builds the project now (<kbd>Ctrl</kbd>+<kbd>Enter</kbd>). With automatic builds on, it reads <span class="ui">Auto-Compile</span>, outlined in grey with turning arrows (a spinner while a build runs) instead of the blue of an action to take, and a build starts each time typing pauses (see <a href="getting-started.html#auto-compile">Automatic builds</a>). While a build runs, the status bar and the PDF pane's header show the pass and the page being built.</p>
       <p>The button's menu half (the arrow on its right) opens its options:</p>
       <ul>
+        <li>The engine the next build runs, and why (<a href="#engine">below</a>).</li>
         <li><span class="ui">Compile automatically</span>: on or off.</li>
         <li><span class="ui">Draft images (framed boxes)</span>: images drawn as boxes with their names, for faster builds.</li>
         <li><span class="ui">Stop at the first error</span>: otherwise the build goes on and reports every error.</li>
@@ -50,7 +51,7 @@
         <li><span class="ui">Delete Build Files</span>: the next build starts from scratch.</li>
         <li><span class="ui">Stop Compiling</span>.</li>
       </ul>
-      <p>The engine (LuaLaTeX or pdfLaTeX, or chosen from the document) is set in <a href="settings.html#building">Settings › Building</a>.</p>
+      <p id="engine">The engine (LuaLaTeX or pdfLaTeX, or chosen from the document) is set in <a href="settings.html#building">Settings › Building</a>. Chosen from the document, a build runs as pdfLaTeX when the main file asks for it in its first lines (<code>% !TEX program = pdflatex</code>, or <code>% !TeX TS-program = pdflatex</code>), or when the document, or a file it reads from the project, uses a pdfTeX command that LuaLaTeX lacks, such as <code>\pdfmapfile</code>, <code>\pdfglyphtounicode</code> or <code>\pdfcompresslevel</code>, outside a test for the engine; a document that also loads a package for LuaTeX only (<code>fontspec</code>) is left as it is. Otherwise it runs as LuaLaTeX. The Compile button's menu says which engine the next build runs and why (<span class="ui">pdfLaTeX: the document uses \pdfmapfile (main.tex:2)</span>), and the build log says it for the last build. An engine chosen in Settings always wins.</p>
       <p>On the desktop, the build runs in a helper that keeps the preamble ready between builds, so a rebuild after an edit usually takes under a second, even with a heavy preamble. In the browser, the first build of a visit fetches the TeX files the document reads; they are kept for the next visit.</p>
       <p>Bibliographies (BibTeX and biber) and indexes (makeindex) run inside the build, as many times as the document needs: there is nothing else to run.</p>
 

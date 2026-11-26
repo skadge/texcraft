@@ -1,0 +1,8 @@
+% A document written for pdfLaTeX: pdfTeX's primitives that LuaLaTeX does not define.
+\documentclass{article}
+\pdfcompresslevel=9
+\pdfmapline{}
+\newcommand{\same}[2]{\ifnum\pdfstrcmp{#1}{#2}=0 equal\else different\fi}
+\begin{document}
+The words are \same{one}{one}, and these are \same{one}{two}.
+\end{document}

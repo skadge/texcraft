@@ -471,6 +471,16 @@ fn auto(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"on": s.settings.auto_compile, "delay_ms": s.settings.auto_compile_delay_ms}))
 }
 
+/// The engine of the last build: the one the settings name, or the one the document chose and why
+/// (`chosen: "document"`), or retex's own choice.
+fn engine_of(s: &Session) -> Value {
+    match (s.settings.build.engine, s.built_engine()) {
+        (_, Some(c)) => json!({"engine": c.engine, "chosen": "document", "why": c.why}),
+        (texcraft_compile::Engine::Auto, None) => json!({"engine": "auto", "chosen": "retex"}),
+        (e, None) => json!({"engine": e, "chosen": "settings"}),
+    }
+}
+
 fn result(s: &mut Session, _: &Value) -> Result<Value> {
     s.refresh_hidden();
     // The running build's draft PDF, while its later passes run.
@@ -491,6 +501,7 @@ fn result(s: &mut Session, _: &Value) -> Result<Value> {
         "diagnostics": o.diagnostics,
         "draft": draft,
         "output": o.output,
+        "engine": engine_of(s),
         "accessibility": o.accessibility().collect::<Vec<_>>(),
         "print": o.preflight.as_ref().map(|p| json!({
             "standard": p.standard.name(),

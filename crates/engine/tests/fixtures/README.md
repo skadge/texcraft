@@ -7,3 +7,6 @@
   built on, and the build folder under `/tmp`. The last paragraph of `one.tex` ends in `main.tex`,
   so its line box is tagged with `main.tex`'s line: the case of an included file's last paragraph
   (retex-synctex 2.3.0 sends a click in it to `one.tex`).
+- `pdflatex-only.tex`: a document of our own written for pdfLaTeX (`\pdfcompresslevel`,
+  `\pdfmapline`, `\pdfstrcmp`, which LuaLaTeX's format does not define), under the repository's
+  licence: the build chooses pdfLaTeX for it (#52).

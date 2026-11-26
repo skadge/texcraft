@@ -47,6 +47,7 @@ pub use cmd::forge_auth::{Progress as SignInProgress, Unavailable as SignInUnava
 pub use cmd::forge_pick::Lookup as ForgeLookup;
 /// A git hosting service recognised by a remote's address (`git.remotes`' `hosting`).
 pub use cmd::git::{Hosting as GitHosting, hosting as git_hosting};
+pub use texcraft_compile::engine_choice;
 pub use texcraft_compile::{
     Diagnostic, Draft, Engine, Export, MAX_BLEED_MM, Options as BuildOptions, Outcome, Output, PdfX, Progress, Severity, Status,
 };
@@ -153,6 +154,9 @@ pub struct Session {
     built_revision: Option<u64>,
     /// The review revision the last build started at, for builds with suggestions.
     built_review: u64,
+    /// The engine the document chose for the last build started, when the settings left it to
+    /// the document and it said ([`texcraft_compile::engine_choice`]).
+    built_engine: Option<texcraft_compile::engine_choice::Chosen>,
     builder: Builder,
     next_job: u64,
     last: Option<Outcome>,
@@ -268,6 +272,7 @@ impl Session {
             last: None,
             pdf: None,
             pdf_output: texcraft_compile::Output::Screen,
+            built_engine: None,
             pdfx: None,
             settings: Settings::default(),
             roots: None,
@@ -437,6 +442,23 @@ impl Session {
         match &self.pdfx {
             None if self.pdf_output == texcraft_compile::Output::Accessible => Ok((pdf, "PDF/UA")),
             None => Ok((pdf, "screen")),
+    /// The engine the document chose for the last build started (Settings › Building › Engine
+    /// "Chosen from the document"), and why; none when the settings name one, or the document
+    /// did not say (retex then chooses).
+    pub fn built_engine(&self) -> Option<&texcraft_compile::engine_choice::Chosen> {
+        self.built_engine.as_ref()
+    }
+
+    /// The engine the document chooses now, as [`Self::built_engine`] would be for a build of
+    /// the project as it is.
+    pub fn engine_choice(&self) -> Option<texcraft_compile::engine_choice::Chosen> {
+        if self.settings.build.engine != texcraft_compile::Engine::Auto {
+            return None;
+        }
+        let main = self.project.main()?;
+        texcraft_compile::engine_choice::choose_with(main, |p| self.project.text(p).ok().map(str::to_owned))
+    }
+
             Some(Ok((standard, pdfx))) => Ok((pdfx.clone(), standard.name())),
             Some(Err(why)) => Err(why.clone()),
         }
@@ -705,6 +727,7 @@ impl Session {
         self.project.text(main).is_ok_and(class_is_beamer)
     }
 
+        job.choose_engine();
     /// Deletes the build files (not the PDF shown); the next build starts from scratch.
     pub(crate) fn clean_build(&mut self) -> Result<()> {
         match &mut self.builder {
@@ -926,6 +949,7 @@ impl Session {
             Builder::Web(w) => w.submit(job),
         }
         Ok(id)
+        self.built_engine = job.choose_engine();
     }
 
     /// Takes a finished build's outcome, if one arrived. The frontends call this each frame.

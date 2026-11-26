@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use texcraft_project::{Project, ProjectPath};
 
+pub mod engine_choice;
 #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
 pub mod formulas;
 pub mod places;
