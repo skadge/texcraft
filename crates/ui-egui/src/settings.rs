@@ -77,6 +77,14 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     }
 }
 
+/// Chooses the tab named `name` (its English name in lower case: `editor`, `ai`), if there is one.
+pub(crate) fn choose_tab(app: &mut App, name: &str) {
+    if let Some(i) = TABS.iter().position(|(label, _)| label.eq_ignore_ascii_case(name)) {
+        app.view.settings_tab = i;
+        app.view.settings_page = true;
+    }
+}
+
 /// The sections: tabs beside the section shown, or on a phone a list whose rows open them.
 fn sections(app: &mut App, ui: &mut egui::Ui, t: &Tokens, list: bool) {
     for (i, (label, icon)) in TABS.iter().enumerate() {
@@ -173,6 +181,14 @@ fn appearance(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             },
         );
     }
+    setting(ui, t, tl!("Show tips at startup"), tl!("A tip of the day on the start page, about a feature that is easy to miss."), |ui| {
+        let mut on = app.prefs.show_tips;
+        let r = ui.checkbox(&mut on, "");
+        if r.changed() {
+            crate::tips::set_shown(app, on);
+        }
+        Some(r)
+    });
     let languages = crate::i18n::languages();
     let help = if languages.len() > 1 {
         tl!("The language of menus and messages.")

@@ -92,7 +92,8 @@ fn help_user_guide_and_f1_open_the_guide_and_a_page_parameter_cannot_leave_it() 
     harness.run();
     harness.get_by_label("Help").click();
     harness.run();
-    harness.get_by_label_contains("User Guide").click();
+    // The menu's entry, with its shortcut (the first-steps hint names the guide too).
+    harness.get_by_label("User Guide F1").click();
     harness.step();
     assert!(opened(&harness, texcraft_ui_egui::ui_cmd::USER_GUIDE), "Help › User Guide did not open the guide");
 

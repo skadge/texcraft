@@ -23,6 +23,7 @@ mod fields;
 mod figure_dialog;
 mod figure_view;
 mod find_bar;
+mod first_steps;
 pub mod fonts;
 mod forge;
 mod forge_pick;
@@ -58,6 +59,7 @@ mod start;
 mod status;
 mod suggest;
 mod system_menu;
+mod tips;
 mod top_bar;
 pub mod ui_cmd;
 pub mod widgets;
@@ -222,6 +224,8 @@ pub struct App {
     /// The start page is shown in place of the project.
     start: bool,
     thumbs: start::Thumbnails,
+    /// The start page's tip of the day.
+    tips: tips::TipState,
     /// Picks for the shell to show.
     picks: Vec<picks::PickRequest>,
     /// Whether the shell shows native pickers; without them paths are typed.
@@ -347,6 +351,7 @@ impl App {
             gallery: gallery::Gallery::default(),
             start: false,
             thumbs: start::Thumbnails::default(),
+            tips: tips::TipState::default(),
             picks: Vec::new(),
             after_save: None,
             quit: false,
@@ -519,6 +524,11 @@ impl App {
     /// Shows the start page (the desktop app does when it starts without a project).
     pub fn show_start_page(&mut self) {
         self.start = true;
+    }
+
+    /// The date the tip of the day is chosen by, in place of today's (tests).
+    pub fn set_today(&mut self, date: chrono::NaiveDate) {
+        self.tips.today = Some(date);
     }
 
     /// Opens what the command line or the desktop names: a project folder, or a file of one (its
@@ -866,6 +876,7 @@ impl App {
             if self.view.side.is_some() && !self.view.narrow {
                 side::show(self, ui);
             }
+            first_steps::show(self, ui);
         }
         self.panes(ui);
         status::show(self, ui, status);

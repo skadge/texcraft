@@ -12,6 +12,7 @@ mod drop;
 mod editor_menu;
 mod export_menu;
 mod find;
+mod first_steps;
 mod focus_mode;
 mod folders;
 mod folding;

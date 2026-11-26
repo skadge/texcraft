@@ -133,6 +133,10 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.add_space(48.0);
                 header(app, ui, &t);
                 ui.add_space(36.0);
+                if app.prefs.show_tips {
+                    crate::tips::show(app, ui, &t);
+                    ui.add_space(24.0);
+                }
                 recent(app, ui, &t, width);
                 ui.add_space(24.0);
                 templates(app, ui, &t);
@@ -231,12 +235,16 @@ fn templates(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     }
     let mut chosen = None;
     let mut blank = false;
+    let mut example = false;
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(12.0, 12.0);
         if crate::gallery::blank_card(ui, t) {
             blank = true;
         }
-        for template in catalog.templates() {
+        if example_card(ui, t) {
+            example = true;
+        }
+        for template in catalog.templates().iter().filter(|t| !t.is_example()) {
             let kept = app.template_kept(template);
             if crate::gallery::card(ui, t, template, false, kept, in_browser) {
                 chosen = Some(template.id.clone());
@@ -246,6 +254,9 @@ fn templates(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     if blank {
         app.guard(Next::NewProject);
         app.start = false;
+    }
+    if example {
+        crate::ui_cmd::run(app, "help.example");
     }
     if let Some(id) = chosen {
         if app.session.template_store().is_some() || in_browser {
@@ -267,8 +278,7 @@ fn recent(app: &mut App, ui: &mut egui::Ui, t: &Tokens, width: f32) {
     }
     let recent = library.clone().unwrap_or_else(|| app.prefs.recent.clone());
     if recent.is_empty() {
-        let empty = if library.is_some() { tl!("Projects you save appear here.") } else { tl!("Projects you open appear here.") };
-        ui.horizontal(|ui| ui.label(RichText::new(empty).color(t.text_muted)));
+        first_visit(app, ui, t, library.is_some());
         return;
     }
     let columns = ((width + 16.0) / (CARD.x + 16.0)).floor().max(1.0) as usize;
@@ -304,6 +314,59 @@ fn recent(app: &mut App, ui: &mut egui::Ui, t: &Tokens, width: f32) {
     if let Some(path) = open {
         app.guard(Next::OpenProject(path));
     }
+}
+
+/// No projects yet: what to do first, with the example one click away.
+fn first_visit(app: &mut App, ui: &mut egui::Ui, t: &Tokens, in_browser: bool) {
+    let mut try_it = false;
+    let frame =
+        egui::Frame::new().stroke(egui::Stroke::new(1.0, t.control_border)).corner_radius(t.corner_large()).inner_margin(egui::Margin::same(16));
+    frame.show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        let none = if in_browser { tl!("No projects in this browser yet.") } else { tl!("No projects yet.") };
+        ui.horizontal(|ui| ui.label(RichText::new(none).font(t.strong())));
+        ui.add_space(t.unit);
+        let what = if in_browser {
+            tl!("To begin, try the example: a short paper you can change and build, to see how TeXCraft works. Or choose New Project for a template, or drop a zip file of a project here.")
+        } else {
+            tl!("To begin, try the example: a short paper you can change and build, to see how TeXCraft works. Or choose New Project for a template, Open Folder… for a project you have, or drop a folder or zip file here.")
+        };
+        ui.horizontal_wrapped(|ui| ui.label(RichText::new(what).color(t.text_muted)));
+        ui.add_space(t.unit * 3.0);
+        ui.horizontal(|ui| {
+            let button = egui::Button::image_and_text(icons::image("book-open", t.icon_size, t.text), tl!("Try an Example")).min_size(vec2(0.0, 34.0));
+            try_it = ui.add(button).clicked();
+        });
+    });
+    if try_it {
+        crate::ui_cmd::run(app, "help.example");
+    }
+}
+
+/// The example project's card, beside the blank project's; returns whether it was clicked.
+fn example_card(ui: &mut egui::Ui, t: &Tokens) -> bool {
+    let size = crate::gallery::CARD;
+    let (rect, r) = ui.allocate_exact_size(size, Sense::click());
+    let title = tl!("Example project");
+    let about = tl!("A short paper to explore: sections, a list, a table, a figure, equations and a citation.");
+    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, title));
+    ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(about));
+    let base = blend(t.surface, t.accent_soft);
+    let fill = if r.hovered() { blend(base, t.hover) } else { base };
+    ui.painter().rect_filled(rect, t.corner_large(), fill);
+    ui.painter().rect_stroke(rect, t.corner_large(), egui::Stroke::new(1.0, t.control_border), egui::StrokeKind::Inside);
+    icons::paint(ui, egui::Rect::from_center_size(rect.center_top() + vec2(0.0, 56.0), vec2(28.0, 28.0)), "book-open", 26.0, t.accent);
+    let width = size.x - 24.0;
+    let galley = ui.painter().layout(title.to_owned(), t.strong(), t.text, width);
+    let top = rect.top() + 92.0;
+    ui.painter().galley(egui::pos2(rect.center().x - galley.size().x / 2.0, top), galley.clone(), t.text);
+    let mut job = egui::text::LayoutJob::simple(about.to_owned(), t.small(), t.text_muted, width);
+    job.halign = Align::Center;
+    job.wrap.max_rows = 5;
+    let about_galley = ui.painter().layout_job(job);
+    ui.painter().galley(egui::pos2(rect.center().x, top + galley.size().y + 6.0), about_galley, t.text_muted);
+    widgets::focus_ring(ui, t, &r, rect, t.corner_large());
+    r.clicked()
 }
 
 enum CardAction {
