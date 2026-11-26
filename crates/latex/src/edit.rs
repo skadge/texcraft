@@ -127,13 +127,14 @@ impl Line {
         Some(self.stops.first()?.1..self.stops.last()?.1)
     }
 
-    /// The stop that stands for source offset `byte`: its own, or the first after it (the last
-    /// stop for a byte after the line).
+    /// The stop that stands for source offset `byte`: its own, else the last before it (a byte
+    /// in markup the view hides, such as just inside `\textbf{`, shows where that markup is), the
+    /// first stop for a byte before the line.
     pub fn view_at(&self, byte: usize) -> Option<usize> {
         if let Some(s) = self.stops.iter().find(|s| s.1 == byte) {
             return Some(s.0);
         }
-        self.stops.iter().find(|s| s.1 > byte).or(self.stops.last()).map(|s| s.0)
+        self.stops.iter().rev().find(|s| s.1 < byte).or(self.stops.first()).map(|s| s.0)
     }
 
     /// The parts with the position each starts at.
@@ -517,8 +518,9 @@ fn open_paragraph(text: &str, pos: usize) -> SourceEdit {
 
 /// The edit Enter makes at source offset `at`: in a paragraph, a paragraph break (the styles open
 /// at the caret closed before it and opened again after it); at a paragraph's or a heading's end,
-/// an empty paragraph after it; in a list, a new item. `None` where a line break cannot go (a
-/// caption, a formula, a footnote).
+/// an empty paragraph after it; in a list, a new item, and on an empty item, the item one level
+/// out ([`outdent`]: out of the list at the top). `None` where a line break cannot go (a caption, a
+/// formula, a footnote).
 pub fn enter(text: &str, at: usize) -> Option<SourceEdit> {
     let tree = tree::parse(text);
     let mut frames = Vec::new();
@@ -533,6 +535,7 @@ pub fn enter(text: &str, at: usize) -> Option<SourceEdit> {
             let end = heading_end(&blocks, node.range.clone()).unwrap_or(node.range.end);
             Some(open_paragraph(text, end))
         }
+        Context::Item(_) if styles.is_empty() && item_is_empty(text, &frames, at) => outdent(text, at),
         Context::Item(body) => {
             let item = body.iter().rev().find(|n| matches!(&n.kind, Kind::Command { name, .. } if name == "item") && n.range.start < at)?;
             let line_start = text.get(..item.range.start)?.rfind('\n').map_or(0, |n| n + 1);
@@ -572,14 +575,62 @@ fn heading_end(blocks: &[Block], range: Range<usize>) -> Option<usize> {
 }
 
 /// Pasted plain text as source at `at`: escaped, its line ends kept in a paragraph and made spaces
-/// where a paragraph break cannot go (a style, a heading, a caption).
+/// where a paragraph break cannot go (a style, a heading, a caption). In a paragraph, lines that
+/// start with a bullet or a number become a bulleted or numbered list.
 pub fn paste(text: &str, at: usize, pasted: &str) -> String {
     let tree = tree::parse(text);
     let mut frames = Vec::new();
     path(&tree, at, &mut frames);
     let plain = matches!(context(text, &frames), Some((Context::Paragraph | Context::Item(_), styles)) if styles.is_empty());
     let pasted = pasted.replace("\r\n", "\n");
-    if plain { escape(&pasted) } else { escape(&pasted.split_whitespace().collect::<Vec<_>>().join(" ")) }
+    if !plain {
+        return escape(&pasted.split_whitespace().collect::<Vec<_>>().join(" "));
+    }
+    if !pasted.contains('\n') {
+        return escape(&pasted);
+    }
+    // Lines that start with a bullet or a number are a list's items.
+    let lines: Vec<&str> = pasted.split('\n').collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while let Some(line) = lines.get(i) {
+        if let Some((name, _)) = list_marker(line) {
+            if !out.is_empty() && !out.ends_with('\n') {
+                out.push('\n');
+            }
+            out.push_str(&format!("\\begin{{{name}}}\n"));
+            while let Some((_, item)) = lines.get(i).and_then(|l| list_marker(l)).filter(|(n, _)| *n == name) {
+                out.push_str(&format!("  \\item {}\n", escape(item.trim())));
+                i += 1;
+            }
+            out.push_str(&format!("\\end{{{name}}}"));
+            if i < lines.len() {
+                out.push('\n');
+            }
+            continue;
+        }
+        out.push_str(&escape(line));
+        if i + 1 < lines.len() {
+            out.push('\n');
+        }
+        i += 1;
+    }
+    out
+}
+
+/// The list a pasted line is an item of (`- `, `* `, `• ` for bullets, `1. ` or `1) ` for
+/// numbers), and its text.
+fn list_marker(line: &str) -> Option<(&'static str, &str)> {
+    let line = line.trim_start();
+    for bullet in ["- ", "* ", "• ", "◦ ", "‣ ", "– "] {
+        if let Some(rest) = line.strip_prefix(bullet) {
+            return Some(("itemize", rest));
+        }
+    }
+    let digits = line.len() - line.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+    let rest = line.get(digits..)?;
+    let rest = rest.strip_prefix(". ").or_else(|| rest.strip_prefix(") "))?;
+    (digits > 0).then_some(("enumerate", rest))
 }
 
 /// The command `name` around source span `r` whose argument is exactly `r`, at any depth.
@@ -660,8 +711,8 @@ pub fn set_heading(text: &str, at: usize, name: &str) -> Option<Vec<Change>> {
         return Some(vec![change(name_start..name_start + old.len(), name)]);
     }
     let blocks = view::build(text, &tree);
-    let para = paragraph_at(&blocks, at)?;
-    Some(vec![change(para.range.start..para.range.start, format!("\\{name}{{")), change(para.range.end..para.range.end, "}")])
+    let para = trimmed(text, paragraph_at(&blocks, at)?.range.clone());
+    Some(vec![change(para.start..para.start, format!("\\{name}{{")), change(para.end..para.end, "}")])
 }
 
 /// A list environment (`itemize`, `enumerate`) at source offset `at`: a list of another kind there
@@ -689,11 +740,15 @@ pub fn set_list(text: &str, at: usize, name: &str) -> Option<Vec<Change>> {
         return Some(out);
     }
     let blocks = view::build(text, &tree);
-    let para = paragraph_at(&blocks, at)?;
-    Some(vec![
-        change(para.range.start..para.range.start, format!("\\begin{{{name}}}\n  \\item ")),
-        change(para.range.end..para.range.end, format!("\n\\end{{{name}}}")),
-    ])
+    let para = trimmed(text, paragraph_at(&blocks, at)?.range.clone());
+    Some(vec![change(para.start..para.start, format!("\\begin{{{name}}}\n  \\item ")), change(para.end..para.end, format!("\n\\end{{{name}}}"))])
+}
+
+/// `r` without the white space at its ends.
+fn trimmed(text: &str, r: Range<usize>) -> Range<usize> {
+    let Some(src) = text.get(r.clone()) else { return r };
+    let start = r.start + (src.len() - src.trim_start().len());
+    start..(r.start + src.trim_end().len()).max(start)
 }
 
 /// `changes` (in order, not overlapping) made on `text`.
@@ -707,4 +762,349 @@ pub fn apply(text: &str, changes: &[Change]) -> String {
     }
     out.push_str(text.get(at..).unwrap_or_default());
     out
+}
+
+/// Where source offset `at` stands in the document's structure: the toolbar's state.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Here {
+    /// The style the commands around it give (`\textbf`, `\textit`, `\texttt`…).
+    pub style: Style,
+    /// Bold, italic and typewriter given by these commands themselves, which their buttons undo.
+    pub bold: bool,
+    pub italic: bool,
+    pub code: bool,
+    /// The heading's level ([`view::heading_level`]) when it is in a heading.
+    pub heading: Option<u8>,
+    /// The innermost list around it, and how many lists deep it is (1 for a list in none).
+    pub list: Option<(view::ListKind, usize)>,
+}
+
+/// What encloses source offset `at`.
+pub fn here(text: &str, at: usize) -> Here {
+    let tree = tree::parse(text);
+    let mut frames = Vec::new();
+    path(&tree, at, &mut frames);
+    let mut out = Here::default();
+    for f in &frames {
+        match f {
+            Frame::Command { name, .. } => {
+                if let Some(level) = view::heading_level(name) {
+                    out.heading = Some(level);
+                }
+                if let Some(style) = view::styled(name, out.style) {
+                    out.style = style;
+                }
+                match *name {
+                    "textbf" => out.bold = true,
+                    "textit" => out.italic = true,
+                    "texttt" => out.code = true,
+                    _ => {}
+                }
+            }
+            Frame::Environment { name, .. } => {
+                let kind = match *name {
+                    "itemize" => view::ListKind::Bullets,
+                    "enumerate" => view::ListKind::Numbers,
+                    "description" => view::ListKind::Descriptions,
+                    _ => continue,
+                };
+                let depth = out.list.map_or(0, |(_, d)| d) + 1;
+                out.list = Some((kind, depth));
+            }
+            Frame::Group(_) | Frame::Math => {}
+        }
+    }
+    out
+}
+
+/// The sectioning commands of the paragraph styles Heading 1, 2 and 3 in a document whose main
+/// file is `main`: `\chapter`, `\section`, `\subsection` in a class with chapters (book, report and
+/// their kin), else `\section`, `\subsection`, `\subsubsection`.
+pub fn heading_commands(main: &str) -> [&'static str; 3] {
+    const WITH_CHAPTERS: &[&str] = &["book", "report", "memoir", "scrbook", "scrreprt", "ctexbook", "ctexrep", "thesis"];
+    let tree = tree::parse(main);
+    let class = tree.iter().find_map(|n| match &n.kind {
+        Kind::Command { name, args, .. } if name == "documentclass" => args.iter().find(|a| !a.optional).and_then(|a| main.get(a.inner.clone())),
+        _ => None,
+    });
+    if class.is_some_and(|c| WITH_CHAPTERS.contains(&c.trim())) {
+        ["chapter", "section", "subsection"]
+    } else {
+        ["section", "subsection", "subsubsection"]
+    }
+}
+
+/// A heading at source offset `at` made a paragraph again: its command and braces removed. `None`
+/// outside a heading.
+pub fn set_body(text: &str, at: usize) -> Option<Vec<Change>> {
+    let tree = tree::parse(text);
+    let mut frames = Vec::new();
+    path(&tree, at, &mut frames);
+    frames.iter().rev().find_map(|f| match f {
+        Frame::Command { node, name, arg } if view::heading_level(name).is_some() => {
+            Some(vec![change(node.range.start..arg.inner.start, ""), change(arg.inner.end..node.range.end, "")])
+        }
+        _ => None,
+    })
+}
+
+/// Where byte `at` of the text goes once `changes` (in order, not overlapping) are made: after
+/// what they insert there, at the start of a change that replaces it.
+pub fn map_offset(changes: &[Change], at: usize) -> usize {
+    let mut delta: isize = 0;
+    for c in changes {
+        if c.range.start > at || (c.range.start == at && c.range.end > at) {
+            break;
+        }
+        if at < c.range.end {
+            return c.range.start.saturating_add_signed(delta);
+        }
+        delta += c.text.len() as isize - (c.range.end - c.range.start) as isize;
+    }
+    at.saturating_add_signed(delta)
+}
+
+/// A list around a source offset: the list's node and name, the `\item`s of its body (indices),
+/// and which of them holds the offset.
+struct ListAt<'a> {
+    node: &'a Node,
+    name: &'a str,
+    body: &'a [Node],
+    items: Vec<usize>,
+    /// Index in `items`.
+    k: usize,
+    /// The list it is in (directly, in one of its items), if any.
+    outer: bool,
+}
+
+fn is_list(name: &str) -> bool {
+    matches!(name, "itemize" | "enumerate" | "description")
+}
+
+fn list_at<'a>(frames: &[Frame<'a>], at: usize) -> Option<ListAt<'a>> {
+    let lists: Vec<(usize, &Frame<'a>)> =
+        frames.iter().enumerate().filter(|(_, f)| matches!(f, Frame::Environment { name, .. } if is_list(name))).collect();
+    let (i, Frame::Environment { node, name, body }) = lists.last().copied()? else { return None };
+    let is_item = |n: &Node| matches!(&n.kind, Kind::Command { name, .. } if name == "item");
+    let items: Vec<usize> = body.iter().enumerate().filter(|(_, n)| is_item(n)).map(|(i, _)| i).collect();
+    let k = items.iter().rposition(|&j| body.get(j).is_some_and(|n| n.range.start < at))?;
+    // Directly in another list: nothing but that list's item between them.
+    let outer = i > 0 && frames.get(i - 1).is_some_and(|f| matches!(f, Frame::Environment { name, .. } if is_list(name)));
+    Some(ListAt { node, name, body, items, k, outer })
+}
+
+impl ListAt<'_> {
+    /// The `\item` node of item `k`.
+    fn item(&self, k: usize) -> Option<&Node> {
+        self.body.get(*self.items.get(k)?)
+    }
+
+    /// Where the text of item `k` starts (after `\item` and the space after it) and ends (before
+    /// the white space before the next item or the list's end).
+    fn content(&self, text: &str, k: usize) -> Option<Range<usize>> {
+        let head = self.item(k)?;
+        let next = self.items.get(k + 1).copied().unwrap_or(self.body.len());
+        let nodes = self.body.get(self.items.get(k)? + 1..next).unwrap_or_default();
+        let start = head.range.end + (text.get(head.range.end..)?.len() - text.get(head.range.end..)?.trim_start().len());
+        let end = nodes
+            .iter()
+            .rev()
+            .find_map(|n| {
+                let src = text.get(n.range.clone())?;
+                let trimmed = src.trim_end();
+                (!trimmed.is_empty()).then_some(n.range.start + trimmed.len())
+            })
+            .unwrap_or(head.range.end);
+        Some(start.min(end.max(head.range.end))..end.max(head.range.end))
+    }
+
+    /// Where the next item, or the list's `\end`, starts.
+    fn after(&self, k: usize) -> Option<usize> {
+        match self.item(k + 1) {
+            Some(n) => Some(n.range.start),
+            None => match &self.node.kind {
+                Kind::Environment { end: Some(e), .. } => Some(e.start),
+                _ => None,
+            },
+        }
+    }
+
+    fn begin(&self) -> Option<Range<usize>> {
+        match &self.node.kind {
+            Kind::Environment { begin, .. } => Some(begin.clone()),
+            _ => None,
+        }
+    }
+
+    fn end(&self) -> Option<Range<usize>> {
+        match &self.node.kind {
+            Kind::Environment { end, .. } => end.clone(),
+            _ => None,
+        }
+    }
+}
+
+/// The white space before `pos` on its line, when only white space is there.
+fn indent_at(text: &str, pos: usize) -> &str {
+    let start = text.get(..pos).and_then(|s| s.rfind('\n')).map_or(0, |n| n + 1);
+    text.get(start..pos).filter(|s| s.trim().is_empty()).unwrap_or_default()
+}
+
+/// `pos` moved back over the white space (line ends included) before it.
+fn space_before(text: &str, pos: usize) -> usize {
+    let before = text.get(..pos).unwrap_or_default();
+    before.trim_end().len()
+}
+
+/// `pos` moved on over the white space after it.
+fn space_after(text: &str, pos: usize) -> usize {
+    let after = text.get(pos..).unwrap_or_default();
+    pos + (after.len() - after.trim_start().len())
+}
+
+/// Tab on a list item: the item at source offset `at` becomes the last item of a list of the same
+/// kind inside the item before it (joining the list that item ends with, if any). `None` outside a
+/// list or on its first item.
+pub fn indent(text: &str, at: usize) -> Option<SourceEdit> {
+    let tree = tree::parse(text);
+    let mut frames = Vec::new();
+    path(&tree, at, &mut frames);
+    let list = list_at(&frames, at)?;
+    if list.k == 0 {
+        return None;
+    }
+    let head = list.item(list.k)?;
+    let content = list.content(text, list.k)?;
+    let indent = indent_at(text, head.range.start);
+    let name = list.name;
+    // The item before ends with a list: the item joins it.
+    let prev_start = list.items.get(list.k - 1).map_or(0, |i| i + 1);
+    let prev_nodes = list.body.get(prev_start..*list.items.get(list.k)?).unwrap_or_default();
+    let last = prev_nodes.iter().rev().find(|n| !invisible_node(text, n));
+    let changes = match last.map(|n| &n.kind) {
+        Some(Kind::Environment { name: inner, end: Some(end), body, .. }) if is_list(inner) => {
+            let inner_item = body.iter().find(|n| matches!(&n.kind, Kind::Command { name, .. } if name == "item"));
+            let inner_indent = inner_item.map_or(indent, |n| indent_at(text, n.range.start));
+            let end_indent = indent_at(text, end.start);
+            let end_src = text.get(end.clone())?;
+            vec![
+                change(space_before(text, end.start)..head.range.start, format!("\n{inner_indent}")),
+                change(content.end..content.end, format!("\n{end_indent}{end_src}")),
+            ]
+        }
+        _ if text
+            .get(..head.range.start)
+            .is_some_and(|s| s.ends_with(indent) && (s.len() == indent.len() || s[..s.len() - indent.len()].ends_with('\n'))) =>
+        {
+            let line = head.range.start - indent.len();
+            vec![
+                change(line..head.range.start, format!("{indent}\\begin{{{name}}}\n{indent}  ")),
+                change(content.end..content.end, format!("\n{indent}\\end{{{name}}}")),
+            ]
+        }
+        _ => vec![
+            change(head.range.start..head.range.start, format!("\\begin{{{name}}} ")),
+            change(content.end..content.end, format!(" \\end{{{name}}}")),
+        ],
+    };
+    let caret = map_offset(&changes, at.max(content.start));
+    Some(SourceEdit { changes, caret })
+}
+
+fn invisible_node(text: &str, n: &Node) -> bool {
+    match n.kind {
+        Kind::Text => text.get(n.range.clone()).is_none_or(|s| s.trim().is_empty()),
+        Kind::ParBreak => true,
+        _ => false,
+    }
+}
+
+/// Shift+Tab on a list item (and Enter on an empty one): the item at source offset `at` goes one
+/// level out, after the item holding its list; in a list in none, it leaves the list and becomes a
+/// paragraph. The items before and after it stay in their list. `None` outside a list.
+pub fn outdent(text: &str, at: usize) -> Option<SourceEdit> {
+    let tree = tree::parse(text);
+    let mut frames = Vec::new();
+    path(&tree, at, &mut frames);
+    let list = list_at(&frames, at)?;
+    let head = list.item(list.k)?;
+    let content = list.content(text, list.k)?;
+    let (begin, end) = (list.begin()?, list.end()?);
+    let first = list.k == 0;
+    let last = list.k + 1 == list.items.len();
+    let name = list.name;
+    let begin_src = text.get(begin.clone())?;
+    let at_begin = indent_at(text, begin.start);
+    let mut changes = Vec::new();
+    if list.outer {
+        // Still an item, of the list around.
+        if first {
+            changes.push(change(space_before(text, begin.start)..head.range.start, format!("\n{at_begin}")));
+        } else {
+            changes.push(change(space_before(text, head.range.start)..head.range.start, format!("\n{at_begin}\\end{{{name}}}\n{at_begin}")));
+        }
+        // An empty item keeps the space after `\item`, for the text to come.
+        let space = if content.is_empty() { " " } else { "" };
+        if last {
+            changes.push(change(content.end..end.end, space));
+        } else {
+            let next = list.after(list.k)?;
+            changes.push(change(content.end..next, format!("{space}\n{at_begin}{begin_src}\n{}", indent_at(text, next))));
+        }
+    } else {
+        // A paragraph between the parts of the list.
+        if first {
+            changes.push(change(space_before(text, begin.start)..content.start, "\n\n"));
+        } else {
+            changes.push(change(space_before(text, head.range.start)..content.start, format!("\n{at_begin}\\end{{{name}}}\n\n")));
+        }
+        if last {
+            let after = space_after(text, end.end);
+            let rest = if after >= text.len() { "\n" } else { "\n\n" };
+            changes.push(change(content.end..after, rest));
+        } else {
+            let next = list.after(list.k)?;
+            changes.push(change(content.end..next, format!("\n\n{at_begin}{begin_src}\n{}", indent_at(text, next))));
+        }
+    }
+    changes.retain(|c| !(c.range.is_empty() && c.text.is_empty()));
+    let caret = map_offset(&changes, at.clamp(content.start, content.end));
+    // After the space an empty item keeps.
+    let caret = caret + usize::from(list.outer && content.is_empty());
+    Some(SourceEdit { changes, caret })
+}
+
+/// Whether source offset `at` is where the text of the list item holding it starts.
+fn at_item_start(text: &str, frames: &[Frame<'_>], at: usize) -> bool {
+    list_at(frames, at).and_then(|l| l.content(text, l.k)).is_some_and(|c| c.start == at)
+}
+
+/// Whether the list item holding source offset `at` has no text.
+fn item_is_empty(text: &str, frames: &[Frame<'_>], at: usize) -> bool {
+    list_at(frames, at).and_then(|l| l.content(text, l.k)).is_some_and(|c| c.is_empty())
+}
+
+/// Backspace at the start of a line of the view: at a heading's start the heading becomes a
+/// paragraph, at a list item's start the item goes one level out (out of the list at the top).
+/// `None` elsewhere (the caller joins the paragraphs).
+pub fn backspace_at_start(text: &str, at: usize) -> Option<SourceEdit> {
+    let tree = tree::parse(text);
+    let mut frames = Vec::new();
+    path(&tree, at, &mut frames);
+    let heading = frames.iter().rev().find_map(|f| match f {
+        Frame::Command { name, arg, .. } if view::heading_level(name).is_some() => Some(arg.inner.clone()),
+        _ => None,
+    });
+    if let Some(inner) = heading {
+        if space_after(text, inner.start) < at {
+            return None;
+        }
+        let changes = set_body(text, at)?;
+        let caret = map_offset(&changes, at);
+        return Some(SourceEdit { changes, caret });
+    }
+    if at_item_start(text, &frames, at) {
+        return outdent(text, at);
+    }
+    None
 }

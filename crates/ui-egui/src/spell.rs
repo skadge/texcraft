@@ -98,6 +98,10 @@ pub(crate) fn run(app: &mut App, id: &str, params: &Value) {
     if id == "edit.spelling.next" {
         return next(app);
     }
+    // The formatted view's caret is on its own words.
+    if crate::formatted_edit::spelling(app, id, params) {
+        return;
+    }
     let Some(problem) = app.editor.source.misspelling_at_caret().cloned() else {
         app.view.status = Some((tl!("The caret is not on a misspelled word.").to_owned(), true));
         return;
@@ -133,6 +137,14 @@ pub(crate) fn run(app: &mut App, id: &str, params: &Value) {
                 None => app.view.status = Some((tl!("The dictionary has no spelling to offer for “{word}”.").replace("{word}", &word), true)),
             }
         }
+        _ => keep(app, id, &word, params),
+    }
+}
+
+/// Add to Dictionary (`edit.spelling.add`, `{to?}`) or Ignore (`edit.spelling.ignore`) for
+/// `word`, saying what was done.
+pub(crate) fn keep(app: &mut App, id: &str, word: &str, params: &Value) {
+    match id {
         "edit.spelling.add" => {
             let to = params.get("to").and_then(Value::as_str).unwrap_or("user");
             if let Some(r) = app.run("language.add_word", json!({"word": word, "to": to})) {
@@ -141,12 +153,12 @@ pub(crate) fn run(app: &mut App, id: &str, params: &Value) {
                     Some("session") => tl!("Added “{word}” to the project's words for this session: the project has no folder yet."),
                     _ => tl!("Added “{word}” to your dictionary."),
                 };
-                app.view.status = Some((said.replace("{word}", &word), false));
+                app.view.status = Some((said.replace("{word}", word), false));
                 app.prefs_changed = true;
             }
         }
         "edit.spelling.ignore" if app.run("language.ignore_word", json!({"word": word})).is_some() => {
-            app.view.status = Some((tl!("“{word}” is ignored until TeXCraft closes.").replace("{word}", &word), false));
+            app.view.status = Some((tl!("“{word}” is ignored until TeXCraft closes.").replace("{word}", word), false));
         }
         _ => {}
     }

@@ -9281,6 +9281,7 @@ dependencies = [
 name = "texcraft-latex"
 version = "0.12.2"
 dependencies = [
+ "retex-bib",
  "retex-lsp",
  "serde",
 ]

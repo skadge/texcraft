@@ -2,7 +2,7 @@
 //! make.
 
 use texcraft_latex::edit::{self, Change, Doc, Line, Part, Pos};
-use texcraft_latex::view::{Block, BlockKind, Inline, InlineKind, Style, view};
+use texcraft_latex::view::{Block, BlockKind, Inline, InlineKind, ListKind, Style, view};
 
 /// The lines of the paragraphs and headings of `text`, as the formatted view makes them (atoms one
 /// character wide).
@@ -257,13 +257,25 @@ fn pasted_text_is_escaped_and_kept_on_one_line_inside_a_style() {
 #[test]
 fn hostile_input_never_breaks_the_edits() {
     let main = include_str!("../../../../examples/article/main.tex");
-    for sample in [main, "é$\\(ü\\[ö{\\verb\u{2603}x\u{2603}\\begin{ä}%ß\n\n}\\item \\textbf{\\section{", "\\begin{itemize}\\item\\textbf{"] {
+    let nested = "\\begin{itemize}\n  \\item a\n  \\begin{enumerate}\\item b \\item\\end{enumerate}\\item c\n\\end{itemize}x";
+    for sample in [
+        main,
+        "é$\\(ü\\[ö{\\verb\u{2603}x\u{2603}\\begin{ä}%ß\n\n}\\item \\textbf{\\section{",
+        "\\begin{itemize}\\item\\textbf{",
+        nested,
+        "\\begin{itemize}\\item",
+    ] {
         for at in (0..=sample.len()).filter(|i| sample.is_char_boundary(*i)) {
             let mut all: Vec<Vec<Change>> = Vec::new();
             all.extend(edit::enter(sample, at).map(|e| e.changes));
             all.extend(edit::set_heading(sample, at, "section"));
             all.extend(edit::set_list(sample, at, "enumerate"));
-            all.push(vec![Change { range: at..at, text: edit::paste(sample, at, "a\n\nb%") }]);
+            all.push(vec![Change { range: at..at, text: edit::paste(sample, at, "a\n\nb%\n- c\n- d") }]);
+            all.extend(edit::indent(sample, at).map(|e| e.changes));
+            all.extend(edit::outdent(sample, at).map(|e| e.changes));
+            all.extend(edit::backspace_at_start(sample, at).map(|e| e.changes));
+            all.extend(edit::set_body(sample, at));
+            let _ = edit::here(sample, at);
             for changes in all {
                 assert!(changes.windows(2).all(|w| w[0].range.end <= w[1].range.start), "overlapping changes at {at}");
                 assert!(changes.iter().all(|c| sample.get(c.range.clone()).is_some()), "a change off the text at {at}");
@@ -271,4 +283,139 @@ fn hostile_input_never_breaks_the_edits() {
         }
         let _ = lines(sample);
     }
+}
+
+/// The items of each list of the view, nested lists as their own entries, in order.
+fn lists(text: &str) -> Vec<Vec<String>> {
+    fn walk(blocks: &[Block], out: &mut Vec<Vec<String>>) {
+        for b in blocks {
+            if let BlockKind::List { items, .. } = &b.kind {
+                let at = out.len();
+                out.push(Vec::new());
+                for item in items {
+                    let text: String = item
+                        .blocks
+                        .iter()
+                        .filter_map(|b| match &b.kind {
+                            BlockKind::Paragraph(p) => Some(
+                                p.iter()
+                                    .filter_map(|i| if let InlineKind::Text { text, .. } = &i.kind { Some(text.as_str()) } else { None })
+                                    .collect::<String>(),
+                            ),
+                            _ => None,
+                        })
+                        .collect();
+                    if let Some(list) = out.get_mut(at) {
+                        list.push(text);
+                    }
+                    walk(&item.blocks, out);
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(&view(text), &mut out);
+    out
+}
+
+fn made(e: Option<edit::SourceEdit>, text: &str) -> (String, usize) {
+    assert!(e.is_some(), "no edit in {text:?}");
+    let e = e.unwrap_or_else(|| edit::SourceEdit { changes: Vec::new(), caret: 0 });
+    (edit::apply(text, &e.changes), e.caret)
+}
+
+const THREE: &str = "\\begin{itemize}\n  \\item one\n  \\item two\n  \\item three\n\\end{itemize}\n";
+
+#[test]
+fn tab_nests_an_item_under_the_one_before_and_shift_tab_takes_it_back() {
+    let at = THREE.find("two").unwrap_or_default();
+    let (nested, caret) = made(edit::indent(THREE, at), THREE);
+    assert_eq!(lists(&nested), [vec!["one", "three"], vec!["two"]]);
+    assert!(nested[caret..].starts_with("two"), "the caret left the item's text");
+    // Only lines of their own were added: the items' lines are as they were.
+    for line in THREE.lines().filter(|l| l.contains("\\item")) {
+        assert!(nested.contains(line.trim()), "{line} changed");
+    }
+    // The next item joins the nested list rather than making another.
+    let (both, _) = made(edit::indent(&nested, nested.find("three").unwrap_or_default()), &nested);
+    assert_eq!(lists(&both), [vec!["one"], vec!["two", "three"]]);
+    // Shift+Tab undoes Tab exactly.
+    let (back, caret) = made(edit::outdent(&nested, caret), &nested);
+    assert_eq!(back, THREE);
+    assert!(back[caret..].starts_with("two"));
+    // The first item has no item before it to go under.
+    assert!(edit::indent(THREE, THREE.find("one").unwrap_or_default()).is_none());
+}
+
+#[test]
+fn shift_tab_on_a_top_level_item_makes_it_a_paragraph_between_the_list_parts() {
+    let (out, caret) = made(edit::outdent(THREE, THREE.find("two").unwrap_or_default()), THREE);
+    assert_eq!(lists(&out), [vec!["one"], vec!["three"]]);
+    assert_eq!(paragraphs(&out), ["two"]);
+    assert!(out[caret..].starts_with("two"));
+    // A list's only item: the list goes, its text stays.
+    let one = "Before.\n\n\\begin{enumerate}\n  \\item alone\n\\end{enumerate}\nAfter.";
+    let (out, _) = made(edit::outdent(one, one.find("alone").unwrap_or_default()), one);
+    assert!(lists(&out).is_empty(), "{out}");
+    assert_eq!(paragraphs(&out), ["Before.", "alone", "After."]);
+}
+
+#[test]
+fn enter_on_an_empty_item_ends_the_list() {
+    let text = "\\begin{itemize}\n  \\item one\n  \\item \n\\end{itemize}\n\nAfter.";
+    let at = text.find("\\item \n").map_or(0, |i| i + "\\item".len());
+    let (out, caret) = enter(text, at);
+    assert_eq!(lists(&out), [vec!["one"]]);
+    assert_eq!(paragraphs(&insert(&out, caret, "New")), ["New", "After."]);
+    // In a nested list, the empty item goes one level out instead.
+    let text = "\\begin{itemize}\n  \\item one\n  \\begin{itemize}\n    \\item two\n    \\item \n  \\end{itemize}\n\\end{itemize}";
+    let at = text.find("\\item \n").map_or(0, |i| i + "\\item".len());
+    let (out, caret) = enter(text, at);
+    assert_eq!(lists(&insert(&out, caret, "x")), [vec!["one", "x"], vec!["two"]]);
+}
+
+#[test]
+fn backspace_at_a_line_start_lifts_a_heading_or_an_item() {
+    let text = "\\section{Methods}\n\nText.";
+    let (out, caret) = made(edit::backspace_at_start(text, text.find("Methods").unwrap_or_default()), text);
+    assert_eq!(out, "Methods\n\nText.");
+    assert_eq!(caret, 0);
+    assert!(edit::backspace_at_start(text, text.find("thods").unwrap_or_default()).is_none(), "inside a heading's text nothing is lifted");
+    let (out, _) = made(edit::backspace_at_start(THREE, THREE.find("three").unwrap_or_default()), THREE);
+    assert_eq!(lists(&out), [vec!["one", "two"]]);
+    assert_eq!(paragraphs(&out), ["three"]);
+    assert!(edit::backspace_at_start("Plain text.", 0).is_none());
+}
+
+#[test]
+fn the_caret_knows_its_styles_heading_and_list() {
+    let text = "\\section{A \\textit{b}}\n\nSome \\textbf{bold \\texttt{code}} \\emph{e}.\n\n\\begin{itemize}\\item a\\begin{enumerate}\\item b\\end{enumerate}\\end{itemize}";
+    let at = |s: &str| text.find(s).unwrap_or_default() + 1;
+    let h = edit::here(text, at("b}}"));
+    assert_eq!(h.heading, Some(2), "a section is level 2");
+    assert!(h.italic && !h.bold);
+    let c = edit::here(text, at("ode"));
+    assert!(c.bold && c.code && c.style.mono && c.heading.is_none());
+    let e = edit::here(text, at("e}."));
+    assert!(e.style.italic && !e.italic, "\\emph is italic text but not the Italic button's command");
+    assert_eq!(edit::here(text, at("a\\begin")).list, Some((ListKind::Bullets, 1)));
+    assert_eq!(edit::here(text, at("b\\end")).list, Some((ListKind::Numbers, 2)));
+    assert_eq!(edit::here(text, at("Some")), edit::Here::default());
+}
+
+#[test]
+fn heading_levels_follow_the_document_class() {
+    assert_eq!(edit::heading_commands("\\documentclass[11pt]{report}\n"), ["chapter", "section", "subsection"]);
+    assert_eq!(edit::heading_commands("\\documentclass{article}"), ["section", "subsection", "subsubsection"]);
+    assert_eq!(edit::heading_commands("no class at all"), ["section", "subsection", "subsubsection"]);
+}
+
+#[test]
+fn pasted_lines_with_bullets_or_numbers_become_lists() {
+    let pasted = edit::paste("Text.", 5, "Steps:\n1. mix\n2) bake 50%\n\n- salt\n* pepper\nDone");
+    let text = format!("{pasted}\n");
+    assert_eq!(lists(&text), [vec!["mix", "bake 50%"], vec!["salt", "pepper"]]);
+    assert!(pasted.contains("50\\%"), "an item's text is escaped: {pasted}");
+    // One line is text as typed, even with a dash in front.
+    assert_eq!(edit::paste("Text.", 5, "- 5 degrees"), "- 5 degrees");
 }

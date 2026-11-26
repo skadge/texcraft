@@ -60,8 +60,12 @@ pub(crate) struct Formatted {
     misspelled: Option<(u64, f64, Misspelled)>,
     /// The grammar problems' bytes, the same way.
     grammar: Option<(u64, f64, Misspelled)>,
+    /// The bibliography's entries (key, author and year), with the session revision.
+    cited: Option<(u64, Arc<HashMap<String, String>>)>,
     /// The caret's keys and pointer.
     pub editing: crate::formatted_edit::Editing,
+    /// The toolbar's state: where the caret is.
+    pub bar: crate::formatted_bar::State,
 }
 
 /// Typeset formulas as textures, by their batch's PDF, page and pixels per point; those not drawn
@@ -142,6 +146,12 @@ impl Ink {
 }
 
 impl Formatted {
+    /// The misspelled word holding source byte `at` (its bytes), as last found.
+    pub(crate) fn misspelling_at(&self, at: usize) -> Option<Range<usize>> {
+        let (_, _, found) = self.misspelled.as_ref()?;
+        found.iter().find(|m| m.start <= at && at <= m.end).cloned()
+    }
+
     /// Whether `path` is shown formatted.
     pub fn shows(&self, path: &ProjectPath) -> bool {
         self.files.contains(path)
@@ -240,6 +250,10 @@ struct Cx<'a> {
     misspelled: &'a [Range<usize>],
     /// The grammar problems' bytes, in order.
     grammar: &'a [Range<usize>],
+    /// The project's bibliography: each key's author and year.
+    cited: &'a HashMap<String, String>,
+    /// Out: a cross-reference was followed (Ctrl+click): its key.
+    follow: Option<String>,
 }
 
 /// A line of text as drawn: what its characters stand for, its layout and where it is, the slot
@@ -314,6 +328,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     let vim = app.editor.source.vim.is_some();
     let misspelled = misspellings(app, ui, path);
     let grammar = grammar_problems(app, ui, path);
+    let cited = cited(app);
     let ink = &mut app.editor.formatted.ink;
     ink.begin();
     let mut cx = Cx {
@@ -344,6 +359,8 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         edit_figure: None,
         misspelled: &misspelled,
         grammar: &grammar,
+        cited: &cited,
+        follow: None,
     };
     let page = 6.0 * t.unit;
     app.view.cursor = None;
@@ -378,6 +395,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     cx.ink.end();
     let (jump, toggle, first, lines) = (cx.jump.take(), cx.toggle_preamble, cx.first, std::mem::take(&mut cx.lines));
     let (table_action, edit_figure, toolbar_focused) = (cx.table_action.take(), cx.edit_figure, cx.toolbar_focused);
+    let follow = cx.follow.take();
     app.region(crate::Region::Editor, if lines.is_empty() { first.unwrap_or(doc_id) } else { doc_id });
     // Escape on a table's toolbar gives the keyboard back to the cell.
     let e = &mut app.editor.formatted.editing;
@@ -388,6 +406,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     if let Some(action) = table_action {
         run_table_action(app, path, &text, action);
     }
+    if let Some(key) = follow {
+        follow_reference(app, &key);
+    }
     if let Some(at) = edit_figure {
         crate::figure_dialog::open(app, path, &text, at);
     }
@@ -397,6 +418,50 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     if let Some(Jump(byte)) = jump {
         to_source(app, ui, path, &text, byte);
     }
+}
+
+/// The project's bibliography entries, each key's author and year, made again when the project
+/// changes.
+fn cited(app: &mut App) -> Arc<HashMap<String, String>> {
+    let revision = app.session.revision();
+    if let Some((r, found)) = &app.editor.formatted.cited
+        && *r == revision
+    {
+        return Arc::clone(found);
+    }
+    let project = app.session.project();
+    let mut found = HashMap::new();
+    for path in project.paths().filter(|p| p.extension() == "bib") {
+        for e in project.text(path).map(texcraft_latex::refs::entries).unwrap_or_default() {
+            found.insert(e.key.clone(), texcraft_latex::refs::author_year(&e));
+        }
+    }
+    let found = Arc::new(found);
+    app.editor.formatted.cited = Some((revision, Arc::clone(&found)));
+    found
+}
+
+/// Goes to the label `key` names: in this file or another of the project's, its caret there.
+fn follow_reference(app: &mut App, key: &str) {
+    let project = app.session.project();
+    let found = project.paths().filter(|p| p.extension() == "tex").find_map(|p| {
+        project.text(p).ok().and_then(|t| texcraft_latex::refs::labels(t).into_iter().find(|l| l.key == key)).map(|l| (p.clone(), l.line))
+    });
+    let Some((path, line)) = found else {
+        app.view.status = Some((tl!("No label {key} in the project's files.").replace("{key}", key), true));
+        return;
+    };
+    if app.session.current() != Some(&path) {
+        app.run("file.open", serde_json::json!({"path": path.as_str()}));
+        app.editor.formatted.set(&path, true);
+    } else {
+        let b = &app.editor.source.doc.buffer;
+        let at = b.line_to_char((line as usize).min(b.len_lines().saturating_sub(1)));
+        app.editor.source.doc.selection = texcraft_buffer::Selection::single(at, at);
+        app.editor.formatted.editing.reveal = true;
+        app.editor.formatted.editing.focus = true;
+    }
+    app.view.goto = Some((path, line + 1));
 }
 
 /// The misspelled words of the shown file, found again when it changes and at most each second
@@ -879,7 +944,7 @@ fn chip_icon(kind: ChipKind) -> &'static str {
 }
 
 /// What hovering a piece explains.
-fn piece_tip(kind: &PieceKind, text: &str, range: &Range<usize>) -> Option<String> {
+fn piece_tip(kind: &PieceKind, text: &str, range: &Range<usize>, cited: &HashMap<String, String>) -> Option<String> {
     let key = || {
         let src = text.get(range.clone()).unwrap_or_default();
         src.split_once('{').map_or(src, |(_, k)| k.trim_end_matches('}')).to_owned()
@@ -888,9 +953,15 @@ fn piece_tip(kind: &PieceKind, text: &str, range: &Range<usize>) -> Option<Strin
         PieceKind::Text | PieceKind::Break => return None,
         PieceKind::Chip(ChipKind::Label, _) => tl!("Label {key}").replace("{key}", &key()),
         PieceKind::Chip(ChipKind::Reference, command) => {
-            tl!("Reference (\\{command}) to {key}").replace("{command}", command).replace("{key}", &key())
+            let said = tl!("Reference (\\{command}) to {key}").replace("{command}", command).replace("{key}", &key());
+            format!("{said}. {}", tl!("Ctrl+click to go to it."))
         }
-        PieceKind::Chip(ChipKind::Citation, command) => tl!("Citation (\\{command}) of {key}").replace("{command}", command).replace("{key}", &key()),
+        PieceKind::Chip(ChipKind::Citation, command) => {
+            let said = tl!("Citation (\\{command}) of {key}").replace("{command}", command).replace("{key}", &key());
+            // Each key's entry, as an author-year reader sees it.
+            let who: Vec<&str> = key().split(',').filter_map(|k| cited.get(k.trim()).map(String::as_str)).collect();
+            if who.is_empty() { said } else { format!("{said}: {}", who.join("; ")) }
+        }
         PieceKind::Chip(ChipKind::File, command) => tl!("File read with \\{command}: {key}").replace("{command}", command).replace("{key}", &key()),
         PieceKind::Formula(true) => tl!("The formula's source, while it is typeset. Double-click to edit it.").to_owned(),
         PieceKind::Formula(false) => {
@@ -950,7 +1021,15 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
         paint_typeset(ui, cx, &galley, &pieces, origin, (scale, para.color));
     }
     let hovered = r.hover_pos().and_then(|p| piece_at(&galley, &pieces, p - origin));
-    let r = match hovered.and_then(|p| piece_tip(&p.kind, cx.text, &p.range)) {
+    // Ctrl+click on a cross-reference goes to its label.
+    if r.clicked()
+        && ui.input(|i| i.modifiers.command)
+        && let Some(p) = hovered.filter(|p| matches!(p.kind, PieceKind::Chip(ChipKind::Reference, _)))
+    {
+        let src = cx.text.get(p.range.clone()).unwrap_or_default();
+        cx.follow = src.split_once('{').map(|(_, k)| k.trim_end_matches('}').trim().to_owned());
+    }
+    let r = match hovered.and_then(|p| piece_tip(&p.kind, cx.text, &p.range, cx.cited)) {
         Some(tip) => r.on_hover_text_at_pointer(tip),
         None => r,
     };

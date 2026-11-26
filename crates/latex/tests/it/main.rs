@@ -6,6 +6,7 @@ mod fold;
 mod lex;
 mod passage;
 mod prose;
+mod refs;
 mod table;
 mod tree;
 mod view;

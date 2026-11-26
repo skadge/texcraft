@@ -386,12 +386,15 @@ const fn wrap(before: &'static str, after: &'static str, placeholder: &'static s
 /// The source edit of each `edit.*` command (Insert and Format menus, toolbar, shortcuts).
 fn wrap_for(id: &str) -> Option<Wrap> {
     Some(match id {
+        "edit.chapter" => wrap("\\chapter{", "}", "Title"),
         "edit.section" => wrap("\\section{", "}", "Title"),
         "edit.subsection" => wrap("\\subsection{", "}", "Title"),
         "edit.subsubsection" => wrap("\\subsubsection{", "}", "Title"),
         "edit.paragraph" => wrap("\\paragraph{", "}", "Title"),
         "edit.bold" => wrap("\\textbf{", "}", "text"),
         "edit.italic" => wrap("\\textit{", "}", "text"),
+        "edit.code" => wrap("\\texttt{", "}", "code"),
+        "edit.footnote" => wrap("\\footnote{", "}", "text"),
         "edit.math_inline" => wrap("\\(", "\\)", "x"),
         "edit.math_display" => wrap("\\[\n  ", "\n\\]", "x"),
         "edit.equation" => wrap("\\begin{equation}\n  ", "\n  \\label{eq:label}\n\\end{equation}", "x"),
@@ -406,18 +409,37 @@ fn wrap_for(id: &str) -> Option<Wrap> {
     })
 }
 
-/// Runs an `edit.*` command on the shown file's selection; false when no text file is shown.
-pub(crate) fn edit(app: &mut App, id: &str) -> bool {
+/// Runs an `edit.*` command with its parameters: `{key}` for a citation or a cross-reference, `{url,
+/// text?}` for a link, `{text}` for a footnote, `{latex}` for a formula, `{image}` for a figure.
+pub(crate) fn edit_with(app: &mut App, id: &str, params: &serde_json::Value) -> bool {
     let shown_text = app.session.current().is_some_and(|p| matches!(app.session.project().get(p), Some(Contents::Text(_))));
     if !shown_text {
         return false;
     }
     // The formatted view makes its own edits; the others show the source they change.
-    if let Some(done) = crate::formatted_edit::command(app, id) {
+    if let Some(done) = crate::formatted_edit::command(app, id, params) {
         return done;
     }
     if let Some(path) = app.session.current().cloned() {
         app.editor.formatted.set(&path, false);
+    }
+    // The paragraph styles are the document's sectioning levels.
+    let heading = match id {
+        "edit.heading_1" => Some(0),
+        "edit.heading_2" => Some(1),
+        "edit.heading_3" => Some(2),
+        _ => None,
+    };
+    let resolved;
+    let id = match heading {
+        Some(level) => {
+            resolved = format!("edit.{}", crate::formatted_bar::heading_commands(app)[level]);
+            resolved.as_str()
+        }
+        None => id,
+    };
+    if let Some(done) = structure_in_source(app, id, params) {
+        return done;
     }
     let source = &mut app.editor.source;
     match id {
@@ -540,6 +562,76 @@ pub(crate) fn edit(app: &mut App, id: &str) -> bool {
         }
         _ => false,
     }
+}
+
+/// The structural commands and those with parameters, on the source at the caret: what the
+/// formatted view does, made in the source. `None` for the other commands.
+fn structure_in_source(app: &mut App, id: &str, params: &serde_json::Value) -> Option<bool> {
+    use texcraft_latex::edit;
+    let text = app.editor.source.doc.buffer.text();
+    let at = crate::formatted_edit::caret_byte(app);
+    let param = |k: &str| params.get(k).and_then(serde_json::Value::as_str).map(str::to_owned);
+    let made = match id {
+        "edit.body" => match edit::set_body(&text, at) {
+            Some(changes) => Ok((edit::map_offset(&changes, at), changes)),
+            None => Err(tl!("The caret is in body text already.")),
+        },
+        "edit.indent" | "edit.outdent" => {
+            let e = if id == "edit.indent" { edit::indent(&text, at) } else { edit::outdent(&text, at) };
+            match e {
+                Some(e) => Ok((e.caret, e.changes)),
+                None if id == "edit.indent" => Err(tl!("Put the caret in a list item after the first to indent it.")),
+                None => Err(tl!("Put the caret in a list item to outdent it.")),
+            }
+        }
+        _ => {
+            let inserted = match (id, param("key"), param("url"), param("text"), param("latex")) {
+                ("edit.cite", Some(key), ..) => format!("\\cite{{{key}}}"),
+                ("edit.ref", Some(key), ..) => format!("\\{}{{{key}}}", crate::formatted_edit::ref_command(app)),
+                ("edit.link", _, Some(url), text, _) => match text.filter(|t| !t.is_empty()) {
+                    Some(t) => format!("\\href{{{url}}}{{{}}}", edit::escape(&t)),
+                    None => format!("\\url{{{url}}}"),
+                },
+                ("edit.footnote", _, _, Some(t), _) => format!("\\footnote{{{}}}", edit::escape(&t)),
+                ("edit.math_inline", .., Some(m)) => format!("\\({m}\\)"),
+                ("edit.math_display", .., Some(m)) => format!("\\[\n  {m}\n\\]"),
+                ("edit.equation", .., Some(m)) => format!("\\begin{{equation}}\n  {m}\n\\end{{equation}}"),
+                _ => return None,
+            };
+            let sel = app.editor.source.doc.selection.primary();
+            let (a, b) = (sel.start(), sel.end());
+            let b0 = app.editor.source.doc.buffer.char_to_byte(a);
+            let b1 = app.editor.source.doc.buffer.char_to_byte(b);
+            Ok((b0 + inserted.len(), vec![edit::Change { range: b0..b1, text: inserted }]))
+        }
+    };
+    match made {
+        Ok((caret, changes)) => {
+            let source = &mut app.editor.source;
+            let doc = &mut source.doc;
+            let list = changes
+                .iter()
+                .map(|c| texcraft_buffer::Change {
+                    start: doc.buffer.byte_to_char(c.range.start),
+                    end: doc.buffer.byte_to_char(c.range.end),
+                    text: c.text.clone(),
+                })
+                .collect();
+            let new = edit::apply(&text, &changes);
+            let caret = new.get(..caret).map_or(0, |s| s.chars().count());
+            let before = doc.selection.clone();
+            if let Ok(tx) = Transaction::new(list)
+                && doc.buffer.edit(tx, &before, &Selection::single(caret, caret), EditKind::Other).is_ok()
+            {
+                doc.buffer.seal();
+                source.select(caret, caret);
+                source.reveal = true;
+            }
+        }
+        Err(why) => app.view.status = Some((why.to_owned(), false)),
+    }
+    app.editor.focus = true;
+    Some(true)
 }
 
 const FIGURE: Wrap = wrap(
@@ -692,10 +784,7 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
             }
         }
         if on {
-            divider(ui, &t);
-            ui.add_space(t.unit * 2.0);
-            let hint = tl!("Read-only for now: double-click any part to edit its source.");
-            ui.add(egui::Label::new(egui::RichText::new(hint).font(t.small()).color(t.text_muted)).truncate());
+            crate::formatted_bar::show(app, ui, &mut chosen);
             return;
         }
         // Room for Find and the More menu on the right.
