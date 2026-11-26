@@ -41,6 +41,8 @@ pub struct WebWorker {
     /// Why there is no worker, when it could not start.
     error: Option<String>,
     running: Option<(u64, Option<String>, crate::Options)>,
+    /// The running job's files and main document, to place its errors where they start.
+    sources: Option<Box<Job>>,
     waiting: Option<Job>,
     progress: Progress,
     draft: Option<Draft>,
@@ -76,6 +78,7 @@ impl WebWorker {
             inbox,
             error,
             running: None,
+            sources: None,
             waiting: None,
             progress: Progress::default(),
             draft: None,
@@ -118,6 +121,7 @@ impl WebWorker {
         let msg = message("build", job.id as f64, &job);
         self.send(msg.into());
         self.running = Some((job.id, dir, job.options));
+        self.sources = Some(Box::new(job));
         self.progress = Progress::default();
         self.draft = None;
         self.started = js_sys::Date::now();
@@ -332,7 +336,12 @@ impl WebWorker {
                     let seconds = get(&msg, "seconds").as_f64().unwrap_or(0.0);
                     let written =
                         records::Written { pdf: bytes(get(&msg, "pdf")), synctex: bytes(get(&msg, "synctex")), pdfx: bytes(get(&msg, "pdfx")) };
-                    return Some(records::outcome(id, &output, dir.as_deref(), &options, written, seconds));
+                    let mut outcome = records::outcome(id, &output, dir.as_deref(), &options, written, seconds);
+                    // TeX's own log, with the files it opened: the output has only the messages.
+                    if let (Some(log), Some(job)) = (get(&msg, "log").as_string(), &self.sources) {
+                        crate::places::place_where_started(&mut outcome.diagnostics, &log, &job.files, &job.main, dir.as_deref());
+                    }
+                    return Some(outcome);
                 }
                 _ => {}
             }
@@ -355,6 +364,7 @@ impl WebWorker {
     pub fn poll(&mut self) -> Option<Outcome> {
         let outcome = self.receive()?;
         self.running = None;
+        self.sources = None;
         self.draft = None;
         if let Some(next) = self.waiting.take() {
             self.start(next);
@@ -375,6 +385,7 @@ fn failure(job: u64, message: &str) -> Outcome {
         end_column: None,
         help: Vec::new(),
         fixes: Vec::new(),
+        noticed: None,
     };
     Outcome { status: crate::Status::Failed, diagnostics: vec![diagnostic], ..Outcome::unavailable(job, "") }
 }

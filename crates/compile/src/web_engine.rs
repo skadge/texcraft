@@ -687,6 +687,10 @@ impl Engine {
             self.keep_read_list(project, whole && code == 0).await;
         }
         let mut fields = vec![("code", JsValue::from(code)), ("output", out.text.into()), ("seconds", seconds.into()), ("stops", stops.into())];
+        // TeX's log, which says which files were open when a problem was noticed.
+        if let Some(log) = self.fs.read(&format!("{cwd}/{job}.log")) {
+            fields.push(("log", String::from_utf8_lossy(&log).into_owned().into()));
+        }
         let mut transfer = Vec::new();
         let pdfx = pdfx.iter().find(|p| self.fs.read(p).is_some()).cloned().unwrap_or_default();
         for (key, path) in [("pdf", &pdf), ("synctex", &synctex), ("pdfx", &pdfx)] {

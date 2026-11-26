@@ -378,6 +378,7 @@ impl Backend for Failing {
             end_column: None,
             help: Vec::new(),
             fixes: Vec::new(),
+            noticed: None,
         }];
         outcome
     }

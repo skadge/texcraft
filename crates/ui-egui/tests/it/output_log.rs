@@ -21,6 +21,7 @@ fn diagnostic(severity: Severity, message: &str, origin: Option<&str>, line: u32
         end_column: None,
         help: Vec::new(),
         fixes: Vec::new(),
+        noticed: None,
     }
 }
 

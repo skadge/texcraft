@@ -49,7 +49,7 @@ const PROJECT_ROOT: &str = "/project/";
 /// The project path of a file retex names relative to the main document's folder (`../shared/x.tex`
 /// too) or under the browser's project folder; other absolute paths (the TeX tree,
 /// `/texlive/...`) and paths above the project have none.
-fn project_file(file: &str, main_dir: Option<&str>) -> Option<String> {
+pub(crate) fn project_file(file: &str, main_dir: Option<&str>) -> Option<String> {
     let joined = match (file.strip_prefix(PROJECT_ROOT), file.starts_with('/'), main_dir) {
         (Some(inside), _, _) => inside.to_owned(),
         (None, true, _) => return None,
@@ -105,6 +105,7 @@ fn diagnostic(v: &Value, main_dir: Option<&str>) -> Option<Diagnostic> {
         end_column: number(v, "end_column"),
         help: texts(v, "help"),
         fixes,
+        noticed: None,
     })
 }
 
