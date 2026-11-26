@@ -502,6 +502,10 @@ pub(crate) fn edit_with(app: &mut App, id: &str, params: &serde_json::Value) -> 
         "edit.accept_all" | "edit.reject_all" => {
             let command = if id == "edit.accept_all" { "review.accept_all" } else { "review.reject_all" };
             let Some(path) = app.session.current().cloned() else { return false };
+            // The text as it was is kept in a version first: accepting all rewrites the file.
+            if id == "edit.accept_all" {
+                crate::autosave::keep_a_version(app);
+            }
             if let Some(r) = app.run(command, json!({"path": path.as_str()})) {
                 let (n, outdated) = (r["accepted"].as_u64().or(r["rejected"].as_u64()).unwrap_or(0), r["outdated"].as_array().map_or(0, Vec::len));
                 let mut said = if id == "edit.accept_all" {

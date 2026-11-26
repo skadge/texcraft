@@ -225,6 +225,22 @@ fn appearance(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
 }
 
 fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    let mut autosave = app.session.settings.autosave;
+    setting(
+        ui,
+        t,
+        tl!("Save automatically"),
+        tl!(
+            "Write changes shortly after typing stops, and keep versions of the project by themselves. Off, File › Save saves, and closing asks about changes not saved."
+        ),
+        |ui| {
+            let r = ui.add(egui::Checkbox::without_text(&mut autosave));
+            if r.changed() {
+                app.run("project.autosave", json!({"on": autosave}));
+            }
+            Some(r)
+        },
+    );
     setting(ui, t, tl!("Font size"), tl!("The size of the source text, in points."), |ui| {
         let mut size = app.prefs.editor_font_size;
         ui.label(crate::i18n::measure(f64::from(size), 1, "{n} pt"));

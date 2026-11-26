@@ -70,7 +70,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             } else {
                 bar
             };
-            project_title(app, ui, room);
+            if let Some(title) = project_title(app, ui, room) {
+                beside_title(app, ui, title, room);
+            }
         }
         let rect = egui::Rect::from_min_max(egui::pos2(bar.center().x, bar.top()), bar.max);
         // At the bar's end, in reading order: the repository's badge, the layout switch, then the
@@ -451,11 +453,12 @@ impl App {
     }
 }
 
-/// The project's name, centred in `bar`: a button that edits it in place, and beside it the project's menu.
-fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
+/// The project's name, centred in `bar`: a button that edits it in place, and beside it the
+/// project's menu. Returns where it is drawn (none while the name is edited).
+fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) -> Option<egui::Rect> {
     if app.view.rename.is_some() {
         rename_field(app, ui, bar);
-        return;
+        return None;
     }
     let t = app.tokens;
     let name = app.project_name();
@@ -484,7 +487,10 @@ fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
     let text_pos = egui::pos2(rect.left() + 3.0 * t.unit, rect.center().y - galley.size().y / 2.0);
     let text_right = text_pos.x + galley.size().x;
     ui.painter().galley(text_pos, galley, t.text);
-    if app.session.is_dirty() {
+    // The dot of unsaved changes, where the window does not save by itself (the words beside the
+    // title say how saving stands where it does).
+    let saving_itself = crate::autosave::state(app).is_some();
+    if app.session.is_dirty() && !saving_itself {
         ui.painter().circle_filled(egui::pos2(text_right + 7.0, rect.center().y), 3.0, t.text_muted);
     }
     widgets::focus_ring(ui, &t, &response, name_rect, t.corner());
@@ -493,10 +499,10 @@ fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
         (true, true) => tl!("Click to rename the project's folder"),
         (true, false) => tl!("Click to rename the project"),
     };
-    let hint = if app.session.is_dirty() { format!("{hint}\n{}", tl!("Unsaved changes")) } else { hint.to_owned() };
+    let hint = if app.session.is_dirty() && !saving_itself { format!("{hint}\n{}", tl!("Unsaved changes")) } else { hint.to_owned() };
     if response.on_hover_text(hint).on_hover_cursor(egui::CursorIcon::Text).clicked() {
         app.start_rename();
-        return;
+        return Some(rect);
     }
 
     let menu = ui.interact(menu_rect, ui.scope_id().with("project-menu"), Sense::click());
@@ -529,6 +535,40 @@ fn project_title(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
             } else {
                 ui_cmd::run(app, id);
             }
+        }
+    });
+    Some(rect)
+}
+
+/// After the project's name: Sync, when the project has a remote, and how saving stands, dim
+/// ("All changes saved", "Saving…", or why the last write failed), where the window saves by
+/// itself. Kept to the room before the controls at the bar's end.
+fn beside_title(app: &mut App, ui: &mut egui::Ui, title: egui::Rect, bar: egui::Rect) {
+    let t = app.tokens;
+    let controls: f32 = ui.data(|d| d.get_temp(ui.scope_id().with("bar-end"))).unwrap_or(0.0);
+    let right = (bar.right() - controls - 2.0 * t.unit).max(title.right());
+    let room = egui::Rect::from_min_max(egui::pos2(title.right() + t.unit, bar.top()), egui::pos2(right, bar.bottom()));
+    if room.width() < 4.0 * t.unit {
+        return;
+    }
+    let narrow = app.view.narrow;
+    ui.scope_builder(egui::UiBuilder::new().max_rect(room).layout(EguiLayout::left_to_right(Align::Center)), |ui| {
+        ui.spacing_mut().item_spacing.x = 1.5 * t.unit;
+        crate::sync::button(app, ui, narrow);
+        let Some(state) = crate::autosave::state(app) else { return };
+        let (text, color) = match &state {
+            crate::autosave::State::Saved => (tl!("All changes saved").to_owned(), t.text_muted),
+            crate::autosave::State::Saving => (tl!("Saving…").to_owned(), t.text_muted),
+            crate::autosave::State::Failed(_) => (tl!("Not saved").to_owned(), t.error),
+        };
+        if narrow && !matches!(state, crate::autosave::State::Failed(_)) {
+            return;
+        }
+        let label = ui.add(egui::Label::new(RichText::new(&text).font(t.small()).color(color)).truncate().sense(Sense::hover()));
+        if let crate::autosave::State::Failed(why) = &state {
+            let said = format!("{text}: {why}");
+            crate::status::announce(ui, &label, &said);
+            label.on_hover_text(said);
         }
     });
 }

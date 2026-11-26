@@ -65,6 +65,8 @@ pub(crate) enum Dialog {
     ForgeSave(Box<crate::forge_save::SaveForm>),
     ForgeServer(crate::forge_server::ServerForm),
     ForgeProposal(crate::forge_server::ProposalForm),
+    /// A token for a remote's server, for a Sync, a push or a pull.
+    GitToken(Box<crate::sync::TokenForm>),
     Figure(Box<crate::figure_dialog::FigureForm>),
     /// What explaining a message sends, before the first one goes.
     /// Make with AI: a description, the model's LaTeX typeset, Insert.
@@ -97,6 +99,7 @@ impl Dialog {
             Dialog::ForgeSave(_) => "forge_save",
             Dialog::ForgeServer(_) => "forge_server",
             Dialog::ForgeProposal(_) => "forge_proposal",
+            Dialog::GitToken(_) => "git_token",
             Dialog::Figure(_) => "figure",
             Dialog::AiMake(_) => "ai_make",
             Dialog::AiReference(_) => "ai_reference",
@@ -120,6 +123,7 @@ fn own_window(app: &mut App, ctx: &egui::Context) -> bool {
         Some(Dialog::Choose(_)) => crate::insert_pick::show,
         Some(Dialog::ForgeServer(_) | Dialog::ForgeProposal(_)) => crate::forge_server::dialog,
         Some(Dialog::ForgeSave(_)) => crate::forge_save::dialog,
+        Some(Dialog::GitToken(_)) => crate::sync::dialog,
         Some(Dialog::ForgeOpen(_) | Dialog::ForgeCommit(_) | Dialog::ForgeResolve(_) | Dialog::ForgeMergeRequest(_)) => crate::forge::dialog,
         _ => return false,
     };
@@ -134,7 +138,11 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     }
     let project = app.project_name();
     let engine = app.session.backend_name();
-    let keeping = Keeping { browser: app.session.library().is_some(), forge: app.session.forge().map(|l| l.address.service) };
+    let keeping = Keeping {
+        browser: app.session.library().is_some(),
+        forge: app.session.forge().map(|l| l.address.service),
+        failed: app.autosave.failure().map(str::to_owned),
+    };
     let mut commit = false;
     let Some(dialog) = app.view.dialog.as_mut() else { return };
     let t = app.tokens;
@@ -155,6 +163,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         | Dialog::ForgeSave(_)
         | Dialog::ForgeServer(_)
         | Dialog::ForgeProposal(_)
+        | Dialog::GitToken(_)
         | Dialog::AiMake(_)
         | Dialog::AiReference(_)
         | Dialog::AiInstruct(_)
@@ -206,11 +215,16 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                             let said = if done["commit"].is_string() { tl!("Committed.") } else { tl!("Nothing changed since the last commit.") };
                             app.view.status = Some((said.to_owned(), false));
                         }
+                        "history.version" => {
+                            let said =
+                                if done["commit"].is_string() { tl!("Version named.") } else { tl!("Nothing changed since the latest version.") };
+                            app.view.status = Some((said.to_owned(), false));
+                        }
                         _ => {}
                     }
                 }
             }
-            Some(Dialog::Confirm(c)) => match app.run(c.command, c.params.clone()) {
+            Some(Dialog::Confirm(c)) => match confirmed(app, &c) {
                 Some(_) if c.command == "project.delete" => {
                     if let Some(name) = c.params["name"].as_str() {
                         app.prefs.recent.retain(|p| p != name);
@@ -218,7 +232,11 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                     }
                 }
                 Some(_) if c.command == "history.restore" => {
-                    let said = tl!("Restored, as unsaved changes: the next save makes a new version.");
+                    let said = if crate::autosave::applies(app) {
+                        tl!("Restored. It is saved after the next pause in typing, and the history keeps every version.")
+                    } else {
+                        tl!("Restored, as unsaved changes: the next save makes a new version.")
+                    };
                     app.view.status = Some((said.to_owned(), false));
                 }
                 Some(done) if c.command == "project.replace" => {
@@ -243,6 +261,15 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     }
 }
 
+/// Runs a confirmed action; the project as it is is kept in a version before a restore
+/// replaces it.
+fn confirmed(app: &mut App, c: &Confirm) -> Option<Value> {
+    if c.command == "history.restore" {
+        crate::autosave::keep_a_version(app);
+    }
+    app.run(c.command, c.params.clone())
+}
+
 pub(crate) enum Outcome {
     Open,
     Cancel,
@@ -252,7 +279,7 @@ pub(crate) enum Outcome {
 }
 
 /// Why the question is asked now: what is about to replace the project.
-fn why(next: &Next) -> &'static str {
+fn why_now(next: &Next) -> &'static str {
     match next {
         Next::Quit => tl!("TeXCraft is about to close."),
         Next::NewProject => tl!("A new project is about to replace this one."),
@@ -264,17 +291,46 @@ fn why(next: &Next) -> &'static str {
 
 /// Where the project's changes go: the browser's storage or the project's folder, and the forge
 /// it was opened from, if any.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Keeping {
     browser: bool,
     forge: Option<texcraft_engine::forge::Service>,
+    /// Why the last write failed, when the window saves by itself: the question is asked because
+    /// of it.
+    failed: Option<String>,
 }
 
-/// The unsaved-changes question. In the browser, keeping is storing the project in the browser
-/// (nothing leaves it); on the desktop, saving is writing the project's folder. Neither sends the
-/// changes to a forge: for a project opened from one, committing is a choice of its own. Returns
-/// the outcome, and whether Commit was chosen.
+/// The unsaved-changes question. A project the window saves by itself is asked about only when
+/// its last write failed (issue #23's wording, then, says so); one with no place yet, or with
+/// saving by itself turned off, as before. In the browser, keeping is storing the project in the
+/// browser (nothing leaves it); on the desktop, saving is writing the project's folder. Neither
+/// sends the changes to a forge: for a project opened from one, committing is a choice of its own.
+/// Returns the outcome, and whether Commit was chosen.
 fn unsaved(ui: &mut egui::Ui, t: &Tokens, project: &str, next: &Next, keeping: Keeping) -> (Outcome, bool) {
+    let failed = keeping.failed.as_deref().map(|why| {
+        if keeping.browser {
+            (
+                tl!("The last changes to {project} could not be kept in this browser"),
+                tl!("{why} Try again, or download the project as a zip from the File menu to keep a copy."),
+                tl!("Try Again"),
+                tl!("Don't Keep"),
+                why,
+            )
+        } else {
+            (
+                tl!("The last changes to {project} could not be saved"),
+                tl!("{why} Try again, or leave them unsaved."),
+                tl!("Try Again"),
+                tl!("Don't Save"),
+                why,
+            )
+        }
+    });
+    if let Some((question, how, keep, drop, why)) = failed {
+        title(ui, t, &question.replace("{project}", project));
+        ui.horizontal_wrapped(|ui| ui.label(format!("{} {}", why_now(next), how.replace("{why}", why))));
+        return unsaved_buttons(ui, t, keep, drop, keeping.forge);
+    }
     let (question, how, keep, drop) = if keeping.browser {
         (
             tl!("Keep the changes to {project} in this browser?"),
@@ -291,7 +347,13 @@ fn unsaved(ui: &mut egui::Ui, t: &Tokens, project: &str, next: &Next, keeping: K
         )
     };
     title(ui, t, &question.replace("{project}", project));
-    ui.horizontal_wrapped(|ui| ui.label(format!("{} {how}", why(next))));
+    ui.horizontal_wrapped(|ui| ui.label(format!("{} {how}", why_now(next))));
+    unsaved_buttons(ui, t, keep, drop, keeping.forge)
+}
+
+/// The question's buttons: keep or save, Commit to the forge for a project opened from one,
+/// Cancel, and leaving the changes.
+fn unsaved_buttons(ui: &mut egui::Ui, t: &Tokens, keep: &str, drop: &str, forge: Option<texcraft_engine::forge::Service>) -> (Outcome, bool) {
     let mut outcome = Outcome::Open;
     let mut commit = false;
     ui.add_space(t.unit * 4.0);
@@ -301,7 +363,7 @@ fn unsaved(ui: &mut egui::Ui, t: &Tokens, project: &str, next: &Next, keeping: K
             outcome = Outcome::Run;
         }
         // Only for a project opened from a forge: committing sends the changes there.
-        if let Some(service) = keeping.forge {
+        if let Some(service) = forge {
             let label = crate::forge::say(service, tl!("Commit to GitLab…"), tl!("Commit to GitHub…"));
             if ui.add(egui::Button::new(label).min_size(egui::vec2(88.0, 30.0))).clicked() {
                 commit = true;
