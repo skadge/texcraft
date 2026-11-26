@@ -16,12 +16,18 @@
 //!   last years run.
 //! * WASI has no threads, so the module's own stack is made large (the
 //!   engine's recursion).
-//! * No package downloads: retex's `download` feature is off.
+//! * Package downloads (retex's `download` feature): the module asks for the packages a document
+//!   lacks from a directory its host serves (`RETEX_REPOSITORY`), which TeXCraft's worker maps
+//!   onto a TeX Live mirror (crates/compile/src/packages.rs).
 //!
 //! `RETEX_WASM_TOOLCHAIN` names the nightly toolchain (default `nightly`).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// retex's cargo features in the module, also in its stamp: a module built with others is
+/// built again.
+const FEATURES: &str = "download";
 
 /// The module's stack: 128 MiB.
 const STACK: usize = 128 << 20;
@@ -51,8 +57,9 @@ pub fn run(root: &Path) -> Result<(), String> {
     let out = target.join("retex-wasm");
     let stamp = out.join("version.txt");
     let module = out.join("retex.wasm");
-    if module.is_file() && std::fs::read_to_string(&stamp).ok().as_deref() == Some(version.as_str()) {
-        eprintln!("{}: retex {version}, up to date", module.display());
+    let stamped = format!("{version} {FEATURES}");
+    if module.is_file() && std::fs::read_to_string(&stamp).ok().as_deref() == Some(stamped.as_str()) {
+        eprintln!("{}: retex {version} ({FEATURES}), up to date", module.display());
         return Ok(());
     }
     let rustflags = format!(
@@ -72,6 +79,8 @@ pub fn run(root: &Path) -> Result<(), String> {
         install.to_str().ok_or("the target directory's path is not UTF-8")?,
         &format!("retex@={version}"),
         "--no-default-features",
+        "--features",
+        FEATURES,
         "--target",
         "wasm32-wasip1",
         "-Zbuild-std=std,panic_unwind",
@@ -101,7 +110,7 @@ pub fn run(root: &Path) -> Result<(), String> {
     if !status.success() {
         return Err("llvm-strip failed".into());
     }
-    std::fs::write(&stamp, &version).map_err(|e| format!("{}: {e}", stamp.display()))?;
+    std::fs::write(&stamp, &stamped).map_err(|e| format!("{}: {e}", stamp.display()))?;
     let size = std::fs::metadata(&module).map_err(|e| format!("{}: {e}", module.display()))?.len();
     eprintln!("{}: retex {version}, {:.1} MB", module.display(), size as f64 / 1e6);
     Ok(())

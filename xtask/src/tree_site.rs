@@ -23,7 +23,10 @@
 //!    browser (directly when run as root, as in CI; otherwise in a bubblewrap sandbox). retex's
 //!    site makes them by running the module in Node, which TeXCraft does not use (no
 //!    handwritten JavaScript). The format is left to the browser: it depends on the engine's
-//!    build.
+//!    build. `seed/version.txt` says which retex and TeX Live year the tree is of (`retex 2.5.2`,
+//!    `texlive 2026`, as retex's site has it): the year of the installation's
+//!    `release-texlive.txt`, which the browser gives the module as the tree's own, and whose
+//!    mirror it downloads missing packages from.
 //!
 //! The native retex is `$RETEX` when set, else built with `cargo install` into
 //! `target/retex-native`.
@@ -92,7 +95,13 @@ pub fn run(root: &Path, out: &Path) -> Result<()> {
     let tree = select(&root.join("apps/texcraft-web/tree.txt"), &retex, out, &work)?;
     let contents = contents(&tree)?;
     let index = write(&contents, &out.join("tree"))?;
-    seed(&contents, &index, &tree, &retex, out, &work)?;
+    let year = installation_year()?;
+    seed(&contents, &index, &tree, &retex, year, out, &work)?;
+    // Which retex and TeX Live year the seed is of: the browser's worker downloads missing
+    // packages from the mirror of that year (retex's `seed/version.txt`, R17).
+    let version = crate::retex_wasm::pinned_version(root)?;
+    let to = out.join("seed/version.txt");
+    fs::write(&to, format!("retex {version}\ntexlive {year}\n")).map_err(io(&to))?;
     fs::remove_dir_all(&work).map_err(io(&work))?;
     Ok(())
 }
@@ -128,6 +137,29 @@ fn installation_trees() -> Result<Vec<PathBuf>> {
         .map(PathBuf::from)
         .filter(|p| p.is_dir() && !home.as_ref().is_some_and(|h| p.starts_with(h)))
         .collect())
+}
+
+/// The TeX Live year of the installation the tree is taken from, from its `release-texlive.txt`.
+/// The tree has its own (`/texlive/release-texlive.txt`, [`release_text`]): retex takes its
+/// year from there, else from the LaTeX kernel's date, which in the months after a TeX Live
+/// release is still the year before's.
+fn installation_year() -> Result<u16> {
+    let out = Command::new("kpsewhich").arg("-var-value=TEXMFROOT").output().map_err(|e| format!("cannot run kpsewhich: {e}"))?;
+    let file = PathBuf::from(String::from_utf8_lossy(&out.stdout).trim()).join("release-texlive.txt");
+    let text = fs::read_to_string(&file).map_err(io(&file))?;
+    release_year(&text).ok_or_else(|| format!("{}: no TeX Live year on its first line", file.display()))
+}
+
+/// The year of a `release-texlive.txt` (`TeX Live (https://tug.org/texlive) version 2026`).
+fn release_year(text: &str) -> Option<u16> {
+    let year: u16 = text.lines().next()?.rsplit_once("version ")?.1.trim().parse().ok()?;
+    (1996..3000).contains(&year).then_some(year)
+}
+
+/// The first line of a `release-texlive.txt` of `year`, as retex reads it; the browser's worker
+/// writes the same (crates/compile/src/web_engine.rs).
+fn release_text(year: u16) -> String {
+    format!("TeX Live (https://tug.org/texlive) version {year}\n")
 }
 
 /// The installation's `texmf.cnf` files, the first one's definitions winning.
@@ -538,7 +570,7 @@ fn stage(contents: &BTreeMap<String, Vec<u8>>, root: &Path) -> Result<()> {
 
 /// Makes the seed: retex's indexes of the tree, made by the native retex building the blank
 /// project with the tree where the browser has it, and the files that build reads.
-fn seed(contents: &BTreeMap<String, Vec<u8>>, index: &Index, tree: &Tree, retex: &Path, out: &Path, work: &Path) -> Result<()> {
+fn seed(contents: &BTreeMap<String, Vec<u8>>, index: &Index, tree: &Tree, retex: &Path, year: u16, out: &Path, work: &Path) -> Result<()> {
     let read = &tree.read;
     let root = is_root();
     // The system's root as root (CI); a folder bubblewrap mounts as `/texlive` and `/cache`.
@@ -555,6 +587,8 @@ fn seed(contents: &BTreeMap<String, Vec<u8>>, index: &Index, tree: &Tree, retex:
     }
     fs::create_dir_all(&cache).map_err(io(&cache))?;
     stage(contents, &stage_root)?;
+    let release = stage_root.join("texlive/release-texlive.txt");
+    fs::write(&release, release_text(year)).map_err(io(&release))?;
     // Runs retex in `dir` with the tree and the cache where the browser has them.
     let in_tree = |dir: &Path, args: &[&str]| -> Result<bool> {
         let mut cmd = if root {
@@ -683,6 +717,13 @@ mod tests {
     #[test]
     fn context_files_are_taken_one_by_one() {
         assert_eq!(package_of("tex/context/base/mkii/supp-pdf.mkii"), "tex/context/base/mkii/supp-pdf.mkii");
+    }
+
+    #[test]
+    fn the_year_is_read_back_from_the_release_file() {
+        assert_eq!(release_year(&release_text(2026)), Some(2026));
+        assert_eq!(release_year("TeX Live (https://tug.org/texlive) version 2025\n\nThis file is public domain."), Some(2025));
+        assert_eq!(release_year("no year here"), None);
     }
 
     #[test]
