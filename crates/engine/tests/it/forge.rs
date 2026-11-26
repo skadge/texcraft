@@ -343,3 +343,41 @@ fn a_github_repository_opens_commits_and_takes_a_pull_request() -> Result<(), St
     assert!(s.execute("forge.open", &json!({"url": "https://gitlab.com/group/paper", "service": "github", "token": GH_TOKEN})).is_err());
     Ok(())
 }
+
+#[test]
+fn a_sync_in_the_browser_leaves_nothing_to_send_and_a_reload_agrees() -> Result<(), String> {
+    let fake = fake();
+    let mut s = session(&fake);
+    s.set_author(Some(texcraft_engine::review::Author::new("Alice", "alice-key")));
+    s.use_library(Library::default());
+    s.execute("forge.open", &json!({"url": URL, "token": TOKEN}))?;
+    write(&mut s, "intro.tex", "A longer intro\n")?;
+    s.execute("review.comment", &json!({"path": "intro.tex", "start": 2, "end": 8, "text": "Why?"}))?;
+    assert_eq!(changed(&mut s)?.len(), 2, "the edit and the thread wait to be sent");
+
+    s.execute("project.sync", &json!({"background": true}))?;
+    let outcome = loop {
+        if let Some(outcome) = s.poll_forge() {
+            break outcome?;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    };
+    assert_eq!(outcome["operation"], "commit", "{outcome}");
+    assert_eq!(fake.files("main")["intro.tex"], b"A longer intro\n");
+    assert!(changed(&mut s)?.is_empty(), "the Sync sent everything");
+    assert_eq!(s.forge().map(|l| l.base.clone()), fake.head("main"), "the link's base is the new commit");
+
+    // A reload: the library gives back what was kept, and agrees.
+    let mut library = Library::default();
+    for change in s.take_library_changes() {
+        if let Change::Saved(name, stored) = change {
+            library.insert(name, *stored);
+        }
+    }
+    let mut s = session(&fake);
+    s.use_library(library);
+    s.execute("project.open", &json!({"path": "paper"}))?;
+    assert_eq!(s.forge().map(|l| l.base.clone()), fake.head("main"));
+    assert!(changed(&mut s)?.is_empty(), "nothing waits after a reload either");
+    Ok(())
+}

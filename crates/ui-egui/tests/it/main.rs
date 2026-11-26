@@ -56,6 +56,7 @@ mod regions;
 mod rename;
 mod review;
 mod search;
+mod settings;
 mod shortcuts;
 mod source_toolbar;
 mod start_page;

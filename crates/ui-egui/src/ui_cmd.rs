@@ -567,13 +567,7 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             app.view.status = Some((tl!("Opening the retex user manual (PDF) in your browser.").to_owned(), false));
         }
         "help.about" => app.view.dialog = Some(Dialog::About),
-        // `{"tab": "editor"}` opens Settings on that tab (by its English name, in lower case).
-        "app.settings" => {
-            if let Some(tab) = params.get("tab").and_then(serde_json::Value::as_str) {
-                crate::settings::choose_tab(app, tab);
-            }
-            app.view.dialog = Some(Dialog::Settings);
-        }
+        "app.settings" => crate::settings::open(app, params),
         "help.example" => app.open_example(),
         "help.first_steps" => crate::first_steps::toggle(app),
         "app.start" => app.start = true,

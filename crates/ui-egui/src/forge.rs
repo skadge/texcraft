@@ -87,9 +87,10 @@ pub(crate) struct MergeRequestNote {
     pub focus: bool,
 }
 
-/// How many files changed since the branch's base, as last counted: (revision, time, count).
+/// How many files changed since the branch's base, as last counted: (revision and base, time,
+/// count). A commit, a Sync or a pull moves the base without changing the text: counted again.
 #[derive(Default)]
-pub(crate) struct Count(Option<((u64, u64), f64, usize)>);
+pub(crate) struct Count(Option<((u64, u64, String), f64, usize)>);
 
 /// The branch checked for new commits: when it last was, whether the window had the focus, and
 /// whether the operation running is such a check (it is then quiet).
@@ -1037,10 +1038,13 @@ pub(crate) fn busy_text(app: &App) -> Option<String> {
 
 /// The files changed since the base, counted again at most once a second while typing.
 pub(crate) fn changed_count(app: &mut App, now: f64) -> usize {
-    let revision = (app.session.revision(), app.session.review_revision());
-    match app.forge_count.0 {
-        Some((r, _, n)) if r == revision => n,
-        Some((_, at, n)) if now - at < 1.0 => {
+    let base = app.session.forge().map(|l| l.base.clone()).unwrap_or_default();
+    let revision = (app.session.revision(), app.session.review_revision(), base);
+    match &app.forge_count.0 {
+        Some((r, _, n)) if *r == revision => *n,
+        // Typing: counted again at most once a second; the base moved: now.
+        Some((r, at, n)) if r.2 == revision.2 && now - at < 1.0 => {
+            let (at, n) = (*at, *n);
             app.ctx.request_repaint_after(std::time::Duration::from_secs_f64(1.0 - (now - at)));
             n
         }

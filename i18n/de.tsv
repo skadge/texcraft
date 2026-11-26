@@ -2466,3 +2466,6 @@ unit	{n} s	{n} s
 	{engine}: chosen in Settings › Building	{engine}: gewählt in Einstellungen › Build läuft
 @msg	The branch moved since TeXCraft's last version: a new version is made instead.	Der Zweig hat sich seit der letzten Version von TeXCraft bewegt: Stattdessen wird eine neue Version erstellt.
 @msg	The history moved since TeXCraft's last version: a new version is made instead.	Der Verlauf hat sich seit der letzten Version von TeXCraft verändert: Stattdessen wird eine neue Version erstellt.
+	Search settings	Einstellungen durchsuchen
+	No setting matches the search.	Keine Einstellung passt zur Suche.
+@plural	{n} setting found|{n} settings found	{n} Einstellung gefunden|{n} Einstellungen gefunden

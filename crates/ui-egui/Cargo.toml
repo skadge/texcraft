@@ -31,6 +31,8 @@ log = { workspace = true }
 chrono = { workspace = true }
 # Decodes the app icon for the top bar, the start page and About.
 png = "0.18"
+# Settings' search finds words without their accents.
+unicode-normalization = "0.1"
 
 # Installed fonts after the bundled ones, for characters they lack (newer emoji, rare scripts), and
 # colour glyphs (colour emoji); desktop only.

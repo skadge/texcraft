@@ -161,6 +161,10 @@ pub(crate) struct View {
     pub settings_page: bool,
     /// Give the keyboard to the row of section `settings_tab` (back from its page).
     pub settings_focus: bool,
+    /// What Settings' search looks for: empty, the sections; else the settings that match.
+    pub settings_search: String,
+    /// Give the keyboard to Settings' search field (Ctrl+F while Settings is open).
+    pub settings_search_focus: bool,
     /// Which messages the build log lists.
     pub log_filter: preview::Filter,
     /// The build log lists the messages of hidden kinds too, to show them again.
@@ -346,6 +350,8 @@ impl App {
                 settings_tab: 0,
                 settings_page: false,
                 settings_focus: false,
+                settings_search: String::new(),
+                settings_search_focus: false,
                 regions: Vec::new(),
                 region_areas: Vec::new(),
                 modal_was_open: false,
@@ -912,6 +918,8 @@ impl App {
             ui_cmd::run(self, "view.menu_bar");
         }
         self.system_menu_clicks(ctx);
+        // Ctrl+F in Settings is its search, not the editor's.
+        settings::claim_keys(self, ctx);
         for id in self.keys.dispatch(ctx) {
             ui_cmd::run(self, &id);
         }

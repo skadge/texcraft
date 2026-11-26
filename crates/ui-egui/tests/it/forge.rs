@@ -248,3 +248,26 @@ fn a_github_repository_is_opened_and_its_pull_request_link_shown() {
     assert!(h.query_by_label("Open the pull request on GitHub").is_some(), "the pull request's link is not shown");
     assert_eq!(fake.merge_requests().len(), 1);
 }
+
+/// Issue #53: after a Sync that sent the change, the top bar has nothing pending, though the text
+/// did not change.
+#[test]
+fn after_a_sync_the_top_bar_has_no_change_pending() {
+    let fake = paper();
+    let mut h = browser(&fake);
+    let open = json!({"command": "forge.open", "params": {"url": "https://gitlab.example/group/paper", "token": TOKEN}});
+    assert_eq!(h.state_mut().control("engine.execute", &open)["ok"], true);
+    assert!(settle(&mut h), "the GitLab operation did not end");
+    write(&mut h, "intro.tex", "Better intro\n");
+    // While typing, the count waits a second.
+    for _ in 0..90 {
+        h.step();
+    }
+    h.run();
+    assert!(h.query_by_label_contains("group/paper · main · 1 changed file").is_some(), "the top bar does not count the change");
+    h.query_by_label_contains("Sync: 1 changed file to send").expect("the Sync button does not count the change").click();
+    assert!(settle(&mut h), "the Sync did not end");
+    assert_eq!(fake.files("main")["intro.tex"], b"Better intro\n", "the Sync did not send the change");
+    assert!(h.query_by_label_contains("group/paper · main · up to date").is_some(), "the top bar still counts a change");
+    assert!(h.query_by_label_contains("changed file to send").is_none(), "the Sync button still counts a change");
+}

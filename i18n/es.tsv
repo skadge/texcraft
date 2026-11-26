@@ -2466,3 +2466,6 @@ unit	{n} s	{n} s
 	{engine}: chosen in Settings › Building	{engine}: elegido en Ajustes › Compilando
 @msg	The branch moved since TeXCraft's last version: a new version is made instead.	La rama se movió desde la última versión de TeXCraft: se crea una versión nueva en su lugar.
 @msg	The history moved since TeXCraft's last version: a new version is made instead.	El historial cambió desde la última versión de TeXCraft: se crea una versión nueva en su lugar.
+	Search settings	Buscar en los ajustes
+	No setting matches the search.	Ningún ajuste coincide con la búsqueda.
+@plural	{n} setting found|{n} settings found	{n} ajuste encontrado|{n} ajustes encontrados

@@ -59,6 +59,9 @@ static I18N: LazyLock<I18n> = LazyLock::new(|| {
 /// The `@msg` templates of each embedded locale, by code, read on first use.
 static TEMPLATES: LazyLock<HashMap<String, Vec<Template>>> = LazyLock::new(|| templates(CRAFT_I18N));
 
+/// The English of each embedded locale's plain rows, by translation, by code, read on first use.
+static SOURCES: LazyLock<HashMap<String, HashMap<String, String>>> = LazyLock::new(|| sources(CRAFT_I18N));
+
 /// Padded pseudo-locale strings by source text, leaked so lookups can hand out `&'static str`
 /// (debug builds and tests only; one per distinct string).
 static PADDED: LazyLock<Mutex<BTreeMap<String, &'static str>>> = LazyLock::new(Mutex::default);
@@ -249,6 +252,33 @@ fn templates(embedded: &craft_i18n::Embedded) -> HashMap<String, Vec<Template>> 
         out.insert(code.to_ascii_lowercase(), list);
     }
     out
+}
+
+/// The plain rows (no context) of every embedded locale: English by translation, by code; the
+/// app's rows win over the shared ones.
+fn sources(embedded: &craft_i18n::Embedded) -> HashMap<String, HashMap<String, String>> {
+    let mut out: HashMap<String, HashMap<String, String>> = HashMap::new();
+    for (code, shared, app) in embedded {
+        let map = out.entry(code.to_ascii_lowercase()).or_default();
+        for text in [app, shared] {
+            for line in text.lines() {
+                let mut cols = line.trim_end_matches('\r').splitn(3, '\t');
+                let (Some(""), Some(english), Some(translation)) = (cols.next(), cols.next(), cols.next()) else { continue };
+                map.entry(unescape(translation)).or_insert_with(|| unescape(english));
+            }
+        }
+    }
+    out
+}
+
+/// The English that `shown`, a text in the current language, translates, when a catalog row
+/// gives it; none in English, or for text no row has (Settings' search looks for both).
+pub fn english(shown: &str) -> Option<&'static str> {
+    let code = current_code();
+    if code == "en" {
+        return None;
+    }
+    SOURCES.get(code)?.get(shown).map(String::as_str)
 }
 
 fn unescape(s: &str) -> String {
