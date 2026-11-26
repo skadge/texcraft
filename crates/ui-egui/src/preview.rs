@@ -1079,6 +1079,17 @@ fn go_to_source(app: &mut App, page: usize, x: f32, y: f32) {
     }
 }
 
+/// Scrolls the PDF to the place of `line` (from 1) of `path`, marked for a moment, when the last
+/// build put it there: an outline entry chosen shows its heading in the PDF as in the editor.
+/// Before a build, or for a line not in the PDF, the PDF stays where it is, without a word.
+pub(crate) fn follow_in_pdf(app: &mut App, path: &texcraft_engine::project::ProjectPath, line: u32) {
+    let rects = app.session.locate(path, line);
+    if !rects.is_empty() {
+        let now = app.ctx.input(|i| i.time);
+        app.pdf.show_place(rects, now);
+    }
+}
+
 /// Shows the place of `line` (from 1) of `path` in the PDF, marked for a moment.
 pub(crate) fn show_in_pdf(app: &mut App, path: &texcraft_engine::project::ProjectPath, line: u32) {
     let rects = app.session.locate(path, line);

@@ -503,6 +503,7 @@ fn file_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, text: &str
     });
     if let Some(line) = goto {
         app.view.goto = Some((path.clone(), line));
+        crate::preview::follow_in_pdf(app, path, line);
     }
 }
 
@@ -510,7 +511,7 @@ fn file_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, text: &str
 /// text's colour with the heading icons, the other files' muted with a file's icon (and named
 /// after their file where a file's part starts), so the shown part does not stand out by colour
 /// alone. An include that is not read says why in its place. A click opens the entry's file at
-/// its line.
+/// its line, and shows the heading in the PDF when the last build has it.
 fn document_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, entries: &[texcraft_latex::document::Entry]) {
     use texcraft_latex::document::EntryKind;
     let t = app.tokens;
@@ -581,6 +582,7 @@ fn document_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, entrie
             i.consume_key(egui::Modifiers::NONE, egui::Key::Space);
         });
         if file == *path || app.run("file.open", json!({"path": file.as_str()})).is_some() {
+            crate::preview::follow_in_pdf(app, &file, line);
             app.view.goto = Some((file, line));
         }
     }

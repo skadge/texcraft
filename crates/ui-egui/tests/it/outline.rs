@@ -96,3 +96,88 @@ fn the_outline_is_walked_with_the_arrows_and_enter_opens_an_entry() {
     assert_eq!(shown_file(&mut h).as_deref(), Some("chapters/one.tex"), "Enter did not open the entry's file");
     assert_eq!(caret_line(&mut h), 3);
 }
+
+/// SyncTeX data written by hand for `MAIN`: its line 3 (Intro) on the first page, its line 6
+/// (End) low on the second.
+const SYNCTEX: &str = "SyncTeX Version:1
+Input:1:/tmp/texcraft-build/src/./main.tex
+Output:pdf
+Magnification:1000
+Unit:1
+X Offset:0
+Y Offset:0
+Content:
+{1
+[1,3:0,0:39000000,50000000,0
+(1,3:4736286,8865054:22609920,462029,135004
+h1,3:4736286,8865054:983040,0,0
+)
+]
+}1
+{2
+[1,6:0,0:39000000,50000000,0
+(1,6:4736286,40000000:22609920,462029,135004
+h1,6:4736286,40000000:983040,0,0
+)
+]
+}2
+Postamble:
+Count:6
+Post scriptum:
+";
+
+/// The sample PDF of two pages, with `SYNCTEX`.
+struct Synced;
+
+impl texcraft_compile::Backend for Synced {
+    fn name(&self) -> String {
+        "test".to_owned()
+    }
+    fn compile(&mut self, job: &texcraft_compile::Job) -> texcraft_compile::Outcome {
+        texcraft_compile::Outcome {
+            status: texcraft_compile::Status::Built,
+            pdf: Some(std::sync::Arc::new(crate::pdf_preview::sample::links_pdf())),
+            synctex: Some(std::sync::Arc::new(SYNCTEX.as_bytes().to_vec())),
+            pages: 2,
+            ..texcraft_compile::Outcome::unavailable(job.id, "")
+        }
+    }
+}
+
+fn pdf_scroll(h: &mut Harness<'_, App>) -> f64 {
+    h.state_mut().control("ui.inspect", &json!({}))["result"]["preview"]["scroll"][1].as_f64().unwrap_or_default()
+}
+
+/// Issue #30: an entry chosen in the outline shows its heading in the PDF too, once built.
+#[test]
+fn choosing_an_entry_scrolls_the_pdf_to_its_heading_too() {
+    let mut s = Session::with_backend(Box::new(Synced));
+    for (path, text) in [("chapters/one.tex", ONE), ("main.tex", MAIN)] {
+        let _ = s.execute("file.new", &json!({"path": path}));
+        assert!(s.execute("file.write", &json!({"path": path, "text": text})).is_ok());
+    }
+    assert!(s.execute("file.set_main", &json!({"path": "main.tex"})).is_ok());
+    assert!(s.execute("file.open", &json!({"path": "main.tex"})).is_ok());
+    assert!(s.execute("build.compile", &json!({"wait": true})).is_ok());
+    let prefs = Prefs { auto_compile: false, side: "outline".to_owned(), layout: "split".to_owned(), ..Prefs::default() };
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1400.0, 900.0))
+        .with_max_steps(10)
+        .build_ui_state(|ui, app: &mut App| app.frame(ui), App::with_prefs(s, prefs));
+    for _ in 0..40 {
+        h.step();
+        if h.query_by_label_contains("1 / 2").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(h.query_by_label_contains("1 / 2").is_some(), "the PDF is not shown");
+    let before = pdf_scroll(&mut h);
+    let end = rows(&h).into_iter().map(|(l, _)| l).find(|l| l.ends_with("End")).unwrap_or_default();
+    h.get_by_role_and_label(Role::TreeItem, &end).click();
+    for _ in 0..4 {
+        h.step();
+    }
+    assert_eq!(caret_line(&mut h), 6, "the editor did not go to the heading");
+    assert!(pdf_scroll(&mut h) > before + 100.0, "the PDF did not scroll to the heading: {before} then {}", pdf_scroll(&mut h));
+}

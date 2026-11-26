@@ -11,7 +11,7 @@ use texcraft_ui_egui::prefs::Prefs;
 use texcraft_ui_egui::{App, ui_cmd};
 
 #[path = "../../../preview/tests/it/sample.rs"]
-mod sample;
+pub(crate) mod sample;
 
 /// Builds the sample PDF of two pages with links.
 pub(crate) struct Sample;
