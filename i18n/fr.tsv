@@ -2088,3 +2088,89 @@ unit	{n} s	{n} s
 # History: what a version changed
 	no files	aucun fichier
 @plural	and {n} other|and {n} others	et {n} autre|et {n} autres
+
+# First steps: the example project, template cards, tips of the day
+	A new project is about to replace this one.	Un nouveau projet va remplacer celui-ci.
+	A project folder in a git repository can push and pull from its History section.	Un dossier de projet dans un dépôt git peut pousser et tirer depuis sa section Historique.
+	A project from GitLab or GitHub is about to open in its place.	Un projet de GitLab ou GitHub va s'ouvrir à sa place.
+	A short paper to explore: sections, a list, a table, a figure, equations and a citation.	Un court article à explorer : des sections, une liste, un tableau, une figure, des équations et une citation.
+	A tip of the day on the start page, about a feature that is easy to miss.	Une astuce du jour sur la page d'accueil, à propos d'une fonction facile à manquer.
+	Another project is about to open in its place.	Un autre projet va s'ouvrir à sa place.
+	Built in	Intégré
+	Connect an AI model in Settings › AI to explain a build error, rewrite a selection or review a section. Nothing is sent before you connect one.	Connectez un modèle d'IA dans Paramètres › IA pour expliquer une erreur de compilation, réécrire une sélection ou relire une section. Rien n'est envoyé avant que vous en connectiez un.
+	Did you know that you can drop a whole project as a zip file on the start page? It becomes a new project.	Saviez-vous que vous pouvez déposer un projet entier sous forme de fichier zip sur la page d'accueil ? Il devient un nouveau projet.
+	Dismiss	Ignorer
+	Double-click a place in the PDF to go to the line that wrote it. Edit › Show in PDF goes the other way.	Double-cliquez sur un endroit du PDF pour aller à la ligne qui l'a écrit. Modifier › Afficher dans le PDF fait le chemin inverse.
+	Downloads when used	Téléchargé à l'utilisation
+	Drop an image file on the formatted view, and it becomes a figure with a caption.	Déposez un fichier image sur la vue mise en forme, et il devient une figure avec sa légende.
+	Edit › Find in Project searches, and replaces, in every file of the project.	Modifier › Rechercher dans le projet cherche, et remplace, dans tous les fichiers du projet.
+	Edit › Go to File… lists the project's files as you type, the ones you opened last first.	Modifier › Aller au fichier… liste les fichiers du projet pendant la frappe, les derniers ouverts en premier.
+	Edit › Quick Fix lists the fixes for the error at the caret, such as adding the package a command needs.	Modifier › Correction rapide liste les corrections de l'erreur sous le curseur, comme ajouter le paquet dont une commande a besoin.
+	Every save that changes something is a version. The History section says what each one changed and can restore any of them.	Chaque enregistrement qui change quelque chose est une version. La section Historique indique ce que chacune a changé et peut restaurer n'importe laquelle.
+	Every shortcut can be changed: Keyboard Shortcuts, at the bottom of the rail, lists them all.	Chaque raccourci peut être changé : Raccourcis clavier, en bas de la barre des sections, les liste tous.
+	Example paper	Article d'exemple
+	Example project	Projet d'exemple
+	Export, in the PDF's toolbar, saves your document as a DOCX or OpenDocument text, a web page or Markdown, and beamer slides as a PPTX presentation.	Exporter, dans la barre d'outils du PDF, enregistre votre document en texte DOCX ou OpenDocument, en page web ou en Markdown, et des diapositives beamer en présentation PPTX.
+	F12 on a reference or a command goes to where it is defined, even in another file.	F12 sur une référence ou une commande va à l'endroit où elle est définie, même dans un autre fichier.
+	F6 moves the keyboard between the regions of the window: the menus, the rail, the side panel, the editor and the PDF.	F6 déplace le clavier entre les régions de la fenêtre : les menus, la barre des sections, le panneau latéral, l'éditeur et le PDF.
+	F7 goes to the next spelling or grammar problem in the file.	F7 va au prochain problème d'orthographe ou de grammaire du fichier.
+	First steps	Premiers pas
+	Free to use (LPPL)	Libre d'utilisation (LPPL)
+	Free to use (MIT)	Libre d'utilisation (MIT)
+	Free to use (public domain)	Libre d'utilisation (domaine public)
+	Hint dismissed. Help › First Steps shows it again.	Conseil masqué. Aide › Premiers pas l'affiche à nouveau.
+	If you are a Vim user, you can turn on Vim mode in Settings › Editor: modes, motions, registers, and text objects for environments and formulas.	Si vous utilisez Vim, vous pouvez activer le mode Vim dans Paramètres › Éditeur : modes, mouvements, registres et objets texte pour les environnements et les formules.
+	Insert › Symbols… opens a palette of mathematical symbols you can search by name, and says which package a symbol needs.	Insérer › Symboles… ouvre une palette de symboles mathématiques que vous pouvez rechercher par nom, et indique le paquet dont un symbole a besoin.
+	Licence: {licence}	Licence : {licence}
+	New Project has journal and conference templates from publishers such as Elsevier, IEEE and ACM, kept for offline use once downloaded.	Nouveau projet propose des modèles de revues et de conférences d'éditeurs comme Elsevier, IEEE et ACM, conservés pour un usage hors ligne une fois téléchargés.
+	New here? Formatted, above the text, shows your document as it reads, and you can edit it there. The PDF's Build log explains any error. Help › User Guide (F1) has the rest.	Nouveau ici ? Mis en forme, au-dessus du texte, montre votre document tel qu'il se lit, et vous pouvez le modifier là. Le Journal de compilation du PDF explique toute erreur. Aide › Guide de l'utilisateur (F1) explique le reste.
+	Next Tip	Astuce suivante
+	No projects in this browser yet.	Aucun projet dans ce navigateur pour l'instant.
+	No projects yet.	Aucun projet pour l'instant.
+	Not needed for a server on this computer	Inutile pour un serveur sur cet ordinateur
+	On a phone or in a narrow window, the editor and the PDF become two tabs, and the side panel a drawer.	Sur un téléphone ou dans une fenêtre étroite, l'éditeur et le PDF deviennent deux onglets, et le panneau latéral un tiroir.
+	Open the Example Project	Ouvrir le projet d'exemple
+	Open the Guide	Ouvrir le Guide de l'utilisateur
+	Previous Tip	Astuce précédente
+	Projects in the browser stay in this browser. File › Download Project as Zip keeps a copy elsewhere.	Les projets du navigateur restent dans ce navigateur. Fichier › Télécharger le projet en zip en garde une copie ailleurs.
+	Read More in the Guide	En savoir plus dans le Guide de l'utilisateur
+	Ready offline	Prêt hors ligne
+	Save Project to GitLab or GitHub puts a project online in a new repository, ready to share.	Enregistrer le projet sur GitHub ou GitLab met un projet en ligne dans un nouveau dépôt, prêt à être partagé.
+	Select some text and right-click it to add a comment beside it. The Review section lists every comment of the project.	Sélectionnez du texte et faites un clic droit dessus pour ajouter un commentaire à côté. La section Relecture liste tous les commentaires du projet.
+	Show tips at startup	Afficher les astuces au démarrage
+	TeXCraft is about to close.	TeXCraft va se fermer.
+	The Formatted switch above the text shows your document as it reads, without the markup, and you can edit it there too.	Le bouton Mis en forme au-dessus du texte montre votre document tel qu'il se lit, sans le balisage, et vous pouvez aussi le modifier là.
+	The imported project is about to open in its place.	Le projet importé va s'ouvrir à sa place.
+	This build has no example project.	Cette version de TeXCraft n'a pas de projet d'exemple.
+	Tip of the day	Astuce du jour
+	Tips are off. Settings › Appearance turns them on again.	Les astuces sont désactivées. Paramètres › Apparence les réactive.
+	To begin, try the example: a short paper you can change and build, to see how TeXCraft works. Or choose New Project for a template, Open Folder… for a project you have, or drop a folder or zip file here.	Pour commencer, essayez l'exemple : un court article que vous pouvez modifier et compiler, pour voir comment fonctionne TeXCraft. Ou choisissez Nouveau projet pour un modèle, Ouvrir un dossier… pour un projet que vous avez déjà, ou déposez ici un dossier ou un fichier zip.
+	To begin, try the example: a short paper you can change and build, to see how TeXCraft works. Or choose New Project for a template, or drop a zip file of a project here.	Pour commencer, essayez l'exemple : un court article que vous pouvez modifier et compiler, pour voir comment fonctionne TeXCraft. Ou choisissez Nouveau projet pour un modèle, ou déposez ici le fichier zip d'un projet.
+	Try an Example	Essayer un exemple
+	Turn on Suggest in the editor's toolbar, and your edits become suggestions that can be accepted or rejected one by one.	Activez Suggérer dans la barre d'outils de l'éditeur, et vos modifications deviennent des suggestions qui peuvent être acceptées ou refusées une par une.
+	{publisher} · from the {source} · {licence}	{publisher} · source : {source} · {licence}
+@id	help.example	Ouvrir le projet d'exemple…
+@id	help.first_steps	Premiers pas
+@msg	A CV in the European Union's Europass layout.	Un CV dans la mise en page Europass de l'Union européenne.
+@msg	A CV with a modern look and several styles.	Un CV d'allure moderne, en plusieurs styles.
+@msg	A formal letter with addresses, date and signature.	Une lettre formelle avec adresses, date et signature.
+@msg	A large poster for a conference, drawn with TikZ.	Un grand poster pour une conférence, dessiné avec TikZ.
+@msg	A long document with a title page and one file per chapter.	Un long document avec une page de titre et un fichier par chapitre.
+@msg	A manuscript in APA style, 7th edition.	Un manuscrit au style APA, 7e édition.
+@msg	A one-page CV with education, experience and skills.	Un CV d'une page avec formation, expérience et compétences.
+@msg	A short paper or report with sections, ready to fill in.	Un court article ou rapport avec des sections, prêt à remplir.
+@msg	A short paper to explore: sections, a list, a table, a figure, equations and a citation.	Un court article à explorer : des sections, une liste, un tableau, une figure, des équations et une citation.
+@msg	Example paper: folding a sheet of paper	Article d'exemple : plier une feuille de papier
+@msg	For ACM conferences that use the sigconf format.	Pour les conférences ACM au format sigconf.
+@msg	For ASME conference papers.	Pour les articles de conférence ASME.
+@msg	For Elsevier journals that cite by author and year.	Pour les revues Elsevier qui citent par auteur et année.
+@msg	For Elsevier journals whose references are numbered.	Pour les revues Elsevier dont les références sont numérotées.
+@msg	For IEEE Transactions and other IEEE journals.	Pour IEEE Transactions et les autres revues IEEE.
+@msg	For IEEE conference proceedings, two columns.	Pour les actes de conférence IEEE, sur deux colonnes.
+@msg	For Monthly Notices of the Royal Astronomical Society.	Pour les Monthly Notices of the Royal Astronomical Society.
+@msg	For Physical Review and other APS journals.	Pour Physical Review et les autres revues APS.
+@msg	For journals of the American Chemical Society.	Pour les revues de l'American Chemical Society.
+@msg	For submitting a manuscript to Nature.	Pour soumettre un manuscrit à Nature.
+@msg	For the Astrophysical Journal and other AAS journals.	Pour l'Astrophysical Journal et les autres revues AAS.
+@msg	Numbered exercises with their points, for a course.	Des exercices numérotés avec leur barème, pour un cours.
+@msg	Slides for a talk, in widescreen.	Des diapositives pour un exposé, en format large.

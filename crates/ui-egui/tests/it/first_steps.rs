@@ -86,8 +86,8 @@ fn the_example_opens_as_a_project_in_the_browser_under_a_name_to_accept() {
     h.get_by_role_and_label(Role::Button, "Try an Example").click();
     run(&mut h);
     assert_eq!(dialog(&mut h), "prompt", "no name was asked for");
-    h.key_press(egui::Key::Enter);
-    run(&mut h);
+    // The name is given: Create takes it as it is.
+    click(&mut h, "Create");
     let s = h.state().session();
     assert_eq!(s.dir().map(|d| d.display().to_string()).as_deref(), Some("Example paper"));
     assert_eq!(s.project().main().map(|p| p.as_str()), Some("main.tex"));

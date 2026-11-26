@@ -106,7 +106,7 @@ pub(crate) const TIPS: &[Tip] = &[
         guide!("projects.html#history"),
     ),
     tip(
-        tn!("Save Project to GitHub or GitLab puts a project online in a new repository, ready to share."),
+        tn!("Save Project to GitLab or GitHub puts a project online in a new repository, ready to share."),
         Needs::Anywhere,
         guide!("forges.html#save-to"),
     ),
