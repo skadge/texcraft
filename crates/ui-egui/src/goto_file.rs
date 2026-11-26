@@ -137,10 +137,8 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             open = matches.get(palette.selected).map(|m| m.path.clone());
         }
     }
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-goto-file")).frame(crate::widgets::dialog_frame(ctx)).show(ctx, |ui| {
-        ui.set_width(520.0);
-        ui.label(RichText::new(tl!("Go to File")).font(t.title()));
-        ui.add_space(t.unit * 2.0);
+    let modal = crate::sheet::show(ctx, &t, "texcraft-goto-file", 520.0, crate::sheet::Leave::Close, |ui| {
+        crate::dialogs::title(ui, &t, tl!("Go to File"));
         let label = ui.label(RichText::new(tl!("Type part of a file's path")).color(t.text_muted));
         let edit = ui
             .add(egui::TextEdit::singleline(&mut palette.query).id(field_id).desired_width(f32::INFINITY).margin(egui::vec2(8.0, 6.0)))
@@ -187,7 +185,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         });
         palette.scroll = false;
     });
-    if modal.should_close() || ctx.input(|i| i.key_pressed(Key::Escape)) {
+    if modal.close || ctx.input(|i| i.key_pressed(Key::Escape)) {
         close = true;
     }
     if let Some(path) = open {

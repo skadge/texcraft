@@ -314,6 +314,16 @@ impl Session {
         self.library.as_mut().map(library::Library::take_changes).unwrap_or_default()
     }
 
+    /// The shell could not store `change` (see [`library::out_of_room`] for why): what the library
+    /// holds in memory is not kept, so the open project, when it is the change's, has unsaved
+    /// changes again; the next save stores it all again, and leaving the page warns first.
+    pub fn not_stored(&mut self, change: &library::Change) {
+        let open = self.library.is_some() && self.dir.as_ref().and_then(|d| d.to_str()) == Some(change.project());
+        if open && !matches!(change, library::Change::Deleted(_)) {
+            self.dirty = true;
+        }
+    }
+
     /// Keeps templates in `dir` (the shell's data folder).
     pub fn set_template_store(&mut self, dir: PathBuf) {
         self.templates = Some(texcraft_templates::Store::new(dir));

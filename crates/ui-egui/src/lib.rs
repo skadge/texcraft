@@ -43,7 +43,7 @@ mod source;
 mod spell;
 mod symbols;
 pub use picks::{Pick, PickKind, PickRequest};
-pub use start::{THUMBNAIL_WIDTH, Thumbnail};
+pub use start::{BrowserStorage, THUMBNAIL_WIDTH, Thumbnail};
 mod history;
 mod panes;
 mod picks;
@@ -52,6 +52,7 @@ mod rail;
 mod review;
 mod search;
 mod settings;
+mod sheet;
 mod side;
 mod start;
 mod status;
@@ -149,6 +150,10 @@ pub(crate) struct View {
     pub focus_fallback: Option<egui::Id>,
     /// The Settings dialog's open tab.
     pub settings_tab: usize,
+    /// On a phone, Settings shows the section `settings_tab` (not the list of sections).
+    pub settings_page: bool,
+    /// Give the keyboard to the row of section `settings_tab` (back from its page).
+    pub settings_focus: bool,
     /// Which messages the build log lists.
     pub log_filter: preview::Filter,
     /// The raw log's search.
@@ -221,6 +226,8 @@ pub struct App {
     picks: Vec<picks::PickRequest>,
     /// Whether the shell shows native pickers; without them paths are typed.
     native_pickers: bool,
+    /// What the browser said of the room for its projects, once the shell asked (W13).
+    browser_storage: Option<BrowserStorage>,
     /// Whether the shell can show a file in the system's file manager ([`App::take_reveals`]).
     file_manager: bool,
     /// Files for the shell to show in the file manager.
@@ -295,6 +302,8 @@ impl App {
                 log_filter: preview::Filter::All,
                 log_search: preview::LogSearch::default(),
                 settings_tab: 0,
+                settings_page: false,
+                settings_focus: false,
                 regions: Vec::new(),
                 region_areas: Vec::new(),
                 modal_was_open: false,
@@ -341,6 +350,7 @@ impl App {
             quit: false,
             close_confirmed: false,
             native_pickers: false,
+            browser_storage: None,
             file_manager: false,
             reveals: Vec::new(),
             ctx: egui::Context::default(),
@@ -570,6 +580,37 @@ impl App {
     /// as storing the projects.
     pub fn report(&mut self, message: String, error: bool) {
         self.view.status = Some((message, error));
+    }
+
+    /// The shell could not store `change` in the browser (IndexedDB refused it with `error`). The
+    /// change's project, when it is the open one, has unsaved changes again (rule 15: no save is
+    /// said to have worked when the write failed), and the status line says why and what to do.
+    pub fn not_stored(&mut self, change: &texcraft_engine::library::Change, error: &str) {
+        use texcraft_engine::library::{Change, out_of_room};
+        self.session.not_stored(change);
+        let project = change.project();
+        let said = if out_of_room(error) {
+            tl!("There is no room left in this browser to keep {project}: its last changes are not saved. Download the project as a zip (File menu) to keep a copy, then delete projects you no longer need to make room.")
+                .replace("{project}", project)
+        } else {
+            let what = match change {
+                Change::Saved(..) | Change::Deleted(_) => tl!("{project} could not be kept in this browser: {error}"),
+                Change::Versions { .. } => tl!("A version of {project} could not be kept in this browser: {error}"),
+                Change::Thread { .. } => tl!("A comment of {project} could not be kept in this browser: {error}"),
+            };
+            let mut said = what.replace("{project}", project).replace("{error}", error);
+            if !matches!(change, Change::Deleted(_)) {
+                said.push(' ');
+                said.push_str(tl!("Its changes are not saved."));
+            }
+            said
+        };
+        self.view.status = Some((said, true));
+    }
+
+    /// What the browser says of the room for its projects: shown on the start page.
+    pub fn set_browser_storage(&mut self, storage: BrowserStorage) {
+        self.browser_storage = Some(storage);
     }
 
     /// Puts the open project's folder first in the recent projects.

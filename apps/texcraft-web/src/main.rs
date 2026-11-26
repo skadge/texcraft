@@ -22,7 +22,7 @@ mod web {
     use std::rc::Rc;
 
     use texcraft_engine::library::{Change, Library};
-    use texcraft_ui_egui::{App, Pick};
+    use texcraft_ui_egui::{App, BrowserStorage, Pick};
     use wasm_bindgen::JsCast;
 
     use crate::store::Store;
@@ -36,6 +36,10 @@ mod web {
     /// The names of what a drop of folders brought, read by [`read_dropped_tree`]: eframe hands
     /// the same drop over as files, which are left out.
     type Taken = Rc<RefCell<Vec<String>>>;
+    /// Writes the browser's storage refused (the change, and why), for the next frame.
+    type Refused = Rc<RefCell<Vec<(Change, String)>>>;
+    /// What the browser last said of the room for the projects, for the next frame.
+    type Room = Rc<RefCell<Option<BrowserStorage>>>;
     /// Templates fetched (their files, or why not), waiting for the next frame.
     type Fetched = Rc<RefCell<Vec<(String, Result<Vec<(String, Vec<u8>)>, String>)>>>;
 
@@ -68,6 +72,29 @@ mod web {
         Ok(files)
     }
 
+    /// Whether `promise` (of `navigator.storage`) resolved to true, false, or said nothing.
+    async fn flag(promise: Result<js_sys::Promise, wasm_bindgen::JsValue>) -> Option<bool> {
+        wasm_bindgen_futures::JsFuture::from(promise.ok()?).await.ok()?.as_bool()
+    }
+
+    /// What `navigator.storage` says of the site's data: whether the browser keeps it until the
+    /// user deletes it, first asking it to (`ask`) when it does not, and the room used and allowed.
+    /// A browser without the Storage API (or a page that is not a secure context) says nothing.
+    async fn storage(ask: bool) -> BrowserStorage {
+        let Some(manager) = web_sys::window().map(|w| w.navigator().storage()) else { return BrowserStorage::default() };
+        let mut persisted = flag(manager.persisted()).await;
+        if ask && persisted == Some(false) {
+            persisted = flag(manager.persist()).await.or(persisted);
+        }
+        let estimate = match manager.estimate() {
+            Ok(promise) => wasm_bindgen_futures::JsFuture::from(promise).await.ok().map(|v| v.unchecked_into::<web_sys::StorageEstimate>()),
+            Err(_) => None,
+        };
+        let used = estimate.as_ref().and_then(|e| e.get_usage()).map(|u| u as u64);
+        let quota = estimate.as_ref().and_then(|e| e.get_quota()).map(|q| q as u64);
+        BrowserStorage { persisted, used, quota }
+    }
+
     struct Shell {
         app: App,
         chosen: Chosen,
@@ -81,6 +108,10 @@ mod web {
         repaint: Repaint,
         /// Whether the session has unsaved changes, for the page's `beforeunload` listener.
         unsaved: Rc<Cell<bool>>,
+        refused: Refused,
+        room: Room,
+        /// Whether the browser was asked to keep the projects for good (at the first save).
+        asked_to_keep: bool,
     }
 
     impl Shell {
@@ -91,29 +122,32 @@ mod web {
             let prefs = self.app.take_changed_prefs();
             let thumbnails = self.app.take_thumbnails();
             if let Some(store) = &self.store {
-                for change in changes {
-                    let (store, errors, ctx) = (store.clone(), self.errors.clone(), ctx.clone());
+                // The first save of the page asks the browser to keep the projects until the user
+                // deletes them; the start page says whether it agreed.
+                if !self.asked_to_keep && changes.iter().any(|c| matches!(c, Change::Saved(..))) {
+                    self.asked_to_keep = true;
+                    let (room, ctx) = (self.room.clone(), ctx.clone());
                     wasm_bindgen_futures::spawn_local(async move {
-                        use texcraft_ui_egui::i18n::t;
-                        let project_failed = t("{project} could not be kept in this browser: {error}");
-                        let (name, result, what) = match &change {
-                            Change::Saved(name, project) => (name, store.put_project(name, project).await, project_failed),
-                            Change::Deleted(name) => (name, store.delete_project(name).await, project_failed),
-                            Change::Versions { project, versions, blobs } => (
-                                project,
-                                store.put_versions(project, versions, blobs).await,
-                                t("A version of {project} could not be kept in this browser: {error}"),
-                            ),
-                            Change::Thread { project, file, text } => (
-                                project,
-                                store.put_thread(project, file, text.as_deref()).await,
-                                t("A comment of {project} could not be kept in this browser: {error}"),
-                            ),
+                        *room.borrow_mut() = Some(storage(true).await);
+                        ctx.request_repaint();
+                    });
+                }
+                for change in changes {
+                    let (store, refused, room, ctx) = (store.clone(), self.refused.clone(), self.room.clone(), ctx.clone());
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let result = match &change {
+                            Change::Saved(name, project) => store.put_project(name, project).await,
+                            Change::Deleted(name) => store.delete_project(name).await,
+                            Change::Versions { project, versions, blobs } => store.put_versions(project, versions, blobs).await,
+                            Change::Thread { project, file, text } => store.put_thread(project, file, text.as_deref()).await,
                         };
-                        if let Err(e) = result {
-                            errors.borrow_mut().push(what.replace("{project}", name).replace("{error}", &e));
-                            ctx.request_repaint();
+                        match result {
+                            Err(e) => refused.borrow_mut().push((change, e)),
+                            // The room the projects take now.
+                            Ok(()) if matches!(change, Change::Saved(..) | Change::Deleted(_)) => *room.borrow_mut() = Some(storage(false).await),
+                            Ok(()) => {}
                         }
+                        ctx.request_repaint();
                     });
                 }
                 if let Some(json) = prefs.and_then(|p| serde_json::to_string(&p).ok()) {
@@ -138,6 +172,13 @@ mod web {
             let errors = std::mem::take(&mut *self.errors.borrow_mut());
             if let Some(last) = errors.into_iter().last() {
                 self.app.report(last, true);
+            }
+            // A refused write leaves its project unsaved, and says why (rule 15).
+            for (change, error) in std::mem::take(&mut *self.refused.borrow_mut()) {
+                self.app.not_stored(&change, &error);
+            }
+            if let Some(room) = self.room.borrow_mut().take() {
+                self.app.set_browser_storage(room);
             }
         }
 
@@ -607,6 +648,9 @@ mod web {
             for thumbnail in thumbnails {
                 app.set_thumbnail(thumbnail);
             }
+            if store.is_some() {
+                app.set_browser_storage(storage(false).await);
+            }
             app.set_native_pickers(true);
             app.show_start_page();
             if let Some(params) = returned {
@@ -621,8 +665,21 @@ mod web {
             watch_drops(&canvas, &chosen, &errors, &repaint, &taken);
             let unsaved = Rc::new(Cell::new(false));
             warn_before_leaving(unsaved.clone());
-            let shell =
-                Shell { app, chosen, zips: Chosen::default(), taken, started: false, store, errors, fetched: Fetched::default(), repaint, unsaved };
+            let shell = Shell {
+                app,
+                chosen,
+                zips: Chosen::default(),
+                taken,
+                started: false,
+                store,
+                errors,
+                fetched: Fetched::default(),
+                repaint,
+                unsaved,
+                refused: Refused::default(),
+                room: Room::default(),
+                asked_to_keep: false,
+            };
             let started = eframe::WebRunner::new().start(canvas, eframe::WebOptions::default(), Box::new(|_cc| Ok(Box::new(shell)))).await;
             if let Err(e) = started {
                 log::error!("TeXCraft could not start: {e:?}");

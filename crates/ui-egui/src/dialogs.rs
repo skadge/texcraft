@@ -133,33 +133,29 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let Some(dialog) = app.view.dialog.as_mut() else { return };
     let t = app.tokens;
     let mut outcome = Outcome::Open;
-    let width = 400.0;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-dialog")).frame(crate::widgets::dialog_frame(ctx)).show(ctx, |ui| {
-        ui.set_width(width);
-        match dialog {
-            Dialog::Prompt(p) => outcome = prompt(ui, &t, p),
-            Dialog::Confirm(c) => outcome = confirm(ui, &t, c),
-            Dialog::Unsaved(_) => outcome = unsaved(ui, &t, &project),
-            Dialog::Shortcuts
-            | Dialog::Settings
-            | Dialog::GoToFile(_)
-            | Dialog::Choose(_)
-            | Dialog::ForgeOpen(_)
-            | Dialog::ForgeCommit(_)
-            | Dialog::ForgeResolve(_)
-            | Dialog::ForgeMergeRequest(_)
-            | Dialog::ForgeSave(_)
-            | Dialog::ForgeServer(_)
-            | Dialog::ForgeProposal(_)
-            | Dialog::AiMake(_)
-            | Dialog::AiReference(_)
-            | Dialog::AiInstruct(_)
-            | Dialog::Drop(_) => {}
-            Dialog::Figure(f) => outcome = crate::figure_dialog::form(ui, &t, f),
-            Dialog::About => outcome = about(ui, &t, &engine),
-        }
+    let shown = crate::sheet::show(ctx, &t, "texcraft-dialog", 400.0, crate::sheet::Leave::Close, |ui| match dialog {
+        Dialog::Prompt(p) => outcome = prompt(ui, &t, p),
+        Dialog::Confirm(c) => outcome = confirm(ui, &t, c),
+        Dialog::Unsaved(_) => outcome = unsaved(ui, &t, &project),
+        Dialog::Shortcuts
+        | Dialog::Settings
+        | Dialog::GoToFile(_)
+        | Dialog::Choose(_)
+        | Dialog::ForgeOpen(_)
+        | Dialog::ForgeCommit(_)
+        | Dialog::ForgeResolve(_)
+        | Dialog::ForgeMergeRequest(_)
+        | Dialog::ForgeSave(_)
+        | Dialog::ForgeServer(_)
+        | Dialog::ForgeProposal(_)
+        | Dialog::AiMake(_)
+        | Dialog::AiReference(_)
+        | Dialog::AiInstruct(_)
+        | Dialog::Drop(_) => {}
+        Dialog::Figure(f) => outcome = crate::figure_dialog::form(ui, &t, f),
+        Dialog::About => outcome = about(ui, &t, &engine),
     });
-    if modal.should_close() || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+    if shown.close || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         outcome = Outcome::Cancel;
     }
     match outcome {
@@ -249,7 +245,7 @@ fn unsaved(ui: &mut egui::Ui, t: &Tokens, project: &str) -> Outcome {
     ui.label(tl!("Changes that are not saved are lost."));
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
-    button_row(ui, |ui| {
+    actions(ui, |ui| {
         let save = egui::Button::new(RichText::new(tl!("Save")).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
         if ui.add(save.min_size(egui::vec2(88.0, 30.0))).clicked() {
             outcome = Outcome::Run;
@@ -266,16 +262,22 @@ fn unsaved(ui: &mut egui::Ui, t: &Tokens, project: &str) -> Outcome {
     outcome
 }
 
+/// The dialog's title: at the top of its box, or of a phone's sheet ([`crate::sheet::title`]).
 pub(crate) fn title(ui: &mut egui::Ui, t: &Tokens, text: &str) {
-    ui.label(RichText::new(text).font(t.title()));
-    ui.add_space(t.unit * 2.0);
+    crate::sheet::title(ui, t, text);
+}
+
+/// The dialog's actions, from the right: the last row of its box, or a phone's sheet's bottom
+/// bar ([`crate::sheet::actions`]).
+pub(crate) fn actions(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    crate::sheet::actions(ui, add);
 }
 
 /// Cancel and the primary action, right-aligned. Returns the outcome chosen.
 pub(crate) fn buttons(ui: &mut egui::Ui, t: &Tokens, action: &str, danger: bool, enabled: bool) -> Outcome {
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
-    button_row(ui, |ui| {
+    actions(ui, |ui| {
         let fill = if danger { t.error } else { t.accent };
         let label = RichText::new(action).color(t.on_accent).font(t.strong());
         let primary = egui::Button::new(label).fill(fill).stroke(egui::Stroke::NONE).min_size(egui::vec2(88.0, 30.0));
@@ -365,16 +367,10 @@ fn about(ui: &mut egui::Ui, t: &Tokens, engine: &str) -> Outcome {
     });
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
-    button_row(ui, |ui| {
+    actions(ui, |ui| {
         if ui.add(egui::Button::new(tl!("Close")).min_size(egui::vec2(80.0, 30.0))).clicked() {
             outcome = Outcome::Cancel;
         }
     });
     outcome
-}
-
-/// A row of buttons from the right edge, as tall as a button: a layout from the right would
-/// otherwise take the dialog's whole height and push its buttons down.
-pub(crate) fn button_row(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
-    ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 32.0), Layout::right_to_left(Align::Center), add);
 }

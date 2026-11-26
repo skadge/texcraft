@@ -368,7 +368,7 @@ fn menu_items(app: &mut App, ui: &mut egui::Ui, menu: &str) {
     let t = app.tokens;
     ui.set_min_width(220.0);
     let mut chosen = None;
-    for spec in cmd::all().iter().filter(|c| c.menu.first() == Some(&menu)) {
+    for spec in cmd::all().iter().filter(|c| c.menu.first() == Some(&menu) && ui_cmd::in_menus(app, c.id)) {
         let mut label = crate::forge::label(app, spec.id).unwrap_or_else(|| crate::i18n::tid(spec.id, spec.label)).to_owned();
         if spec.id == "build.auto" && app.session.settings.auto_compile {
             label = format!("{label} ✓");

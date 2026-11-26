@@ -97,8 +97,15 @@
 
       <h2 id="library">Projects in the browser</h2>
       <p>The browser version keeps projects in your browser's storage for this site, by name. The start page lists them under <span class="ui">Projects in this browser</span>, to open or to delete. The page asks before you leave it with unsaved changes.</p>
+      <p>When you first save a project, TeXCraft asks the browser to keep the site's data for good. Under <span class="ui">Projects in this browser</span> the start page says what the browser answered, and how much room the projects take:</p>
+      <ul>
+        <li><strong>Kept until you delete them</strong>: the browser agreed; it does not remove the projects on its own.</li>
+        <li><strong>The browser may remove them when space runs low</strong>: it did not (some browsers decide by how often you visit the site, or ask you). Keep a copy elsewhere, as below.</li>
+      </ul>
+      <p>If the browser has no room left, the save fails and TeXCraft says so on the status line: the project keeps its unsaved changes (the dot after its name), and leaving the page warns you. Download it as a zip, delete projects you no longer need, then save again.</p>
+      <p><span class="ui">File › Download Project as Zip</span> <span class="tag">Browser only</span> downloads the project's files (and its review's comments, in <code>.texcraft/review/</code>) as one zip file. Dropped on the start page, it becomes a project again with the same files; on the desktop, unzip it and open the folder, comments included.</p>
       <div class="note">
-        <p>Projects stay in this browser on this computer only. Clearing the site's data in the browser deletes them. To keep a copy elsewhere, save the project to GitLab or GitHub (<a href="forges.html#save-to">how</a>); exports and the PDF can be downloaded at any time.</p>
+        <p>Projects stay in this browser on this computer only. Clearing the site's data in the browser deletes them. To keep a copy elsewhere, download it as a zip, or save the project to GitLab or GitHub (<a href="forges.html#save-to">how</a>); exports and the PDF can be downloaded at any time.</p>
       </div>
       <nav class="pager" aria-label="Previous and next page">
         <a class="prev" href="building.html" rel="prev"><span class="dir">Previous</span> Building and exporting</a>

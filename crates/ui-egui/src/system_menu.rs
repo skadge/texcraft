@@ -36,7 +36,7 @@ impl App {
         let mut menus = Vec::with_capacity(MENUS.len());
         for title in MENUS {
             let mut children: Vec<Node> = Vec::new();
-            for spec in cmd::all().iter().filter(|c| c.menu.first() == Some(title)) {
+            for spec in cmd::all().iter().filter(|c| c.menu.first() == Some(title) && ui_cmd::in_menus(self, c.id)) {
                 let label = crate::forge::label(self, spec.id).unwrap_or_else(|| crate::i18n::tid(spec.id, spec.label));
                 children.push(Item::new(spec.id, label).enabled((spec.enabled)(&self.session).is_ok()).into());
             }

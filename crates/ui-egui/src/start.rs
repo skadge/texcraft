@@ -26,6 +26,50 @@ pub struct Thumbnail {
     pub rgba: Vec<u8>,
 }
 
+/// What the browser says of the room for the projects it keeps (`navigator.storage`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BrowserStorage {
+    /// Whether the browser keeps the site's data until the user deletes it (persistent storage
+    /// granted), or may remove it when space runs low; `None` when it did not say.
+    pub persisted: Option<bool>,
+    /// The bytes the site uses, and may use at most, when the browser says.
+    pub used: Option<u64>,
+    pub quota: Option<u64>,
+}
+
+/// `bytes` in the unit that suits it.
+fn size_text(bytes: u64) -> String {
+    let b = bytes as f64;
+    if b >= 1e9 {
+        crate::i18n::measure(b / 1e9, 1, "{n} GB")
+    } else if b >= 1e6 {
+        crate::i18n::measure(b / 1e6, 1, "{n} MB")
+    } else {
+        crate::i18n::measure((b / 1e3).ceil(), 0, "{n} kB")
+    }
+}
+
+/// What the start page says of where the browser keeps the projects: whether they are kept for
+/// good, and the room used and left.
+fn storage(app: &App, ui: &mut egui::Ui, t: &Tokens) {
+    let Some(storage) = app.browser_storage else { return };
+    let mut lines = Vec::new();
+    match storage.persisted {
+        Some(true) => lines.push(tl!("Kept until you delete them.").to_owned()),
+        Some(false) => lines
+            .push(tl!("The browser may remove them when space runs low: download each as a zip (File menu) to keep a copy elsewhere.").to_owned()),
+        None => {}
+    }
+    if let (Some(used), Some(quota)) = (storage.used, storage.quota) {
+        let left = quota.saturating_sub(used);
+        lines.push(tl!("{used} used, {left} available.").replace("{used}", &size_text(used)).replace("{left}", &size_text(left)));
+    }
+    for line in lines {
+        ui.horizontal_wrapped(|ui| ui.label(RichText::new(line).font(t.small()).color(t.text_muted)));
+    }
+    ui.add_space(t.unit * 2.0);
+}
+
 /// Thumbnails known to the interface: drawn ones, and ones to hand to the shell.
 #[derive(Default)]
 pub(crate) struct Thumbnails {
@@ -218,6 +262,9 @@ fn recent(app: &mut App, ui: &mut egui::Ui, t: &Tokens, width: f32) {
     let title = if library.is_some() { tl!("Projects in this browser") } else { tl!("Recent projects") };
     ui.horizontal(|ui| widgets::section_title(ui, t, title));
     ui.add_space(t.unit * 3.0);
+    if library.is_some() {
+        storage(app, ui, t);
+    }
     let recent = library.clone().unwrap_or_else(|| app.prefs.recent.clone());
     if recent.is_empty() {
         let empty = if library.is_some() { tl!("Projects you save appear here.") } else { tl!("Projects you open appear here.") };

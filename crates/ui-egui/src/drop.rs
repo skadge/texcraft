@@ -16,9 +16,9 @@ use std::path::PathBuf;
 use egui::RichText;
 use serde_json::{Value, json};
 
-use crate::dialogs::{Dialog, Next, button_row, title};
+use crate::App;
+use crate::dialogs::{Dialog, Next, actions, title};
 use crate::theme::Tokens;
-use crate::{App, widgets};
 
 /// Something dropped or chosen.
 #[derive(Debug, Clone)]
@@ -346,13 +346,12 @@ impl Tally {
 pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
     let t = app.tokens;
     let mut choice = None;
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-drop")).frame(widgets::dialog_frame(ctx)).show(ctx, |ui| {
-        ui.set_width(440.0);
+    let modal = crate::sheet::show(ctx, &t, "texcraft-drop", 440.0, crate::sheet::Leave::Close, |ui| {
         if let Some(Dialog::Drop(form)) = app.view.dialog.as_mut() {
             choice = ask(ui, &t, form);
         }
     });
-    if modal.should_close() || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+    if modal.close || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         choice = Some(Choice::Cancel);
     }
     let Some(choice) = choice else { return };
@@ -386,7 +385,7 @@ fn ask(ui: &mut egui::Ui, t: &Tokens, form: &mut DropForm) -> Option<Choice> {
             title(ui, t, &tl!("Unzip {file}?").replace("{file}", name));
             ui.label(tl!("Its files and folders can be added to the project, or the zip file itself."));
             ui.add_space(t.unit * 4.0);
-            button_row(ui, |ui| {
+            actions(ui, |ui| {
                 if primary(ui, t, tl!("Unzip into the Project"), focus).clicked() {
                     choice = Some(Choice::Unzip);
                 }
@@ -410,7 +409,7 @@ fn ask(ui: &mut egui::Ui, t: &Tokens, form: &mut DropForm) -> Option<Choice> {
             ui.label(RichText::new(list).color(t.text_muted));
             ui.label(tl!("Replace them with the new ones, keep both (the new ones get another name), or skip the new ones?"));
             ui.add_space(t.unit * 4.0);
-            button_row(ui, |ui| {
+            actions(ui, |ui| {
                 if primary(ui, t, tl!("Replace"), focus).clicked() {
                     choice = Some(Choice::Existing("replace"));
                 }
