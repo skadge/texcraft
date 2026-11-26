@@ -68,7 +68,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | B7 | ✅ 0.5.0 | Progress beside the PDF | The page being built also in the PDF pane's header. |
 | B8 | ✅ 0.6.0 | A better preview | Pages drawn in the background, zoom presets, links, text selection, presentation mode. Selection is on one page at a time; presentations fill the window, not the screen. |
 | B9 | ✅ 0.10.0 | The raw log and outputs | Search in the raw log (count of matches, previous and next, marked and scrolled to), and the build's files (PDF, PDF/X, SyncTeX, log) with Save As…, Download in the browser and Show in Folder on the desktop. |
-| B10 | ⬜ | Errors where they are | An unclosed environment reported at its `\begin` as well as where TeX noticed (the example: `sections/intro.tex:3`, not `main.tex:59`), both linked and marked in the editor; messages written as sentences; the build log's button named with its count (retex; UX review, findings 6, 20 and 27). |
+| B10 | 🚧 | Errors where they are | Done (unreleased): an environment left open, or a `{` never closed, in an included file is reported at its `\begin` (or its `{`) in that file, read from TeX's log (the files it opened, the line it names) and the project's files; where TeX noticed it (`main.tex:59`) is linked under the message and marked in the editor too; the build log's button is named with its count ("Build log, 2 errors"). Still to do: messages written as sentences (retex) (UX review, findings 6, 20 and 27). |
 
 ## Comments and working together
 

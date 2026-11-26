@@ -55,13 +55,14 @@
       <p>Bibliographies (BibTeX and biber) and indexes (makeindex) run inside the build, as many times as the document needs: there is nothing else to run.</p>
 
       <h2 id="log">The build log</h2>
-      <p><span class="ui">Build log</span> in the PDF pane shows the last build's messages in the PDF's place; <span class="ui">Back to PDF</span> returns.</p>
+      <p><span class="ui">Build log</span> in the PDF pane shows the last build's messages in the PDF's place; <span class="ui">Back to PDF</span> returns. Its badge counts the errors (or, without any, the warnings), and its name says the count too: <span class="ui">Build log, 2 errors</span>.</p>
       <figure>
         <img src="../images/log-dark.png" width="1440" height="900" alt="The build log in the dark theme, in the place of the PDF: one error and two warnings as cards, each with its message, an explanation and a link to its line; in the editor, the same lines are marked in the gutter.">
         <figcaption>Messages as cards, each linked to its line.</figcaption>
       </figure>
       <ul>
         <li>Each message is a card: its kind (error, warning, note or hint), what it means in words, help on how to fix it, and a link to the line. The same lines are marked in the editor's gutter, and errors are underlined in the text.</li>
+        <li>A problem is linked where it starts, which is not always where TeX noticed it: an environment left open in an included file is noticed only at the main document's <code>\end{document}</code>, and a <code>{</code> never closed at the <code>\input</code> line that read the file. Such a card links to the <code>\begin</code> (or the <code>{</code>) in its file, and under the message to <span class="ui">TeX noticed it at main.tex:59</span>; the editor marks both lines.</li>
         <li>The filters at the top show <span class="ui">All</span>, <span class="ui">Errors</span>, <span class="ui">Warnings</span> or <span class="ui">Notes</span>, and for accessible and print builds <span class="ui">Accessibility</span> and <span class="ui">Print</span>.</li>
         <li>Messages can be selected and copied; <span class="ui">Copy the message</span> on a card, or <span class="ui">Copy the messages shown</span> for all of them.</li>
         <li>With a model connected, <span class="ui">Explain</span> on a card asks it for a plain explanation and a fix (<a href="ai.html#explain">AI assistance</a>). <span class="tag">Desktop only</span></li>
