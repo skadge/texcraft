@@ -324,9 +324,9 @@ pub(crate) fn export_label(format: Export) -> &'static str {
     match format {
         Export::Pdf => tl!("PDF"),
         Export::Odt => tl!("OpenDocument Text (.odt)"),
-        Export::Docx => tl!("Word Document (.docx)"),
+        Export::Docx => tl!("DOCX Document (.docx)"),
         Export::Odp => tl!("OpenDocument Presentation (.odp)"),
-        Export::Pptx => tl!("PowerPoint Presentation (.pptx)"),
+        Export::Pptx => tl!("PPTX Presentation (.pptx)"),
         Export::Html => tl!("Web Page (.html)"),
         Export::Markdown => tl!("Markdown (.md)"),
         Export::Svg => tl!("SVG Image (.svg)"),

@@ -39,15 +39,15 @@ fn menu_for(main: &str) -> Result<(f32, f32), String> {
     h.run();
     h.get_by_label("Export").click();
     h.run();
-    Ok((top(&h, "PowerPoint Presentation (.pptx)"), top(&h, "Word Document (.docx)")))
+    Ok((top(&h, "PPTX Presentation (.pptx)"), top(&h, "DOCX Document (.docx)")))
 }
 
 #[test]
 fn a_presentation_lists_its_slide_formats_before_the_text_formats() -> Result<(), String> {
     let (pptx, docx) = menu_for("\\documentclass[11pt]{beamer}\n\\begin{document}\\end{document}\n")?;
-    assert!(pptx < docx, "PowerPoint is not above Word for a beamer document");
+    assert!(pptx < docx, "PPTX is not above DOCX for a beamer document");
     let (pptx, docx) = menu_for("\\documentclass{article}\n\\begin{document}\\end{document}\n")?;
-    assert!(docx < pptx, "Word is not above PowerPoint for an article");
+    assert!(docx < pptx, "DOCX is not above PPTX for an article");
     Ok(())
 }
 
@@ -86,7 +86,7 @@ fn the_export_pill_turns_while_a_file_is_exported_and_the_status_says_when_it_is
     assert!(pill.width() > h.get_by_label("Build log").rect().width() * 2.0, "Export is not a pill with its name");
     h.get_by_label("Export").click();
     h.run();
-    h.get_by_label("Word Document (.docx)").click();
+    h.get_by_label("DOCX Document (.docx)").click();
     h.run();
     let out = std::env::temp_dir().join(format!("texcraft-export-pill-{}.docx", std::process::id()));
     h.get_by_label("The file to write the export to").type_text(&out.to_string_lossy());
@@ -97,7 +97,7 @@ fn the_export_pill_turns_while_a_file_is_exported_and_the_status_says_when_it_is
         h.step();
     }
     assert!(h.query_by_label("Exporting…").is_some(), "the pill does not say an export is running");
-    assert!(h.query_all_by_label_contains("Exporting as Word Document").next().is_some(), "the status line does not say the export started");
+    assert!(h.query_all_by_label_contains("Exporting as DOCX Document").next().is_some(), "the status line does not say the export started");
     go.store(true, std::sync::atomic::Ordering::SeqCst);
     for _ in 0..400 {
         h.step();
