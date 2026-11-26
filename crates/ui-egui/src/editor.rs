@@ -804,11 +804,8 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
                 hidden.push(i);
             }
         }
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.add_space(t.unit * 2.0);
-            if widgets::icon_button(ui, &t, "search", tl!("Find and replace"), true).clicked() {
-                chosen = Some("edit.replace");
-            }
+        // At the row's end, in reading order: More formatting, then Find.
+        widgets::right_aligned(ui, "editor-tools-end", |ui| {
             if !hidden.is_empty() {
                 let more = widgets::icon_button(ui, &t, "ellipsis", tl!("More formatting"), true);
                 crate::widgets::keyboard_menu(ui, &more);
@@ -826,6 +823,10 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
                     }
                 });
             }
+            if widgets::icon_button(ui, &t, "search", tl!("Find and replace"), true).clicked() {
+                chosen = Some("edit.replace");
+            }
+            ui.add_space(t.unit * 2.0);
         });
     });
     if let Some(id) = chosen {

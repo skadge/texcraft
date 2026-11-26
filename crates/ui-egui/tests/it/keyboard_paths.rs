@@ -224,7 +224,7 @@ fn tab_crosses_the_window_in_reading_order_and_f6_takes_the_keyboard_out_of_the_
         (Role::Button, "Untitled project: name and save the project"),
         (Role::Button, "Editor and PDF"),
         (Role::Tab, "Project Files"),
-        (Role::Tab, "Settings"),
+        (Role::Button, "Settings"),
         (Role::Button, "Add Files…"),
         (Role::TreeItem, "main.tex"),
         (Role::TreeItem, "Introduction"),

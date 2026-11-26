@@ -74,24 +74,29 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             project_title(app, ui, room);
         }
         let rect = egui::Rect::from_min_max(egui::pos2(bar.center().x, bar.top()), bar.max);
-        let end = ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(EguiLayout::right_to_left(Align::Center)), |ui| {
-            if app.own_frame() {
-                crate::window::controls(app, ui);
+        // At the bar's end, in reading order: the repository's badge, the layout switch, then the
+        // window's buttons.
+        let end = ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(EguiLayout::left_to_right(Align::Center)), |ui| {
+            widgets::right_aligned(ui, "bar-end-controls", |ui| {
                 if !app.start {
-                    ui.add_space(t.unit);
-                    ui.add(egui::Separator::default().vertical().shrink(t.unit * 3.0));
-                    ui.add_space(t.unit);
+                    crate::forge::badge(app, ui);
+                    if !app.view.narrow {
+                        ui.add_space(t.unit * 2.0);
+                        layout_switch(app, ui);
+                    }
                 }
-            }
-            if !app.start {
-                if !app.view.narrow {
-                    layout_switch(app, ui);
-                    ui.add_space(t.unit * 2.0);
+                if app.own_frame() {
+                    if !app.start {
+                        ui.add_space(t.unit);
+                        ui.add(egui::Separator::default().vertical().shrink(t.unit * 3.0));
+                        ui.add_space(t.unit);
+                    }
+                    crate::window::controls(app, ui);
                 }
-                crate::forge::badge(app, ui);
-            }
+                ui.min_rect().width()
+            })
         });
-        let width = end.response.rect.width();
+        let width = end.inner;
         ui.data_mut(|d| d.insert_temp(ui.scope_id().with("bar-end"), width));
     });
     app.region_area(crate::Region::TopBar, shown.response.rect);
@@ -552,12 +557,11 @@ fn rename_field(app: &mut App, ui: &mut egui::Ui, bar: egui::Rect) {
 
 fn layout_switch(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
-    // Right to left: the last entry is drawn first. Named as their commands are, in the menus and
-    // the shortcuts list.
+    // In reading order. Named as their commands are, in the menus and the shortcuts list.
     for (layout, icon, id, label) in [
-        (Layout::PreviewOnly, "file-text", "view.layout.preview", tn!("PDF Only")),
-        (Layout::EditorOnly, "code", "view.layout.editor", tn!("Editor Only")),
         (Layout::Split, "columns-2", "view.layout.split", tn!("Editor and PDF")),
+        (Layout::EditorOnly, "code", "view.layout.editor", tn!("Editor Only")),
+        (Layout::PreviewOnly, "file-text", "view.layout.preview", tn!("PDF Only")),
     ] {
         let shown = if app.view.pdf_window { Layout::EditorOnly } else { app.view.layout };
         if widgets::icon_toggle(ui, &t, icon, crate::i18n::tid(id, label), shown == layout).clicked() {

@@ -43,6 +43,7 @@ mod pdf_window;
 mod phone_dialogs;
 mod progress;
 mod raw_log;
+mod reading_order;
 mod recent;
 mod regions;
 mod rename;
