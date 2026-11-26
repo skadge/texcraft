@@ -34,6 +34,9 @@ pub struct Prefs {
     pub editor_font_size: f32,
     pub auto_compile: bool,
     pub auto_compile_delay_ms: u64,
+    /// The project's changes are written shortly after typing stops, and versions made by
+    /// themselves (`project.autosave`).
+    pub autosave: bool,
     /// `split`, `editor` or `preview`.
     pub layout: String,
     /// `files`, `outline`, `review` or empty for a hidden side panel.
@@ -118,6 +121,7 @@ impl Default for Prefs {
             editor_font_size: TEXT_SIZE_DEFAULT,
             auto_compile: true,
             auto_compile_delay_ms: 800,
+            autosave: true,
             layout: "split".to_owned(),
             side: "files".to_owned(),
             recent: Vec::new(),

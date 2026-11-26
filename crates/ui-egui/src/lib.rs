@@ -15,6 +15,7 @@ mod ai;
 mod ai_ask;
 mod ai_make;
 mod app_icon;
+mod autosave;
 pub mod commands;
 pub mod control;
 mod dialogs;
@@ -59,6 +60,7 @@ mod side;
 mod start;
 mod status;
 mod suggest;
+mod sync;
 mod system_menu;
 mod tips;
 mod top_bar;
@@ -280,6 +282,10 @@ pub struct App {
     ai: ai::AiView,
     /// The symbol palette's search.
     symbols: symbols::Palette,
+    /// Writing the project by itself, and versions made by themselves.
+    autosave: autosave::Autosave,
+    /// The project's remote and the Sync under way.
+    sync: sync::SyncView,
 }
 
 impl App {
@@ -291,6 +297,7 @@ impl App {
     pub fn with_prefs(mut session: Session, prefs: prefs::Prefs) -> Self {
         session.settings.auto_compile = prefs.auto_compile;
         session.settings.auto_compile_delay_ms = prefs.auto_compile_delay_ms.clamp(200, 10_000);
+        session.settings.autosave = prefs.autosave;
         session.settings.build = prefs.build;
         session.set_author(prefs.identity.as_ref().map(prefs::Identity::author));
         session.restore_ai(prefs.ai.clone());
@@ -385,6 +392,8 @@ impl App {
             fields: fields::Fields::default(),
             ai: ai::AiView::default(),
             symbols: symbols::Palette::default(),
+            autosave: autosave::Autosave::default(),
+            sync: sync::SyncView::default(),
         };
         app.remember_project();
         app
@@ -408,6 +417,7 @@ impl App {
         let side = if self.view.narrow { self.view.side_wide } else { self.view.side };
         current.set_view(self.view.layout, side);
         current.auto_compile = self.session.settings.auto_compile;
+        current.autosave = self.session.settings.autosave;
         current.build = self.session.settings.build;
         current.spelling = self.session.settings.spelling.clone();
         current.grammar = self.session.settings.grammar.clone();
@@ -475,12 +485,13 @@ impl App {
         self.remember_project();
     }
 
-    /// Does `next` now, or first asks what to do with unsaved changes.
+    /// Does `next` now, the project's changes written and a version made first when the window
+    /// saves it by itself; or first asks what to do with changes it could not write.
     pub(crate) fn guard(&mut self, next: dialogs::Next) {
-        if self.session.is_dirty() {
-            self.view.dialog = Some(dialogs::Dialog::Unsaved(next));
-        } else {
+        if autosave::before_leaving(self) {
             self.proceed(next);
+        } else {
+            self.view.dialog = Some(dialogs::Dialog::Unsaved(next));
         }
     }
 
@@ -518,7 +529,7 @@ impl App {
     /// The window was asked to close. Returns whether the close must be cancelled (the user is
     /// asked about unsaved changes first).
     pub fn close_requested(&mut self) -> bool {
-        if self.close_confirmed || !self.session.is_dirty() {
+        if self.close_confirmed || autosave::before_leaving(self) {
             return false;
         }
         if !matches!(self.view.dialog, Some(dialogs::Dialog::Unsaved(_))) {
@@ -615,6 +626,10 @@ impl App {
     pub fn not_stored(&mut self, change: &texcraft_engine::library::Change, error: &str) {
         use texcraft_engine::library::{Change, out_of_room};
         self.session.not_stored(change);
+        if self.session.is_dirty() {
+            let at = (self.session.revision(), self.session.review_revision());
+            self.autosave.not_kept(crate::i18n::msg(error), at);
+        }
         let project = change.project();
         let said = if out_of_room(error) {
             tl!("There is no room left in this browser to keep {project}: its last changes are not saved. Download the project as a zip (File menu) to keep a copy, then delete projects you no longer need to make room.")
@@ -781,7 +796,8 @@ impl App {
     }
 
     /// After a save: says which removed files went to the trash, or could not leave the folder.
-    fn saved(&mut self, result: &Value) {
+    pub(crate) fn saved(&mut self, result: &Value) {
+        self.autosave.clear_failure();
         let names = |key: &str| -> Vec<String> {
             result["removed"][key].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect()).unwrap_or_default()
         };
@@ -844,6 +860,7 @@ impl App {
             None => {}
         }
         forge::poll(self, ctx);
+        autosave::tick(self, ctx);
         ai::poll(self, ctx);
         if self.session.exporting() {
             // Look again until it ends.

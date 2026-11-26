@@ -238,6 +238,7 @@ pub const MENU_BAR: &[(&str, &[Entry])] = &[
             S,
             Sub(tn!("Add to Project"), &[C("file.new"), C("file.new_folder"), S, C("file.import"), C("file.unzip")]),
             S,
+            C("project.sync"),
             C("forge.commit"),
             C("forge.pull"),
             Sub(tn!("Save Project to GitLab or GitHub"), &[C("forge.save_to_gitlab"), C("forge.save_to_github")]),
@@ -569,6 +570,11 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "forge.pull" => crate::forge::pull(app),
         "forge.save_to_github" => crate::forge_save::ask(app, texcraft_engine::forge::Service::GitHub),
         "forge.save_to_gitlab" => crate::forge_save::ask(app, texcraft_engine::forge::Service::GitLab),
+        "project.sync" => crate::sync::start(app, json!({})),
+        "project.autosave" => {
+            let on = !app.session.settings.autosave;
+            app.run("project.autosave", json!({"on": on}));
+        }
         "git.push" => crate::history::push(app),
         "git.pull" => crate::history::pull(app),
         "project.new" => app.guard(Next::NewProject),
@@ -657,6 +663,7 @@ pub fn in_menus(app: &App, id: &str) -> bool {
     match id {
         "project.download_zip" => app.session.library().is_some(),
         "forge.commit" | "forge.pull" => app.session.forge().is_some(),
+        "project.sync" => crate::sync::has_remote(app),
         "forge.save_to_github" | "forge.save_to_gitlab" => app.session.forge().is_none(),
         "edit.ai_grammar" | "edit.ai_review" | "edit.ai_make" | "edit.ai_reference" | "edit.instruct" => crate::ai::offered(app),
         _ => true,

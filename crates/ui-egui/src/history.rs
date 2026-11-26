@@ -1,8 +1,10 @@
 //! The side panel's History (docs/ROADMAP.md, C4): the project's saved versions, newest first,
 //! from its git repository (C8), each with what it changed (C9). Choosing a version lists the files it changed; choosing a file
 //! compares it with the version before, line by line, read-only. A file, or the whole project, can
-//! be brought back as it was, as unsaved changes; in a repository the user made, a Commit button
-//! commits the saved project.
+//! be brought back as it was. Versions are made by themselves (docs/ROADMAP.md, C9: after a pause
+//! in typing, on closing, before a Sync); Name This Version… makes one with a name. The folder's
+//! remote, with Push and Pull and how many versions wait to go either way, is above the list
+//! (issue #34), the hosting service it is on named (issue #35).
 //!
 //! Everything goes through the engine's `history.*` commands. The list is read again whenever the
 //! repository's latest commit changes (a save, a commit).
@@ -12,6 +14,7 @@ use serde_json::{Value, json};
 
 use crate::dialogs::{Confirm, Dialog, Prompt};
 use crate::i18n::trn;
+use crate::sync::Counts;
 use crate::theme::Tokens;
 use crate::widgets::{self, Row};
 use crate::{App, Region};
@@ -212,7 +215,7 @@ enum Action {
     CloseDiff,
     RestoreFile,
     RestoreProject(String),
-    Commit,
+    NameVersion,
 }
 
 /// The list of versions; the chosen one with its files and Restore. `first`: the first row.
@@ -268,28 +271,25 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(t.unit * 2.0);
         widgets::section_title(ui, &t, tl!("History"));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if owner.as_deref() == Some("theirs") {
-                let can = texcraft_engine::cmd::find("history.commit").map_or(Ok(()), |c| (c.enabled)(&app.session));
-                let r = widgets::text_button(ui, &t, tl!("Commit…"), can.is_ok());
-                app.region(Region::Side, r.id);
-                match &can {
+            if app.session.dir().is_some() {
+                let can = if app.session.unversioned() { Ok(()) } else { Err(tl!("Nothing changed since the latest version.")) };
+                // Not the region's first stop: F6 goes to the versions.
+                let r = widgets::icon_button(ui, &t, "tag", tl!("Name This Version…"), can.is_ok());
+                match can {
                     Err(reason) => {
-                        let _ = r.on_disabled_hover_text(reason.as_str());
+                        let _ = r.on_disabled_hover_text(reason);
                     }
-                    Ok(()) if r.clicked() => action = Some(Action::Commit),
+                    Ok(()) if r.clicked() => action = Some(Action::NameVersion),
                     Ok(()) => {}
                 }
             }
         });
     });
-    // What the list is, or why there is none.
+    // Why there is no list.
     let note = match (&owner, &view.error) {
         (_, Some(e)) => Some((crate::i18n::msg(e), t.error)),
         (None, None) => Some((no_history(&app.session).to_owned(), t.text_muted)),
         (Some(_), None) if view.commits.is_empty() => Some((tl!("No saved versions yet.").to_owned(), t.text_muted)),
-        (Some(o), None) if o == "theirs" => {
-            Some((tl!("This folder is in a git repository of its own: saving does not commit, Commit does.").to_owned(), t.text_muted))
-        }
         (Some(_), None) => None,
     };
     if let Some((text, color)) = note {
@@ -351,13 +351,13 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
                 params: json!({"commit": id}),
             }));
         }
-        Some(Action::Commit) => {
+        Some(Action::NameVersion) => {
             app.view.dialog = Some(Dialog::Prompt(Prompt {
-                title: tl!("Commit the Project"),
-                label: tl!("What this commit changes"),
+                title: tl!("Name This Version"),
+                label: tl!("A name for the project as it is now"),
                 value: String::new(),
-                action: crate::i18n::tc("button", "Commit"),
-                command: "history.commit",
+                action: tl!("Name"),
+                command: "history.version",
                 params: Box::new(|message| json!({"message": message})),
                 focus: true,
             }));
@@ -367,8 +367,9 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
     app.history = view;
 }
 
-/// The folder's remote (docs/forges.md, step 5): where it is, how far ahead or behind, Push and
-/// Pull; or, with none, Save to GitHub and Save to GitLab.
+/// The folder's remote (docs/forges.md, step 5): its name and address, the hosting service it is
+/// on, Push and Pull, and how many versions wait to go either way; or, with none, Save to GitHub
+/// and Save to GitLab. Terse: the longer explanations are tooltips.
 fn remote_section(app: &mut App, ui: &mut egui::Ui, t: &Tokens, view: &mut HistoryView) {
     let key = format!("{:?}\n{:?}", view.key, app.session.git_busy());
     if view.remote_key.as_ref() != Some(&key) {
@@ -376,63 +377,63 @@ fn remote_section(app: &mut App, ui: &mut egui::Ui, t: &Tokens, view: &mut Histo
         view.remote_key = Some(key);
     }
     let remote = view.remote.clone();
+    let counts = crate::sync::counts(app).filter(|_| remote["remote"].is_string());
     let muted = |text: String| RichText::new(text).font(t.small()).color(t.text_muted);
-    ui.horizontal_wrapped(|ui| {
+    // One line: the service the remote is on (or git's mark) and where it is; the full address on
+    // hover.
+    ui.horizontal(|ui| {
         ui.add_space(t.unit * 2.0);
         let Some(name) = remote["remote"].as_str() else {
-            ui.label(muted(tl!("No remote yet: save the project to GitHub or GitLab to keep it there too.").to_owned()));
+            let r = ui.add(egui::Label::new(muted(tl!("No remote").to_owned())).sense(egui::Sense::hover()));
+            r.on_hover_text(tl!("Save the project to GitHub or GitLab to keep it there too, and to sync it."));
             return;
         };
         let place = remote["web_url"].as_str().or(remote["url"].as_str()).unwrap_or_default();
-        let shown = place.trim_start_matches("https://").to_owned();
-        ui.label(muted(tl!("Remote {name}:").replace("{name}", name)));
-        match remote["web_url"].as_str() {
-            Some(url) => {
-                ui.hyperlink_to(RichText::new(shown).font(t.small()), url);
-            }
-            None => {
-                ui.label(muted(shown));
-            }
+        let hint = tl!("Remote {name}: {url}").replace("{name}", name).replace("{url}", place);
+        if let Some(service) = counts.as_ref().and_then(|c| c.hosting) {
+            crate::sync::hosting_label(ui, t, service, place);
+            ui.add(egui::Label::new(muted(format!("· {name}"))).sense(egui::Sense::hover())).on_hover_text(hint);
+            return;
         }
-    });
-    let state = match (remote["remote"].as_str(), remote["ahead"].as_u64(), remote["behind"].as_u64()) {
-        (None, ..) => None,
-        (Some(_), None, _) | (Some(_), _, None) => Some(tl!("Not pushed yet.").to_owned()),
-        (Some(_), Some(0), Some(0)) => Some(tl!("Up to date with the remote, as last pushed or pulled.").to_owned()),
-        (Some(_), Some(a), Some(b)) => {
-            let mut parts = Vec::new();
-            if a > 0 {
-                parts.push(trn(a as usize, "{n} commit to push", "{n} commits to push"));
-            }
-            if b > 0 {
-                parts.push(trn(b as usize, "{n} commit to pull", "{n} commits to pull"));
-            }
-            Some(format!("{}.", parts.join(", ")))
-        }
-    };
-    if let Some(state) = state {
-        ui.horizontal(|ui| {
-            ui.add_space(t.unit * 2.0);
-            ui.label(muted(state));
-        });
-    }
-    ui.horizontal(|ui| {
-        ui.add_space(t.unit * 2.0);
-        let commands: &[(&str, &str)] = if remote["remote"].is_string() {
-            &[("git.push", tl!("Push")), ("git.pull", crate::i18n::tc("button", "Pull"))]
-        } else {
-            &[("forge.save_to_github", tl!("Save to GitHub…")), ("forge.save_to_gitlab", tl!("Save to GitLab…"))]
+        ui.add(crate::icons::image("git-commit-horizontal", t.icon_size - 2.0, t.text_muted));
+        let shown = place.trim_start_matches("https://").trim_start_matches("git@").to_owned();
+        let r = match remote["web_url"].as_str() {
+            Some(url) => ui.hyperlink_to(RichText::new(&shown).font(t.small()), url),
+            None => ui.add(egui::Label::new(muted(shown.clone())).truncate().sense(egui::Sense::hover())),
         };
-        for (id, label) in commands {
+        r.on_hover_text(hint);
+    });
+    ui.horizontal_wrapped(|ui| {
+        ui.add_space(t.unit * 2.0);
+        let commands: &[(&str, &str, &str)] = if remote["remote"].is_string() {
+            &[("git.push", "arrow-up", tl!("Push")), ("git.pull", "arrow-down", crate::i18n::tc("button", "Pull"))]
+        } else {
+            &[("forge.save_to_github", "upload", tl!("Save to GitHub…")), ("forge.save_to_gitlab", "upload", tl!("Save to GitLab…"))]
+        };
+        for (id, icon, label) in commands {
             let can = texcraft_engine::cmd::find(id).map_or(Ok(()), |c| (c.enabled)(&app.session));
-            let r = widgets::text_button(ui, t, label, can.is_ok());
+            let name = match (*id, counts.as_ref()) {
+                ("git.push", Some(c)) => format!("{label}: {}", push_words(c)),
+                ("git.pull", Some(c)) if c.down > 0 => format!("{label}: {}", trn(c.down, "{n} version to receive", "{n} versions to receive")),
+                _ => (*label).to_owned(),
+            };
+            let r = widgets::framed_button(ui, t, Some(icon), label, &name, can.is_ok());
             match &can {
                 Err(reason) => {
-                    let _ = r.on_disabled_hover_text(reason.as_str());
+                    let _ = r.on_disabled_hover_text(crate::i18n::msg(reason));
                 }
                 Ok(()) if r.clicked() => crate::ui_cmd::run(app, id),
                 Ok(()) => {}
             }
+        }
+        // What waits to go either way, in words beside the arrows (not by colour).
+        if let Some(c) = &counts {
+            let arrows = crate::sync::arrows(c);
+            let text = if arrows.is_empty() { tl!("Up to date").to_owned() } else { arrows.trim().to_owned() };
+            let r = ui.add(egui::Label::new(muted(text)).sense(egui::Sense::hover()));
+            let words = crate::sync::said(c);
+            r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &words));
+            r.on_hover_text(words.clone());
         }
         if let Some(op) = app.session.git_busy()
             && let Some(text) = crate::forge_save::busy_text(app, op)
@@ -443,17 +444,55 @@ fn remote_section(app: &mut App, ui: &mut egui::Ui, t: &Tokens, view: &mut Histo
     });
 }
 
-/// Push: the branch's commits to its remote, in the background.
-pub(crate) fn push(app: &mut App) {
-    if app.run("git.push", json!({"background": true})).is_some() {
-        app.view.status = Some((tl!("Pushing…").to_owned(), false));
+/// What a push would send, in words.
+fn push_words(c: &Counts) -> String {
+    match c.up {
+        None => tl!("nothing sent to the remote yet").to_owned(),
+        Some(0) => tl!("nothing new to send").to_owned(),
+        Some(n) => trn(n, "{n} version to send", "{n} versions to send"),
     }
 }
 
-/// Pull: the remote's new commits into the folder, in the background.
+/// Push: a version of the changes made, then the branch's commits sent to its remote, in the
+/// background.
+pub(crate) fn push(app: &mut App) {
+    push_with(app, json!({}));
+}
+
+/// Push with `extra` parameters (a token asked for).
+pub(crate) fn push_with(app: &mut App, extra: Value) {
+    transfer(app, "git.push", extra, tl!("Pushing…"));
+}
+
+/// Pull: a version of the changes made, then the remote's new commits into the folder, in the
+/// background.
 pub(crate) fn pull(app: &mut App) {
-    if app.run("git.pull", json!({"background": true})).is_some() {
-        app.view.status = Some((tl!("Pulling…").to_owned(), false));
+    pull_with(app, json!({}));
+}
+
+pub(crate) fn pull_with(app: &mut App, extra: Value) {
+    transfer(app, "git.pull", extra, tl!("Pulling…"));
+}
+
+/// Runs `command` (`git.push`, `git.pull`) after making a version of the changes, which both need
+/// committed; a missing token is asked for.
+fn transfer(app: &mut App, command: &'static str, extra: Value, running: &str) {
+    if (app.session.unversioned() || app.session.is_dirty())
+        && let Err(e) = app.session.execute("history.version", &json!({}))
+    {
+        app.view.status = Some((crate::i18n::msg(&e), true));
+        return;
+    }
+    let mut params = json!({"background": true});
+    if let (Some(to), Some(from)) = (params.as_object_mut(), extra.as_object()) {
+        to.extend(from.clone());
+    }
+    match app.session.execute(command, &params) {
+        Ok(_) => app.view.status = Some((running.to_owned(), false)),
+        Err(e) => {
+            app.view.status = Some((crate::i18n::msg(&e), true));
+            crate::sync::after_failure(app, command);
+        }
     }
 }
 

@@ -67,9 +67,12 @@ pub(crate) struct ConflictRow {
 
 /// The files in conflict after an update from the branch, to decide before it is taken in.
 pub(crate) struct ResolveForm {
-    pub service: Service,
+    /// The forge of the branch; none for a project folder's git remote.
+    pub service: Option<Service>,
     pub branch: String,
     pub conflicts: Vec<ConflictRow>,
+    /// What runs again with the choices: `forge.pull`, or `project.sync`.
+    pub command: &'static str,
 }
 
 /// A merge request (a pull request on GitHub) just opened: its link.
@@ -468,7 +471,21 @@ pub(crate) fn pull(app: &mut App) {
 fn ask_resolve(app: &mut App) {
     let Some(link) = app.session.forge() else { return };
     let (service, branch) = (link.address.service, link.branch.clone());
-    app.view.dialog = Some(Dialog::ForgeResolve(ResolveForm { service, branch, conflicts: conflict_rows(app) }));
+    app.view.dialog =
+        Some(Dialog::ForgeResolve(ResolveForm { service: Some(service), branch, conflicts: conflict_rows(app), command: "forge.pull" }));
+}
+
+/// Opens the dialog of the files a Sync found in conflict: choosing syncs again.
+pub(crate) fn ask_resolve_sync(app: &mut App) {
+    let (service, branch) = match app.session.forge() {
+        Some(link) => (Some(link.address.service), link.branch.clone()),
+        None => {
+            let remote = app.session.execute("git.remotes", &json!({})).unwrap_or_default();
+            let place = format!("{}/{}", remote["remote"].as_str().unwrap_or("origin"), remote["remote_branch"].as_str().unwrap_or_default());
+            (None, place)
+        }
+    };
+    app.view.dialog = Some(Dialog::ForgeResolve(ResolveForm { service, branch, conflicts: conflict_rows(app), command: "project.sync" }));
 }
 
 /// The open forge dialog, if any.
@@ -537,9 +554,12 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
                     app.view.status = Some((committing(form.service).to_owned(), false));
                 }
             }
+            Some(Dialog::ForgeResolve(form)) if form.command == "project.sync" => {
+                crate::sync::start(app, json!({"resolve": resolve(&form.conflicts)}))
+            }
             Some(Dialog::ForgeResolve(form)) if app.run("forge.pull", json!({"resolve": resolve(&form.conflicts), "background": true})).is_some() => {
                 app.forge_check.quiet = false;
-                app.view.status = Some((updating(form.service).to_owned(), false));
+                app.view.status = Some((updating(form.service.unwrap_or_default()).to_owned(), false));
             }
             _ => {}
         },
@@ -742,7 +762,7 @@ fn commit_form(ui: &mut egui::Ui, t: &Tokens, form: &mut CommitForm, browser: bo
     });
     if !form.conflicts.is_empty() {
         ui.add_space(t.unit * 2.0);
-        conflicts(ui, t, &mut form.conflicts, !form.to_new_branch, form.service);
+        conflicts(ui, t, &mut form.conflicts, !form.to_new_branch, Some(form.service));
     }
     ui.add_space(t.unit * 2.0);
     let label = say(form.service, tl!("Commit to a new branch and open a merge request"), tl!("Commit to a new branch and open a pull request"));
@@ -805,17 +825,20 @@ fn commit_form(ui: &mut egui::Ui, t: &Tokens, form: &mut CommitForm, browser: bo
 
 /// The files in conflict, each with Keep mine and Take theirs (AGENTS.md rule 21: each named by
 /// its label and its file).
-fn conflicts(ui: &mut egui::Ui, t: &Tokens, rows: &mut [ConflictRow], enabled: bool, service: Service) {
+fn conflicts(ui: &mut egui::Ui, t: &Tokens, rows: &mut [ConflictRow], enabled: bool, service: Option<Service>) {
     ui.label(RichText::new(trn(rows.len(), "{n} file in conflict with the branch", "{n} files in conflict with the branch")).font(t.strong()));
-    let note = say(
-        service,
-        tl!(
-            "The branch has new commits that change the same parts of these files. For each, keep your version or take the branch's; or commit to a new branch and open a merge request, where GitLab shows both."
+    let note = match service {
+        Some(service) => say(
+            service,
+            tl!(
+                "The branch has new commits that change the same parts of these files. For each, keep your version or take the branch's; or commit to a new branch and open a merge request, where GitLab shows both."
+            ),
+            tl!(
+                "The branch has new commits that change the same parts of these files. For each, keep your version or take the branch's; or commit to a new branch and open a pull request, where GitHub shows both."
+            ),
         ),
-        tl!(
-            "The branch has new commits that change the same parts of these files. For each, keep your version or take the branch's; or commit to a new branch and open a pull request, where GitHub shows both."
-        ),
-    );
+        None => tl!("The remote has new commits that change the same parts of these files. For each, keep your version or take the remote's."),
+    };
     ui.label(RichText::new(note).font(t.small()).color(t.text_muted));
     egui::ScrollArea::vertical().id_salt("forge-conflicts").max_height(160.0).auto_shrink([false, true]).show(ui, |ui| {
         for row in rows.iter_mut() {
@@ -842,12 +865,18 @@ fn conflicts(ui: &mut egui::Ui, t: &Tokens, rows: &mut [ConflictRow], enabled: b
 }
 
 fn resolve_form(ui: &mut egui::Ui, t: &Tokens, form: &mut ResolveForm) -> Outcome {
-    title(ui, t, say(form.service, tl!("Update from GitLab"), tl!("Update from GitHub")));
+    let sync = form.command == "project.sync";
+    let heading = match form.service {
+        _ if sync => tl!("Sync"),
+        Some(service) => say(service, tl!("Update from GitLab"), tl!("Update from GitHub")),
+        None => tl!("Sync"),
+    };
+    title(ui, t, heading);
     ui.label(tl!("Nothing was taken in from the branch {branch} yet: choose for each file below first.").replace("{branch}", &form.branch));
     ui.add_space(t.unit * 2.0);
     conflicts(ui, t, &mut form.conflicts, true, form.service);
     let ready = form.conflicts.iter().all(|c| c.choice.is_some());
-    buttons(ui, t, tl!("Update"), false, ready)
+    buttons(ui, t, if sync { tl!("Sync") } else { tl!("Update") }, false, ready)
 }
 
 fn merge_request_note(ui: &mut egui::Ui, t: &Tokens, note: &mut MergeRequestNote) -> Outcome {
@@ -881,6 +910,8 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
     let was = app.session.forge_busy().or(app.session.git_busy());
     match app.session.poll_forge() {
         Some(Ok(done)) => {
+            // A Sync of a forge branch ends with its commit or its pull.
+            let forge_ended = matches!(done["operation"].as_str(), Some("commit" | "pull"));
             app.forge_check.said = None;
             app.forge_check.last = Some(ctx.input(|i| i.time));
             match done["operation"].as_str() {
@@ -893,7 +924,11 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
                 Some("owners") => crate::forge_save::owners_listed(app, &done),
                 Some("git_push") => crate::history::pushed(app, &done),
                 Some("git_pull") => crate::history::git_pulled(app, &done),
+                Some("sync") => crate::sync::synced(app, &done),
                 _ => committed(app, &done),
+            }
+            if forge_ended {
+                app.sync.running = false;
             }
             app.forge_check.quiet = false;
         }
@@ -925,7 +960,7 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
 /// A forge operation failed: said, and for a commit or a pull that a choice can get through
 /// (conflicts, a branch that does not take the commit), its dialog opened again with it.
 fn failed(app: &mut App, was: Option<&str>, e: String) {
-    if crate::forge_save::failed(app, was, &e) {
+    if crate::forge_save::failed(app, was, &e) || crate::sync::failed(app, was, &e) {
         return;
     }
     if std::mem::take(&mut app.forge_check.quiet) {
@@ -1066,6 +1101,7 @@ pub(crate) fn busy_text(app: &App) -> Option<String> {
     }
     Some(
         match app.session.forge_busy()? {
+            _ if app.sync.running => tl!("Syncing…"),
             "open" => opening(app.forge_check.opening),
             // A periodic check says nothing while it runs.
             "pull" if app.forge_check.quiet => return None,
@@ -1077,7 +1113,7 @@ pub(crate) fn busy_text(app: &App) -> Option<String> {
 }
 
 /// The files changed since the base, counted again at most once a second while typing.
-fn changed_count(app: &mut App, now: f64) -> usize {
+pub(crate) fn changed_count(app: &mut App, now: f64) -> usize {
     let revision = (app.session.revision(), app.session.review_revision());
     match app.forge_count.0 {
         Some((r, _, n)) if r == revision => n,

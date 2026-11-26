@@ -71,6 +71,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "history.version",
+            label: "Make a Version",
+            menu: &[],
+            shortcut: None,
+            params: version_schema,
+            enabled: has_place,
+            run: version_command,
+            changes: true,
+        },
+        CommandSpec {
             id: "history.commit",
             label: "Commit Project",
             menu: &[],
@@ -107,6 +117,69 @@ fn commit_schema() -> Value {
     json!({"type": "object", "properties": {
         "message": {"type": "string", "description": "What the commit changes."}
     }, "required": ["message"], "additionalProperties": false})
+}
+
+fn version_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "message": {"type": "string", "description": "The version's name (its commit message); by default it says what changed."},
+        "automatic": {"type": "boolean", "description": "Made by TeXCraft itself (after a pause in typing, when the project closes): then none is made in a repository someone else made, where TeXCraft commits only when asked. Default false."}
+    }, "additionalProperties": false})
+}
+
+/// The project has a place for its versions: a folder, or a name in the browser's library.
+fn has_place(s: &Session) -> Result<()> {
+    if s.dir.is_some() {
+        return Ok(());
+    }
+    Err(if s.library.is_some() {
+        "The project has no name yet: save it first.".to_owned()
+    } else {
+        "The project has no folder yet: save it in a folder first.".to_owned()
+    })
+}
+
+/// `history.version`: the project's changes written, then a version made of them.
+fn version_command(s: &mut Session, p: &Value) -> Result<Value> {
+    let message = p.get("message").and_then(Value::as_str).map(str::trim).filter(|m| !m.is_empty()).map(str::to_owned);
+    let automatic = p.get("automatic").and_then(Value::as_bool).unwrap_or(false);
+    make_version(s, message.as_deref(), automatic)
+}
+
+/// Writes the project's changes, then makes a version of it with `message` (none: what changed,
+/// [`crate::describe`]): a commit in its folder's repository (made when there is none), or a
+/// version in the library. `automatic`: TeXCraft's own (after a pause, on closing, before files are
+/// rewritten), which a repository someone else made does not get. Says what was done; `commit`
+/// is null when nothing changed since the latest version, or when none was made.
+pub(crate) fn make_version(s: &mut Session, message: Option<&str>, automatic: bool) -> Result<Value> {
+    let Some(dir) = s.dir.clone() else { return Ok(json!({"commit": null, "why": "no place"})) };
+    if s.dirty {
+        super::project::write_to(s, &dir)?;
+    }
+    if s.library.is_some() {
+        let name = dir.display().to_string();
+        let snapshot = snapshot(s)?;
+        let empty = texcraft_history::store::Versions::default();
+        let message = match message {
+            Some(m) => m.to_owned(),
+            None => save_message(s.library.as_ref().and_then(|l| l.history(&name)).unwrap_or(&empty), &snapshot),
+        };
+        let author = s.author.as_ref().map_or_else(|| "TeXCraft".to_owned(), |a| a.name.clone());
+        let now = s.now();
+        let id = s.library.as_mut().ok_or("The project is not kept in the browser.")?.record(&name, &snapshot, &message, &author, now)?;
+        s.mark_versioned();
+        return Ok(json!({"repository": "ours", "commit": id}));
+    }
+    if s.history.is_none() {
+        let history = History::open_or_init(&dir)?;
+        allowed(s, &history, Access::Read)?;
+        s.history = Some(history);
+    }
+    let owner = s.history.as_ref().map(History::owner);
+    if automatic && owner == Some(Owner::Theirs) {
+        return Ok(json!({"repository": "theirs", "commit": null, "why": "theirs"}));
+    }
+    let id = commit_now(s, message)?;
+    Ok(json!({"repository": owner.map(Owner::as_str), "commit": id}))
 }
 
 fn has_history(s: &Session) -> Result<()> {
@@ -197,7 +270,10 @@ pub(super) fn after_library_save(s: &mut Session, name: &str) -> Value {
         s.library.as_mut().ok_or_else(|| "The project is not kept in the browser.".to_owned())?.record(name, &snapshot, &message, &author, now)
     });
     match recorded {
-        Ok(id) => json!({"repository": "ours", "commit": id}),
+        Ok(id) => {
+            s.mark_versioned();
+            json!({"repository": "ours", "commit": id})
+        }
         Err(e) => json!({"repository": "ours", "commit": null, "error": e}),
     }
 }
@@ -210,7 +286,9 @@ fn commit_now(s: &mut Session, message: Option<&str>) -> Result<Option<String>> 
     allowed(s, history, Access::Write)?;
     let author = s.author.as_ref().map(|a| Person::new(a.name.clone(), ""));
     let message = message.map_or_else(|| save_message(history, &snapshot), str::to_owned);
-    history.commit(&snapshot, &message, author.as_ref(), s.now())
+    let id = history.commit(&snapshot, &message, author.as_ref(), s.now())?;
+    s.mark_versioned();
+    Ok(id)
 }
 
 /// The message of the version a save makes of `snapshot`: what changed since the latest one.

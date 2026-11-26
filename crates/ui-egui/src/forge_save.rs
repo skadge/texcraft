@@ -167,6 +167,7 @@ pub(crate) fn busy_text(app: &App, op: &str) -> Option<&'static str> {
         "create_repository" => say(service, tl!("Saving the project to GitLab…"), tl!("Saving the project to GitHub…")),
         "git_push" => tl!("Pushing…"),
         "git_pull" => tl!("Pulling…"),
+        "sync" => tl!("Syncing…"),
         _ => return None,
     })
 }

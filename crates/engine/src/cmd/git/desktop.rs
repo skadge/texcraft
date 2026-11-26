@@ -10,7 +10,7 @@ use texcraft_project::ProjectPath;
 
 use super::super::forge::{Renewed, start};
 use super::super::history::{allowed, snapshot};
-use super::{Made, Prepared, SAVE_MESSAGE, Task, credentials, write_key};
+use super::{Made, Prepared, SAVE_MESSAGE, Syncing, Task, hosting, remote_credentials, write_key};
 use crate::file_access::Access;
 use crate::{Result, Session};
 
@@ -83,8 +83,11 @@ fn which(h: &History, p: &Value) -> Result<(String, String)> {
 pub(crate) fn https_url(url: &str) -> Result<String> {
     let url = url.trim().trim_end_matches('/');
     let not = || format!("TeXCraft reaches remotes over HTTPS: {url} is not an address it can reach.");
-    if url.starts_with("https://") {
-        return Ok(url.to_owned());
+    if let Some(rest) = url.strip_prefix("https://") {
+        // A user name in the address (`https://git@host/…`) goes in the credentials, not the URL.
+        let (authority, path) = rest.split_once('/').map_or((rest, ""), |(a, p)| (a, p));
+        let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+        return Ok(if path.is_empty() { format!("https://{host}") } else { format!("https://{host}/{path}") });
     }
     if let Some(rest) = url.strip_prefix("http://") {
         let host = rest.split(['/', ':']).next().unwrap_or_default();
@@ -122,8 +125,12 @@ fn server_of(s: &Session, https: &str) -> (Service, String) {
     (service, instance)
 }
 
-/// The page of a forge's repository from its git address, when it reads as one.
+/// The page of a forge's repository from its git address, when it reads as one (not a hosting
+/// service's git address, whose page is elsewhere).
 fn web_url(https: &str) -> Option<String> {
+    if hosting(https).is_some() {
+        return None;
+    }
     let address = texcraft_forge::Address::parse(https).ok()?;
     Some(address.web_url())
 }
@@ -155,6 +162,8 @@ pub(super) fn remotes(s: &mut Session) -> Result<Value> {
         "remote_branch": url.as_ref().map(|_| branch.clone()),
         "url": url,
         "web_url": url.as_deref().and_then(|u| https_url(u).ok()).as_deref().and_then(web_url),
+        "hosting": url.as_deref().and_then(hosting).map(|h| h.id()),
+        "hosting_name": url.as_deref().and_then(hosting).map(|h| h.name()),
         "tracking": tracking,
         "ahead": ahead,
         "behind": behind,
@@ -186,36 +195,149 @@ fn check_committed(s: &mut Session, doing: &str) -> Result<()> {
     Ok(())
 }
 
+/// Whether the folder's repository has the remote a push or a pull would reach.
+pub(super) fn has_remote(s: &Session) -> bool {
+    let Some(h) = &s.history else { return false };
+    which(h, &json!({})).ok().and_then(|(remote, _)| h.remote_url(&remote).ok().flatten()).is_some()
+}
+
+/// Where a push or a pull goes: the remote, its branch, its address as configured and over HTTPS,
+/// and its server.
+struct Target {
+    remote: String,
+    branch: String,
+    url: String,
+    https: String,
+    service: Service,
+    instance: String,
+}
+
+/// `push`: the target of a push (its refusal says how to get a remote).
+fn target(s: &Session, p: &Value, push: bool) -> Result<Target> {
+    let h = history(s)?;
+    let (remote, branch) = which(h, p)?;
+    let url = h.remote_url(&remote)?.ok_or_else(|| {
+        if push {
+            format!("The project has no remote {remote}: set one (git.set_remote), or save the project to GitLab or GitHub.")
+        } else {
+            format!("The project has no remote {remote}: set one (git.set_remote) first.")
+        }
+    })?;
+    let https = https_url(&url)?;
+    let (service, instance) = server_of(s, &https);
+    Ok(Target { remote, branch, url, https, service, instance })
+}
+
+/// The key for `target`'s server: the token given, the one given earlier in this session, or the
+/// sign-in to it. A hosting service's git access (Overleaf) takes its own token, never a forge's
+/// sign-in. `required`: a key is needed (a push; a pull from a hosting service); otherwise a
+/// public repository is read without one. With none, the session asks for a token (rule 15:
+/// said in words, and [`super::super::forge::Problem::NeedsToken`]).
+fn git_key(s: &mut Session, p: &Value, target: &Target, write: bool) -> Result<Option<super::super::forge::Key>> {
+    use super::super::forge::{Key, Problem};
+    let hosted = hosting(&target.url);
+    let given = p.get("token").and_then(Value::as_str).filter(|t| !t.trim().is_empty());
+    let needs = |s: &mut Session| s.forge_problem = Some(Problem::NeedsToken { instance: target.instance.clone(), hosting: hosted });
+    if let Some(h) = hosted {
+        if let Some(t) = given {
+            return texcraft_forge::Token::new(t).map(|t| Some(Key::Token(t))).map_err(|e| e.to_string());
+        }
+        if let Some(token) = s.forge_tokens.get(&target.instance) {
+            return Ok(Some(Key::Token(token.clone())));
+        }
+        needs(s);
+        return Err(format!(
+            "Give your {} git authentication token for this project (token): TeXCraft keeps it only while it runs, never on disk.",
+            h.name()
+        ));
+    }
+    if write {
+        return match write_key(s, p, &target.instance, target.service) {
+            Ok(key) => Ok(Some(key)),
+            Err(e) => {
+                if s.forge_problem.is_none() {
+                    needs(s);
+                }
+                Err(e)
+            }
+        };
+    }
+    // A public repository is read without credentials.
+    if given.is_some() {
+        super::super::forge::key_at(s, p, &target.instance, target.service).map(Some)
+    } else {
+        Ok(super::super::forge::key_at(s, p, &target.instance, target.service).ok())
+    }
+}
+
+/// The key a transfer was given, kept for the session once the server took it.
+pub(crate) struct Kept {
+    instance: String,
+    url: String,
+    key: Option<super::super::forge::Key>,
+}
+
+/// A transfer ended: the key the server took is kept for the session; credentials it refused are
+/// forgotten, and a new token asked for.
+pub(super) fn settle<T>(s: &mut Session, kept: Kept, done: std::result::Result<T, String>) -> std::result::Result<T, String> {
+    match &done {
+        Ok(_) => {
+            if let Some(key) = kept.key {
+                s.keep_key(&kept.instance, key);
+            }
+        }
+        Err(e) if *e == texcraft_gitwire::Error::Unauthorized.to_string() => {
+            s.forge_tokens.remove(&kept.instance);
+            s.forge_problem = Some(super::super::forge::Problem::NeedsToken { instance: kept.instance.clone(), hosting: hosting(&kept.url) });
+        }
+        Err(_) => {}
+    }
+    done
+}
+
 pub(super) fn push(s: &mut Session, p: &Value) -> Result<Value> {
+    start_push(s, p, None).map(|done| done.unwrap_or_else(|| json!({"operation": "git_push", "started": true})))
+}
+
+/// Starts a push: `Ok(None)` while it runs in the background, else its outcome (a Sync's, with
+/// `sync`).
+fn start_push(s: &mut Session, p: &Value, sync: Option<Box<Syncing>>) -> Result<Option<Value>> {
     let h = history(s)?;
     allowed(s, h, Access::Read)?;
-    let (remote, branch) = which(h, p)?;
-    let url = h
-        .remote_url(&remote)?
-        .ok_or_else(|| format!("The project has no remote {remote}: set one (git.set_remote), or save the project to GitLab or GitHub."))?;
-    let https = https_url(&url)?;
+    let target = target(s, p, true)?;
     check_committed(s, "a push sends what is committed")?;
     let h = history(s)?;
     let head = h.head()?.ok_or("The project has no commit yet: save it first.")?;
     let git_dir = h.git_dir().to_path_buf();
-    let (service, instance) = server_of(s, &https);
-    let key = write_key(s, p, &instance, service)?;
+    let key = git_key(s, p, &target, true)?.ok_or("No credentials for the remote's server.")?;
     let (connect, clients, slot, http) = (s.forge_transport.clone(), s.forge_auth_clients(), Renewed::default(), s.git_http.clone());
     let filled = slot.clone();
-    let reference = format!("refs/heads/{branch}");
+    let reference = format!("refs/heads/{}", target.branch);
+    let sent = key.clone();
+    let (url, https, service) = (target.url.clone(), target.https.clone(), target.service);
     let make = move || async move {
-        let token = key.token(&*connect(), &clients, &filled).await?;
-        let remote = texcraft_gitwire::Remote::new(&https, Some(credentials(service, &token)));
+        let token = sent.token(&*connect(), &clients, &filled).await?;
+        let remote = texcraft_gitwire::Remote::new(&https, Some(remote_credentials(&url, service, &token)));
         Ok(texcraft_gitwire::push(&*http(), &remote, &git_dir, &head, &reference, false).map_err(|e| e.to_string()))
     };
-    let started = start(p, make);
+    let background = super::super::forge::background(p) || sync.as_ref().is_some_and(|s| super::super::forge::background(&s.params));
+    let started = start(&json!({"background": background}), make);
     s.keep_renewed(&slot);
+    let Target { remote, branch, instance, url, .. } = target;
+    let kept = Kept { instance, url, key: Some(key) };
     match started.map_err(|e| s.forge_failed(e))? {
         Ok(pending) => {
-            s.git_task = Some(Task::Push { pending, remote: remote.clone(), branch: branch.clone(), renewed: slot });
-            Ok(json!({"operation": "git_push", "started": true, "remote": remote, "branch": branch}))
+            s.git_task = Some(Task::Push { pending, remote, branch, renewed: slot, kept, sync });
+            Ok(None)
         }
-        Err(done) => pushed(s, &remote, &branch, done),
+        Err(done) => {
+            let done = settle(s, kept, done);
+            let pushed = pushed(s, &remote, &branch, done)?;
+            Ok(Some(match sync {
+                Some(sync) => synced(*sync, pushed),
+                None => pushed,
+            }))
+        }
     }
 }
 
@@ -240,25 +362,29 @@ pub(super) fn pushed(s: &mut Session, remote: &str, branch: &str, done: std::res
 }
 
 pub(super) fn pull(s: &mut Session, p: &Value) -> Result<Value> {
+    start_pull(s, p, None).map(|done| done.unwrap_or_else(|| json!({"operation": "git_pull", "started": true})))
+}
+
+/// Starts a pull: `Ok(None)` while it runs in the background, else its outcome (for a Sync, the
+/// push that follows it started or done).
+fn start_pull(s: &mut Session, p: &Value, sync: Option<Box<Syncing>>) -> Result<Option<Value>> {
     let h = history(s)?;
     allowed(s, h, Access::Write)?;
-    let (remote, branch) = which(h, p)?;
-    let url = h.remote_url(&remote)?.ok_or_else(|| format!("The project has no remote {remote}: set one (git.set_remote) first."))?;
-    let https = https_url(&url)?;
+    let target = target(s, p, false)?;
+    let choices = super::super::forge::choices(p)?;
     check_committed(s, "a pull changes the files on disk")?;
     let h = history(s)?;
-    let tips: Vec<String> = [h.head()?, h.ref_id(&format!("refs/remotes/{remote}/{branch}"))?].into_iter().flatten().collect();
+    let tips: Vec<String> = [h.head()?, h.ref_id(&format!("refs/remotes/{}/{}", target.remote, target.branch))?].into_iter().flatten().collect();
     let git_dir = h.git_dir().to_path_buf();
-    let (service, instance) = server_of(s, &https);
-    // A public repository is read without credentials.
-    let given = p.get("token").and_then(Value::as_str).is_some_and(|t| !t.trim().is_empty());
-    let key = if given { Some(super::key_at(s, p, &instance, service)?) } else { super::key_at(s, p, &instance, service).ok() };
+    let key = git_key(s, p, &target, false)?;
     let (connect, clients, slot, http) = (s.forge_transport.clone(), s.forge_auth_clients(), Renewed::default(), s.git_http.clone());
     let filled = slot.clone();
-    let reference = format!("refs/heads/{branch}");
+    let reference = format!("refs/heads/{}", target.branch);
+    let sent = key.clone();
+    let (url, https, service) = (target.url.clone(), target.https.clone(), target.service);
     let make = move || async move {
-        let credentials = match key {
-            Some(key) => Some(credentials(service, &key.token(&*connect(), &clients, &filled).await?)),
+        let credentials = match sent {
+            Some(key) => Some(remote_credentials(&url, service, &key.token(&*connect(), &clients, &filled).await?)),
             None => None,
         };
         let remote = texcraft_gitwire::Remote::new(&https, credentials);
@@ -266,22 +392,70 @@ pub(super) fn pull(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let started = start(p, make);
     s.keep_renewed(&slot);
+    let Target { remote, branch, instance, url, .. } = target;
+    let kept = Kept { instance, url, key };
     match started.map_err(|e| s.forge_failed(e))? {
         Ok(pending) => {
-            s.git_task = Some(Task::Pull { pending, remote: remote.clone(), branch: branch.clone(), renewed: slot });
-            Ok(json!({"operation": "git_pull", "started": true, "remote": remote, "branch": branch}))
+            s.git_task = Some(Task::Pull { pending, remote, branch, renewed: slot, kept, choices, sync });
+            Ok(None)
         }
-        Err(done) => fetched(s, &remote, &branch, done),
+        Err(done) => {
+            let done = settle(s, kept, done);
+            let pulled = fetched(s, &remote, &branch, done, &choices, sync.is_some())?;
+            match sync {
+                Some(mut sync) => {
+                    sync.pulled = Some(pulled);
+                    push_for_sync(s, sync)
+                }
+                None => Ok(Some(pulled)),
+            }
+        }
     }
+}
+
+/// Sync on the desktop: a version of the changes, then a pull, then a push.
+pub(super) fn sync(s: &mut Session, p: &Value) -> Result<Value> {
+    s.forge_problem = None;
+    let version = super::super::history::make_version(s, None, false)?;
+    let sync = Box::new(Syncing { params: p.clone(), version, pulled: None });
+    Ok(start_pull(s, p, Some(sync))?.unwrap_or_else(|| json!({"operation": "sync", "started": true})))
+}
+
+/// A Sync's pull is done: its push starts (`Ok(None)` while it runs), or is done.
+pub(super) fn push_for_sync(s: &mut Session, sync: Box<Syncing>) -> Result<Option<Value>> {
+    if sync.pulled.as_ref().is_some_and(|p| p["up_to_date"] == true && p["ahead"] == 0) {
+        // Nothing to send either.
+        return Ok(Some(synced(*sync, json!({"operation": "git_push", "up_to_date": true}))));
+    }
+    let params = sync.params.clone();
+    start_push(s, &params, Some(sync))
+}
+
+/// A Sync's outcome: the version it made, what the pull took in and what the push sent.
+pub(super) fn synced(sync: Syncing, pushed: Value) -> Value {
+    json!({"operation": "sync", "version": sync.version, "pulled": sync.pulled, "pushed": pushed})
 }
 
 /// A fetch's outcome: the remote's branch, as now known, moves, then the branch checked out
 /// catches up with it: a fast-forward, or a merge when both have commits the other has not
-/// (text files changed on both sides merged line by line; anything else that does not merge
-/// refuses the pull, with nothing changed).
-pub(super) fn fetched(s: &mut Session, remote: &str, branch: &str, done: std::result::Result<texcraft_gitwire::Fetched, String>) -> Result<Value> {
+/// (text files changed on both sides merged line by line, files in conflict kept as `choices`
+/// says; any other that does not merge refuses the pull, with nothing changed, and is listed by
+/// `forge.status`). `empty_ok`: a remote with no such branch yet is fine (a Sync then pushes it).
+pub(super) fn fetched(
+    s: &mut Session,
+    remote: &str,
+    branch: &str,
+    done: std::result::Result<texcraft_gitwire::Fetched, String>,
+    choices: &texcraft_forge::Choices,
+    empty_ok: bool,
+) -> Result<Value> {
     let fetched = done?;
-    let tip = fetched.tip.ok_or_else(|| format!("The remote {remote} has no branch {branch}: push it there first."))?;
+    let Some(tip) = fetched.tip else {
+        if empty_ok {
+            return Ok(json!({"operation": "git_pull", "remote": remote, "branch": branch, "empty": true, "changed": []}));
+        }
+        return Err(format!("The remote {remote} has no branch {branch}: push it there first."));
+    };
     let author = s.author.as_ref().map(|a| Person::new(a.name.clone(), ""));
     let now = s.now();
     let h = s.history.as_mut().ok_or("The project has no git repository.")?;
@@ -299,7 +473,13 @@ pub(super) fn fetched(s: &mut Session, remote: &str, branch: &str, done: std::re
         Some(head) if !h.is_ancestor(head, &tip)? => {
             let message = format!("Merge {remote}/{branch}");
             let merge = |b: &[u8], o: &[u8], t: &[u8]| texcraft_forge::merge::merge3(b, o, t);
-            match h.merge(&tip, &message, author.as_ref(), now, &merge)? {
+            let choose = |path: &str| {
+                choices.get(path).map(|c| match c {
+                    texcraft_forge::Choice::Mine => texcraft_history::Side::Ours,
+                    texcraft_forge::Choice::Theirs => texcraft_history::Side::Theirs,
+                })
+            };
+            match h.merge_choosing(&tip, &message, author.as_ref(), now, &merge, &choose)? {
                 Merged::Done { commit, changed } => {
                     result["merged"] = json!(true);
                     result["commit"] = json!(commit);
@@ -307,8 +487,11 @@ pub(super) fn fetched(s: &mut Session, remote: &str, branch: &str, done: std::re
                 }
                 Merged::Conflicts(files) => {
                     let list: Vec<String> = files.iter().map(|(p, why)| format!("{p} ({why})")).collect();
+                    let conflicts =
+                        files.iter().map(|(path, why)| texcraft_forge::Conflict { path: path.clone(), kind: conflict_kind(why) }).collect();
+                    s.forge_problem = Some(super::super::forge::Problem::Conflicts(conflicts));
                     return Err(format!(
-                        "The remote's branch {branch} and this project changed the same files in ways that do not merge: {}. Nothing was changed: settle them with git, or keep one side's version and commit it.",
+                        "The remote's branch {branch} and this project changed the same files in ways that do not merge: {}. Nothing was changed: choose which version of each to keep, then try again.",
                         list.join(", ")
                     ));
                 }
@@ -324,7 +507,20 @@ pub(super) fn fetched(s: &mut Session, remote: &str, branch: &str, done: std::re
     }
     result["changed"] = json!(changed.iter().map(|(p, k)| json!({"path": p, "change": k.as_str()})).collect::<Vec<_>>());
     apply(s, &changed)?;
+    s.forge_problem = None;
     Ok(result)
+}
+
+/// A conflict's reason, as the merge words it, as the forges' conflicts have it.
+fn conflict_kind(why: &str) -> texcraft_forge::ConflictKind {
+    use texcraft_forge::ConflictKind;
+    match why {
+        "deleted here, changed on the remote" => ConflictKind::DeletedHere,
+        "changed here, deleted on the remote" => ConflictKind::DeletedThere,
+        "added on both sides" => ConflictKind::AddedBoth,
+        "changed on both sides, and not text" => ConflictKind::Binary,
+        _ => ConflictKind::Overlap,
+    }
 }
 
 /// Puts the files a pull changed on disk into the project (and its review threads), as saved.
@@ -364,6 +560,7 @@ fn apply(s: &mut Session, changed: &[(String, ChangeKind)]) -> Result<()> {
     s.open.retain(|p| s.project.get(p).is_some());
     // The project is as on disk, which is as committed.
     s.dirty = false;
+    s.mark_versioned();
     Ok(())
 }
 

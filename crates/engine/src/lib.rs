@@ -44,6 +44,8 @@ pub use cmd::forge::Problem as ForgeProblem;
 pub use cmd::forge_auth::{Progress as SignInProgress, Unavailable as SignInUnavailable};
 /// Which forge lookup an outcome is of ([`Session::poll_forge_lookup`]).
 pub use cmd::forge_pick::Lookup as ForgeLookup;
+/// A git hosting service recognised by a remote's address (`git.remotes`' `hosting`).
+pub use cmd::git::{Hosting as GitHosting, hosting as git_hosting};
 pub use texcraft_compile::{
     Diagnostic, Draft, Engine, Export, MAX_BLEED_MM, Options as BuildOptions, Outcome, Output, PdfX, Progress, Severity, Status,
 };
@@ -77,6 +79,14 @@ pub struct Settings {
     /// The kinds of build message hidden in every project (`build.hide_messages`, [`hidden`]).
     #[serde(default)]
     pub hidden_messages: Vec<String>,
+    /// The window writes changes shortly after typing stops and makes versions by itself
+    /// (`project.autosave`); the session only keeps the setting, the window does the timing.
+    #[serde(default = "yes")]
+    pub autosave: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -89,6 +99,7 @@ impl Default for Settings {
             spelling: SpellingOptions::default(),
             grammar: GrammarOptions::default(),
             hidden_messages: Vec::new(),
+            autosave: true,
         }
     }
 }
@@ -129,6 +140,9 @@ pub struct Session {
     dir: Option<PathBuf>,
     /// Unsaved changes since the project was opened or saved.
     dirty: bool,
+    /// The file and review revisions the latest version was made at (or the project opened at):
+    /// changes since are in no version yet ([`Session::unversioned`]).
+    versioned: (u64, u64),
     /// Files open in the editor, in tab order, and the one shown.
     open: Vec<ProjectPath>,
     current: Option<ProjectPath>,
@@ -242,6 +256,7 @@ impl Session {
             project,
             dir: None,
             dirty: false,
+            versioned: (0, 0),
             revision: 0,
             built_revision: None,
             built_review: 0,
@@ -378,6 +393,17 @@ impl Session {
 
     pub fn is_dirty(&self) -> bool {
         self.dirty
+    }
+
+    /// Whether the project changed since its latest version (or since it was opened): saved or
+    /// not, those changes are in no version of its history yet.
+    pub fn unversioned(&self) -> bool {
+        (self.revision, self.review.revision) != self.versioned
+    }
+
+    /// The project as it is now is the latest version.
+    pub(crate) fn mark_versioned(&mut self) {
+        self.versioned = (self.revision, self.review.revision);
     }
 
     pub fn revision(&self) -> u64 {
@@ -864,6 +890,7 @@ impl Session {
         self.dirty = false;
         self.touch();
         self.dirty = false;
+        self.mark_versioned();
         self.last = None;
         self.pdf = None;
         self.pdfx = None;

@@ -34,6 +34,18 @@ pub enum Merged {
     Conflicts(Vec<(String, &'static str)>),
 }
 
+/// Which side's version of a file in conflict a merge keeps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    /// The branch checked out: the version here.
+    Ours,
+    /// The commit merged in: the remote's.
+    Theirs,
+}
+
+/// Which side to keep for a file in conflict, by path; none leaves it a conflict.
+pub type Choose<'a> = &'a dyn Fn(&str) -> Option<Side>;
+
 /// Every file of a tree by path.
 type Flat = BTreeMap<BString, (EntryMode, ObjectId)>;
 
@@ -262,6 +274,20 @@ impl History {
         time: chrono::DateTime<chrono::Utc>,
         merge_text: MergeText<'_>,
     ) -> Result<Merged> {
+        self.merge_choosing(theirs, message, author, time, merge_text, &|_| None)
+    }
+
+    /// [`History::merge`], keeping for each file in conflict the side `choose` names (a file it
+    /// names none for stays a conflict).
+    pub fn merge_choosing(
+        &self,
+        theirs: &str,
+        message: &str,
+        author: Option<&Person>,
+        time: chrono::DateTime<chrono::Utc>,
+        merge_text: MergeText<'_>,
+        choose: Choose<'_>,
+    ) -> Result<Merged> {
         let theirs = self.commit_id(theirs)?;
         let head = self.head_id()?.ok_or("The project has no commit yet to merge into.")?;
         let base = self.merge_base(head, theirs)?;
@@ -274,10 +300,16 @@ impl History {
         let mut conflicts = Vec::new();
         for path in paths {
             let (b, o, t) = (base_files.get(path), ours.get(path), their_files.get(path));
+            let chosen = choose(&path.to_str_lossy());
             let entry = if o == t || t == b {
                 o.copied()
             } else if o == b {
                 t.copied()
+            } else if let Some(side) = chosen {
+                match side {
+                    Side::Ours => o.copied(),
+                    Side::Theirs => t.copied(),
+                }
             } else {
                 match (b, o, t) {
                     (Some(b), Some(o), Some(t)) if o.0.is_blob() && t.0.is_blob() && b.0.is_blob() => {

@@ -22,6 +22,7 @@
 	 · recording @{r}	 · opname @{r}
 	A formula. Double-click to edit its source.	Een formule. Dubbelklik om de broncode te bewerken.
 	A label cannot hold braces, backslashes, % or #.	Een label mag geen accolades, backslashes, % of # bevatten.
+	A name for the project as it is now	Een naam voor het project zoals het nu is
 	A name for the project, kept in this browser	Een naam voor het project, bewaard in deze browser
 	A new file	Een nieuw bestand
 	A new or empty folder for the project	Een nieuwe of lege map voor het project
@@ -31,6 +32,7 @@
 	A sign-in is kept while TeXCraft runs only.	Een aanmelding wordt alleen bewaard zolang TeXCraft draait.
 	A table keeps one column at least.	Een tabel houdt minstens één kolom.
 	A table keeps one row at least.	Een tabel houdt minstens één rij.
+	A Token for {service}	Een token voor {service}
 	A token is kept: type to replace it	Er is een token bewaard: typ om het te vervangen
 	AI	AI
 	AI is off until you connect a model: any OpenAI-compatible endpoint, a server on this computer (llama.cpp, Ollama, vLLM) included. Every change it proposes arrives as a suggested change.	AI staat uit tot u een model koppelt: elk OpenAI-compatibel endpoint, ook een server op deze computer (llama.cpp, Ollama, vLLM). Elke wijziging die het voorstelt, komt binnen als voorgestelde wijziging.
@@ -73,6 +75,7 @@
 	Agreement	Congruentie
 	All	Alles
 	All borders	Alle randen
+	All changes saved	Alle wijzigingen opgeslagen
 	Allow Commits on GitLab	Commits op GitLab toestaan
 	Also check the text after % in the source.	Ook de tekst na % in de broncode controleren.
 	Another branch…	Andere branch…
@@ -172,7 +175,6 @@
 	Comments beside the text are hidden; the Review panel lists them.	Opmerkingen naast de tekst zijn verborgen; het paneel Review somt ze op.
 	Commit and Open Merge Request	Committen en merge request openen
 	Commit and Open Pull Request	Committen en pull request openen
-	Commit the Project	Het project committen
 	Commit to GitHub	Committen naar GitHub
 	Commit to GitHub…	Committen naar GitHub…
 	Commit to GitLab	Committen naar GitLab
@@ -183,7 +185,6 @@
 	Committed.	Gecommit.
 	Committing to GitHub…	Bezig met committen naar GitHub…
 	Committing to GitLab…	Bezig met committen naar GitLab…
-	Commit…	Committen…
 	Compile	Compileren
 	Compile automatically	Automatisch compileren
 	Compile the project to see it here.	Compileer het project om het hier te zien.
@@ -480,6 +481,8 @@
 	Name	Naam
 	Name a symbol of the palette by its command, such as \\alpha.	Noem een symbool van het palet bij zijn commando, zoals \\alpha.
 	Name the build output: pdf, pdfx, synctex or log.	Noem de builduitvoer: pdf, pdfx, synctex of log.
+	Name This Version	Deze versie een naam geven
+	Name This Version…	Deze versie een naam geven…
 	New File	Nieuw bestand
 	New File…	Nieuw bestand…
 	New Folder	Nieuwe map
@@ -510,7 +513,7 @@
 	No project matches: type its whole address to open it.	Geen project komt overeen: typ het volledige adres om het te openen.
 	No recent projects	Geen recente projecten
 	No reference was drafted: {error}	Er is geen referentie ontworpen: {error}
-	No remote yet: save the project to GitHub or GitLab to keep it there too.	Nog geen remote: sla het project op in GitHub of GitLab om het daar ook te bewaren.
+	No remote	Geen remote
 	No results	Geen resultaten
 	No review: {error}	Geen review: {error}
 	No rewrite: {error}	Niet herschreven: {error}
@@ -529,13 +532,16 @@
 	Not compiled yet	Nog niet gecompileerd
 	Not found in the file: “{quote}”	Niet gevonden in het bestand: “{quote}”
 	Not opened: {address} is not a web or mail address. Links from the PDF open only those.	Niet geopend: {address} is geen web- of e-mailadres. Links uit de pdf openen alleen die.
-	Not pushed yet.	Nog niet gepusht.
+	Not saved	Niet opgeslagen
 	Note	Notitie
 	Notes	Notities
 	Nothing changed since the last commit.	Niets gewijzigd sinds de laatste commit.
+	Nothing changed since the latest version.	Er is niets veranderd sinds de laatste versie.
 	Nothing has been compiled yet.	Er is nog niets gecompileerd.
 	Nothing in this file is folded.	Niets in dit bestand is ingevouwen.
 	Nothing leaves this computer. A kind switched off is never sent.	Niets verlaat deze computer. Een uitgeschakelde soort wordt nooit verstuurd.
+	nothing new to send	niets nieuws te verzenden
+	nothing sent to the remote yet	nog niets naar de remote verzonden
 	Nothing to commit: the files are as on the branch.	Niets te committen: de bestanden zijn zoals op de branch.
 	Nothing to report	Niets te melden
 	Nothing was made: {error}	Er is niets gemaakt: {error}
@@ -546,6 +552,7 @@
 	Omega, capital	Omega, hoofdletter
 	On a page of floats	Op een pagina met zwevende objecten
 	On this computer: nothing leaves it, and no token is needed.	Op deze computer: niets verlaat hem, en er is geen token nodig.
+	on {service}	op {service}
 	One caret	Eén cursor
 	Only LaTeX files (.tex) have a formatted view.	Alleen LaTeX-bestanden (.tex) hebben een opgemaakte weergave.
 	Only a .tex file can be the main document.	Alleen een .tex-bestand kan het hoofddocument zijn.
@@ -671,7 +678,7 @@
 	Rejected by {name} · {text}	Afgewezen door {name} · {text}
 	Rejected by {name}, {when}	Afgewezen door {name}, {when}
 	Relations	Relaties
-	Remote {name}:	Remote {name}:
+	Remote {name}: {url}	Remote {name}: {url}
 	Remove Server	Server verwijderen
 	Remove from recent projects	Uit recente projecten verwijderen
 	Remove from recent projects:	Uit recente projecten verwijderen:
@@ -713,6 +720,7 @@
 	Restore {file} as it was before it was deleted?	{file} herstellen zoals het was voordat het werd verwijderd?
 	Restore {file} as it was {when}?	{file} herstellen zoals het was {when}?
 	Restored, as unsaved changes: the next save makes a new version.	Hersteld, als niet-opgeslagen wijzigingen: de volgende keer opslaan maakt een nieuwe versie.
+	Restored. It is saved after the next pause in typing, and the history keeps every version.	Hersteld. Het wordt opgeslagen bij de volgende typpauze, en de geschiedenis bewaart elke versie.
 	Review	Review
 	Review This Section	Deze sectie laten beoordelen
 	Rewrite	Herschrijven
@@ -722,6 +730,9 @@
 	Row below	Rij eronder
 	Rules of this kind are checked.	Regels van deze soort worden gecontroleerd.
 	Russian	Russisch
+	Save automatically	Automatisch opslaan
+	Save the project to GitHub or GitLab to keep it there too, and to sync it.	Sla het project op in GitHub of GitLab om het daar ook te bewaren en te synchroniseren.
+	Saving…	Bezig met opslaan…
 	SVG Image (.svg)	SVG-afbeelding (.svg)
 	Save	Opslaan
 	Save As…	Opslaan als…
@@ -843,6 +854,10 @@
 	Swedish	Zweeds
 	Symbols	Symbolen
 	Symbols…	Symbolen…
+	Sync	Synchroniseren
+	Synced with {remote}: took in {files}.	Gesynchroniseerd met {remote}: overgenomen: {files}.
+	Synced with {remote}: your versions are sent.	Gesynchroniseerd met {remote}: uw versies zijn verzonden.
+	Syncing…	Bezig met synchroniseren…
 	SyncTeX data	SyncTeX-gegevens
 	System	Systeem
 	System title bar	Titelbalk van het systeem
@@ -867,6 +882,8 @@
 	The AI connection and its token are forgotten.	De AI-koppeling en het token zijn vergeten.
 	The API's base address: https://, or http:// only for this computer.	Het basisadres van de API: https://, of http:// alleen voor deze computer.
 	The ID is not a secret: it is kept in the preferences. Sign-ins stay in the keychain.	De ID is geen geheim: die wordt in de voorkeuren bewaard. Aanmeldingen blijven in de sleutelhanger.
+	The last changes to {project} could not be kept in this browser	De laatste wijzigingen aan {project} konden niet in deze browser worden bewaard
+	The last changes to {project} could not be saved	De laatste wijzigingen aan {project} konden niet worden opgeslagen
 	The LaTeX is made and typeset: its preview is in the dialog.	De LaTeX is gemaakt en gezet: het voorbeeld staat in het dialoogvenster.
 	The LaTeX is made but does not typeset: the dialog shows why.	De LaTeX is gemaakt maar wordt niet gezet: het dialoogvenster toont waarom.
 	The LaTeX made	De gemaakte LaTeX
@@ -950,6 +967,8 @@
 	The prompt for {kind} is the app's own again.	De prompt voor {kind} is weer die van de app zelf.
 	The push did not work: {why}	Het pushen is mislukt: {why}
 	The raw log is copied.	Het onbewerkte log is gekopieerd.
+	The remote has new commits that change the same parts of these files. For each, keep your version or take the remote's.	De remote heeft nieuwe commits die dezelfde delen van deze bestanden wijzigen. Houd voor elk uw versie of neem die van de remote.
+	The remote is on {service}: {url}	De remote staat op {service}: {url}
 	The rewrite is a suggested change: accept or reject it beside the text or in the Review panel.	De herschrijving is een voorgestelde wijziging: accepteer of wijs die af naast de tekst of in het paneel Review.
 	The rule {rule} is off: turn it on again in Settings › Editor.	De regel {rule} staat uit: schakel die weer in via Instellingen › Editor.
 	The section at the caret.	De sectie bij de cursor.
@@ -993,7 +1012,6 @@
 	This file	Dit bestand
 	This file ({file})	Dit bestand ({file})
 	This file has no outline.	Dit bestand heeft geen overzicht.
-	This folder is in a git repository of its own: saving does not commit, Commit does.	Deze map staat in een eigen git-repository: opslaan commit niet, Committen wel.
 	This folder no longer exists.	Deze map bestaat niet meer.
 	This formula has an error: {message}	Deze formule bevat een fout: {message}
 	This grammar problem is ignored until TeXCraft closes.	Dit grammaticaprobleem wordt genegeerd tot TeXCraft sluit.
@@ -1043,9 +1061,10 @@
 	Unzip into the Project	Uitpakken in het project
 	Unzip {file}?	{file} uitpakken?
 	Up and Down choose a fix, Enter applies it, Escape closes.	Omhoog en Omlaag kiezen een oplossing, Enter past die toe, Escape sluit.
+	Up to date	Bijgewerkt
 	Up to date with the branch {branch}.	Bijgewerkt met de branch {branch}.
-	Up to date with the remote, as last pushed or pulled.	Bijgewerkt met de remote, zoals laatst gepusht of gepulld.
 	Up to date with {remote}.	Bijgewerkt met {remote}.
+	up to date, as last synced	bijgewerkt, volgens de laatste synchronisatie
 	Update	Bijwerken
 	Update from GitHub	Bijwerken vanuit GitHub
 	Update from GitLab	Bijwerken vanuit GitLab
@@ -1056,6 +1075,7 @@
 	Use a personal access token instead	In plaats daarvan een persoonlijk toegangstoken gebruiken
 	Use a personal access token instead of the sign-in	Een persoonlijk toegangstoken gebruiken in plaats van de aanmelding
 	Use this instruction again	Deze instructie opnieuw gebruiken
+	Version named.	Versie benoemd.
 	Version {version}	Versie {version}
 	Vim	Vim
 	Vim's keys work in the source; here the standard keys edit the text.	De toetsen van Vim werken in de broncode; hier bewerken de standaardtoetsen de tekst.
@@ -1074,13 +1094,16 @@
 	Width, as a share of the line	Breedte, als deel van de regel
 	Withdraw Suggestion	Voorstel intrekken
 	Word choice and usage	Woordkeuze en gebruik
+	Write changes shortly after typing stops, and keep versions of the project by themselves. Off, File › Save saves, and closing asks about changes not saved.	Wijzigingen kort na het typen wegschrijven en vanzelf versies van het project bewaren. Uit: Bestand › Opslaan slaat op, en bij sluiten wordt gevraagd naar niet-opgeslagen wijzigingen.
 	Write LaTeX, see the PDF as you type.	Schrijf LaTeX, zie de pdf terwijl u typt.
 	Xi, capital	Xi, hoofdletter
 	You signed in to GitLab to read only. To commit, GitLab asks you to let TeXCraft write too (the api scope); your message is kept.	U bent bij GitLab aangemeld om alleen te lezen. Om te committen vraagt GitLab u TeXCraft ook te laten schrijven (de scope api); uw bericht blijft bewaard.
 	You signed in to GitLab to read only. To make a project, GitLab asks you to let TeXCraft write too (the api scope).	U bent bij GitLab aangemeld om alleen te lezen. Om een project te maken vraagt GitLab u TeXCraft ook te laten schrijven (de scope api).
 	You: sign in, or give a token, to choose another owner.	U: meld u aan, of geef een token op, om een andere eigenaar te kiezen.
+	Your changes are not saved: {why}	Uw wijzigingen zijn niet opgeslagen: {why}
 	Your changes are on the new branch {branch}, in merge request !{iid} into {target}. The project now follows {branch}.	Uw wijzigingen staan op de nieuwe branch {branch}, in merge request !{iid} naar {target}. Het project volgt nu {branch}.
 	Your changes are on the new branch {branch}, in pull request #{iid} into {target}. The project now follows {branch}.	Uw wijzigingen staan op de nieuwe branch {branch}, in pull request #{iid} naar {target}. Het project volgt nu {branch}.
+	Your changes are saved, but no version of them could be made: {why}	Uw wijzigingen zijn opgeslagen, maar er kon geen versie van worden gemaakt: {why}
 	Your description, the main document's preamble and, for a figure, the names of the project's images.	Uw beschrijving, de preambule van het hoofddocument en, voor een figuur, de namen van de afbeeldingen van het project.
 	Your instruction, the selected text and a few lines around it.	Uw instructie, de geselecteerde tekst en enkele regels eromheen.
 	Your key	Uw sleutel
@@ -1313,6 +1336,7 @@
 	{file} formatted	{file} opgemaakt
 	{host} (GitHub Enterprise Server)	{host} (GitHub Enterprise Server)
 	{host} (GitLab)	{host} (GitLab)
+	{host} asks for a personal access token that can read and write the repository. Signing in to GitLab or GitHub in Settings › Accounts works too.	{host} vraagt om een persoonlijk toegangstoken dat de repository kan lezen en schrijven. Aanmelden bij GitLab of GitHub in Instellingen › Accounts werkt ook.
 	{host} is a GitHub Enterprise Server (version {version}).	{host} is een GitHub Enterprise Server (versie {version}).
 	{host} is a GitHub Enterprise Server.	{host} is een GitHub Enterprise Server.
 	{host} is a GitLab server (version {version}).	{host} is een GitLab-server (versie {version}).
@@ -1340,9 +1364,12 @@
 	{project}: PDF	{project}: pdf
 	{publisher} · from the {source} · licence {licence}	{publisher} · uit de {source} · licentie {licence}
 	{remote} has these commits already.	{remote} heeft deze commits al.
+	{service} lets git reach a project with a git authentication token: make one in your {service} account's settings, then paste it here.	{service} laat git een project bereiken met een git-authenticatietoken: maak er een in de instellingen van uw {service}-account en plak het hier.
 	{source} · licence {licence}	{source} · licentie {licence}
 	{style}, paragraph style	{style}, alineastijl
 	{time} · {size} to {destination} · {model} · {outcome}	{time} · {size} naar {destination} · {model} · {outcome}
+	{why} Try again, or download the project as a zip from the File menu to keep a copy.	{why} Probeer het opnieuw, of download het project als zip via het menu Bestand om een kopie te bewaren.
+	{why} Try again, or leave them unsaved.	{why} Probeer het opnieuw, of laat ze niet opgeslagen.
 	{w} × {h} pixels	{w} × {h} pixels
 	{w} × {h} pt	{w} × {h} pt
 	“{word}” is ignored until TeXCraft closes.	“{word}” wordt genegeerd tot TeXCraft wordt gesloten.
@@ -1401,10 +1428,9 @@ suggestion	Reopen	Heropenen
 @plural	{n} already in the project|{n} already in the project	{n} al in het project|{n} al in het project
 @plural	{n} build output|{n} build outputs	{n} builduitvoer|{n} builduitvoeren
 @plural	{n} caret|{n} carets	{n} cursor|{n} cursors
+@plural	{n} changed file to send|{n} changed files to send	{n} gewijzigd bestand te verzenden|{n} gewijzigde bestanden te verzenden
 @plural	{n} changed file|{n} changed files	{n} gewijzigd bestand|{n} gewijzigde bestanden
 @plural	{n} comment|{n} comments	{n} opmerking|{n} opmerkingen
-@plural	{n} commit to pull|{n} commits to pull	{n} commit om te pullen|{n} commits om te pullen
-@plural	{n} commit to push|{n} commits to push	{n} commit om te pushen|{n} commits om te pushen
 @plural	{n} completion|{n} completions	{n} aanvulling|{n} aanvullingen
 @plural	{n} day ago|{n} days ago	{n} dag geleden|{n} dagen geleden
 @plural	{n} error|{n} errors	{n} fout|{n} fouten
@@ -1433,6 +1459,8 @@ suggestion	Reopen	Heropenen
 @plural	{n} suggestion|{n} suggestions	{n} voorstel|{n} voorstellen
 @plural	{n} that could not be read or added|{n} that could not be read or added	{n} dat niet kon worden gelezen of toegevoegd|{n} die niet konden worden gelezen of toegevoegd
 @plural	{n} unsafe name|{n} unsafe names	{n} onveilige naam|{n} onveilige namen
+@plural	{n} version to receive|{n} versions to receive	{n} versie te ontvangen|{n} versies te ontvangen
+@plural	{n} version to send|{n} versions to send	{n} versie te verzenden|{n} versies te verzenden
 @plural	{n} warning|{n} warnings	{n} waarschuwing|{n} waarschuwingen
 @plural	{n} was dropped: the words it quoted are not in the text.|{n} were dropped: the words they quoted are not in the text.	{n} is weggelaten: de woorden die het citeerde staan niet in de tekst.|{n} zijn weggelaten: de woorden die ze citeerden staan niet in de tekst.
 
@@ -1564,12 +1592,14 @@ unit	{n} s	{n} s
 @id	history.restore	Versie herstellen
 @id	history.show	Versie van een bestand tonen
 @id	history.status	Status van de geschiedenis
+@id	history.version	Versie maken
 @id	language.add_word	Aan woordenboek toevoegen
 @id	language.fix	Snelle oplossing toepassen
 @id	language.ignore_word	Woord negeren
 @id	language.spelling_options	Spellingsopties
 @id	pdf.locate	In pdf tonen
 @id	pdf.source	Naar broncode gaan
+@id	project.autosave	Automatisch opslaan
 @id	project.delete	Project verwijderen
 @id	project.find	Zoeken in project
 @id	project.from_template	Nieuw project uit sjabloon…
@@ -1581,6 +1611,8 @@ unit	{n} s	{n} s
 @id	project.replace	Vervangen in project
 @id	project.save	Opslaan
 @id	project.save_as	Project opslaan als…
+@id	project.sync	Synchroniseren
+@id	project.write	Wijzigingen wegschrijven
 @id	table.edit	Tabel bewerken
 @id	table.inspect	Tabellen lezen
 @id	template.fetch	Sjabloon downloaden
@@ -1683,6 +1715,7 @@ unit	{n} s	{n} s
 @msg	Give the application's ID, as the server shows it once the application is registered.	Geef de ID van de applicatie op, zoals de server die toont zodra de applicatie is geregistreerd.
 @msg	Give the project a name.	Geef het project een naam.
 @msg	Give the title or DOI in at most {MAX_DESCRIPTION_CHARS} characters.	Geef de titel of DOI in hoogstens {MAX_DESCRIPTION_CHARS} tekens.
+@msg	Give your {value} git authentication token for this project (token): TeXCraft keeps it only while it runs, never on disk.	Geef uw git-authenticatietoken van {value} voor dit project (token): TeXCraft bewaart het alleen zolang het draait, nooit op schijf.
 @msg	Grammar checking is not in this build; Check Grammar with AI is available.	Grammaticacontrole zit niet in deze build; Grammatica controleren met AI is beschikbaar.
 @msg	Grammar checking is off (Settings › Editor).	Grammaticacontrole staat uit (Instellingen › Editor).
 @msg	Grammar is checked offline in English only, and this document is in {lang}: Check Grammar with AI works in any language.	Grammatica wordt offline alleen in het Engels gecontroleerd, en de taal van dit document is {lang}: Grammatica controleren met AI werkt in elke taal.
@@ -1709,6 +1742,7 @@ unit	{n} s	{n} s
 @msg	No branch is checked out (HEAD is detached), so no branch can be set to follow a remote one.	Er is geen branch uitgecheckt (HEAD is losgekoppeld), dus er kan geen branch worden ingesteld om een branch van een remote te volgen.
 @msg	No branch is checked out (HEAD is detached): check out a branch with git first.	Er is geen branch uitgecheckt (HEAD is losgekoppeld): check eerst een branch uit met git.
 @msg	No build is running, or the engine cannot stop it.	Er loopt geen build, of de engine kan die niet stoppen.
+@msg	No credentials for the remote's server.	Geen inloggegevens voor de server van de remote.
 @msg	No sign-in is running.	Er loopt geen aanmelding.
 @msg	No sign-in was waiting on this page: sign in again.	Er wachtte geen aanmelding op deze pagina: meld u opnieuw aan.
 @msg	No source line is known there: build the project first, or point at its text.	Daar is geen bronregel bekend: bouw eerst het project, of wijs de tekst ervan aan.
@@ -1810,6 +1844,7 @@ unit	{n} s	{n} s
 @msg	The project has no commit yet to merge into.	Het project heeft nog geen commit om in samen te voegen.
 @msg	The project has no commit yet: save it first.	Het project heeft nog geen commit: sla het eerst op.
 @msg	The project has no folder yet.	Het project heeft nog geen map.
+@msg	The project has no folder yet: save it in a folder first.	Het project heeft nog geen map: sla het eerst op in een map.
 @msg	The project has no folder yet: use Save Project As.	Het project heeft nog geen map: gebruik Project opslaan als.
 @msg	The project has no folder.	Het project heeft geen map.
 @msg	The project has no git repository yet: save it in a folder first.	Het project heeft nog geen git-repository: sla het eerst op in een map.
@@ -1820,7 +1855,10 @@ unit	{n} s	{n} s
 @msg	The project has no main document to build.	Het project heeft geen hoofddocument om te bouwen.
 @msg	The project has no main document to export.	Het project heeft geen hoofddocument om te exporteren.
 @msg	The project has no main document.	Het project heeft geen hoofddocument.
+@msg	The project has no name yet: save it first.	Het project heeft nog geen naam: sla het eerst op.
 @msg	The project has no name yet: use Save Project As.	Het project heeft nog geen naam: gebruik Project opslaan als.
+@msg	The project has no remote to sync with.	Het project heeft geen remote om mee te synchroniseren.
+@msg	The project has no remote to sync with: save it to GitLab or GitHub, or give its folder a remote (git.set_remote).	Het project heeft geen remote om mee te synchroniseren: sla het op in GitLab of GitHub, of geef de map een remote (git.set_remote).
 @msg	The project has no remote {remote}: set one (git.set_remote) first.	Het project heeft geen remote {remote}: stel er eerst een in (git.set_remote).
 @msg	The project has no remote {remote}: set one (git.set_remote), or save the project to GitLab or GitHub.	Het project heeft geen remote {remote}: stel er een in (git.set_remote), of sla het project op in GitLab of GitHub.
 @msg	The project has no text file to ask about.	Het project heeft geen tekstbestand om naar te vragen.
@@ -1833,7 +1871,7 @@ unit	{n} s	{n} s
 @msg	The project's folder {old} could not be renamed: {e}	De map {old} van het project kon niet worden hernoemd: {e}
 @msg	The project's new git repository cannot be found.	De nieuwe git-repository van het project is niet te vinden.
 @msg	The remote {remote} has no branch {branch}: push it there first.	De remote {remote} heeft geen branch {branch}: push die er eerst naartoe.
-@msg	The remote's branch {branch} and this project changed the same files in ways that do not merge: {value}. Nothing was changed: settle them with git, or keep one side's version and commit it.	De branch {branch} van de remote en dit project hebben dezelfde bestanden gewijzigd op manieren die niet samen te voegen zijn: {value}. Er is niets gewijzigd: los ze op met git, of behoud de versie van één kant en commit die.
+@msg	The remote's branch {branch} and this project changed the same files in ways that do not merge: {value}. Nothing was changed: choose which version of each to keep, then try again.	De branch {branch} van de remote en dit project wijzigden dezelfde bestanden op manieren die niet samengaan: {value}. Er is niets veranderd: kies welke versie u van elk bewaart en probeer het opnieuw.
 @msg	The remote's branch {branch} has commits this project does not have: pull first, then push.	De branch {branch} van de remote heeft commits die dit project niet heeft: pull eerst en push dan.
 @msg	The repository has a file at {path}, which cannot be written safely.	De repository heeft een bestand op {path} dat niet veilig kan worden geschreven.
 @msg	The repository has no commit {commit}.	De repository heeft geen commit {commit}.

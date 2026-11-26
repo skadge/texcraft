@@ -44,7 +44,9 @@
         <dt>Opening</dt>
         <dd><span class="ui">File › Open Project Folder…</span> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) opens a folder <span class="tag">Desktop only</span>; recent projects are under <span class="ui">File › Open Recent</span>, in the project menu beside the project's name, and on the start page. On the desktop you can also give a folder when starting TeXCraft: <code>texcraft path/to/project</code>. A file larger than 64 MB (a reference PDF, a dataset) does not stop the project opening: it is not loaded, stays in the folder untouched, and is not part of the build; the status line names it with its size.</dd>
         <dt>Saving</dt>
-        <dd><span class="ui">File › Save</span> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) saves every changed file. <span class="ui">File › Save Project As…</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) copies the project to another folder, or in the browser saves it under another name. A dot after the project's name in the top bar means unsaved changes; TeXCraft asks before they could be lost. In the browser, saving is keeping the project in the browser's storage: the entry reads <span class="ui">Keep in This Browser</span>, and the question <span class="ui">Keep in This Browser</span>, <span class="ui">Don't Keep</span> or <span class="ui">Cancel</span>. Nothing leaves your computer: for a project opened from GitLab or GitHub, the question also offers <span class="ui">Commit to GitLab…</span>, which keeps the changes first and then opens the commit dialog.</dd>
+        <dd>A project that has a place (a folder, or a name in the browser) saves itself: about a second and a half after you stop typing, when the window loses the keyboard focus, and before the project closes, its changed files are written to its folder, or in the browser to the browser's storage. Beside the project's name the top bar says <span class="ui">All changes saved</span> or <span class="ui">Saving…</span>; when a write fails it says <span class="ui">Not saved</span>, the status line says why, and leaving the project asks first. <span class="ui">File › Save</span> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) saves at once and makes a version (in the browser the entry reads <span class="ui">Keep in This Browser</span>). A new project has no place yet: its first save asks where, and until then the dot after its name means unsaved changes and closing asks. <span class="ui">File › Save Project As…</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) copies the project to another folder, or in the browser saves it under another name. To save only when you say so, turn off <span class="ui">Save automatically</span> in <a href="settings.html">Settings › Editor</a>.</dd>
+        <dt>When saving fails</dt>
+        <dd>The question asked before the project closes then says so: on the desktop <span class="ui">The last changes to … could not be saved</span>, with <span class="ui">Try Again</span>, <span class="ui">Don't Save</span> or <span class="ui">Cancel</span>; in the browser <span class="ui">The last changes to … could not be kept in this browser</span>, with <span class="ui">Try Again</span>, <span class="ui">Don't Keep</span> or <span class="ui">Cancel</span>. Nothing leaves your computer: for a project opened from GitLab or GitHub, the question also offers <span class="ui">Commit to GitLab…</span>, which keeps the changes first and then opens the commit dialog.</dd>
         <dt>Renaming</dt>
         <dd>Click the project's name in the top bar and type. On the desktop this renames the project's folder; an untitled project is saved under the name you type.</dd>
         <dt>The main document</dt>
@@ -73,19 +75,23 @@
       <h2 id="history">History and versions</h2>
       <!-- screenshot: the History section with a version chosen and its changes shown -->
       <p>Every project has a history, and on the desktop that history is a git repository in the project's folder, whether or not it is ever pushed anywhere.</p>
+      <p>Saving does not make a version each time: that would bury the history. A version (a commit) is made when something changed since the latest one:</p>
       <ul>
-        <li><strong>A folder that is not in a repository</strong> becomes one on its first save, and each save that changes something is a new version (a commit).</li>
-        <li><strong>A folder already in a repository of its own</strong> is used as it is: saving does not commit. Use <span class="ui">Commit…</span> in the History section when you want a version, with your own message.</li>
-        <li><strong>In the browser</strong>, each save that changes something is a version kept in the browser, with the same comparisons and restores.</li>
+        <li>after five minutes without typing;</li>
+        <li>when the project closes;</li>
+        <li>before something replaces the files: a restore, a pull, accepting all suggestions;</li>
+        <li>before every <a href="forges.html#sync">Sync</a>;</li>
+        <li>on <span class="ui">File › Save</span>, and with <span class="ui">Name This Version…</span> (the tag button in the History section), which gives it a name of your own.</li>
       </ul>
-      <p>The <span class="ui">History</span> section of the side panel lists the versions, newest first, each with what it changed, when, by whom and the files it changed. A version a save makes describes itself: the files added, edited, deleted or renamed and, for a LaTeX file, the sections whose text changed, as the outline names them, for example <span class="ui">Edited Introduction and Results (main.tex); added figures/plot.png</span>. When that would be longer than a line, it says less (the sections, then the folders, then only how many files), and hovering over the version lists each file. A version you commit yourself keeps your message. Choose one to see what it changed in each file, line by line (<span class="ui">What this commit changes</span>). From there:</p>
+      <p>On the desktop, <strong>a folder that is not in a repository</strong> becomes one on its first save. <strong>A folder already in a repository of its own</strong> is used as it is, and TeXCraft commits to it only when you ask: Sync, a push or a pull, and <span class="ui">Name This Version…</span>; its own versions after a pause or on closing are not made there. <strong>In the browser</strong>, versions are kept in the browser, with the same comparisons and restores.</p>
+      <p>The <span class="ui">History</span> section of the side panel lists the versions, newest first, each with what it changed, when, by whom and the files it changed. A version a save makes describes itself: the files added, edited, deleted or renamed and, for a LaTeX file, the sections whose text changed, as the outline names them, for example <span class="ui">Edited Introduction and Results (main.tex); added figures/plot.png</span>. When that would be longer than a line, it says less (the sections, then the folders, then only how many files), and hovering over the version lists each file. A version you name keeps your name. Choose one to see what it changed in each file, line by line (<span class="ui">What this commit changes</span>). From there:</p>
       <ul>
         <li><span class="ui">Restore This File…</span> brings one file back as it was;</li>
         <li><span class="ui">Restore the Project at This Version…</span> brings back every file, and removes the files added since.</li>
       </ul>
-      <p>A restore comes back as unsaved changes: nothing is lost, and the next save makes a new version, so the history keeps every version, including the one you restored over.</p>
+      <p>Before a restore, the project as it is is kept in a version; the restored files are then saved like any change. Nothing is lost: the history keeps every version, including the one you restored over.</p>
       <p>Commits carry your git identity when your system has one (<code>git config user.name</code> and <code>user.email</code>), and the name TeXCraft otherwise. When TeXCraft makes the repository, it also writes a <code>.gitignore</code> that keeps build files out.</p>
-      <p>To keep the history on GitLab or GitHub too, see <a href="forges.html#push-pull">Push and pull</a> and <a href="forges.html#save-to">Save Project to GitHub or GitLab</a>.</p>
+      <p>To keep the history on GitLab, GitHub or another git server too, see <a href="forges.html#sync">Sync</a>, <a href="forges.html#push-pull">Push and pull</a> and <a href="forges.html#save-to">Save Project to GitHub or GitLab</a>.</p>
 
       <h2 id="texcraft-folder">The <code>.texcraft</code> folder</h2>
       <p>TeXCraft keeps a few things of a project in a hidden <code>.texcraft</code> folder inside it, so they travel with the project and its history:</p>
@@ -96,13 +102,13 @@
       </ul>
 
       <h2 id="library">Projects in the browser</h2>
-      <p>The browser version keeps projects in your browser's storage for this site, by name. The start page lists them under <span class="ui">Projects in this browser</span>, to open or to delete. The page asks before you leave it with unsaved changes.</p>
+      <p>The browser version keeps projects in your browser's storage for this site, by name. The start page lists them under <span class="ui">Projects in this browser</span>, to open or to delete. The page asks before you leave it with changes not kept yet (typing that has not paused, or a write that failed).</p>
       <p>When you first save a project, TeXCraft asks the browser to keep the site's data for good. Under <span class="ui">Projects in this browser</span> the start page says what the browser answered, and how much room the projects take:</p>
       <ul>
         <li><strong>Kept until you delete them</strong>: the browser agreed; it does not remove the projects on its own.</li>
         <li><strong>The browser may remove them when space runs low</strong>: it did not (some browsers decide by how often you visit the site, or ask you). Keep a copy elsewhere, as below.</li>
       </ul>
-      <p>If the browser has no room left, the save fails and TeXCraft says so on the status line: the project keeps its unsaved changes (the dot after its name), and leaving the page warns you. Download it as a zip, delete projects you no longer need, then save again.</p>
+      <p>If the browser has no room left, the save fails and TeXCraft says so on the status line and beside the project's name (<span class="ui">Not saved</span>): the project keeps its unsaved changes, and leaving the page warns you. Download it as a zip, delete projects you no longer need, then save again.</p>
       <p><span class="ui">File › Download Project as Zip</span> <span class="tag">Browser only</span> downloads the project's files (and its review's comments, in <code>.texcraft/review/</code>) as one zip file. Dropped on the start page, it becomes a project again with the same files; on the desktop, unzip it and open the folder, comments included.</p>
       <div class="note">
         <p>Projects stay in this browser on this computer only. Clearing the site's data in the browser deletes them. To keep a copy elsewhere, download it as a zip, or save the project to GitLab or GitHub (<a href="forges.html#save-to">how</a>); exports and the PDF can be downloaded at any time.</p>

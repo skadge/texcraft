@@ -93,6 +93,35 @@ pub fn text_button(ui: &mut Ui, t: &Tokens, text: &str, enabled: bool) -> Respon
     r
 }
 
+/// A button that looks like one: a border (the theme's control border, 3:1 against the frame),
+/// an icon before its text when given, and `name` as its accessible name and tooltip when it says
+/// more than the text (counts, what it does).
+pub fn framed_button(ui: &mut Ui, t: &Tokens, icon: Option<&str>, text: &str, name: &str, enabled: bool) -> Response {
+    let font = t.body();
+    let galley = ui.painter().layout_no_wrap(text.to_owned(), font.clone(), t.text);
+    let icon_room = if icon.is_some() { t.icon_size + t.unit } else { 0.0 };
+    let size = vec2(galley.size().x + icon_room + 5.0 * t.unit, t.toolbar_height - 3.0 * t.unit);
+    let sense = if enabled { Sense::click() } else { Sense::hover() };
+    let (rect, r) = ui.allocate_exact_size(size, sense);
+    r.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, name));
+    if ui.is_rect_visible(rect) {
+        let fill = if enabled { state_fill(t, &r, t.frame) } else { t.frame };
+        ui.painter().rect_filled(rect, t.corner(), fill);
+        let border = if enabled { t.control_border } else { t.control_border.gamma_multiply(0.55) };
+        ui.painter().rect_stroke(rect, t.corner(), Stroke::new(1.0, border), StrokeKind::Inside);
+        let color = if enabled { t.text } else { t.text_muted.gamma_multiply(0.55) };
+        let mut x = rect.left() + 2.5 * t.unit;
+        if let Some(icon) = icon {
+            let at = Rect::from_min_size(egui::pos2(x, rect.top()), vec2(t.icon_size, rect.height()));
+            icons::paint(ui, at, icon, t.icon_size - 2.0, color);
+            x += icon_room;
+        }
+        ui.painter().text(egui::pos2(x, rect.center().y), Align2::LEFT_CENTER, text, font, color);
+        focus_ring(ui, t, &r, rect, t.corner());
+    }
+    if name == text { r } else { r.on_hover_text(name) }
+}
+
 /// A rail section: an 18 px icon in a 36 px square, with an accent bar on its inner edge when
 /// active.
 pub fn rail_button(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, active: Option<bool>) -> Response {

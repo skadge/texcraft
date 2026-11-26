@@ -52,6 +52,26 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "project.write",
+            label: "Write Changes",
+            menu: &[],
+            shortcut: None,
+            params: no_params,
+            enabled: has_dir,
+            run: write,
+            changes: true,
+        },
+        CommandSpec {
+            id: "project.autosave",
+            label: "Save Automatically",
+            menu: &[],
+            shortcut: None,
+            params: on_schema,
+            enabled: always,
+            run: autosave,
+            changes: true,
+        },
+        CommandSpec {
             id: "project.save_as",
             label: "Save Project As…",
             menu: &["File"],
@@ -106,6 +126,10 @@ pub(super) fn specs() -> Vec<CommandSpec> {
 
 fn path_schema() -> Value {
     json!({"type": "object", "properties": {"path": {"type": "string", "description": "A folder on disk, or in the browser a project's name."}}, "required": ["path"], "additionalProperties": false})
+}
+
+fn on_schema() -> Value {
+    json!({"type": "object", "properties": {"on": {"type": "boolean", "description": "Whether the window writes changes shortly after typing stops, and makes versions by itself (after a pause in typing, when the project closes)."}}, "required": ["on"], "additionalProperties": false})
 }
 
 fn name_schema() -> Value {
@@ -260,6 +284,24 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"files": files, "main": main, "skipped": skipped, "folder": gathered.stripped}))
 }
 
+/// Writes the project's changes where it is kept, without making a version: what the window does
+/// shortly after typing stops. Nothing is written when nothing changed.
+fn write(s: &mut Session, _: &Value) -> Result<Value> {
+    let dir = s.dir.clone().ok_or("The project has no folder yet.")?;
+    if !s.dirty {
+        return Ok(json!({"path": dir.display().to_string(), "written": false}));
+    }
+    let mut result = write_to(s, &dir)?;
+    result["written"] = json!(true);
+    Ok(result)
+}
+
+fn autosave(s: &mut Session, p: &Value) -> Result<Value> {
+    let on = p.get("on").and_then(Value::as_bool).ok_or("`on` (true or false) is missing")?;
+    s.settings.autosave = on;
+    Ok(json!({"autosave": on}))
+}
+
 fn save(s: &mut Session, _: &Value) -> Result<Value> {
     let dir = s.dir.clone().ok_or("The project has no folder yet.")?;
     save_to(s, &dir)
@@ -280,11 +322,21 @@ fn save_as(s: &mut Session, params: &Value) -> Result<Value> {
     save_to(s, &dir)
 }
 
-/// Writes the project to `dir` (a folder, or its name in the library) and makes it the
-/// project's folder.
+/// Writes the project to `dir` (a folder, or its name in the library), makes it the project's
+/// folder, and records a version of it (in a repository TeXCraft made, or the library).
 pub(super) fn save_to(s: &mut Session, dir: &Path) -> Result<Value> {
-    let now = s.now().timestamp_millis();
     let moved = s.dir.as_deref() != Some(dir);
+    let mut result = write_to(s, dir)?;
+    // The project is saved either way; the history says what became of the version.
+    result["history"] =
+        if s.library.is_some() { super::history::after_library_save(s, &dir.display().to_string()) } else { super::history::after_save(s, moved) };
+    Ok(result)
+}
+
+/// Writes the project to `dir` (a folder, or its name in the library) and makes it the
+/// project's folder, without making a version.
+pub(super) fn write_to(s: &mut Session, dir: &Path) -> Result<Value> {
+    let now = s.now().timestamp_millis();
     let mut result = json!({"path": dir.display().to_string()});
     match &mut s.library {
         Some(library) => {
@@ -295,9 +347,6 @@ pub(super) fn save_to(s: &mut Session, dir: &Path) -> Result<Value> {
     }
     s.dir = Some(dir.to_path_buf());
     s.dirty = false;
-    // The project is saved either way; the history says what became of the version.
-    result["history"] =
-        if s.library.is_some() { super::history::after_library_save(s, &dir.display().to_string()) } else { super::history::after_save(s, moved) };
     Ok(result)
 }
 

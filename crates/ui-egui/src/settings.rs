@@ -240,6 +240,22 @@ fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             Some(r)
         },
     );
+    let mut autosave = app.session.settings.autosave;
+    setting(
+        ui,
+        t,
+        tl!("Save automatically"),
+        tl!(
+            "Write changes shortly after typing stops, and keep versions of the project by themselves. Off, File › Save saves, and closing asks about changes not saved."
+        ),
+        |ui| {
+            let r = ui.add(egui::Checkbox::without_text(&mut autosave));
+            if r.changed() {
+                app.run("project.autosave", json!({"on": autosave}));
+            }
+            Some(r)
+        },
+    );
     key_bindings(app, ui, t, "settings-keys-editor");
     setting(
         ui,

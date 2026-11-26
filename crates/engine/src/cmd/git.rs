@@ -25,13 +25,92 @@ pub const SAVE_MESSAGE: &str = "Saved from TeXCraft";
 /// A git or repository operation running in the background.
 pub(crate) enum Task {
     #[cfg(not(target_arch = "wasm32"))]
-    Push { pending: Pending<std::result::Result<texcraft_gitwire::Pushed, String>>, remote: String, branch: String, renewed: Renewed },
+    Push {
+        pending: Pending<std::result::Result<texcraft_gitwire::Pushed, String>>,
+        remote: String,
+        branch: String,
+        renewed: Renewed,
+        kept: desktop::Kept,
+        /// The Sync this push ends, with what it did before.
+        sync: Option<Box<Syncing>>,
+    },
     #[cfg(not(target_arch = "wasm32"))]
-    Pull { pending: Pending<std::result::Result<texcraft_gitwire::Fetched, String>>, remote: String, branch: String, renewed: Renewed },
+    Pull {
+        pending: Pending<std::result::Result<texcraft_gitwire::Fetched, String>>,
+        remote: String,
+        branch: String,
+        renewed: Renewed,
+        kept: desktop::Kept,
+        /// For files in conflict, the side to keep.
+        choices: texcraft_forge::Choices,
+        /// The Sync this pull starts: a push follows it.
+        sync: Option<Box<Syncing>>,
+    },
     /// A repository made (and, on the desktop, the history pushed to it).
     Create { pending: Pending<Made>, renewed: Renewed, key: Key },
     /// Where the account can make repositories.
     Owners { pending: Pending<Vec<Owner>>, renewed: Renewed, key: Key, instance: String },
+}
+
+/// A Sync under way (`project.sync`): its parameters, the version it made, and once pulled what
+/// the pull did.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) struct Syncing {
+    params: Value,
+    version: Value,
+    pulled: Option<Value>,
+}
+
+/// A git hosting service TeXCraft recognises by its address, to name it beside the remote: the
+/// service a remote is on is a fact about the user's project, not the name of a feature of ours.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Hosting {
+    /// Overleaf's git access (`https://git.overleaf.com/<project id>`), which takes a git
+    /// authentication token as the password of the user `git`.
+    Overleaf,
+}
+
+impl Hosting {
+    pub fn id(self) -> &'static str {
+        match self {
+            Hosting::Overleaf => "overleaf",
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Hosting::Overleaf => "Overleaf",
+        }
+    }
+
+    /// The user name git's basic authentication takes with the service's token.
+    pub fn user(self) -> &'static str {
+        match self {
+            Hosting::Overleaf => "git",
+        }
+    }
+}
+
+/// The host a git address names (`https://user@host/path`, `ssh://git@host:22/path`,
+/// `git@host:path`), in lower case; none for one that names none.
+pub fn remote_host(url: &str) -> Option<String> {
+    let url = url.trim();
+    let rest = match url.split_once("://") {
+        Some((_, rest)) => rest.split('/').next().unwrap_or_default(),
+        // scp-like: user@host:path
+        None => url.split_once(':').map(|(h, _)| h).filter(|h| !h.contains('/'))?,
+    };
+    let host = rest.rsplit_once('@').map_or(rest, |(_, h)| h);
+    let host = host.split(':').next().unwrap_or_default().to_ascii_lowercase();
+    (!host.is_empty()).then_some(host)
+}
+
+/// The hosting service a git address is on, when TeXCraft recognises it.
+pub fn hosting(url: &str) -> Option<Hosting> {
+    match remote_host(url)?.as_str() {
+        "git.overleaf.com" => Some(Hosting::Overleaf),
+        _ => None,
+    }
 }
 
 /// What making a repository did.
@@ -85,6 +164,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             params: transfer_schema,
             enabled: can_transfer,
             run: pull,
+            changes: true,
+        },
+        CommandSpec {
+            id: "project.sync",
+            label: "Sync",
+            menu: &["File"],
+            shortcut: None,
+            params: sync_schema,
+            enabled: can_sync,
+            run: sync,
             changes: true,
         },
         CommandSpec {
@@ -145,6 +234,14 @@ fn transfer_schema() -> Value {
         "remote": {"type": "string", "description": "The remote: the branch's upstream remote, else origin."},
         "branch": {"type": "string", "description": "The branch on the remote: the upstream's, else the branch checked out."},
         "token": {"type": "string", "description": TOKEN},
+        "background": {"type": "boolean", "description": BACKGROUND}
+    }, "additionalProperties": false})
+}
+
+fn sync_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "token": {"type": "string", "description": "A token for the remote's server, kept for this session only: a personal access token (GitLab, GitHub) or a git authentication token (Overleaf); may be left out when one was given or a sign-in made for the server in this session."},
+        "resolve": {"type": "object", "additionalProperties": {"enum": ["mine", "theirs"]}, "description": "For files in conflict (forge.status lists them after a refused Sync): \"mine\" keeps the project's version, \"theirs\" takes the remote's, by path."},
         "background": {"type": "boolean", "description": BACKGROUND}
     }, "additionalProperties": false})
 }
@@ -216,6 +313,53 @@ fn has_repository(s: &Session) -> Result<()> {
 fn can_transfer(s: &Session) -> Result<()> {
     has_repository(s)?;
     idle(s)
+}
+
+/// Sync needs somewhere to sync with: the forge branch the project is linked to, or its folder's
+/// remote; and nothing else running.
+fn can_sync(s: &Session) -> Result<()> {
+    idle(s)?;
+    if s.forge.is_some() {
+        return Ok(());
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if desktop::has_remote(s) {
+        return Ok(());
+    }
+    Err("The project has no remote to sync with: save it to GitLab or GitHub, or give its folder a remote (git.set_remote).".to_owned())
+}
+
+/// Sync (`project.sync`): a version of the changes made, the remote's new commits taken in (merged
+/// with this project's, files in conflict left to `resolve`), then this project's sent. For a
+/// project linked to a forge branch, its changes committed to the branch with a message saying
+/// what changed (which takes in the branch's new commits too), or, with none, the branch's new
+/// commits taken in.
+fn sync(s: &mut Session, p: &Value) -> Result<Value> {
+    if let Some(link) = s.forge.clone() {
+        let version = super::history::make_version(s, None, false)?;
+        let changes = s.forge_changes()?;
+        let mut params = json!({});
+        for key in ["token", "resolve", "background"] {
+            if let Some(v) = p.get(key) {
+                params[key] = v.clone();
+            }
+        }
+        let mut result = if changes.is_empty() {
+            super::forge::run_pull(s, &params)?
+        } else {
+            let files = s.forge_files(false)?;
+            let before: Vec<(String, String)> = link.files.iter().map(|(p, id)| (p.clone(), id.clone())).collect();
+            params["message"] = json!(crate::describe::message(&before, &files, &|_| None));
+            super::forge::run_commit(s, &params)?
+        };
+        result["sync"] = json!(true);
+        result["version"] = version;
+        return Ok(result);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    return desktop::sync(s, p);
+    #[cfg(target_arch = "wasm32")]
+    Err("The project has no remote to sync with.".to_owned())
 }
 
 fn can_create(s: &Session) -> Result<()> {
@@ -420,6 +564,19 @@ fn credentials(service: Service, token: &texcraft_forge::Token) -> texcraft_gitw
     texcraft_gitwire::Credentials::new(user, token.secret())
 }
 
+/// The credentials for a remote at `url` on `service`: the user the address names
+/// (`https://git@host/…`), else the recognised hosting service's, else the forge's.
+#[cfg(not(target_arch = "wasm32"))]
+fn remote_credentials(url: &str, service: Service, token: &texcraft_forge::Token) -> texcraft_gitwire::Credentials {
+    let named = url.split_once("://").and_then(|(_, rest)| rest.split('/').next()).and_then(|h| h.rsplit_once('@')).map(|(u, _)| u);
+    let named = named.map(|u| u.split(':').next().unwrap_or(u)).filter(|u| !u.is_empty());
+    match (named, hosting(url)) {
+        (Some(user), _) => texcraft_gitwire::Credentials::new(user, token.secret()),
+        (None, Some(h)) => texcraft_gitwire::Credentials::new(h.user(), token.secret()),
+        (None, None) => credentials(service, token),
+    }
+}
+
 fn remotes(s: &mut Session, _: &Value) -> Result<Value> {
     #[cfg(not(target_arch = "wasm32"))]
     return desktop::remotes(s);
@@ -468,6 +625,8 @@ impl Session {
     pub fn git_busy(&self) -> Option<&'static str> {
         self.git_task.as_ref().map(|t| match t {
             #[cfg(not(target_arch = "wasm32"))]
+            Task::Push { sync: Some(_), .. } | Task::Pull { sync: Some(_), .. } => "sync",
+            #[cfg(not(target_arch = "wasm32"))]
             Task::Push { .. } => "git_push",
             #[cfg(not(target_arch = "wasm32"))]
             Task::Pull { .. } => "git_pull",
@@ -496,12 +655,32 @@ impl Session {
         self.keep_renewed(&renewed);
         Some(match (ended, task) {
             #[cfg(not(target_arch = "wasm32"))]
-            (Ended::Pushed(done), Task::Push { remote, branch, .. }) => {
-                done.map_err(|e| self.forge_failed(e)).and_then(|pushed| desktop::pushed(self, &remote, &branch, pushed))
+            (Ended::Pushed(done), Task::Push { remote, branch, sync, kept, .. }) => {
+                let done = done.map(|d| desktop::settle(self, kept, d));
+                let pushed = done.map_err(|e| self.forge_failed(e)).and_then(|pushed| desktop::pushed(self, &remote, &branch, pushed));
+                match sync {
+                    Some(sync) => pushed.map(|pushed| desktop::synced(*sync, pushed)),
+                    None => pushed,
+                }
             }
             #[cfg(not(target_arch = "wasm32"))]
-            (Ended::Fetched(done), Task::Pull { remote, branch, .. }) => {
-                done.map_err(|e| self.forge_failed(e)).and_then(|fetched| desktop::fetched(self, &remote, &branch, fetched))
+            (Ended::Fetched(done), Task::Pull { remote, branch, choices, sync, kept, .. }) => {
+                let fetched = done
+                    .map(|d| desktop::settle(self, kept, d))
+                    .map_err(|e| self.forge_failed(e))
+                    .and_then(|fetched| desktop::fetched(self, &remote, &branch, fetched, &choices, sync.is_some()));
+                match (fetched, sync) {
+                    (Ok(pulled), Some(mut sync)) => {
+                        sync.pulled = Some(pulled);
+                        match desktop::push_for_sync(self, sync) {
+                            // The push runs: its end is the Sync's.
+                            Ok(None) => return None,
+                            Ok(Some(done)) => Ok(done),
+                            Err(e) => Err(e),
+                        }
+                    }
+                    (fetched, _) => fetched,
+                }
             }
             (Ended::Made(done), Task::Create { key, .. }) => done.map_err(|e| self.forge_failed(e)).and_then(|made| created(self, *made, key)),
             (Ended::Owners(done), Task::Owners { key, instance, .. }) => {
@@ -526,3 +705,19 @@ enum Ended {
 mod desktop;
 #[cfg(not(target_arch = "wasm32"))]
 pub use desktop::{GitHttp, default_http};
+
+#[cfg(test)]
+mod tests {
+    use super::{Hosting, hosting, remote_host};
+
+    #[test]
+    fn overleaf_is_recognised_in_each_form_of_its_address() {
+        for url in ["https://git.overleaf.com/69cb8d545624606190d85c57", "https://git@git.overleaf.com/69cb8d5456", "https://GIT.OVERLEAF.COM/abc/"] {
+            assert_eq!(hosting(url), Some(Hosting::Overleaf), "{url}");
+        }
+        for url in ["https://github.com/ada/paper.git", "https://overleaf.com.example.org/x", "git@gitlab.com:ada/paper.git", "not an address"] {
+            assert_eq!(hosting(url), None, "{url}");
+        }
+        assert_eq!(remote_host("ssh://git@host.example:2222/ada/paper.git").as_deref(), Some("host.example"));
+    }
+}
