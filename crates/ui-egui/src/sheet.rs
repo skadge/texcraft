@@ -37,8 +37,9 @@ pub(crate) fn narrow(ctx: &egui::Context, t: &Tokens) -> bool {
 pub(crate) enum Leave {
     /// Close, which closes the dialog.
     Close,
-    /// Back, named after where it goes (Settings' sections go back to their list), which the
-    /// dialog handles; a wide window shows nothing for it.
+    /// Back, its whole name saying where it goes ("Back to Settings": a sentence each, so every
+    /// language can say it its own way), which the dialog handles; a wide window shows nothing
+    /// for it.
     Back(&'static str),
 }
 
@@ -107,7 +108,7 @@ fn top_bar(ui: &mut Ui, t: &Tokens, id: Id, leave: Leave) -> (bool, bool) {
     ui.allocate_ui_with_layout(vec2(ui.available_width(), t.toolbar_height + t.unit), Layout::left_to_right(Align::Center), |ui| {
         let r = match leave {
             Leave::Close => widgets::icon_button(ui, t, "x", tl!("Close"), true),
-            Leave::Back(to) => widgets::icon_button(ui, t, "arrow-left", &tl!("Back to {place}").replace("{place}", to), true),
+            Leave::Back(name) => widgets::icon_button(ui, t, "arrow-left", name, true),
         };
         if focus {
             r.request_focus();

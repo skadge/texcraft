@@ -1372,7 +1372,6 @@
 	similar	simile
 	similar or equal	simile o uguale
 	source	sorgente
-	sources	fonti
 	south-east arrow	freccia a sud-est
 	square	quadrato
 	square root	radice quadrata
@@ -2421,3 +2420,4 @@ unit	{n} s	{n} s
 @msg	Name the kind of message, or the `index` of one of the last build's.	Indica il tipo di messaggio, o l'`index` di un messaggio dell'ultima compilazione.
 @msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	I file più grandi di {limit} non sono stati caricati: restano nella cartella del progetto, invariati, e non fanno parte delle sue compilazioni.
 @msg	Apply this fix everywhere in this file ({n} places)	Applica questa correzione ovunque in questo file ({n} punti)
+	Back to Settings	Torna alle impostazioni

@@ -25,7 +25,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let narrow = crate::sheet::narrow(ctx, &t);
     // On a phone the sections are a list, each opening as a page of its own with Back to it.
     let page = narrow && app.view.settings_page;
-    let leave = if page { crate::sheet::Leave::Back(tl!("Settings")) } else { crate::sheet::Leave::Close };
+    let leave = if page { crate::sheet::Leave::Back(tl!("Back to Settings")) } else { crate::sheet::Leave::Close };
     let mut close = false;
     let shown = crate::sheet::show(ctx, &t, "texcraft-settings", 720.0, leave, |ui| {
         if narrow {

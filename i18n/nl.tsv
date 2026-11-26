@@ -1372,7 +1372,6 @@
 	similar	gelijkvormig
 	similar or equal	gelijkvormig of gelijk
 	source	broncode
-	sources	bronnen
 	south-east arrow	pijl naar rechtsonder
 	square	vierkant
 	square root	vierkantswortel
@@ -2421,3 +2420,4 @@ unit	{n} s	{n} s
 @msg	Name the kind of message, or the `index` of one of the last build's.	Noem de soort melding, of de `index` van een melding van de laatste build.
 @msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	Bestanden groter dan {limit} zijn niet geladen: ze blijven ongewijzigd in de map van het project en horen niet bij de builds.
 @msg	Apply this fix everywhere in this file ({n} places)	Deze correctie overal in dit bestand toepassen ({n} plekken)
+	Back to Settings	Terug naar Instellingen

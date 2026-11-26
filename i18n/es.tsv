@@ -1372,7 +1372,6 @@
 	similar	similar
 	similar or equal	similar o igual
 	source	código fuente
-	sources	las fuentes
 	south-east arrow	flecha sureste
 	square	cuadrado
 	square root	raíz cuadrada
@@ -2421,3 +2420,4 @@ unit	{n} s	{n} s
 @msg	Name the kind of message, or the `index` of one of the last build's.	Indique el tipo de mensaje, o el `index` de un mensaje de la última compilación.
 @msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	Los archivos de más de {limit} no se han cargado: se quedan en la carpeta del proyecto, sin cambios, y no forman parte de sus compilaciones.
 @msg	Apply this fix everywhere in this file ({n} places)	Aplicar esta corrección en todo el archivo ({n} lugares)
+	Back to Settings	Volver a Ajustes

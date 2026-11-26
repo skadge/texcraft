@@ -533,7 +533,7 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
     let t = app.tokens;
     let info = info(app, ctx);
     let on_page = matches!(&app.view.dialog, Some(Dialog::Import(f)) if !matches!(f.page, Page::Grid));
-    let leave = if on_page { crate::sheet::Leave::Back(tl!("sources")) } else { crate::sheet::Leave::Close };
+    let leave = if on_page { crate::sheet::Leave::Back(tl!("Back to sources")) } else { crate::sheet::Leave::Close };
     let mut acts = Vec::new();
     let shown = crate::sheet::show(ctx, &t, SHEET, WIDTH, leave, |ui| {
         let Some(Dialog::Import(form)) = app.view.dialog.as_mut() else { return };
