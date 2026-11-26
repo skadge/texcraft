@@ -231,7 +231,7 @@ pub(super) fn save_to(s: &mut Session, dir: &Path) -> Result<Value> {
 fn rename(s: &mut Session, params: &Value) -> Result<Value> {
     let name = crate::library::check_name(string(params, "name")?)?;
     if name == "." || name == ".." {
-        return Err("A project's name cannot be a dot or two.".to_owned());
+        return Err("A project's name cannot be “.” or “..”.".to_owned());
     }
     let old = s.dir.clone().ok_or("The project has no name yet: use Save Project As.")?;
     let new = match &mut s.library {

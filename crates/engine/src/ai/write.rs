@@ -235,14 +235,26 @@ fn refusal(how: &How, original: &str, new: &str) -> Option<String> {
     if changes.is_empty() {
         return None;
     }
-    let mut said: Vec<String> = changes.iter().take(4).map(ToString::to_string).collect();
-    if changes.len() > 4 {
-        said.push(format!("{} more", changes.len() - 4));
-    }
-    Some(if instructed {
-        format!("The change is not offered: it {}. Ask again, or select less.", said.join(", "))
-    } else {
-        format!("The rewrite is not offered: it {}. Rewrite a smaller passage, or try again.", said.join(", "))
+    // The LaTeX it dropped and added, at most four of each; whole sentences, so each reads (and
+    // translates) as one.
+    let items = |dropped: bool| {
+        let all: Vec<&str> = changes.iter().filter(|c| c.dropped == dropped).map(|c| c.item.as_str()).collect();
+        let mut shown = all.iter().take(4).copied().collect::<Vec<_>>().join(", ");
+        if all.len() > 4 {
+            shown.push_str(", …");
+        }
+        shown
+    };
+    let (dropped, added) = (items(true), items(false));
+    Some(match (instructed, dropped.is_empty(), added.is_empty()) {
+        (true, false, true) => format!("The change is not offered: it drops or alters {dropped}. Ask again, or select less."),
+        (true, true, false) => format!("The change is not offered: it adds {added}. Ask again, or select less."),
+        (true, _, _) => format!("The change is not offered: it drops or alters {dropped} and adds {added}. Ask again, or select less."),
+        (false, false, true) => format!("The rewrite is not offered: it drops or alters {dropped}. Rewrite a smaller passage, or try again."),
+        (false, true, false) => format!("The rewrite is not offered: it adds {added}. Rewrite a smaller passage, or try again."),
+        (false, _, _) => {
+            format!("The rewrite is not offered: it drops or alters {dropped} and adds {added}. Rewrite a smaller passage, or try again.")
+        }
     })
 }
 

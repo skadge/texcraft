@@ -126,7 +126,7 @@ impl Address {
         };
         let service = match (known, service) {
             (Some(known), Some(chosen)) if known != chosen => {
-                return Err(bad(&format!("this is an address on {}, not {}.", known.name(), chosen.name())));
+                return Err(bad(&format!("this is an address on {known}, not {chosen}.", known = known.name(), chosen = chosen.name())));
             }
             (Some(known), _) => known,
             (None, chosen) => chosen.unwrap_or_default(),

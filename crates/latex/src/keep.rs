@@ -35,17 +35,6 @@ pub struct Change {
     pub dropped: bool,
 }
 
-impl std::fmt::Display for Change {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match (self.part, self.dropped) {
-            (Part::Math, true) => write!(f, "changed or dropped the formula {}", self.item),
-            (Part::Math, false) => write!(f, "added the formula {}", self.item),
-            (_, true) => write!(f, "dropped {}", self.item),
-            (_, false) => write!(f, "added {}", self.item),
-        }
-    }
-}
-
 /// What `rewritten` changed of `original`'s LaTeX, besides its words; empty when it kept it all.
 /// Commands only count when dropped (a rewrite may add emphasis); labels, references, citations
 /// and formulas count both ways.
@@ -251,7 +240,7 @@ mod tests {
         let changes = compare(PASSAGE, shorter);
         assert_eq!(changes.len(), 1, "{changes:?}");
         assert!(changes[0].dropped && changes[0].part == Part::Reference);
-        assert!(changes[0].to_string().contains("\\ref{sec:intro}"), "{}", changes[0]);
+        assert!(changes[0].item.contains("\\ref{sec:intro}"), "{changes:?}");
     }
 
     #[test]

@@ -113,7 +113,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
 const SERVICE: &str = "gitlab (default) or github.";
 const INSTANCE: &str = "The instance: https://gitlab.com or https://github.com (the default for the service), or a server added (forge.add_server).";
 const TOKEN: &str = "A personal access token; may be left out when one was given for the instance in this session, or when signed in to it.";
-const BACKGROUND: &str = "Return at once; the outcome comes from `Session::poll_forge_lookup` (the Open dialog). A lookup asked while one runs replaces any other waiting.";
+const BACKGROUND: &str = "Return at once; the outcome arrives later, in the Open dialog. A lookup asked while one runs replaces any other waiting.";
 
 fn projects_schema() -> Value {
     json!({"type": "object", "properties": {
