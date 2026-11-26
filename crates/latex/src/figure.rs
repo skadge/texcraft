@@ -40,22 +40,33 @@ pub const FIGURE_ENVIRONMENTS: &[&str] = &["figure", "figure*"];
 /// The figure whose source holds byte `at`, the innermost one.
 pub fn find(text: &str, at: usize) -> Option<Figure> {
     let tree = tree::parse(text);
-    let node = innermost(&tree, at)?;
+    let node = innermost(&tree, at, FIGURE_ENVIRONMENTS)?;
     read(node)
 }
 
-fn innermost(nodes: &[Node], at: usize) -> Option<&Node> {
+/// The `table` float whose source holds byte `at`, the innermost one, read as a figure is: its
+/// placement, caption and label (a table float has no image).
+pub fn find_table_float(text: &str, at: usize) -> Option<Figure> {
+    let tree = tree::parse(text);
+    let node = innermost(&tree, at, TABLE_FLOATS)?;
+    read(node).map(|f| Figure { image: None, ..f })
+}
+
+/// The table floats [`find_table_float`] reads.
+pub const TABLE_FLOATS: &[&str] = &["table", "table*"];
+
+fn innermost<'a>(nodes: &'a [Node], at: usize, envs: &[&str]) -> Option<&'a Node> {
     for n in nodes {
         if !(n.range.start <= at && at < n.range.end) {
             continue;
         }
         let inner = match &n.kind {
-            Kind::Environment { body, .. } | Kind::Group { body, .. } => innermost(body, at),
-            Kind::Command { args, .. } => args.iter().find_map(|a| innermost(&a.body, at)),
+            Kind::Environment { body, .. } | Kind::Group { body, .. } => innermost(body, at, envs),
+            Kind::Command { args, .. } => args.iter().find_map(|a| innermost(&a.body, at, envs)),
             _ => None,
         };
         return match &n.kind {
-            Kind::Environment { name, end: Some(_), .. } if FIGURE_ENVIRONMENTS.contains(&name.as_str()) => inner.or(Some(n)),
+            Kind::Environment { name, end: Some(_), .. } if envs.contains(&name.as_str()) => inner.or(Some(n)),
             _ => inner,
         };
     }
@@ -167,12 +178,14 @@ impl Figure {
             }
         }
         // Where a new caption goes: after the image, or after `\begin` when there is none.
-        let after_image = self.image.as_ref().map_or(self.begin_end, |g| g.range.end);
+        // After `\begin{figure}` and its placement.
+        let after_begin = self.placement.as_ref().map_or(self.begin_end, |r| r.end + 1);
+        let after_image = self.image.as_ref().map_or(after_begin, |g| g.range.end);
         match (&self.image, &c.image) {
             (Some(g), Some(path)) => out.push(change(g.path.clone(), path.as_str())),
             (None, Some(path)) => {
                 let width = width_source(c.width.unwrap_or(1.0));
-                out.push(line_after(self.begin_end, format!("\\centering\n{indent}\\includegraphics[width={width}]{{{path}}}")));
+                out.push(line_after(after_begin, format!("\\centering\n{indent}\\includegraphics[width={width}]{{{path}}}")));
             }
             _ => {}
         }
@@ -195,7 +208,8 @@ impl Figure {
         }
         match (&self.caption, &c.caption) {
             (Some((inner, _)), Some(s)) => out.push(change(inner.clone(), s.as_str())),
-            (None, Some(s)) if !s.is_empty() => out.push(line_after(after_image, format!("\\caption{{{s}}}"))),
+            // An empty caption too: the place to type one.
+            (None, Some(s)) => out.push(line_after(after_image, format!("\\caption{{{s}}}"))),
             _ => {}
         }
         match (&self.label, &c.label) {

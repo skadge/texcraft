@@ -53,3 +53,24 @@ fn missing_parts_are_added_on_lines_of_their_own() -> Result<(), String> {
     assert_eq!(fig.image.map(|g| made[g.path].to_owned()).as_deref(), Some("img/x"));
     Ok(())
 }
+
+#[test]
+fn a_table_float_gets_its_caption_and_label_like_a_figure() -> Result<(), String> {
+    let text = "\\begin{table}[h]\n  \\centering\n  \\begin{tabular}{l}\n  a\n  \\end{tabular}\n\\end{table}\n";
+    let fig = figure::find_table_float(text, text.find("tabular").ok_or("no tabular")?).ok_or("no float")?;
+    let out = apply(text, &fig.edit(text, &FigureChanges { caption: Some("Results.".into()), label: Some("tab:r".into()), ..Default::default() }));
+    assert_eq!(
+        out,
+        "\\begin{table}[h]\n  \\caption{Results.}\n  \\label{tab:r}\n  \\centering\n  \\begin{tabular}{l}\n  a\n  \\end{tabular}\n\\end{table}\n"
+    );
+    assert!(figure::find_table_float("\\begin{figure}\\end{figure}", 3).is_none());
+    Ok(())
+}
+
+#[test]
+fn an_empty_caption_is_added_as_a_place_to_type_one_after_the_placement() -> Result<(), String> {
+    let text = "\\begin{figure}[h]\n\\end{figure}";
+    let out = edit(text, &FigureChanges { caption: Some(String::new()), ..Default::default() })?;
+    assert_eq!(out, "\\begin{figure}[h]\n  \\caption{}\n\\end{figure}");
+    Ok(())
+}

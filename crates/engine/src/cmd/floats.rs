@@ -71,13 +71,17 @@ fn edit_schema() -> Value {
     json!({"type": "object", "properties": {
         "path": {"type": "string", "description": "The .tex file."},
         "at": {"type": "integer", "minimum": 0, "description": "A position inside the tabular (characters from the file's start); without `row` and `column`, the cell there is the one edited."},
-        "op": {"type": "string", "enum": ["set_cell", "insert_row_above", "insert_row_below", "delete_row", "insert_column_left", "insert_column_right", "delete_column", "align_column", "borders"]},
+        "op": {"type": "string", "enum": ["set_cell", "insert_row_above", "insert_row_below", "delete_row", "insert_column_left", "insert_column_right", "delete_column", "align_column", "borders", "header", "merge", "split", "caption", "label"]},
         "row": {"type": "integer", "minimum": 0, "description": "The row, from 0."},
         "column": {"type": "integer", "minimum": 0, "description": "The column, from 0."},
         "text": {"type": "string", "description": "set_cell: the cell's new text; LaTeX's special characters are escaped unless `latex` is true."},
         "latex": {"type": "boolean", "description": "set_cell: `text` is LaTeX source, written as it is."},
         "align": {"type": "string", "enum": ["left", "center", "right"], "description": "align_column."},
-        "borders": {"type": "string", "enum": ["none", "all", "booktabs"], "description": "borders: none; `|` and `\\hline` everywhere; or booktabs' rules (the document must load booktabs: the result says when it does not)."}
+        "borders": {"type": "string", "enum": ["none", "all", "booktabs"], "description": "borders: none; `|` and `\\hline` everywhere; or booktabs' rules (the document must load booktabs: the result says when it does not)."},
+        "on": {"type": "boolean", "description": "header: the first row a header row (its cells in \\textbf, a rule under it in the table's style) or a plain row."},
+        "span": {"type": "integer", "minimum": 2, "description": "merge: how many columns, from `column`, the merged cell takes (a \\multicolumn); split undoes one."},
+        "caption": {"type": "string", "description": "caption: the table's caption, as LaTeX source; a table outside a float is put in a `table` float."},
+        "label": {"type": "string", "description": "label: the table's label, such as `tab:results`; a table outside a float is put in a `table` float."}
     }, "required": ["path", "at", "op"], "additionalProperties": false})
 }
 
@@ -200,7 +204,11 @@ fn edit(s: &mut Session, p: &Value) -> Result<Value> {
         Some(Err(why)) => return Err(format!("this table stays as source: {}", why.describe())),
         None => return Err(format!("there is no tabular at that position in `{path}`")),
     };
-    let (row, column) = cell_of(&t, p, at)?;
+    // The caption, the label and the header row are the table's: no cell needed.
+    let (row, column) = match op {
+        "caption" | "label" | "header" | "borders" => cell_of(&t, p, at).unwrap_or((0, 0)),
+        _ => cell_of(&t, p, at)?,
+    };
     let done = match op {
         "set_cell" => {
             let typed = string(p, "text")?;
@@ -220,6 +228,13 @@ fn edit(s: &mut Session, p: &Value) -> Result<Value> {
             let borders = Borders::from_name(string(p, "borders")?).ok_or("`borders` is none, all or booktabs")?;
             t.set_borders(&text, borders)
         }
+        "header" => t.set_header(&text, p.get("on").and_then(Value::as_bool).ok_or("`on` (true or false) is missing")?),
+        "merge" => {
+            let span = p.get("span").and_then(Value::as_u64).and_then(|v| usize::try_from(v).ok()).filter(|s| *s >= 2);
+            t.merge(&text, row, column, span.ok_or("`span` (2 or more columns) is missing")?)
+        }
+        "split" => t.split(&text, row, column),
+        "caption" | "label" => Ok(float_part(&text, &t, op, string(p, op)?)?),
         other => return Err(format!("`{other}` is not a table operation")),
     }
     .map_err(|e| e.describe())?;
@@ -236,6 +251,28 @@ fn edit(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     Ok(out)
+}
+
+/// The caption or label of the `table` float around `t`, or `t` put in one with it.
+fn float_part(text: &str, t: &Table, op: &str, value: &str) -> Result<table::TableEdit> {
+    if op == "label" && value.contains(['{', '}', '\\', '%', '#']) {
+        return Err("a label cannot hold braces, backslashes, % or #".to_owned());
+    }
+    let value = value.trim();
+    let float = figure::find_table_float(text, t.range.start).filter(|f| f.range.start <= t.range.start && t.range.end <= f.range.end);
+    let changes = match float {
+        Some(f) => {
+            let c = if op == "caption" {
+                FigureChanges { caption: Some(value.to_owned()), ..FigureChanges::default() }
+            } else {
+                FigureChanges { label: Some(value.to_owned()), ..FigureChanges::default() }
+            };
+            f.edit(text, &c)
+        }
+        None if op == "caption" => t.wrap_in_float(text, value, "").changes,
+        None => t.wrap_in_float(text, "", value).changes,
+    };
+    Ok(table::TableEdit { changes, package: None })
 }
 
 fn figure_changes(p: &Value) -> Result<FigureChanges> {

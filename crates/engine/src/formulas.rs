@@ -100,6 +100,50 @@ impl crate::Session {
         Ok(Formulas { body_pt: self.formulas.body_pt, formulas })
     }
 
+    /// `math` (without delimiters; in display environment `env`, or inline unless `display`)
+    /// typeset after the main document's preamble, as `path`'s formulas are: for the formula
+    /// editor's preview while it is typed. Call it again (each frame) for the result.
+    pub fn formula_preview(&mut self, path: &ProjectPath, math: &str, display: bool, env: Option<&str>) -> FormulaState {
+        if self.formulas(path).is_err() {
+            return FormulaState::Failed(vec![format!("`{path}` cannot be read")]);
+        }
+        let source = if display { display_source(math, env) } else { math.trim().to_owned() };
+        self.preview_one(source, display)
+    }
+
+    #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
+    fn preview_one(&mut self, source: String, display: bool) -> FormulaState {
+        use texcraft_compile::formulas::{Done, Files, State as Engine, Wanted};
+        let engine = self.formulas.engine.get_or_insert_with(|| {
+            let dir = std::env::temp_dir().join(format!("texcraft-formulas-{}", std::process::id()));
+            texcraft_compile::formulas::Formulas::new(dir)
+        });
+        let project = &self.project;
+        let files = || {
+            let main_dir = project.main().and_then(|m| m.as_str().rsplit_once('/').map(|(d, _)| d.to_owned()));
+            let files = project.files().map(|(p, c)| (p.clone(), Arc::<[u8]>::from(c.as_bytes()))).collect();
+            Files { files, main_dir }
+        };
+        match engine.request(&self.formulas.preamble, &[Wanted { source, display }], files).into_iter().next() {
+            Some(Engine::Done(done)) => match &*done {
+                Done::Typeset(t) => FormulaState::Typeset(FormulaBox {
+                    pdf: Arc::clone(&t.pdf),
+                    page: t.page,
+                    width_pt: t.width_pt,
+                    height_pt: t.height_pt,
+                    depth_pt: t.depth_pt,
+                }),
+                Done::Failed(messages) => FormulaState::Failed(messages.clone()),
+            },
+            Some(Engine::Pending) | None => FormulaState::Pending,
+        }
+    }
+
+    #[cfg(not(all(feature = "retex", not(target_arch = "wasm32"))))]
+    fn preview_one(&mut self, _source: String, _display: bool) -> FormulaState {
+        FormulaState::Unavailable("Formulas are typeset in the desktop app; this build shows their source.".to_owned())
+    }
+
     /// Waits until no batch of formulas runs (the CLI and the agent tools).
     pub fn wait_for_formulas(&mut self) {
         #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
