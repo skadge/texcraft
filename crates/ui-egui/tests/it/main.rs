@@ -46,6 +46,7 @@ mod rename;
 mod review;
 mod search;
 mod shortcuts;
+mod start_page;
 mod suggest;
 mod system_menu;
 mod tables;
