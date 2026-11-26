@@ -502,7 +502,14 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             ui.add_space(page * 4.0);
             keyboard_scroll(ui, cx.focused, focused);
             // The editable text: it takes the keyboard, the lines take the pointer.
+            let had = ui.memory(|m| m.has_focus(doc_id));
             let r = ui.interact(ui.min_rect(), doc_id, Sense::focusable_noninteractive());
+            // A click on the text keeps the keyboard there: egui gives it up when a click lands
+            // on a widget other than the focused one, and the text's lines are other widgets
+            // (#24: the caret showed while the button was down, then went away).
+            if had && cx.lines.iter().any(|d| d.response.clicked()) {
+                r.request_focus();
+            }
             (ui.painter().clone(), r)
         })
         .inner;
