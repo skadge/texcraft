@@ -379,7 +379,9 @@ fn remote_section(app: &mut App, ui: &mut egui::Ui, t: &Tokens, view: &mut Histo
     let remote = view.remote.clone();
     let counts = crate::sync::counts(app).filter(|_| remote["remote"].is_string());
     let muted = |text: String| RichText::new(text).font(t.small()).color(t.text_muted);
-    ui.horizontal_wrapped(|ui| {
+    // One line: the service the remote is on (or git's mark) and where it is; the full address on
+    // hover.
+    ui.horizontal(|ui| {
         ui.add_space(t.unit * 2.0);
         let Some(name) = remote["remote"].as_str() else {
             let r = ui.add(egui::Label::new(muted(tl!("No remote").to_owned())).sense(egui::Sense::hover()));
@@ -387,18 +389,19 @@ fn remote_section(app: &mut App, ui: &mut egui::Ui, t: &Tokens, view: &mut Histo
             return;
         };
         let place = remote["web_url"].as_str().or(remote["url"].as_str()).unwrap_or_default();
-        let shown = place.trim_start_matches("https://").trim_start_matches("git@").to_owned();
-        match counts.as_ref().and_then(|c| c.hosting) {
-            Some(service) => crate::sync::hosting_label(ui, t, service, place),
-            None => {
-                ui.add(crate::icons::image("git-commit-horizontal", t.icon_size - 2.0, t.text_muted));
-            }
+        let hint = tl!("Remote {name}: {url}").replace("{name}", name).replace("{url}", place);
+        if let Some(service) = counts.as_ref().and_then(|c| c.hosting) {
+            crate::sync::hosting_label(ui, t, service, place);
+            ui.add(egui::Label::new(muted(format!("· {name}"))).sense(egui::Sense::hover())).on_hover_text(hint);
+            return;
         }
+        ui.add(crate::icons::image("git-commit-horizontal", t.icon_size - 2.0, t.text_muted));
+        let shown = place.trim_start_matches("https://").trim_start_matches("git@").to_owned();
         let r = match remote["web_url"].as_str() {
             Some(url) => ui.hyperlink_to(RichText::new(&shown).font(t.small()), url),
             None => ui.add(egui::Label::new(muted(shown.clone())).truncate().sense(egui::Sense::hover())),
         };
-        r.on_hover_text(tl!("Remote {name}: {url}").replace("{name}", name).replace("{url}", place));
+        r.on_hover_text(hint);
     });
     ui.horizontal_wrapped(|ui| {
         ui.add_space(t.unit * 2.0);
