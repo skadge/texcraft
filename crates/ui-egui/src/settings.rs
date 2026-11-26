@@ -225,17 +225,21 @@ fn appearance(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
 }
 
 fn editor(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
-    setting(ui, t, tl!("Font size"), tl!("The size of the source text, in points."), |ui| {
-        let mut size = app.prefs.editor_font_size;
-        ui.label(crate::i18n::measure(f64::from(size), 1, "{n} pt"));
-        let r = ui.add(egui::Slider::new(&mut size, 10.0..=22.0).step_by(0.5).show_value(false));
-        if r.changed() {
-            app.prefs.editor_font_size = size;
-            app.prefs_changed = true;
-            app.apply_editor_font();
-        }
-        Some(r)
-    });
+    setting(
+        ui,
+        t,
+        tl!("Font size"),
+        tl!("The size of the source text, in points; the formatted view's text follows it. Ctrl with the mouse wheel over the text changes it too."),
+        |ui| {
+            let mut size = app.prefs.editor_font_size;
+            ui.label(crate::i18n::measure(f64::from(size), 1, "{n} pt"));
+            let r = ui.add(egui::Slider::new(&mut size, crate::prefs::TEXT_SIZE_MIN..=crate::prefs::TEXT_SIZE_MAX).step_by(0.5).show_value(false));
+            if r.changed() {
+                app.set_text_size(size);
+            }
+            Some(r)
+        },
+    );
     key_bindings(app, ui, t, "settings-keys-editor");
     setting(
         ui,

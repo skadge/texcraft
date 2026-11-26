@@ -954,7 +954,7 @@
 	The selected part of the PDF has no text to copy: its font does not say which characters it draws.	Het geselecteerde deel van de pdf heeft geen tekst om te kopiëren: het lettertype zegt niet welke tekens het tekent.
 	The selected text and a few lines around it.	De geselecteerde tekst en enkele regels eromheen.
 	The selected text, or the paragraph at the caret, and the document's language.	De geselecteerde tekst, of de alinea bij de cursor, en de taal van het document.
-	The size of the source text, in points.	De grootte van de brontekst, in punten.
+	The size of the source text, in points; the formatted view's text follows it. Ctrl with the mouse wheel over the text changes it too.	De grootte van de brontekst, in punten; de tekst van de opgemaakte weergave volgt die. Ctrl met het muiswiel boven de tekst verandert die ook.
 	The system's title bar above the window, in place of the window's buttons in the top bar.	De titelbalk van het systeem boven het venster, in plaats van de vensterknoppen in de bovenbalk.
 	The table editor shows a table float holding one tabular with its caption and label; this one holds more, so it is shown as its source.	De tabeleditor toont een zwevende tabel met één tabular met bijschrift en label; deze bevat meer en wordt daarom als broncode getoond.
 	The table editor shows this table as its source, because it cannot show it faithfully as a grid.	De tabeleditor toont deze tabel als broncode, omdat hij haar niet getrouw als raster kan tonen.
@@ -1606,6 +1606,9 @@ unit	{n} s	{n} s
 @id	view.previous_region	Vorig gebied
 @id	view.show_in_pdf	In pdf tonen
 @id	view.show_in_source	Tonen in de broncode
+@id	view.text_larger	Grotere tekst
+@id	view.text_smaller	Kleinere tekst
+@id	view.text_default	Standaardtekstgrootte
 @id	view.show_output	Builduitvoer in map tonen
 @id	view.side.ask	AI vragen
 @id	view.side.files	Projectbestanden

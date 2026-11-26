@@ -715,11 +715,28 @@ impl App {
         }
     }
 
-    /// The source text's size from the preferences.
+    /// The text's size from the preferences: the source's, and the formatted view's in
+    /// proportion to it.
     pub(crate) fn apply_editor_font(&mut self) {
-        let size = self.prefs.editor_font_size.clamp(10.0, 22.0);
+        let size = self.prefs.editor_font_size.clamp(prefs::TEXT_SIZE_MIN, prefs::TEXT_SIZE_MAX);
         self.tokens.code_size = size;
         self.tokens.code_line_height = (size * 1.55).round();
+        let scale = size / prefs::TEXT_SIZE_DEFAULT;
+        let base = Tokens::dark();
+        self.tokens.reading_size = base.reading_size * scale;
+        self.tokens.heading_sizes = base.heading_sizes.map(|h| h * scale);
+    }
+
+    /// Makes the text `size` points (within the bounds), kept with the preferences: Ctrl with the
+    /// mouse wheel over the text, and the text size commands (issue #33).
+    pub(crate) fn set_text_size(&mut self, size: f32) {
+        let size = size.clamp(prefs::TEXT_SIZE_MIN, prefs::TEXT_SIZE_MAX);
+        if (size - self.prefs.editor_font_size).abs() > f32::EPSILON {
+            self.prefs.editor_font_size = size;
+            self.prefs_changed = true;
+            self.apply_editor_font();
+            self.ctx.request_repaint();
+        }
     }
 
     pub fn session(&self) -> &Session {

@@ -123,6 +123,11 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.show_output", "Show Build Output in Folder", "View", None),
     // Desktop only; closing the window, or choosing a layout, puts the PDF back.
     ui("view.pdf_window", "PDF in Its Own Window", "View", None),
+    // The text's size, in the source and the formatted view (Ctrl with the mouse wheel over the
+    // text does it too); kept with the preferences. Ctrl+0, Ctrl+= and Ctrl+- zoom the PDF.
+    ui("view.text_larger", "Larger Text", "View", None),
+    ui("view.text_smaller", "Smaller Text", "View", None),
+    ui("view.text_default", "Default Text Size", "View", None),
     ui("view.zoom_in", "Zoom In", "View", Some("Cmd+=")),
     ui("view.zoom_out", "Zoom Out", "View", Some("Cmd+-")),
     ui("view.fit_width", "Fit Width", "View", None),
@@ -458,6 +463,9 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             Err(reason) => app.view.status = Some((reason, false)),
             Ok(()) => crate::formatted::show_in_source(app),
         },
+        "view.text_larger" => app.set_text_size(app.prefs.editor_font_size + 1.0),
+        "view.text_smaller" => app.set_text_size(app.prefs.editor_font_size - 1.0),
+        "view.text_default" => app.set_text_size(crate::prefs::TEXT_SIZE_DEFAULT),
         "view.zoom_in" => app.pdf.zoom_by(1.25),
         "view.zoom_out" => app.pdf.zoom_by(0.8),
         "view.present" => {

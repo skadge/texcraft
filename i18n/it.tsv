@@ -954,7 +954,7 @@
 	The selected part of the PDF has no text to copy: its font does not say which characters it draws.	La parte selezionata del PDF non ha testo da copiare: il suo font non indica quali caratteri disegna.
 	The selected text and a few lines around it.	Il testo selezionato e alcune righe intorno.
 	The selected text, or the paragraph at the caret, and the document's language.	Il testo selezionato, o il paragrafo al cursore, e la lingua del documento.
-	The size of the source text, in points.	La dimensione del testo sorgente, in punti.
+	The size of the source text, in points; the formatted view's text follows it. Ctrl with the mouse wheel over the text changes it too.	La dimensione del testo sorgente, in punti; il testo della vista formattata la segue. Ctrl con la rotella del mouse sul testo la cambia anche.
 	The system's title bar above the window, in place of the window's buttons in the top bar.	La barra del titolo di sistema sopra la finestra, al posto dei pulsanti della finestra nella barra superiore.
 	The table editor shows a table float holding one tabular with its caption and label; this one holds more, so it is shown as its source.	L'editor di tabelle mostra un ambiente table con un solo tabular, la sua didascalia e l'etichetta; questo contiene di più, quindi è mostrato come sorgente.
 	The table editor shows this table as its source, because it cannot show it faithfully as a grid.	L'editor di tabelle mostra questa tabella come sorgente, perché non può mostrarla fedelmente come griglia.
@@ -1606,6 +1606,9 @@ unit	{n} s	{n} s
 @id	view.previous_region	Area precedente
 @id	view.show_in_pdf	Mostra nel PDF
 @id	view.show_in_source	Mostra nel sorgente
+@id	view.text_larger	Testo più grande
+@id	view.text_smaller	Testo più piccolo
+@id	view.text_default	Dimensione predefinita del testo
 @id	view.show_output	Mostra output di compilazione nella cartella
 @id	view.side.ask	Chiedi all'IA
 @id	view.side.files	File del progetto

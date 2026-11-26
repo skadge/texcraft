@@ -954,7 +954,7 @@
 	The selected part of the PDF has no text to copy: its font does not say which characters it draws.	La partie sélectionnée du PDF n'a pas de texte à copier : sa police n'indique pas quels caractères elle dessine.
 	The selected text and a few lines around it.	Le texte sélectionné et quelques lignes autour.
 	The selected text, or the paragraph at the caret, and the document's language.	Le texte sélectionné, ou le paragraphe au curseur, et la langue du document.
-	The size of the source text, in points.	La taille du texte source, en points.
+	The size of the source text, in points; the formatted view's text follows it. Ctrl with the mouse wheel over the text changes it too.	La taille du texte source, en points ; le texte de la vue mise en forme la suit. Ctrl avec la molette de la souris sur le texte la change aussi.
 	The system's title bar above the window, in place of the window's buttons in the top bar.	La barre de titre du système au-dessus de la fenêtre, à la place des boutons de fenêtre dans la barre supérieure.
 	The table editor shows a table float holding one tabular with its caption and label; this one holds more, so it is shown as its source.	L'éditeur de tableaux affiche un flottant de tableau contenant un seul tabular avec sa légende et son étiquette ; celui-ci contient davantage, il est donc affiché en source.
 	The table editor shows this table as its source, because it cannot show it faithfully as a grid.	L'éditeur de tableaux affiche ce tableau en source, car il ne peut pas l'afficher fidèlement sous forme de grille.
@@ -1606,6 +1606,9 @@ unit	{n} s	{n} s
 @id	view.previous_region	Région précédente
 @id	view.show_in_pdf	Afficher dans le PDF
 @id	view.show_in_source	Afficher dans la source
+@id	view.text_larger	Texte plus grand
+@id	view.text_smaller	Texte plus petit
+@id	view.text_default	Taille de texte par défaut
 @id	view.show_output	Afficher la sortie de compilation dans le dossier
 @id	view.side.ask	Demander à l'IA
 @id	view.side.files	Fichiers du projet
