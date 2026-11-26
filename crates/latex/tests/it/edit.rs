@@ -532,3 +532,20 @@ fn three_dots_typed_in_text_become_dots_and_nowhere_else() {
     assert!(!edit::after_control_word("Wait\\\\dots", 10), "after a line break `\\\\`, letters are text");
     assert!(!edit::after_control_word("Wait...", 7));
 }
+
+#[test]
+fn an_accented_letter_edits_as_one_character_and_typing_beside_it_keeps_its_command() {
+    let text = "S\\'everin and {\\'e}t\\'{e}, Fran\\c{c}ois.";
+    let [l] = lines(text).try_into().unwrap_or_else(|l: Vec<Line>| panic!("{} lines", l.len()));
+    assert!(l.parts().iter().all(|p| matches!(p, Part::Text(_))), "an accent is edited as a whole: {:?}", l.parts());
+    // The caret after "Sé" stands after `\'e` in the source: typing there keeps the command.
+    let after = l.source_at(2).unwrap();
+    assert_eq!(&text[..after], "S\\'e");
+    assert_eq!(insert(text, after, "x"), "S\\'exverin and {\\'e}t\\'{e}, Fran\\c{c}ois.");
+    // Deleting the letter takes its command with it.
+    let (from, to) = (l.source_at(1).unwrap(), after);
+    assert_eq!(&text[from..to], "\\'e");
+    for (c, w) in "Séverin".chars().zip((0..8).map(|v| l.source_at(v).unwrap()).collect::<Vec<_>>().windows(2)) {
+        assert_eq!(paragraphs(&text[w[0]..w[1]]).concat(), c.to_string(), "{c:?} stands for {:?}", &text[w[0]..w[1]]);
+    }
+}
