@@ -98,7 +98,15 @@ impl App {
             "theme": if self.tokens.scheme == crate::theme::Scheme::Dark { "dark" } else { "light" },
             "cursor": self.view.cursor.map(|(line, column)| json!({"line": line, "column": column})),
             "status": self.view.status.as_ref().map(|(text, error)| json!({"text": text, "error": error})),
-            "preview": {"page": self.pdf.page + 1, "pages": self.pdf.page_count(), "zoom": self.pdf.zoom(), "scroll": [self.pdf.offset().x, self.pdf.offset().y]},
+            "preview": {
+                "page": self.pdf.page + 1,
+                "pages": self.pdf.page_count(),
+                "zoom": self.pdf.zoom(),
+                "scroll": [self.pdf.offset().x, self.pdf.offset().y],
+                "columns": self.pdf.columns(),
+                "two_pages": self.pdf.two_pages(),
+                "thumbnails": self.pdf.thumbnails(),
+            },
             "building": self.session.is_building(),
         })
     }

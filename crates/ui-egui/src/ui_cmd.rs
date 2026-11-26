@@ -130,6 +130,10 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("view.fit_width", "Fit Width", "View", None),
     ui("view.fit_page", "Fit Page", "View", None),
     ui("view.actual_size", "Actual Size", "View", Some("Cmd+0")),
+    // Two pages across at least, the fits making room for both (more go across as the zoom goes
+    // down, with it or not); and the pages' miniatures beside them. Both switch on and off.
+    ui("view.two_pages", "Two Pages", "View", None),
+    ui("view.thumbnails", "Page Thumbnails", "View", None),
     // `{"percent": 200}`: the zoom menu's fixed zooms, and any other from 25 to 400 %.
     ui("view.zoom", "Zoom To", "View", None),
     ui("view.present", "Present the PDF", "View", Some("F5")),
@@ -469,6 +473,14 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "view.fit_width" => app.pdf.set_fit(crate::pdf_view::Fit::Width),
         "view.fit_page" => app.pdf.set_fit(crate::pdf_view::Fit::Page),
         "view.actual_size" => app.pdf.set_fit(crate::pdf_view::Fit::Zoom(1.0)),
+        "view.two_pages" => {
+            let on = !app.pdf.two_pages();
+            app.pdf.set_two_pages(on);
+        }
+        "view.thumbnails" => {
+            let on = !app.pdf.thumbnails();
+            app.pdf.set_thumbnails(on);
+        }
         "edit.spelling.replace" | "edit.spelling.add" | "edit.spelling.ignore" | "edit.spelling.next" => crate::spell::run(app, id, params),
         "edit.grammar.replace" | "edit.grammar.ignore" | "edit.grammar.rule_off" => crate::grammar::run(app, id, params),
         "edit.symbols" => crate::symbols::toggle(app),

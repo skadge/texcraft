@@ -248,3 +248,32 @@ fn the_own_window_button_ends_the_header_after_the_zoom() {
     let compile = rect("Compile");
     assert!((window.center().y - compile.center().y).abs() < compile.height() / 2.0, "the window's button left the header");
 }
+
+fn preview(harness: &mut Harness<'_, App>) -> serde_json::Value {
+    harness.state_mut().control("ui.inspect", &json!({}))["result"]["preview"].clone()
+}
+
+/// Issue #39: Two Pages puts the pages side by side, and zooming out puts as many across as fit.
+#[test]
+fn two_pages_and_zooming_out_put_the_pages_side_by_side() {
+    let mut harness = built();
+    let page = |h: &Harness<'_, App>, n: usize| h.get_by_label(&format!("Page {n} of 2")).rect();
+    assert_eq!(preview(&mut harness)["columns"], 1, "at fit width the pages are not one under the other");
+    let (one, two) = (page(&harness, 1), page(&harness, 2));
+    assert!(two.top() > one.bottom(), "the second page is not under the first");
+
+    harness.get_by_label("Fit width").click();
+    settle(&mut harness);
+    harness.get_by_label("Two Pages").click();
+    settle(&mut harness);
+    assert_eq!(preview(&mut harness)["two_pages"], true);
+    let (one, two) = (page(&harness, 1), page(&harness, 2));
+    assert!(two.left() > one.right() && (two.top() - one.top()).abs() < 1.0, "two pages are not side by side: {one:?} {two:?}");
+    assert!(two.width() < one.width() * 1.01 && one.width() * 2.0 < 1200.0, "the fit did not make room for both");
+
+    ui_cmd::run(harness.state_mut(), "view.two_pages");
+    ui_cmd::run_with(harness.state_mut(), "view.zoom", &json!({"percent": 25}));
+    settle(&mut harness);
+    let (one, two) = (page(&harness, 1), page(&harness, 2));
+    assert!(two.left() > one.right() && (two.top() - one.top()).abs() < 1.0, "zoomed out, the pages stay one under the other");
+}

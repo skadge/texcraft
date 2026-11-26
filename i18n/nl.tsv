@@ -2182,6 +2182,9 @@ unit	{n} s	{n} s
 	Outline options	Opties voor het overzicht
 @id	outline.collapse_all	Alles samenvouwen
 @id	outline.expand_all	Alles uitvouwen
+	Page thumbnails	Paginaminiaturen
+@id	view.thumbnails	Paginaminiaturen
+@id	view.two_pages	Twee pagina's
 
 # The formatted view for readers: numbers from the build, included files
 	Not built yet: the number shows after the document is built.	Nog niet gecompileerd: het nummer verschijnt zodra het document is gecompileerd.

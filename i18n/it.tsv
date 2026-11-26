@@ -2182,6 +2182,9 @@ unit	{n} s	{n} s
 	Outline options	Opzioni della struttura
 @id	outline.collapse_all	Comprimi tutto
 @id	outline.expand_all	Espandi tutto
+	Page thumbnails	Miniature delle pagine
+@id	view.thumbnails	Miniature delle pagine
+@id	view.two_pages	Due pagine
 
 # The formatted view for readers: numbers from the build, included files
 	Not built yet: the number shows after the document is built.	Non ancora compilato: il numero compare dopo la compilazione del documento.

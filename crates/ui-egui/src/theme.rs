@@ -104,6 +104,8 @@ pub struct Tokens {
     pub narrow_width: f32,
     /// The side panel's width as a drawer, at most (a narrower window leaves a strip beside it).
     pub drawer_width: f32,
+    /// The width of a page's miniature beside the PDF.
+    pub thumbnail_width: f32,
     /// The grid unit; gaps are multiples of it.
     pub unit: f32,
 }
@@ -225,6 +227,7 @@ impl Tokens {
             rail_icon_size: 18.0,
             narrow_width: 700.0,
             drawer_width: 300.0,
+            thumbnail_width: 96.0,
             unit: 4.0,
         }
     }

@@ -48,7 +48,18 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         // While a build's later passes run, its draft; otherwise the last PDF a build wrote, so a
         // draft never outlives its build (finished, failed or stopped).
         sync(app);
-        app.pdf.show(ui, &t, building.as_ref());
+        if app.pdf.thumbnails() && app.pdf.has_pdf() {
+            // The miniatures in a strip of their own on the left, the pages beside them.
+            let width = t.thumbnail_width + 6.0 * t.unit + ui.spacing().scroll.bar_width;
+            egui::Panel::left("pdf-thumbnails")
+                .resizable(false)
+                .exact_size(width)
+                .frame(egui::Frame::new().fill(t.frame))
+                .show(ui, |ui| app.pdf.show_thumbnails(ui, &t));
+            egui::CentralPanel::default().frame(egui::Frame::new()).show(ui, |ui| app.pdf.show(ui, &t, building.as_ref()));
+        } else {
+            app.pdf.show(ui, &t, building.as_ref());
+        }
         if let Some((page, x, y)) = app.pdf.clicked.take() {
             go_to_source(app, page, x, y);
         }
@@ -281,9 +292,18 @@ fn window_button(app: &mut App, ui: &mut egui::Ui) {
     }
 }
 
-/// The pages and the zoom of the PDF's toolbar.
+/// The pages and the zoom of the PDF's toolbar. In the PDF's own window, the switches for the
+/// thumbnails and two pages across come first (in the pane, the zoom menu has them).
 fn page_tools(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
+    if app.view.pdf_window {
+        for (id, icon, on) in [("view.thumbnails", "thumbnails", app.pdf.thumbnails()), ("view.two_pages", "columns-2", app.pdf.two_pages())] {
+            if widgets::icon_toggle(ui, &t, icon, ui_cmd::menu_entry(app, id).0, on).clicked() {
+                ui_cmd::run(app, id);
+            }
+        }
+        ui.add_space(t.unit * 2.0);
+    }
     let (page, count) = (app.pdf.page, app.pdf.page_count());
     if widgets::icon_button(ui, &t, "chevron-left", tl!("Previous page"), page > 0).clicked() {
         app.pdf.go_to_page(page.saturating_sub(1));
@@ -429,6 +449,14 @@ fn zoom_menu(app: &mut App, ui: &mut egui::Ui) {
                 choose(ui, &text, Fit::Zoom(1.0), "view.actual_size", serde_json::Value::Null);
             } else {
                 choose(ui, &text, Fit::Zoom(z as f32 / 100.0), "view.zoom", json!({"percent": z}));
+            }
+        }
+        ui.separator();
+        // The page layout's switches, ticked when on.
+        for (id, on) in [("view.two_pages", app.pdf.two_pages()), ("view.thumbnails", app.pdf.thumbnails())] {
+            if ui.add(egui::Button::selectable(on, ui_cmd::menu_entry(app, id).0)).clicked() {
+                ui_cmd::run(app, id);
+                ui.close();
             }
         }
         ui.separator();

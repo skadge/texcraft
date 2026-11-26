@@ -76,6 +76,7 @@ Faces come from storytold/craft-fonts through the optional `CRAFT_FONTS_DIR`: In
   | Status bar | 24 px |
   | Rail | 48 px wide, 36 px buttons |
   | File rows | 26 px |
+  | Page thumbnails | 96 px wide |
 
 - Icons are 16 px in toolbars and rows and 18 px on the rail. All are from the Lucide set, drawn with a 1.75 px stroke and tinted with `text_muted`, or with `text` when active.
 - Menus and popovers float on `raised` with a 1 px `separator` border and a soft shadow (0 6 20 px, black at 14 % light, 40 % dark).

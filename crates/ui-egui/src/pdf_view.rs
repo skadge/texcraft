@@ -14,6 +14,8 @@ use crate::theme::Tokens;
 const MIN_ZOOM: f32 = 0.25;
 const MAX_ZOOM: f32 = 4.0;
 const PAGE_GAP: f32 = 16.0;
+/// Miniatures kept on either side of those in view; the others are let go.
+const THUMBNAILS_KEPT: usize = 24;
 
 /// A running build, as the PDF pane shows it.
 pub(crate) struct Building {
@@ -206,18 +208,25 @@ pub(crate) struct PdfView {
     doc: Option<Arc<Document>>,
     /// Goes up with each new PDF: a drawing of an older one is shown until its page is drawn again.
     generation: u64,
-    renderer: Option<Renderer>,
-    /// Pages asked of the renderer, at their scale, for this generation.
-    pending: HashMap<usize, f32>,
+    /// The pages as the view shows them.
+    pages: Drawings,
+    /// The pages as miniatures, for the thumbnails beside them.
+    thumbs: Drawings,
     sizes: Vec<[f32; 2]>,
     error: Option<String>,
     fit: Fit,
     /// The last fit chosen (width or page), which the zoom's Fit button goes back to.
     last_fit: Fit,
+    /// Two pages across at least (`view.two_pages`); the fits make room for both.
+    two_pages: bool,
+    /// The pages' miniatures beside them (`view.thumbnails`).
+    thumbnails: bool,
+    /// The pages across, last frame.
+    columns: usize,
+    /// The page the thumbnails last showed as the one in view, to follow it.
+    thumbnail_page: Option<usize>,
     /// The zoom used for the last frame.
     zoom: f32,
-    /// Drawn pages: the pixel scale and generation each was drawn at, and its texture.
-    textures: HashMap<usize, (f32, u64, egui::TextureHandle)>,
     /// The first page in view, from 0.
     pub page: usize,
     /// Scroll so that this page is at the top, next frame.
@@ -267,14 +276,17 @@ impl Default for PdfView {
             source: None,
             doc: None,
             generation: 0,
-            renderer: None,
-            pending: HashMap::new(),
+            pages: Drawings::new("pdf-page"),
+            thumbs: Drawings::new("pdf-thumbnail"),
             sizes: Vec::new(),
             error: None,
             fit: Fit::Width,
             last_fit: Fit::Width,
+            two_pages: false,
+            thumbnails: false,
+            columns: 1,
+            thumbnail_page: None,
             zoom: 1.0,
-            textures: HashMap::new(),
             page: 0,
             scroll_to: None,
             clicked: None,
@@ -308,7 +320,8 @@ impl PdfView {
         self.source = pdf.cloned();
         // The pages drawn stay on screen until the new PDF's are drawn.
         self.generation += 1;
-        self.pending.clear();
+        self.pages.pending.clear();
+        self.thumbs.pending.clear();
         self.links.clear();
         self.glyphs.clear();
         self.selection = None;
@@ -319,7 +332,9 @@ impl PdfView {
             match Document::open(bytes.clone()) {
                 Ok(doc) => {
                     self.sizes = doc.page_sizes();
-                    self.textures.retain(|i, _| *i < self.sizes.len());
+                    let count = self.sizes.len();
+                    self.pages.textures.retain(|i, _| *i < count);
+                    self.thumbs.textures.retain(|i, _| *i < count);
                     self.doc = Some(Arc::new(doc));
                 }
                 Err(e) => self.error = Some(e.to_string()),
@@ -377,7 +392,7 @@ impl PdfView {
         let next: Vec<usize> = [p, p + 1].into_iter().filter(|i| *i < self.sizes.len()).collect();
         self.request(ui.ctx(), &next, ui.ctx().pixels_per_point() * zoom);
         ui.painter().rect_filled(page, 0.0, egui::Color32::WHITE);
-        if let Some((_, _, texture)) = self.textures.get(&p) {
+        if let Some(texture) = self.pages.texture(p) {
             let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
             ui.painter().image(texture.id(), page, uv, egui::Color32::WHITE);
         }
@@ -410,6 +425,34 @@ impl PdfView {
     /// How far the pages are scrolled, right and down, in points.
     pub fn offset(&self) -> egui::Vec2 {
         self.offset
+    }
+
+    /// Whether two pages go across at least.
+    pub fn two_pages(&self) -> bool {
+        self.two_pages
+    }
+
+    pub fn set_two_pages(&mut self, on: bool) {
+        self.two_pages = on;
+    }
+
+    /// Whether the pages' miniatures are shown beside them.
+    pub fn thumbnails(&self) -> bool {
+        self.thumbnails
+    }
+
+    /// Shows or hides the miniatures; hidden, they are let go.
+    pub fn set_thumbnails(&mut self, on: bool) {
+        self.thumbnails = on;
+        if !on {
+            self.thumbs.textures.clear();
+            self.thumbnail_page = None;
+        }
+    }
+
+    /// The pages across, last frame.
+    pub fn columns(&self) -> usize {
+        self.columns
     }
 
     /// The fit the zoom's Fit button goes back to: the last of fit width and fit page chosen.
@@ -501,34 +544,38 @@ impl PdfView {
         // Ctrl with the wheel (Cmd on a Mac), or a pinch, zooms around the pointer.
         let pointer = ui.input(|i| i.pointer.hover_pos()).filter(|p| rect.contains(*p) && ui.ctx().layer_id_at(*p) == Some(ui.layer_id()));
         let pinch = if pointer.is_some() { ui.input(|i| i.zoom_delta()) } else { 1.0 };
-        let before = self.zoom;
-        let anchor = pointer.filter(|_| (pinch - 1.0).abs() > 1e-4 && before > 0.0);
+        let before = (self.zoom, self.columns);
+        let anchor = pointer.filter(|_| (pinch - 1.0).abs() > 1e-4 && before.0 > 0.0);
         if anchor.is_some() {
-            self.set_fit(Fit::Zoom(before * pinch));
+            self.set_fit(Fit::Zoom(before.0 * pinch));
         }
+        // The fits make room for two pages across with Two Pages on.
+        let across = if self.two_pages { 2.0 } else { 1.0 };
+        let fit_width = (rect.width() - (across + 1.0) * PAGE_GAP) / (across * widest);
         self.zoom = match self.fit {
-            Fit::Width => (rect.width() - 2.0 * PAGE_GAP) / widest,
-            Fit::Page => ((rect.height() - 2.0 * PAGE_GAP) / tallest).min((rect.width() - 2.0 * PAGE_GAP) / widest),
+            Fit::Width => fit_width,
+            Fit::Page => ((rect.height() - 2.0 * PAGE_GAP) / tallest).min(fit_width),
             Fit::Zoom(z) => z,
         }
         .clamp(MIN_ZOOM, MAX_ZOOM);
         let zoom = self.zoom;
+        self.columns = columns(rect.width(), widest * zoom, self.fit == Fit::Width, self.two_pages, self.sizes.len());
         let pixels = ui.ctx().pixels_per_point() * zoom;
-        let (tops, y) = layout(&self.sizes, zoom);
-        let total = egui::vec2((widest * zoom + 2.0 * PAGE_GAP).max(rect.width()), y);
+        let (places, total) = layout(&self.sizes, zoom, self.columns, rect.width());
         let mut area = egui::ScrollArea::both().auto_shrink([false, false]);
         if let Some(p) = anchor
-            && (zoom - before).abs() > f32::EPSILON
+            && (zoom - before.0).abs() > f32::EPSILON
         {
             let at = p - rect.min;
-            let (old_tops, _) = layout(&self.sizes, before);
-            let old_width = (widest * before + 2.0 * PAGE_GAP).max(rect.width());
-            let content = self.offset + at;
+            let (old, _) = layout(&self.sizes, before.0, before.1, rect.width());
+            let content = (self.offset + at).to_pos2();
             // The point under the pointer, in the page's points, stays under it.
-            let page = old_tops.iter().rposition(|top| *top <= content.y).unwrap_or(0);
-            let y = old_tops.get(page).map_or(content.y, |top| tops[page] + (content.y - top) / before * zoom);
-            let x = (total.x - widest * zoom) / 2.0 + (content.x - (old_width - widest * before) / 2.0) / before * zoom;
-            area = area.scroll_offset((egui::vec2(x, y) - at).max(egui::Vec2::ZERO));
+            let page = old.iter().position(|r| r.contains(content)).or_else(|| old.iter().rposition(|r| r.top() <= content.y)).unwrap_or(0);
+            let moved = match (old.get(page), places.get(page)) {
+                (Some(o), Some(n)) => n.min + (content - o.min) / before.0 * zoom,
+                _ => content,
+            };
+            area = area.scroll_offset((moved - at).to_vec2().max(egui::Vec2::ZERO));
         }
         // The middle button held down drags the pages, when they are larger than the pane.
         let (middle, pressed, moved) =
@@ -543,21 +590,26 @@ impl PdfView {
                 area = area.scroll_offset((self.offset - moved).max(egui::Vec2::ZERO));
             }
         }
-        if let Some(page) = self.scroll_to.take()
-            && let Some(top) = tops.get(page)
-        {
-            area = area.vertical_scroll_offset(top - PAGE_GAP);
+        // A page to show: its row at the top, and its column in view when the rows are wider
+        // than the pane.
+        let wide = total.x > rect.width() + 1.0;
+        let go = |area: egui::ScrollArea, page: usize, y: f32| -> egui::ScrollArea {
+            let Some(place) = places.get(page) else { return area };
+            let area = area.vertical_scroll_offset(y.max(0.0));
+            if wide { area.horizontal_scroll_offset((place.left() - PAGE_GAP).max(0.0)) } else { area }
+        };
+        if let Some(page) = self.scroll_to.take() {
+            let top = places.get(page).map_or(0.0, |r| r.top());
+            area = go(area, page, top - PAGE_GAP);
         }
         // A place shown from the source: a third of the way down the pane.
-        if let Some((page, y)) = self.reveal.take()
-            && let Some(top) = tops.get(page)
-        {
-            area = area.vertical_scroll_offset((top + y * zoom - rect.height() / 3.0).max(0.0));
+        if let Some((page, y)) = self.reveal.take() {
+            let top = places.get(page).map_or(0.0, |r| r.top());
+            area = go(area, page, top + y * zoom - rect.height() / 3.0);
         }
-        if let Some((page, y)) = self.jump.take()
-            && let Some(top) = tops.get(page)
-        {
-            area = area.vertical_scroll_offset((top + y * zoom - PAGE_GAP).max(0.0));
+        if let Some((page, y)) = self.jump.take() {
+            let top = places.get(page).map_or(0.0, |r| r.top());
+            area = go(area, page, top + y * zoom - PAGE_GAP);
         }
         let now = ui.input(|i| i.time);
         const MARK_SECONDS: f64 = 1.8;
@@ -572,38 +624,34 @@ impl PdfView {
         let mut clicked = None;
         let mut follow = None;
         let shadow = egui::Shadow { offset: [0, 2], blur: 10, spread: 0, color: t.shadow };
-        let sizes = self.sizes.clone();
+        let count = self.sizes.len();
         area.show_viewport(ui, |ui, viewport| {
             self.offset = viewport.min.to_vec2();
             let (outer, _) = ui.allocate_exact_size(total, egui::Sense::hover());
             // The pages to draw: those in view, then those half a pane above and below it.
-            let span = |i: usize| egui::Rangef::new(tops[i], tops[i] + sizes[i][1] * zoom);
-            let mut wanted: Vec<usize> = (0..tops.len()).filter(|i| viewport.y_range().intersects(span(*i))).collect();
-            let near = viewport.y_range().expand(viewport.height() / 2.0);
-            wanted.extend((0..tops.len()).filter(|i| near.intersects(span(*i)) && !viewport.y_range().intersects(span(*i))));
+            let mut wanted: Vec<usize> = (0..places.len()).filter(|i| viewport.intersects(places[*i])).collect();
+            let near = viewport.expand2(egui::vec2(0.0, viewport.height() / 2.0));
+            wanted.extend((0..places.len()).filter(|i| near.intersects(places[*i]) && !viewport.intersects(places[*i])));
             self.request(ui.ctx(), &wanted, pixels);
             let mut first_visible = None;
-            for (i, (size, top)) in sizes.iter().zip(&tops).enumerate() {
-                let page = egui::Rect::from_min_size(
-                    egui::pos2(outer.left() + (total.x - size[0] * zoom) / 2.0, outer.top() + top),
-                    egui::vec2(size[0] * zoom, size[1] * zoom),
-                );
-                if !viewport.intersects(page.translate(-outer.min.to_vec2())) {
+            for (i, place) in places.iter().enumerate() {
+                if !viewport.intersects(*place) {
                     continue;
                 }
-                if first_visible.is_none() && page.center().y - outer.top() > viewport.top() {
+                let page = place.translate(outer.min.to_vec2());
+                if first_visible.is_none() && place.center().y > viewport.top() {
                     first_visible = Some(i);
                 }
                 ui.painter().add(shadow.as_shape(page, 2));
                 ui.painter().rect_filled(page, 2, egui::Color32::WHITE);
                 // Until the page is drawn: as drawn before (another zoom, the last PDF), or blank.
-                if let Some((_, _, texture)) = self.textures.get(&i) {
+                if let Some(texture) = self.pages.texture(i) {
                     let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
                     ui.painter().image(texture.id(), page, uv, egui::Color32::WHITE);
                 }
                 // Double-click or Ctrl+click: the source of that point. A drag selects text.
                 let r = ui.interact(page, ui.scope_id().with(("pdf-page", i)), egui::Sense::click_and_drag());
-                let name = tl!("Page {n} of {count}").replace("{n}", &(i + 1).to_string()).replace("{count}", &sizes.len().to_string());
+                let name = tl!("Page {n} of {count}").replace("{n}", &(i + 1).to_string()).replace("{count}", &count.to_string());
                 r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Document, true, &name));
                 if (r.double_clicked() || (r.clicked() && command))
                     && let Some(p) = r.interact_pointer_pos()
@@ -640,6 +688,83 @@ impl PdfView {
         }
         if let Some(pass) = building.and_then(|b| b.draft) {
             draft_badge(ui, t, rect, pass);
+        }
+    }
+
+    /// The pages' miniatures, one under the other in `ui`: the page in view framed in the accent
+    /// and its number in bold, a click (or Enter) going to a page. They are drawn small, those
+    /// in view only, as they scroll into view; those far from it are let go, so a long document
+    /// keeps few of them. The list follows the page in view.
+    pub fn show_thumbnails(&mut self, ui: &mut egui::Ui, t: &Tokens) {
+        self.receive(ui.ctx());
+        let Some(doc) = self.doc.clone() else { return };
+        let count = self.sizes.len();
+        let widest = self.sizes.iter().map(|s| s[0]).fold(1.0_f32, f32::max);
+        let tallest = self.sizes.iter().map(|s| s[1]).fold(1.0_f32, f32::max);
+        // Points on screen per point of the page.
+        let small = t.thumbnail_width / widest;
+        let label = t.small_size + 2.0 * t.unit;
+        let row = tallest * small + label + 3.0 * t.unit;
+        let current = self.page.min(count.saturating_sub(1));
+        let mut area = egui::ScrollArea::vertical().id_salt("pdf-thumbnails").auto_shrink([false, false]);
+        if self.thumbnail_page != Some(current) {
+            self.thumbnail_page = Some(current);
+            let view = ui.available_height();
+            area = area.vertical_scroll_offset((current as f32 * row - (view - row) / 2.0).max(0.0));
+        }
+        let pixels = ui.ctx().pixels_per_point() * small;
+        let generation = self.generation;
+        let mut go = None;
+        let region = egui::UiBuilder::new().accessibility_role(egui::accesskit::Role::List).accessibility_label(tl!("Page thumbnails"));
+        ui.scope_builder(region, |ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            area.show_rows(ui, row, count, |ui, range| {
+                let wanted: Vec<usize> = range.clone().collect();
+                self.thumbs.request(ui.ctx(), &doc, generation, &wanted, pixels);
+                for i in range.clone() {
+                    let (cell, r) = ui.allocate_exact_size(egui::vec2(ui.available_width(), row), egui::Sense::click());
+                    let name = tl!("Page {n}").replace("{n}", &(i + 1).to_string());
+                    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+                    // The page in view is the list's selected one (not a pressed button).
+                    ui.ctx().accesskit_node_builder(r.id, |node| node.set_selected(i == current));
+                    let fill = crate::widgets::state_fill(t, &r, t.frame);
+                    if fill != t.frame {
+                        ui.painter().rect_filled(cell.shrink(t.unit), t.corner(), fill);
+                    }
+                    let size = egui::vec2(self.sizes[i][0], self.sizes[i][1]) * small;
+                    let page = egui::Rect::from_min_size(egui::pos2(cell.center().x - size.x / 2.0, cell.top() + 2.0 * t.unit), size);
+                    ui.painter().rect_filled(page, 1.0, egui::Color32::WHITE);
+                    if let Some(texture) = self.thumbs.texture(i) {
+                        let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+                        ui.painter().image(texture.id(), page, uv, egui::Color32::WHITE);
+                    }
+                    // The page in view: framed, and its number in bold, so not by colour alone.
+                    let (stroke, font, color) = if i == current {
+                        (egui::Stroke::new(2.0, t.accent), egui::FontId::new(t.small_size, crate::fonts::semibold()), t.text)
+                    } else {
+                        (egui::Stroke::new(1.0, t.separator), t.small(), t.text_muted)
+                    };
+                    ui.painter().rect_stroke(page, 1.0, stroke, egui::StrokeKind::Outside);
+                    let number = egui::pos2(cell.center().x, page.bottom() + t.unit + label / 2.0);
+                    ui.painter().text(number, egui::Align2::CENTER_CENTER, (i + 1).to_string(), font, color);
+                    crate::widgets::focus_ring(ui, t, &r, cell.shrink(t.unit), t.corner());
+                    if r.gained_focus() {
+                        r.scroll_to_me(None);
+                    }
+                    if r.on_hover_text(&name).clicked() {
+                        go = Some(i);
+                    }
+                }
+                // Let go of the miniatures far from view.
+                let keep = range.start.saturating_sub(THUMBNAILS_KEPT)..range.end + THUMBNAILS_KEPT;
+                self.thumbs.textures.retain(|i, _| keep.contains(i));
+            });
+        });
+        if let Some(i) = go {
+            self.go_to_page(i);
+            // Followed already: the list stays where it was clicked.
+            self.page = i;
+            self.thumbnail_page = Some(i);
         }
     }
 
@@ -779,27 +904,63 @@ impl PdfView {
     /// Asks for `pages` (in that order) at `scale`, those not drawn at it yet; the renderer drops
     /// what it was asked before and is no longer wanted.
     fn request(&mut self, ctx: &egui::Context, pages: &[usize], scale: f32) {
-        let Some(doc) = self.doc.clone() else { return };
+        if let Some(doc) = self.doc.clone() {
+            self.pages.request(ctx, &doc, self.generation, pages, scale);
+        }
+    }
+
+    /// Takes the pages the renderers drew.
+    fn receive(&mut self, ctx: &egui::Context) {
+        self.pages.receive(ctx, self.generation);
+        self.thumbs.receive(ctx, self.generation);
+    }
+}
+
+/// Pages drawn by a renderer of their own, at one scale at a time: the view's pages, or their
+/// miniatures beside them.
+struct Drawings {
+    /// What their textures are named after.
+    name: &'static str,
+    renderer: Option<Renderer>,
+    /// Pages asked of the renderer, at their scale, for this generation.
+    pending: HashMap<usize, f32>,
+    /// Drawn pages: the pixel scale and generation each was drawn at, and its texture.
+    textures: HashMap<usize, (f32, u64, egui::TextureHandle)>,
+}
+
+impl Drawings {
+    fn new(name: &'static str) -> Self {
+        Self { name, renderer: None, pending: HashMap::new(), textures: HashMap::new() }
+    }
+
+    /// Page `i` as last drawn, at whatever scale or generation.
+    fn texture(&self, i: usize) -> Option<&egui::TextureHandle> {
+        self.textures.get(&i).map(|(_, _, t)| t)
+    }
+
+    /// Asks for `pages` (in that order) of `doc` at `scale`, those not drawn at it yet; the
+    /// renderer drops what it was asked before and is no longer wanted.
+    fn request(&mut self, ctx: &egui::Context, doc: &Arc<Document>, generation: u64, pages: &[usize], scale: f32) {
         if self.renderer.is_none() {
             self.renderer = Renderer::start(ctx);
         }
-        let fresh = |textures: &HashMap<usize, (f32, u64, egui::TextureHandle)>, generation: u64, i: &usize| {
+        let fresh = |textures: &HashMap<usize, (f32, u64, egui::TextureHandle)>, i: &usize| {
             textures.get(i).is_some_and(|(drawn, g, _)| *g == generation && (drawn - scale).abs() < 0.01)
         };
         let Some(renderer) = &self.renderer else {
             // No thread to draw on: drawn here and now.
-            for i in pages.iter().filter(|i| !fresh(&self.textures, self.generation, i)).copied().collect::<Vec<_>>() {
+            for i in pages.iter().filter(|i| !fresh(&self.textures, i)).copied().collect::<Vec<_>>() {
                 let image = doc.render(i, scale).map_err(|e| e.to_string());
-                self.take(ctx, Drawn { generation: self.generation, index: i, scale, image: Some(image) });
+                self.take(ctx, generation, Drawn { generation, index: i, scale, image: Some(image) });
             }
             return;
         };
-        renderer.want(self.generation, scale, pages.to_vec());
+        renderer.want(generation, scale, pages.to_vec());
         for &i in pages {
-            if fresh(&self.textures, self.generation, &i) || self.pending.get(&i).is_some_and(|s| (s - scale).abs() < 0.01) {
+            if fresh(&self.textures, &i) || self.pending.get(&i).is_some_and(|s| (s - scale).abs() < 0.01) {
                 continue;
             }
-            let request = Request { generation: self.generation, index: i, scale, doc: doc.clone() };
+            let request = Request { generation, index: i, scale, doc: doc.clone() };
             if renderer.tx.send(request).is_ok() {
                 self.pending.insert(i, scale);
                 // The browser draws the queue next frame.
@@ -810,15 +971,15 @@ impl PdfView {
     }
 
     /// Takes the pages the renderer drew.
-    fn receive(&mut self, ctx: &egui::Context) {
+    fn receive(&mut self, ctx: &egui::Context, generation: u64) {
         let drawn: Vec<Drawn> = self.renderer.as_mut().map(|r| r.drawn(ctx)).unwrap_or_default();
         for d in drawn {
-            self.take(ctx, d);
+            self.take(ctx, generation, d);
         }
     }
 
-    fn take(&mut self, ctx: &egui::Context, d: Drawn) {
-        if d.generation != self.generation {
+    fn take(&mut self, ctx: &egui::Context, generation: u64, d: Drawn) {
+        if d.generation != generation {
             return;
         }
         if self.pending.get(&d.index).is_some_and(|s| (s - d.scale).abs() < 0.01) {
@@ -829,7 +990,7 @@ impl PdfView {
             None => {}
             Some(Ok(image)) => {
                 let color = egui::ColorImage::from_rgba_premultiplied([image.width as usize, image.height as usize], &image.rgba);
-                let handle = ctx.load_texture(format!("pdf-page-{}", d.index), color, egui::TextureOptions::LINEAR);
+                let handle = ctx.load_texture(format!("{}-{}", self.name, d.index), color, egui::TextureOptions::LINEAR);
                 self.textures.insert(d.index, (d.scale, d.generation, handle));
             }
             Some(Err(e)) => log::warn!("page {}: {e}", d.index + 1),
@@ -838,15 +999,36 @@ impl PdfView {
 }
 
 /// What a link says: where it goes.
-/// Where each page's top is at `zoom`, from the top of the pages, and the height of them all.
-fn layout(sizes: &[[f32; 2]], zoom: f32) -> (Vec<f32>, f32) {
-    let mut tops = Vec::with_capacity(sizes.len());
+/// How many pages go across: as many as fit in `width` at their width `page` (more as the zoom
+/// goes down), two at least with Two Pages on, and only those the fit makes room for at fit
+/// width; never more than there are.
+fn columns(width: f32, page: f32, fit_width: bool, two_pages: bool, count: usize) -> usize {
+    let least = if two_pages { 2 } else { 1 };
+    let fit = ((width - PAGE_GAP) / (page + PAGE_GAP)).floor().max(0.0) as usize;
+    let across = if fit_width { least } else { fit.max(least) };
+    across.min(count.max(1))
+}
+
+/// Where each page is at `zoom`, `columns` to a row, from the top left of the pages, in a pane
+/// `width` wide; and the size of them all. The rows are centred in the pane, each page in its
+/// column, and a row is as tall as its tallest page.
+fn layout(sizes: &[[f32; 2]], zoom: f32, columns: usize, width: f32) -> (Vec<egui::Rect>, egui::Vec2) {
+    let columns = columns.max(1);
+    let column = sizes.iter().map(|s| s[0]).fold(0.0_f32, f32::max) * zoom;
+    let row_width = columns as f32 * column + (columns as f32 - 1.0) * PAGE_GAP;
+    let total_width = (row_width + 2.0 * PAGE_GAP).max(width);
+    let left = (total_width - row_width) / 2.0;
+    let mut places = Vec::with_capacity(sizes.len());
     let mut y = PAGE_GAP;
-    for s in sizes {
-        tops.push(y);
-        y += s[1] * zoom + PAGE_GAP;
+    for row in sizes.chunks(columns) {
+        let height = row.iter().map(|s| s[1]).fold(0.0_f32, f32::max) * zoom;
+        for (c, s) in row.iter().enumerate() {
+            let x = left + c as f32 * (column + PAGE_GAP) + (column - s[0] * zoom) / 2.0;
+            places.push(egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(s[0] * zoom, s[1] * zoom)));
+        }
+        y += height + PAGE_GAP;
     }
-    (tops, y)
+    (places, egui::vec2(total_width, y))
 }
 
 fn link_label(target: &Target) -> String {
