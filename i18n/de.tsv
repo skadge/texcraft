@@ -1346,6 +1346,8 @@
 	“{word}” is not in the dictionary	„{word}“ steht nicht im Wörterbuch
 	Opening the user guide in your browser.	Das Benutzerhandbuch wird im Browser geöffnet.
 	What is sent, and when: the user guide's AI page	Was gesendet wird und wann: die KI-Seite des Benutzerhandbuchs
+	{files} was not loaded: a file larger than {limit} stays in the folder, unchanged, and is not part of the build.	{files} wurde nicht geladen: Eine Datei über {limit} bleibt unverändert im Ordner und gehört nicht zum Build.
+	These files were not loaded: {files}. Files larger than {limit} stay in the folder, unchanged, and are not part of the build.	Diese Dateien wurden nicht geladen: {files}. Dateien über {limit} bleiben unverändert im Ordner und gehören nicht zum Build.
 button	Commit	Committen
 button	Pull	Pullen
 comment	, resolved	, erledigt
@@ -1761,7 +1763,7 @@ unit	{n} s	{n} s
 @msg	The export could not be zipped: {e}	Der Export konnte nicht gezippt werden: {e}
 @msg	The export could not start: {e}	Der Export konnte nicht starten: {e}
 @msg	The export stopped unexpectedly.	Der Export wurde unerwartet beendet.
-@msg	The file is larger than a project file may be.	Die Datei ist größer, als eine Projektdatei sein darf.
+@msg	The file is {size}, larger than the {limit} a project file may have.	Die Datei hat {size}, mehr als die {limit}, die eine Projektdatei haben darf.
 @msg	The fix's edits overlap.	Die Änderungen der Korrektur überlappen sich.
 @msg	The folder {dir} cannot be read: {e}	Der Ordner {dir} kann nicht gelesen werden: {e}
 @msg	The folder {parent} cannot be made: {e}	Der Ordner {parent} kann nicht erstellt werden: {e}
@@ -1951,7 +1953,7 @@ unit	{n} s	{n} s
 @msg	it does not start with {expected}	es beginnt nicht mit {expected}
 @msg	it is not a git server that speaks the smart HTTP protocol (its answer is {value}, not {expected})	es ist kein Git-Server, der das Smart-HTTP-Protokoll spricht (seine Antwort ist {value}, nicht {expected})
 @msg	it is {what}	es ist {what}
-@msg	larger than {value} MB	größer als {value} MB
+@msg	larger than the {mb} MB a project file may have	größer als die {mb} MB, die eine Projektdatei haben darf
 @msg	line {value} is past the end	Zeile {value} liegt hinter dem Ende
 @msg	making the repository {name}	Anlegen des Repositorys {name}
 @msg	no library	keine Bibliothek
@@ -2055,8 +2057,7 @@ unit	{n} s	{n} s
 @msg	{path} was removed from the project but could not be read in its folder: {e}	{path} wurde aus dem Projekt entfernt, konnte aber in seinem Ordner nicht gelesen werden: {e}
 @msg	{path} was removed from the project but stays in its folder: its last version is not in the project's history, and an agent cannot move it to the trash.	{path} wurde aus dem Projekt entfernt, bleibt aber in seinem Ordner: Seine letzte Version ist nicht im Verlauf des Projekts, und ein Agent kann es nicht in den Papierkorb verschieben.
 @msg	{source} has no file name	{source} hat keinen Dateinamen
-@msg	{source} is larger than TeXCraft reads ({max} bytes)	{source} ist größer, als TeXCraft liest ({max} Bytes)
-@msg	{source} is larger than a project file may be, or cannot be read	{source} ist größer, als eine Projektdatei sein darf, oder kann nicht gelesen werden
+@msg	{source} is {size}, larger than the {limit} TeXCraft reads.	{source} hat {size}, mehr als die {limit}, die TeXCraft liest.
 @msg	{text} is no command	{text} ist kein Befehl
 @msg	{url}: HTTP {value}	{url}: HTTP {value}
 @msg	{value} answered with an error ({status}): try again later.	{value} hat mit einem Fehler geantwortet ({status}): Versuchen Sie es später erneut.
@@ -2238,3 +2239,4 @@ unit	{n} s	{n} s
 @msg	Errors are not hidden: fix them instead.	Fehler werden nicht ausgeblendet: Beheben Sie sie.
 @msg	Name the kind of message to hide, on one line.	Nennen Sie die Art der auszublendenden Meldung, in einer Zeile.
 @msg	Name the kind of message, or the `index` of one of the last build's.	Nennen Sie die Art der Meldung oder den `index` einer Meldung des letzten Builds.
+@msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	Dateien über {limit} wurden nicht geladen: Sie bleiben unverändert im Ordner des Projekts und gehören nicht zu seinen Builds.

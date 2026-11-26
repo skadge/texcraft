@@ -1346,6 +1346,8 @@
 	“{word}” is not in the dictionary	“{word}” staat niet in het woordenboek
 	Opening the user guide in your browser.	De gebruikershandleiding wordt in uw browser geopend.
 	What is sent, and when: the user guide's AI page	Wat er wordt verzonden en wanneer: de AI-pagina van de gebruikershandleiding
+	{files} was not loaded: a file larger than {limit} stays in the folder, unchanged, and is not part of the build.	{files} is niet geladen: een bestand groter dan {limit} blijft ongewijzigd in de map en hoort niet bij de build.
+	These files were not loaded: {files}. Files larger than {limit} stay in the folder, unchanged, and are not part of the build.	Deze bestanden zijn niet geladen: {files}. Bestanden groter dan {limit} blijven ongewijzigd in de map en horen niet bij de build.
 button	Commit	Committen
 button	Pull	Pullen
 comment	, resolved	, opgelost
@@ -1761,7 +1763,7 @@ unit	{n} s	{n} s
 @msg	The export could not be zipped: {e}	De export kon niet worden gezipt: {e}
 @msg	The export could not start: {e}	De export kon niet beginnen: {e}
 @msg	The export stopped unexpectedly.	De export is onverwacht gestopt.
-@msg	The file is larger than a project file may be.	Het bestand is groter dan een projectbestand mag zijn.
+@msg	The file is {size}, larger than the {limit} a project file may have.	Het bestand is {size}, groter dan de {limit} die een projectbestand mag hebben.
 @msg	The fix's edits overlap.	De bewerkingen van de oplossing overlappen.
 @msg	The folder {dir} cannot be read: {e}	De map {dir} kan niet worden gelezen: {e}
 @msg	The folder {parent} cannot be made: {e}	De map {parent} kan niet worden gemaakt: {e}
@@ -1951,7 +1953,7 @@ unit	{n} s	{n} s
 @msg	it does not start with {expected}	het begint niet met {expected}
 @msg	it is not a git server that speaks the smart HTTP protocol (its answer is {value}, not {expected})	het is geen git-server die het smart-HTTP-protocol spreekt (het antwoord is {value}, niet {expected})
 @msg	it is {what}	het is {what}
-@msg	larger than {value} MB	groter dan {value} MB
+@msg	larger than the {mb} MB a project file may have	groter dan de {mb} MB die een projectbestand mag hebben
 @msg	line {value} is past the end	regel {value} ligt voorbij het einde
 @msg	making the repository {name}	de repository {name} wordt gemaakt
 @msg	no library	geen bibliotheek
@@ -2055,8 +2057,7 @@ unit	{n} s	{n} s
 @msg	{path} was removed from the project but could not be read in its folder: {e}	{path} is uit het project verwijderd maar kon niet in de map worden gelezen: {e}
 @msg	{path} was removed from the project but stays in its folder: its last version is not in the project's history, and an agent cannot move it to the trash.	{path} is uit het project verwijderd maar blijft in de map staan: de laatste versie staat niet in de geschiedenis van het project, en een agent kan het niet naar de prullenbak verplaatsen.
 @msg	{source} has no file name	{source} heeft geen bestandsnaam
-@msg	{source} is larger than TeXCraft reads ({max} bytes)	{source} is groter dan TeXCraft leest ({max} bytes)
-@msg	{source} is larger than a project file may be, or cannot be read	{source} is groter dan een projectbestand mag zijn, of kan niet worden gelezen
+@msg	{source} is {size}, larger than the {limit} TeXCraft reads.	{source} is {size}, groter dan de {limit} die TeXCraft leest.
 @msg	{text} is no command	{text} is geen commando
 @msg	{url}: HTTP {value}	{url}: HTTP {value}
 @msg	{value} answered with an error ({status}): try again later.	{value} antwoordde met een fout ({status}): probeer het later opnieuw.
@@ -2238,3 +2239,4 @@ unit	{n} s	{n} s
 @msg	Errors are not hidden: fix them instead.	Fouten worden niet verborgen: los ze op.
 @msg	Name the kind of message to hide, on one line.	Noem de soort melding om te verbergen, op één regel.
 @msg	Name the kind of message, or the `index` of one of the last build's.	Noem de soort melding, of de `index` van een melding van de laatste build.
+@msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	Bestanden groter dan {limit} zijn niet geladen: ze blijven ongewijzigd in de map van het project en horen niet bij de builds.

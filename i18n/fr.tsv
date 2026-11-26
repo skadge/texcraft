@@ -1346,6 +1346,8 @@
 	“{word}” is not in the dictionary	« {word} » n'est pas dans le dictionnaire
 	Opening the user guide in your browser.	Ouverture du guide de l'utilisateur dans votre navigateur.
 	What is sent, and when: the user guide's AI page	Ce qui est envoyé, et quand : la page IA du guide de l'utilisateur
+	{files} was not loaded: a file larger than {limit} stays in the folder, unchanged, and is not part of the build.	{files} n'a pas été chargé : un fichier de plus de {limit} reste dans le dossier, inchangé, et ne fait pas partie de la compilation.
+	These files were not loaded: {files}. Files larger than {limit} stay in the folder, unchanged, and are not part of the build.	Ces fichiers n'ont pas été chargés : {files}. Les fichiers de plus de {limit} restent dans le dossier, inchangés, et ne font pas partie de la compilation.
 button	Commit	Valider
 button	Pull	Tirer
 comment	, resolved	, résolu
@@ -1761,7 +1763,7 @@ unit	{n} s	{n} s
 @msg	The export could not be zipped: {e}	L'export n'a pas pu être compressé en zip : {e}
 @msg	The export could not start: {e}	L'export n'a pas pu démarrer : {e}
 @msg	The export stopped unexpectedly.	L'export s'est arrêté de façon inattendue.
-@msg	The file is larger than a project file may be.	Le fichier est plus volumineux que ce qu'un fichier de projet peut être.
+@msg	The file is {size}, larger than the {limit} a project file may have.	Le fichier fait {size}, plus que les {limit} qu'un fichier de projet peut avoir.
 @msg	The fix's edits overlap.	Les modifications de la correction se chevauchent.
 @msg	The folder {dir} cannot be read: {e}	Le dossier {dir} ne peut pas être lu : {e}
 @msg	The folder {parent} cannot be made: {e}	Le dossier {parent} ne peut pas être créé : {e}
@@ -1951,7 +1953,7 @@ unit	{n} s	{n} s
 @msg	it does not start with {expected}	cela ne commence pas par {expected}
 @msg	it is not a git server that speaks the smart HTTP protocol (its answer is {value}, not {expected})	ce n'est pas un serveur git qui parle le protocole HTTP intelligent (sa réponse est {value}, pas {expected})
 @msg	it is {what}	c'est {what}
-@msg	larger than {value} MB	plus de {value} Mo
+@msg	larger than the {mb} MB a project file may have	plus de {mb} Mo, la taille maximale d'un fichier de projet
 @msg	line {value} is past the end	la ligne {value} est au-delà de la fin
 @msg	making the repository {name}	la création du dépôt {name}
 @msg	no library	aucune bibliothèque
@@ -2055,8 +2057,7 @@ unit	{n} s	{n} s
 @msg	{path} was removed from the project but could not be read in its folder: {e}	{path} a été retiré du projet mais n'a pas pu être lu dans son dossier : {e}
 @msg	{path} was removed from the project but stays in its folder: its last version is not in the project's history, and an agent cannot move it to the trash.	{path} a été retiré du projet mais reste dans son dossier : sa dernière version n'est pas dans l'historique du projet, et un agent ne peut pas le mettre à la corbeille.
 @msg	{source} has no file name	{source} n'a pas de nom de fichier
-@msg	{source} is larger than TeXCraft reads ({max} bytes)	{source} dépasse ce que TeXCraft lit ({max} octets)
-@msg	{source} is larger than a project file may be, or cannot be read	{source} est plus volumineux que ce qu'un fichier de projet peut être, ou ne peut pas être lu
+@msg	{source} is {size}, larger than the {limit} TeXCraft reads.	{source} fait {size}, plus que les {limit} que TeXCraft lit.
 @msg	{text} is no command	{text} n'est pas une commande
 @msg	{url}: HTTP {value}	{url} : HTTP {value}
 @msg	{value} answered with an error ({status}): try again later.	{value} a répondu par une erreur ({status}) : réessayez plus tard.
@@ -2238,3 +2239,4 @@ unit	{n} s	{n} s
 @msg	Errors are not hidden: fix them instead.	Les erreurs ne sont pas masquées : corrigez-les.
 @msg	Name the kind of message to hide, on one line.	Nommez le type de message à masquer, sur une ligne.
 @msg	Name the kind of message, or the `index` of one of the last build's.	Nommez le type de message, ou l'`index` d'un message de la dernière compilation.
+@msg	Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds.	Les fichiers de plus de {limit} n'ont pas été chargés : ils restent dans le dossier du projet, inchangés, et ne font pas partie de ses compilations.

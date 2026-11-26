@@ -11,7 +11,9 @@ const MAX_DEPTH: usize = 32;
 
 impl Project {
     /// Every regular file under `dir`. The main document is `main.tex` when there is one, else the
-    /// first `.tex` file with `\documentclass`, else the first `.tex` file.
+    /// first `.tex` file with `\documentclass`, else the first `.tex` file. A file larger than
+    /// [`MAX_FILE_BYTES`] (a reference PDF, a dataset) is not read: it is listed in
+    /// [`Project::not_loaded`] and stays in the folder, so it never stops the project opening.
     pub fn load_dir(dir: &Path) -> Result<Self> {
         let mut project = Project::new();
         walk(dir, "", 0, &mut project)?;
@@ -54,12 +56,23 @@ fn walk(dir: &Path, prefix: &str, depth: usize, project: &mut Project) -> Result
             if project.files.len() >= MAX_FILES {
                 return Err(Error::TooManyFiles);
             }
+            let Ok(path) = ProjectPath::new(&rel) else { continue };
             let len = entry.metadata().map(|m| m.len()).unwrap_or(0);
             if len > MAX_FILE_BYTES as u64 {
-                return Err(Error::TooLarge(rel, usize::try_from(len).unwrap_or(usize::MAX)));
+                project.not_loaded.insert(path, len);
+                continue;
             }
-            let Ok(path) = ProjectPath::new(&rel) else { continue };
-            let bytes = std::fs::read(entry.path()).map_err(|e| Error::Io(format!("reading {rel}: {e}")))?;
+            // At most one byte more than a project file may have: a file that grew since it was
+            // measured is not read whole either.
+            let mut bytes = Vec::new();
+            let file = std::fs::File::open(entry.path()).map_err(|e| Error::Io(format!("reading {rel}: {e}")))?;
+            std::io::Read::read_to_end(&mut std::io::Read::take(file, MAX_FILE_BYTES as u64 + 1), &mut bytes)
+                .map_err(|e| Error::Io(format!("reading {rel}: {e}")))?;
+            if bytes.len() > MAX_FILE_BYTES {
+                let len = entry.metadata().map_or(bytes.len() as u64, |m| m.len());
+                project.not_loaded.insert(path, len);
+                continue;
+            }
             project.add(path, Contents::from_bytes(bytes))?;
         }
     }

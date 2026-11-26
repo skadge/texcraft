@@ -557,11 +557,14 @@ impl App {
 
     /// Opens the project in `folder` and remembers it among the recent projects.
     pub fn open_project(&mut self, folder: &str) {
-        if self.run("project.open", json!({"path": folder})).is_some() {
+        if let Some(opened) = self.run("project.open", json!({"path": folder})) {
             self.start = false;
             self.remember_project();
             self.pdf = pdf_view::PdfView::default();
             self.view.last_edit = Some(0.0);
+            if let Some(said) = not_loaded_words(&opened) {
+                self.view.status = Some((said, false));
+            }
         }
     }
 
@@ -1048,4 +1051,21 @@ impl App {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(delay - (now - edited)));
         }
     }
+}
+
+/// What `project.open` left in the folder because it is too large to load, in words with each
+/// file's size (issue #28); none when it loaded everything.
+fn not_loaded_words(opened: &Value) -> Option<String> {
+    let files: Vec<String> = opened["not_loaded"]
+        .as_array()?
+        .iter()
+        .filter_map(|f| Some(format!("{} ({})", f["path"].as_str()?, i18n::file_size(f["bytes"].as_u64()?))))
+        .collect();
+    let limit = i18n::file_size(texcraft_engine::project::MAX_FILE_BYTES as u64);
+    let template = match files.len() {
+        0 => return None,
+        1 => tl!("{files} was not loaded: a file larger than {limit} stays in the folder, unchanged, and is not part of the build."),
+        _ => tl!("These files were not loaded: {files}. Files larger than {limit} stay in the folder, unchanged, and are not part of the build."),
+    };
+    Some(i18n::fill(template, &[("files", &files.join(", ")), ("limit", &limit)]))
 }

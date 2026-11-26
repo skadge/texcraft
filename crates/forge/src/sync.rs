@@ -217,7 +217,10 @@ async fn fetch(client: &impl Forge, wanted: &[(String, String)]) -> Result<(Vec<
                     }
                     files.push((path.clone(), bytes));
                 }
-                None => skipped.push(Skipped { path: path.clone(), why: format!("larger than {} MB", crate::MAX_FILE / (1024 * 1024)) }),
+                None => {
+                    let mb = crate::MAX_FILE / (1024 * 1024);
+                    skipped.push(Skipped { path: path.clone(), why: format!("larger than the {mb} MB a project file may have") });
+                }
             }
         }
     }

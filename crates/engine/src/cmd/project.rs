@@ -194,9 +194,22 @@ fn open(s: &mut Session, params: &Value) -> Result<Value> {
         None => open_dir(s, path)?,
     };
     let files = project.len();
+    // Files too large to load stay in the folder; the answer names them, with why (rule 15).
+    let not_loaded: Vec<Value> = project
+        .not_loaded()
+        .map(|(path, bytes)| json!({"path": path.as_str(), "bytes": bytes, "size": texcraft_project::size_words(bytes)}))
+        .collect();
     s.replace_project(project, Some(dir));
     super::history::find(s);
-    Ok(json!({"files": files, "main": s.project.main().map(|p| p.to_string()), "history": super::history::status_of(s)}))
+    let mut result = json!({"files": files, "main": s.project.main().map(|p| p.to_string()), "history": super::history::status_of(s)});
+    if !not_loaded.is_empty() {
+        let limit = texcraft_project::size_words(texcraft_project::MAX_FILE_BYTES as u64);
+        result["not_loaded"] = Value::Array(not_loaded);
+        result["note"] = json!(format!(
+            "Files larger than {limit} were not loaded: they stay in the project's folder, unchanged, and are not part of its builds."
+        ));
+    }
+    Ok(result)
 }
 
 fn import_schema() -> Value {
@@ -470,10 +483,12 @@ fn inspect(s: &mut Session, _: &Value) -> Result<Value> {
         .files()
         .map(|(p, c)| json!({"path": p.as_str(), "bytes": c.len(), "text": matches!(c, texcraft_project::Contents::Text(_))}))
         .collect();
+    let not_loaded: Vec<Value> = s.project.not_loaded().map(|(p, bytes)| json!({"path": p.as_str(), "bytes": bytes})).collect();
     Ok(json!({
         "folder": s.dir.as_ref().map(|d| d.display().to_string()),
         "main": s.project.main().map(|p| p.to_string()),
         "files": files,
+        "not_loaded": not_loaded,
         "open": s.open.iter().map(|p| p.as_str()).collect::<Vec<_>>(),
         "current": s.current.as_ref().map(|p| p.as_str()),
         "unsaved": s.dirty,

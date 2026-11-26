@@ -75,7 +75,7 @@
         <li>the <span class="ui">Branch</span>: a list of the project's branches, with the default branch chosen.</li>
       </ul>
       <p>On the desktop the project opens in memory, linked to its branch, not in a folder: your changes go back with Commit, and TeXCraft asks before closing with changes not committed. (<span class="ui">Save Project As…</span> can still copy it into a folder.) In the browser it is kept with your browser's projects, with its link, so a reload keeps your changes.</p>
-      <p>The top bar shows the project, the branch and how many files you changed. Hidden files (such as <code>.gitignore</code>) stay on the branch as they are. Files over 10 MB are skipped, and said; a project over 200 MB is refused.</p>
+      <p>The top bar shows the project, the branch and how many files you changed. Hidden files (such as <code>.gitignore</code>) stay on the branch as they are. Files over 64 MB are skipped, and said, as when a folder is opened; a project over 200 MB is refused.</p>
 
       <h3 id="commit">Committing</h3>
       <p><span class="ui">File › Commit to GitLab…</span> (or <span class="ui">Commit to GitHub…</span>) lists the files you changed and asks for a message. Before committing, TeXCraft looks at the branch: commits others made in the meantime are taken in first, so nothing anyone committed is written over.</p>

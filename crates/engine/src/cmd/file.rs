@@ -340,7 +340,8 @@ pub(super) fn source_param(s: &Session, p: &Value) -> Result<std::path::PathBuf>
 pub(super) fn read_source(source: &std::path::Path, max: u64) -> Result<Vec<u8>> {
     let len = std::fs::metadata(source).map_err(|e| format!("{}: {e}", source.display()))?.len();
     if len > max {
-        return Err(format!("{} is larger than TeXCraft reads ({max} bytes)", source.display()));
+        let (size, limit) = (texcraft_project::size_words(len), texcraft_project::size_words(max));
+        return Err(format!("{} is {size}, larger than the {limit} TeXCraft reads.", source.display()));
     }
     std::fs::read(source).map_err(|e| format!("{}: {e}", source.display()))
 }
@@ -355,7 +356,9 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     } else if p.get("data").is_some() {
         let bytes = base64_param(p, "data")?;
         if bytes.len() > texcraft_project::MAX_FILE_BYTES {
-            return Err("The file is larger than a project file may be.".to_owned());
+            let (size, limit) =
+                (texcraft_project::size_words(bytes.len() as u64), texcraft_project::size_words(texcraft_project::MAX_FILE_BYTES as u64));
+            return Err(format!("The file is {size}, larger than the {limit} a project file may have."));
         }
         let path = ProjectPath::new(string(p, "path")?).map_err(|e| e.to_string())?;
         Gathered::one(path.into(), bytes)
@@ -372,8 +375,7 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
                 None => source.file_name().and_then(|n| n.to_str()).ok_or_else(|| format!("{} has no file name", source.display()))?.to_owned(),
             };
             let path = ProjectPath::new(&name).map_err(|e| e.to_string())?;
-            let bytes = read_source(&source, texcraft_project::MAX_FILE_BYTES as u64)
-                .map_err(|_| format!("{} is larger than a project file may be, or cannot be read", source.display()))?;
+            let bytes = read_source(&source, texcraft_project::MAX_FILE_BYTES as u64)?;
             Gathered::one(path.into(), bytes)
         }
     };
