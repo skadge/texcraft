@@ -146,6 +146,21 @@ pub fn current_code() -> &'static str {
     if pseudo() { "en" } else { I18N.code(CURRENT.get()) }
 }
 
+/// The language spelling is checked in when the document names none: the interface's, with the
+/// system's region when the region's locale is in that language (`en-GB` for the English
+/// interface on a British system, issue #36), so its spellings are the region's.
+pub fn spelling_fallback() -> String {
+    with_region(current_code(), &REGION.numbers)
+}
+
+/// `code` with the region of `locale` when `locale` is in that language.
+fn with_region(code: &str, locale: &str) -> String {
+    match language_region(locale) {
+        (language, Some(region)) if language == code => format!("{code}-{}", region.to_ascii_uppercase()),
+        _ => code.to_owned(),
+    }
+}
+
 /// Follows the system language (on the web, the browser's `navigator.languages`).
 pub fn use_system_language() {
     CURRENT.set(I18N.system_lang());
@@ -416,6 +431,15 @@ macro_rules! tf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spelling_falls_back_to_the_interface_language_as_the_systems_region_writes_it() {
+        assert_eq!(with_region("en", "en_GB.UTF-8"), "en-GB");
+        assert_eq!(with_region("en", "en-AU"), "en-AU");
+        // A region of another language says nothing about this one's spelling.
+        assert_eq!(with_region("en", "fr_FR.UTF-8"), "en");
+        assert_eq!(with_region("fr", "C"), "fr");
+    }
 
     /// A French catalog written for these tests (our own wording).
     const FR: &str = "@id\tlanguage.name\tFrançais\n\

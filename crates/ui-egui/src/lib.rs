@@ -299,7 +299,7 @@ impl App {
         let (layout, side) = (prefs.layout(), prefs.side());
         let keys = keys::Keys::new(prefs.shortcuts.clone());
         i18n::set_language(&prefs.language);
-        session.set_interface_language(i18n::current_code());
+        session.set_interface_language(&i18n::spelling_fallback());
         let mut app = Self {
             session,
             tokens: Tokens::dark(),
