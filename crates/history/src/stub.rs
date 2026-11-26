@@ -19,6 +19,10 @@ impl History {
         Err(NOT_YET.to_owned())
     }
 
+    pub fn init_for_clone(_dir: &Path, _branch: &str) -> Result<Self> {
+        Err(NOT_YET.to_owned())
+    }
+
     pub fn owner(&self) -> Owner {
         Owner::Theirs
     }
