@@ -114,10 +114,7 @@ impl crate::Session {
     #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
     fn preview_one(&mut self, source: String, display: bool) -> FormulaState {
         use texcraft_compile::formulas::{Done, Files, State as Engine, Wanted};
-        let engine = self.formulas.engine.get_or_insert_with(|| {
-            let dir = std::env::temp_dir().join(format!("texcraft-formulas-{}", std::process::id()));
-            texcraft_compile::formulas::Formulas::new(dir)
-        });
+        let engine = self.formulas.engine.get_or_insert_with(new_engine);
         let project = &self.project;
         let files = || {
             let main_dir = project.main().and_then(|m| m.as_str().rsplit_once('/').map(|(d, _)| d.to_owned()));
@@ -160,10 +157,7 @@ impl crate::Session {
         if wanted.is_empty() {
             return found.iter().map(|_| not_closed()).collect();
         }
-        let engine = self.formulas.engine.get_or_insert_with(|| {
-            let dir = std::env::temp_dir().join(format!("texcraft-formulas-{}", std::process::id()));
-            texcraft_compile::formulas::Formulas::new(dir)
-        });
+        let engine = self.formulas.engine.get_or_insert_with(new_engine);
         let project = &self.project;
         let files = || {
             let main_dir = project.main().and_then(|m| m.as_str().rsplit_once('/').map(|(d, _)| d.to_owned()));
@@ -199,6 +193,16 @@ impl crate::Session {
         let why = "Formulas are typeset in the desktop app; this build shows their source.";
         self.formulas.found.iter().map(|f| if f.closed { FormulaState::Unavailable(why.to_owned()) } else { not_closed() }).collect()
     }
+}
+
+/// The formulas engine of a session, in a folder of its own: two sessions of one process (the
+/// tests) do not typeset into the same files.
+#[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
+fn new_engine() -> texcraft_compile::formulas::Formulas {
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("texcraft-formulas-{}-{n}", std::process::id()));
+    texcraft_compile::formulas::Formulas::new(dir)
 }
 
 fn not_closed() -> FormulaState {
