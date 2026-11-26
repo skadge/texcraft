@@ -283,3 +283,150 @@ fn in_the_browser_saving_to_gitlab_commits_the_files_and_links_the_project() -> 
     std::fs::remove_dir_all(&dir)?;
     Ok(())
 }
+
+/// A clone of `a_dir` (a project pushed to `server`) opened in a new session.
+fn clone_of(a_dir: &Path, b_dir: &Path, fake: &Fake, server: &Server) -> Result<Session, Box<dyn std::error::Error>> {
+    copy(a_dir, b_dir)?;
+    let mut b = session(fake, server);
+    b.execute("project.open", &json!({"path": b_dir.display().to_string()}))?;
+    Ok(b)
+}
+
+fn commits(s: &mut Session) -> Result<usize, String> {
+    Ok(s.execute("history.list", &json!({"limit": 1000}))?["commits"].as_array().map_or(0, Vec::len))
+}
+
+#[test]
+fn sync_makes_a_version_takes_in_the_remote_then_sends_everything() -> R {
+    let dir = temp("sync")?;
+    let fake = Fake::account(Service::GitHub, "", "ada", TOKEN);
+    let server = server(&dir)?;
+    let (a_dir, b_dir) = (dir.join("a"), dir.join("b"));
+    let mut a = session(&fake, &server);
+    write(&mut a, "main.tex", "one\ntwo\nthree\nfour\nfive\n")?;
+    a.execute("project.save_as", &json!({"path": a_dir.display().to_string()}))?;
+    assert!(a.execute("project.sync", &json!({"token": TOKEN})).is_err(), "no remote: nothing to sync with");
+    a.execute("git.set_remote", &json!({"name": "origin", "url": "https://github.com/ada/paper.git"}))?;
+    let first = a.execute("project.sync", &json!({"token": TOKEN}))?;
+    assert_eq!(first["operation"], "sync", "{first}");
+    assert_eq!(first["pulled"]["empty"], true, "an empty remote: nothing to take in, everything sent");
+    let mut b = clone_of(&a_dir, &b_dir, &fake, &server)?;
+
+    // B changes a line and syncs; A changes another, written but in no version, and syncs.
+    write(&mut b, "main.tex", "one\ntwo\nthree\nfour\nFIVE\n")?;
+    b.execute("project.write", &json!({}))?;
+    b.execute("project.sync", &json!({"token": TOKEN}))?;
+    write(&mut a, "main.tex", "ONE\ntwo\nthree\nfour\nfive\n")?;
+    a.execute("project.write", &json!({}))?;
+    let before = commits(&mut a)?;
+    let done = a.execute("project.sync", &json!({"token": TOKEN}))?;
+    assert!(done["version"]["commit"].is_string(), "a version of the change first: {done}");
+    assert_eq!(done["pulled"]["merged"], true, "{done}");
+    assert_eq!(text(&a, "main.tex").as_deref(), Some("ONE\ntwo\nthree\nfour\nFIVE\n"));
+    assert!(commits(&mut a)? > before + 1, "the version, B's commit and the merge");
+    assert_eq!(server.get("refs/heads/main").map(|id| id.to_string()), Some(head(&mut a)?), "and all of it sent");
+    let remotes = a.execute("git.remotes", &json!({}))?;
+    assert_eq!((remotes["ahead"].clone(), remotes["behind"].clone()), (json!(0), json!(0)), "{remotes}");
+    assert!(!a.unversioned());
+
+    // In the background, as the window runs it: one operation, polled to its end.
+    write(&mut b, "main.tex", "one\ntwo\nTHREE\nfour\nFIVE\n")?;
+    let started = b.execute("project.sync", &json!({"background": true}))?;
+    assert_eq!(started["started"], true, "{started}");
+    assert_eq!(b.git_busy(), Some("sync"));
+    let done = wait(&mut b)?;
+    assert_eq!(done["operation"], "sync", "{done}");
+    assert_eq!(text(&b, "main.tex").as_deref(), Some("ONE\ntwo\nTHREE\nfour\nFIVE\n"), "A's line came in");
+    assert_eq!(server.get("refs/heads/main").map(|id| id.to_string()), Some(head(&mut b)?));
+    std::fs::remove_dir_all(&dir)?;
+    Ok(())
+}
+
+#[test]
+fn a_sync_in_conflict_lists_the_files_and_the_choice_made_settles_them() -> R {
+    let dir = temp("sync-conflict")?;
+    let fake = Fake::account(Service::GitHub, "", "ada", TOKEN);
+    let server = server(&dir)?;
+    let (a_dir, b_dir) = (dir.join("a"), dir.join("b"));
+    let mut a = session(&fake, &server);
+    write(&mut a, "main.tex", "one\ntwo\n")?;
+    a.execute("project.save_as", &json!({"path": a_dir.display().to_string()}))?;
+    a.execute("git.set_remote", &json!({"name": "origin", "url": "https://github.com/ada/paper.git"}))?;
+    a.execute("project.sync", &json!({"token": TOKEN}))?;
+    let mut b = clone_of(&a_dir, &b_dir, &fake, &server)?;
+    write(&mut b, "main.tex", "one\nB\n")?;
+    b.execute("project.sync", &json!({"token": TOKEN}))?;
+    write(&mut a, "main.tex", "one\nA\n")?;
+
+    let refused = a.execute("project.sync", &json!({})).unwrap_err();
+    assert!(refused.contains("main.tex"), "{refused}");
+    let status = a.execute("forge.status", &json!({}))?;
+    assert_eq!(status["conflicts"][0]["path"], "main.tex", "the window's dialog lists it: {status}");
+    assert_eq!(text(&a, "main.tex").as_deref(), Some("one\nA\n"), "nothing changed");
+
+    a.execute("project.sync", &json!({"resolve": {"main.tex": "mine"}}))?;
+    assert_eq!(text(&a, "main.tex").as_deref(), Some("one\nA\n"));
+    assert!(a.forge_conflicts().is_empty());
+    b.execute("project.sync", &json!({}))?;
+    assert_eq!(text(&b, "main.tex").as_deref(), Some("one\nA\n"), "mine went to the remote");
+    std::fs::remove_dir_all(&dir)?;
+    Ok(())
+}
+
+#[test]
+fn an_overleaf_remote_is_named_and_reached_with_its_git_token() -> R {
+    const OVERLEAF_TOKEN: &str = "olp_engine0test0token";
+    let dir = temp("overleaf")?;
+    let fake = Fake::account(Service::GitHub, "", "ada", TOKEN);
+    let bare = dir.join("server.git");
+    std::fs::create_dir_all(&bare)?;
+    let server = Server::new(&bare_init(&bare)?).with_auth("git", OVERLEAF_TOKEN);
+    let mut s = session(&fake, &server);
+    write(&mut s, "main.tex", "one\n")?;
+    s.execute("project.save_as", &json!({"path": dir.join("p").display().to_string()}))?;
+    s.execute("git.set_remote", &json!({"name": "origin", "url": "https://git@git.overleaf.com/69cb8d545624606190d85c57"}))?;
+    let remotes = s.execute("git.remotes", &json!({}))?;
+    assert_eq!((remotes["hosting"].as_str(), remotes["hosting_name"].as_str()), (Some("overleaf"), Some("Overleaf")), "{remotes}");
+
+    // No token yet: asked for, in words, with nothing sent.
+    let asked = s.execute("project.sync", &json!({})).unwrap_err();
+    assert!(asked.contains("Overleaf") && asked.contains("token"), "{asked}");
+    assert!(matches!(s.forge_problem(), Some(texcraft_engine::ForgeProblem::NeedsToken { .. })));
+    assert_eq!(server.requests().len(), 0);
+
+    s.execute("project.sync", &json!({"token": OVERLEAF_TOKEN}))?;
+    assert_eq!(server.get("refs/heads/main").map(|id| id.to_string()), Some(head(&mut s)?));
+    // Over HTTPS at the project's address, the user name out of the URL and in the credentials.
+    assert!(server.requests().iter().all(|(_, url, _)| url.starts_with("https://git.overleaf.com/69cb8d545624606190d85c57/")));
+    // The token is kept for the session: the next Sync needs none.
+    write(&mut s, "main.tex", "two\n")?;
+    s.execute("project.sync", &json!({}))?;
+    assert_eq!(server.get("refs/heads/main").map(|id| id.to_string()), Some(head(&mut s)?));
+    std::fs::remove_dir_all(&dir)?;
+    Ok(())
+}
+
+#[test]
+fn in_the_browser_sync_commits_the_changes_to_the_linked_branch_saying_what_changed() -> R {
+    let instance = "https://gitlab.example";
+    let fake = Fake::account(Service::GitLab, instance, "ada", TOKEN);
+    let dir = temp("browser-sync")?;
+    let server = server(&dir)?;
+    let mut s = session(&fake, &server);
+    s.use_library(Library::default());
+    write(&mut s, "main.tex", "\\documentclass{article}\n")?;
+    s.execute("project.save_as", &json!({"path": "Paper"}))?;
+    s.execute("forge.create_repository", &json!({"service": "gitlab", "instance": instance, "name": "paper", "token": TOKEN}))?;
+
+    s.execute("file.new", &json!({"path": "intro.tex", "text": "Hello\n"}))?;
+    let done = s.execute("project.sync", &json!({}))?;
+    assert_eq!(done["sync"], true, "{done}");
+    assert!(done["commit"].is_string(), "{done}");
+    assert_eq!(fake.files("main").get("intro.tex").map(Vec::as_slice), Some(&b"Hello\n"[..]));
+    assert!(s.execute("forge.status", &json!({}))?["changes"].as_array().is_some_and(Vec::is_empty));
+    // Nothing left to send: a Sync takes in the branch only.
+    let again = s.execute("project.sync", &json!({}))?;
+    assert_eq!(again["operation"], "pull", "{again}");
+    std::fs::remove_dir_all(&dir)?;
+    Ok(())
+}

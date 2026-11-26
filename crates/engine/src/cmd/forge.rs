@@ -77,6 +77,9 @@ pub enum Problem {
     /// Signed in to GitLab to read only: committing needs signing in again with the api scope
     /// (`forge.sign_in {write: true}`).
     NeedsWrite,
+    /// A push, a pull or a Sync found no token for the remote's server (`instance`), or the one
+    /// given was refused: one is asked for (`token`). `hosting`: the service recognised there.
+    NeedsToken { instance: String, hosting: Option<super::git::Hosting> },
 }
 
 /// Makes the transport a forge operation sends its requests with (on the operation's thread).
@@ -159,7 +162,7 @@ fn pull_schema() -> Value {
 }
 
 /// The `resolve` parameter.
-fn choices(p: &Value) -> Result<Choices> {
+pub(super) fn choices(p: &Value) -> Result<Choices> {
     let Some(map) = p.get("resolve") else { return Ok(Choices::new()) };
     let map = map.as_object().ok_or("resolve: give an object of paths and \"mine\" or \"theirs\".")?;
     map.iter()
@@ -370,6 +373,16 @@ fn commit(s: &mut Session, p: &Value) -> Result<Value> {
     }
 }
 
+/// `forge.pull`, for Sync.
+pub(super) fn run_pull(s: &mut Session, p: &Value) -> Result<Value> {
+    pull(s, p)
+}
+
+/// `forge.commit`, for Sync.
+pub(super) fn run_commit(s: &mut Session, p: &Value) -> Result<Value> {
+    commit(s, p)
+}
+
 fn pull(s: &mut Session, p: &Value) -> Result<Value> {
     let link = s.forge.clone().ok_or("This project was not opened from GitLab or GitHub.")?;
     let key = key_for(s, p, &link.address)?;
@@ -513,7 +526,9 @@ fn change_json(c: &texcraft_forge::FileChange) -> Value {
 
 fn status(s: &mut Session, _: &Value) -> Result<Value> {
     let running = s.forge_busy();
-    let Some(link) = s.forge.clone() else { return Ok(json!({"linked": false, "running": running})) };
+    let conflicts: Vec<Value> = s.forge_conflicts().iter().map(|c| json!({"path": c.path, "why": c.kind.as_str()})).collect();
+    // A project folder's Sync or pull refused over files in conflict lists them too.
+    let Some(link) = s.forge.clone() else { return Ok(json!({"linked": false, "running": running, "conflicts": conflicts})) };
     let changes: Vec<Value> = s.forge_changes()?.iter().map(change_json).collect();
     Ok(json!({
         "linked": true,
@@ -532,7 +547,7 @@ fn status(s: &mut Session, _: &Value) -> Result<Value> {
             "can_commit": g.can_commit(),
         })),
         "running": running,
-        "conflicts": s.forge_conflicts().iter().map(|c| json!({"path": c.path, "why": c.kind.as_str()})).collect::<Vec<_>>(),
+        "conflicts": conflicts,
         "cannot_push": s.forge_problem == Some(Problem::CannotPush),
     }))
 }
