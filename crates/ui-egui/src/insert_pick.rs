@@ -1,9 +1,10 @@
-//! The formatted view's pickers (docs/ROADMAP.md, F3): a citation from the project's `.bib`
-//! entries, a cross-reference to a label of its `.tex` files, an image for a new figure. A typed
-//! query keeps the entries holding it (in the key or the description, ignoring case); Up and Down
-//! move the selection, Enter or a click inserts it through `edit.cite {key}`, `edit.ref {key}` or
-//! `edit.figure {image}`, Escape closes. A key the project does not have yet can be typed and used.
-//! Like Go to File, the picker traps focus and announces the selected entry through a live region.
+//! The pickers of the formatted view (docs/ROADMAP.md, F3) and of the source (E13): a citation
+//! from the project's `.bib` entries, a cross-reference to a label of its `.tex` files (with its
+//! caption or heading), an image for a new figure. A typed query keeps the entries holding it (in
+//! the key or the description, ignoring case); Up and Down move the selection, Enter or a click
+//! inserts it through `edit.cite {key}`, `edit.ref {key}` or `edit.figure {image}`, Escape closes.
+//! A key the project does not have yet can be typed and used. Like Go to File, the picker traps
+//! focus and announces the selected entry through a live region.
 
 use egui::{Key, Modifiers, RichText};
 use serde_json::json;
@@ -193,7 +194,12 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         crate::ui_cmd::run_with(app, id, &params);
     } else if modal.should_close() || ctx.input(|i| i.key_pressed(Key::Escape)) {
         app.view.dialog = None;
-        app.editor.formatted.editing.focus = true;
+        // The keyboard goes back to the view the picker opened from.
+        if app.session.current().is_some_and(|p| app.editor.formatted.shows(p)) {
+            app.editor.formatted.editing.focus = true;
+        } else {
+            app.editor.focus = true;
+        }
     }
 }
 

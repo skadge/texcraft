@@ -398,8 +398,6 @@ fn wrap_for(id: &str) -> Option<Wrap> {
         "edit.math_inline" => wrap("\\(", "\\)", "x"),
         "edit.math_display" => wrap("\\[\n  ", "\n\\]", "x"),
         "edit.equation" => wrap("\\begin{equation}\n  ", "\n  \\label{eq:label}\n\\end{equation}", "x"),
-        "edit.ref" => wrap("\\ref{", "}", "label"),
-        "edit.cite" => wrap("\\cite{", "}", "key"),
         "edit.link" => wrap("\\href{https://}{", "}", "text"),
         "edit.figure" => FIGURE,
         "edit.table" => TABLE,
@@ -438,6 +436,11 @@ pub(crate) fn edit_with(app: &mut App, id: &str, params: &serde_json::Value) -> 
         }
         None => id,
     };
+    // A citation or a cross-reference from the project's entries, as in the formatted view.
+    if matches!(id, "edit.cite" | "edit.ref") && params.get("key").and_then(serde_json::Value::as_str).is_none() {
+        crate::insert_pick::open(app, if id == "edit.cite" { crate::insert_pick::Kind::Citation } else { crate::insert_pick::Kind::Reference });
+        return true;
+    }
     if let Some(done) = structure_in_source(app, id, params) {
         return done;
     }
@@ -586,8 +589,11 @@ fn structure_in_source(app: &mut App, id: &str, params: &serde_json::Value) -> O
         }
         _ => {
             let inserted = match (id, param("key"), param("url"), param("text"), param("latex")) {
-                ("edit.cite", Some(key), ..) => format!("\\cite{{{key}}}"),
-                ("edit.ref", Some(key), ..) => format!("\\{}{{{key}}}", crate::formatted_edit::ref_command(app)),
+                ("edit.cite", Some(key), ..) => return Some(insert_atom(app, &text, &format!("\\cite{{{key}}}"))),
+                ("edit.ref", Some(key), ..) => {
+                    let command = crate::formatted_edit::ref_command(app);
+                    return Some(insert_atom(app, &text, &format!("\\{command}{{{key}}}")));
+                }
                 ("edit.link", _, Some(url), text, _) => match text.filter(|t| !t.is_empty()) {
                     Some(t) => format!("\\href{{{url}}}{{{}}}", edit::escape(&t)),
                     None => format!("\\url{{{url}}}"),
@@ -605,6 +611,26 @@ fn structure_in_source(app: &mut App, id: &str, params: &serde_json::Value) -> O
             Ok((b0 + inserted.len(), vec![edit::Change { range: b0..b1, text: inserted }]))
         }
     };
+    commit_in_source(app, &text, made);
+    Some(true)
+}
+
+/// A citation or a cross-reference after the selection (or at the caret), tied to the word before
+/// it with `~` as in the formatted view; the caret after it.
+fn insert_atom(app: &mut App, text: &str, source: &str) -> bool {
+    let doc = &app.editor.source.doc;
+    let end = doc.buffer.char_to_byte(doc.selection.primary().end());
+    let after_word = text.get(..end).and_then(|s| s.chars().next_back()).is_some_and(char::is_alphanumeric);
+    let inserted = if after_word { format!("~{source}") } else { source.to_owned() };
+    let caret = end + inserted.len();
+    commit_in_source(app, text, Ok((caret, vec![texcraft_latex::edit::Change { range: end..end, text: inserted }])));
+    true
+}
+
+/// Makes `made` (the changes of `text`, the caret's byte after them) one undoable edit of the
+/// source, or says why there are none.
+fn commit_in_source(app: &mut App, text: &str, made: Result<(usize, Vec<texcraft_latex::edit::Change>), &str>) {
+    use texcraft_latex::edit;
     match made {
         Ok((caret, changes)) => {
             let source = &mut app.editor.source;
@@ -617,7 +643,7 @@ fn structure_in_source(app: &mut App, id: &str, params: &serde_json::Value) -> O
                     text: c.text.clone(),
                 })
                 .collect();
-            let new = edit::apply(&text, &changes);
+            let new = edit::apply(text, &changes);
             let caret = new.get(..caret).map_or(0, |s| s.chars().count());
             let before = doc.selection.clone();
             if let Ok(tx) = Transaction::new(list)
@@ -631,7 +657,6 @@ fn structure_in_source(app: &mut App, id: &str, params: &serde_json::Value) -> O
         Err(why) => app.view.status = Some((why.to_owned(), false)),
     }
     app.editor.focus = true;
-    Some(true)
 }
 
 const FIGURE: Wrap = wrap(
@@ -654,12 +679,21 @@ fn menu_entry(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) -> bool {
     chosen
 }
 
+/// A group of the toolbar: whether a divider comes before it, how many buttons it shows, and
+/// its entries for the More menu.
+struct Group {
+    divider: bool,
+    buttons: u8,
+    entries: &'static [(&'static str, &'static str)],
+}
+
 /// The toolbar's groups after the mode switch, in the order they give way to the More menu when the
-/// pane is narrow: each with its width and its entries for that menu.
-const GROUPS: [(f32, &[(&str, &str)]); 3] = [
-    (
-        100.0,
-        &[
+/// pane is narrow: small, so that they go one at a time.
+const GROUPS: [Group; 6] = [
+    Group {
+        divider: true,
+        buttons: 3,
+        entries: &[
             (tn!("Section"), "edit.section"),
             (tn!("Subsection"), "edit.subsection"),
             (tn!("Subsubsection"), "edit.subsubsection"),
@@ -667,29 +701,37 @@ const GROUPS: [(f32, &[(&str, &str)]); 3] = [
             (tn!("Bold"), "edit.bold"),
             (tn!("Italic"), "edit.italic"),
         ],
-    ),
-    (
-        160.0,
-        &[
+    },
+    Group {
+        divider: true,
+        buttons: 1,
+        entries: &[
             (tn!("Inline Formula"), "edit.math_inline"),
             (tn!("Displayed Formula"), "edit.math_display"),
             (tn!("Numbered Equation"), "edit.equation"),
             (tn!("Symbols…"), "edit.symbols"),
-            (tn!("Cross-Reference"), "edit.ref"),
-            (tn!("Citation"), "edit.cite"),
-            (tn!("Link"), "edit.link"),
         ],
-    ),
-    (
-        130.0,
-        &[
-            (tn!("Figure"), "edit.figure"),
-            (tn!("Table"), "edit.table"),
-            (tn!("Bulleted List"), "edit.itemize"),
-            (tn!("Numbered List"), "edit.enumerate"),
-        ],
-    ),
+    },
+    Group { divider: false, buttons: 1, entries: &[(tn!("Cross-Reference"), "edit.ref"), (tn!("Citation"), "edit.cite")] },
+    Group { divider: false, buttons: 1, entries: &[(tn!("Link"), "edit.link")] },
+    Group { divider: true, buttons: 2, entries: &[(tn!("Figure"), "edit.figure"), (tn!("Table"), "edit.table")] },
+    Group { divider: true, buttons: 2, entries: &[(tn!("Bulleted List"), "edit.itemize"), (tn!("Numbered List"), "edit.enumerate")] },
 ];
+
+/// How many of the first groups the mode switch keeps its labels for, and the Suggest switch.
+const WITH_MODE_LABELS: usize = 3;
+const WITH_SUGGEST_LABEL: usize = 4;
+
+/// The width group `g` takes in the row: its buttons (and spacing), and its divider.
+fn group_width(t: &Tokens, g: &Group) -> f32 {
+    let button = t.toolbar_height - 2.0 * t.unit + 2.0;
+    f32::from(g.buttons) * button + if g.divider { 2.0 * t.unit + 3.0 } else { 0.0 }
+}
+
+/// The width of the first `n` groups.
+fn groups_width(t: &Tokens, n: usize) -> f32 {
+    GROUPS.iter().take(n).map(|g| group_width(t, g)).sum()
+}
 
 /// The label of command `id` (`label`, its English), translated: a toolbar entry is named as the
 /// command is in the menus and the shortcuts list.
@@ -704,8 +746,33 @@ fn tool(ui: &mut egui::Ui, t: &Tokens, (icon, label, id): (&str, &str, &'static 
     }
 }
 
+/// A toolbar button that opens a menu of commands, each named as in the menus.
+fn drop_down(
+    ui: &mut egui::Ui,
+    t: &Tokens,
+    (icon, label): (&str, &str),
+    entries: &[(&'static str, &'static str)],
+    chosen: &mut Option<&'static str>,
+) {
+    let button = widgets::icon_button(ui, t, icon, label, true);
+    crate::widgets::keyboard_menu(ui, &button);
+    egui::Popup::menu(&button).show(|ui| {
+        ui.set_min_width(180.0);
+        for (label, id) in entries {
+            if *id == "edit.symbols" {
+                ui.separator();
+            }
+            if menu_entry(ui, cmd(id, label)) {
+                *chosen = Some(id);
+            }
+        }
+    });
+}
+
 fn group(ui: &mut egui::Ui, t: &Tokens, index: usize, chosen: &mut Option<&'static str>) {
-    divider(ui, t);
+    if GROUPS[index].divider {
+        divider(ui, t);
+    }
     match index {
         0 => {
             let heading = widgets::icon_button(ui, t, "heading-1", tl!("Heading"), true);
@@ -728,29 +795,14 @@ fn group(ui: &mut egui::Ui, t: &Tokens, index: usize, chosen: &mut Option<&'stat
             }
             tool(ui, t, ("italic", tl!("Italic"), "edit.italic"), chosen);
         }
-        1 => {
-            let math = widgets::icon_button(ui, t, "sigma", tl!("Formula"), true);
-            crate::widgets::keyboard_menu(ui, &math);
-            egui::Popup::menu(&math).show(|ui| {
-                ui.set_min_width(180.0);
-                for (label, id) in [
-                    (cmd("edit.math_inline", tn!("Inline Formula")), "edit.math_inline"),
-                    (cmd("edit.math_display", tn!("Displayed Formula")), "edit.math_display"),
-                    (cmd("edit.equation", tn!("Numbered Equation")), "edit.equation"),
-                ] {
-                    if menu_entry(ui, label) {
-                        *chosen = Some(id);
-                    }
-                }
-            });
-            tool(ui, t, ("omega", tl!("Symbols"), "edit.symbols"), chosen);
-            tool(ui, t, ("tag", cmd("edit.ref", tn!("Cross-Reference")), "edit.ref"), chosen);
-            tool(ui, t, ("book-open", tl!("Citation"), "edit.cite"), chosen);
-            tool(ui, t, ("link", tl!("Link"), "edit.link"), chosen);
-        }
-        _ => {
+        1 => drop_down(ui, t, ("sigma", tl!("Formula")), GROUPS[1].entries, chosen),
+        2 => drop_down(ui, t, ("tag", tl!("References")), GROUPS[2].entries, chosen),
+        3 => tool(ui, t, ("link", tl!("Link"), "edit.link"), chosen),
+        4 => {
             tool(ui, t, ("image", tl!("Figure"), "edit.figure"), chosen);
             tool(ui, t, ("table", tl!("Table"), "edit.table"), chosen);
+        }
+        _ => {
             tool(ui, t, ("list", cmd("edit.itemize", tn!("Bulleted List")), "edit.itemize"), chosen);
             tool(ui, t, ("list-ordered", cmd("edit.enumerate", tn!("Numbered List")), "edit.enumerate"), chosen);
         }
@@ -772,20 +824,26 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         let on = path.as_ref().is_some_and(|p| app.editor.formatted.shows(p));
         let only_tex = tl!("Only LaTeX files (.tex) have a formatted view.");
         let options = [(tl!("Source"), None), (tl!("Formatted"), if can { None } else { Some(only_tex) })];
-        if let (Some(choice), Some(path)) = (widgets::segmented(ui, &t, "mode", &options, usize::from(on)), path.as_ref()) {
+        // What the right end needs: Find and the More menu, and the margin after them.
+        let right_end = 2.0 * (t.toolbar_height - 2.0 * t.unit + 2.0) + 3.0 * t.unit;
+        // What the labels give way to: the first groups keep the mode switch's labels, and the
+        // Suggest switch's, from going icon-only (each still named and explained on hover).
+        let room = ui.max_rect().right() - ui.cursor().left() - right_end - t.unit;
+        let labels = [options[0].0, options[1].0];
+        let suggest_small = crate::suggest::switch_width(ui, &t, true);
+        let mode_compact = room - widgets::segmented_width(ui, &t, &labels, false) - suggest_small < groups_width(&t, WITH_MODE_LABELS);
+        let mode_width = widgets::segmented_width(ui, &t, &labels, mode_compact);
+        let suggest_compact = room - mode_width - crate::suggest::switch_width(ui, &t, false) < groups_width(&t, WITH_SUGGEST_LABEL);
+        let mode_icons = mode_compact.then_some(&["code", "type"][..]);
+        if let (Some(choice), Some(path)) = (widgets::segmented_with(ui, &t, "mode", &options, usize::from(on), mode_icons), path.as_ref()) {
             app.editor.formatted.set(path, choice == 1);
             if choice == 0 {
                 app.editor.focus = true;
             }
         }
-        // What the right end needs: Find and the More menu.
-        let right_end = 2.0 * t.toolbar_height + 4.0 * t.unit;
         if !on {
             ui.add_space(t.unit);
-            // Its label only where it fits with the right end: long words (German, French) leave
-            // the pencil, still named and explained on hover.
-            let room = ui.max_rect().right() - ui.cursor().left() - right_end;
-            if crate::suggest::switch(app, ui, room) {
+            if crate::suggest::switch(app, ui, suggest_compact) {
                 chosen = Some("edit.suggest_mode");
             }
         }
@@ -796,8 +854,9 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         // Room for Find and the More menu on the right.
         let mut room = ui.max_rect().right() - ui.cursor().left() - right_end;
         let mut hidden: Vec<usize> = Vec::new();
-        for (i, (width, _)) in GROUPS.iter().enumerate() {
-            if hidden.is_empty() && *width <= room {
+        for (i, g) in GROUPS.iter().enumerate() {
+            let width = group_width(&t, g);
+            if hidden.is_empty() && width <= room {
                 group(ui, &t, i, &mut chosen);
                 room -= width;
             } else {
@@ -812,10 +871,10 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
                 egui::Popup::menu(&more).show(|ui| {
                     ui.set_min_width(180.0);
                     for (n, i) in hidden.iter().enumerate() {
-                        if n > 0 {
+                        if n > 0 && GROUPS[*i].divider {
                             ui.separator();
                         }
-                        for (label, id) in GROUPS[*i].1 {
+                        for (label, id) in GROUPS[*i].entries {
                             if menu_entry(ui, cmd(id, label)) {
                                 chosen = Some(id);
                             }

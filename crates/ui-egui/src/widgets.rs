@@ -128,9 +128,23 @@ pub fn rail_button(ui: &mut Ui, t: &Tokens, icon: &str, label: &str, active: Opt
 
 /// A segmented switch. `options` are (label, disabled reason); returns the index clicked.
 pub fn segmented(ui: &mut Ui, t: &Tokens, id: &str, options: &[(&str, Option<&str>)], selected: usize) -> Option<usize> {
+    segmented_with(ui, t, id, options, selected, None)
+}
+
+/// The width of a [`segmented`] switch of `labels`, or with `compact`, of as many icons.
+pub fn segmented_width(ui: &Ui, t: &Tokens, labels: &[&str], compact: bool) -> f32 {
+    labels.iter().map(|l| segment_width(ui, t, l, compact)).sum::<f32>() + 4.0
+}
+
+fn segment_width(ui: &Ui, t: &Tokens, label: &str, compact: bool) -> f32 {
+    if compact { t.icon_size + 3.0 * t.unit } else { ui.painter().layout_no_wrap(label.to_owned(), t.small(), t.text).size().x + 5.0 * t.unit }
+}
+
+/// A [`segmented`] switch that shows `icons` (one an option) instead of its labels, for a row
+/// too narrow for them: each keeps its label as its name and on hover.
+pub fn segmented_with(ui: &mut Ui, t: &Tokens, id: &str, options: &[(&str, Option<&str>)], selected: usize, icons: Option<&[&str]>) -> Option<usize> {
     let height = t.toolbar_height - 3.0 * t.unit;
-    let widths: Vec<f32> =
-        options.iter().map(|(label, _)| ui.painter().layout_no_wrap((*label).to_owned(), t.small(), t.text).size().x + 5.0 * t.unit).collect();
+    let widths: Vec<f32> = options.iter().map(|(label, _)| segment_width(ui, t, label, icons.is_some())).collect();
     let total = vec2(widths.iter().sum::<f32>() + 4.0, height);
     let (outer, _) = ui.allocate_exact_size(total, Sense::hover());
     ui.painter().rect_filled(outer, t.corner(), blend(t.frame, t.hover));
@@ -153,11 +167,17 @@ pub fn segmented(ui: &mut Ui, t: &Tokens, id: &str, options: &[(&str, Option<&st
         } else {
             t.text_muted
         };
-        let font = if i == selected { egui::FontId::new(t.small_size, crate::fonts::semibold()) } else { t.small() };
-        ui.painter().text(rect.center(), Align2::CENTER_CENTER, *label, font, color);
+        match icons.and_then(|list| list.get(i)) {
+            Some(icon) => icons::paint(ui, rect, icon, t.icon_size, color),
+            None => {
+                let font = if i == selected { egui::FontId::new(t.small_size, crate::fonts::semibold()) } else { t.small() };
+                ui.painter().text(rect.center(), Align2::CENTER_CENTER, *label, font, color);
+            }
+        }
         focus_ring(ui, t, &r, rect, t.corner());
         let r = match disabled {
             Some(reason) => r.on_hover_text(*reason),
+            None if icons.is_some() => r.on_hover_text(*label),
             None => r,
         };
         if r.clicked() {
