@@ -5,6 +5,42 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.16.0 (2026-11-26)
+
+Fixes from testing (#16–#26), shorter menus with a list of all commands, a toolbar that fits,
+and one outline for the whole document.
+
+### In the browser and on a phone
+
+- Typing works in the formatted view after clicking in it (#24).
+- On a phone, a finger's drag scrolls the text, the formatted view, the PDF and the file list; a
+  long press selects (#26).
+- A first build fetches what its packages need before it starts, and says so ("Downloading LaTeX
+  packages: 12 of 34 files…"), instead of stopping and starting again for each file (#16).
+- The PDF can be downloaded (File › Download PDF, and a button beside Export) (#22).
+- Unsaved changes are kept in this browser, and the question says so (#23).
+- Print PDFs work there: the colour profiles are in the browser's TeX files (#20).
+
+### Menus and commands
+
+- Shorter menus, each command in one place (#25), and Edit › All Commands… (Ctrl+Shift+P): every
+  command, searched as you type, with its shortcut.
+- The source toolbar fits beside the PDF: formulas and references each in one drop-down, and the
+  citation and cross-reference pickers in the source too.
+- The Outline shows the whole document, through its included files, numbered as in the PDF, the
+  shown file's part marked.
+
+### Building and the PDF
+
+- Hide Like This on a warning hides that kind of message, in this project or in all of them (#21).
+- Ctrl and the wheel (or a pinch) zoom the PDF around the pointer (#19); the middle button drags
+  it (#18).
+- The spelling popup is small: a few spellings and Add to Dictionary (#17).
+
+### Behind the scenes
+
+- The interface tests no longer fail now and then (tests that started a build by themselves).
+
 ## 0.15.0 (2026-11-26)
 
 The formatted view reads like the PDF and edits more of the document; first steps for new users;

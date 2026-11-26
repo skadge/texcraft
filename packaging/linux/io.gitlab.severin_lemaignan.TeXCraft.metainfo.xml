@@ -41,6 +41,19 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.16.0" date="2026-11-26" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.16.0</url>
+      <description>
+        <p>Fixes from testing, shorter menus with a list of all commands, a toolbar that fits, and one outline for the whole document.</p>
+        <ul>
+          <li>Shorter menus, and every command searchable with Ctrl+Shift+P</li>
+          <li>The whole document in the Outline</li>
+          <li>Zooming and dragging the PDF with the mouse</li>
+          <li>Hiding a kind of warning</li>
+          <li>Many fixes for the browser and phones</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.15.0" date="2026-11-26" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.15.0</url>
       <description>
