@@ -5,6 +5,35 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.20.0 (2026-11-27)
+
+The browser downloads the LaTeX packages it lacks, and many fixes to the formatted view.
+
+### Packages in the browser
+
+- A package the browser's TeX tree lacks is downloaded during the build, once, from a copy of
+  TeX Live of the tree's year (texlive.skadge.org by default), and kept across visits and
+  TeXCraft updates. The status line names the package being downloaded, the build log lists what
+  was downloaded, and says why when the server refuses or can't be reached.
+- Settings › Building › Package server: TeXCraft's server, another server, or Off.
+
+### Formatted view
+
+Found by a new test that edits real documents at random and checks each step:
+
+- The caret stays on its line after a trailing space, `~`, `^` or `\`, and in tables with a
+  caption above and a label below.
+- Text typed after a list, a heading's label or a figure's caption goes into it, not after its
+  `\end{…}` or `\label` (which turned a figure into source).
+- Commands no longer run into the next word (`\itemword`, `\dotsword`), and deleting a styled
+  word, a heading's text or whole items leaves no empty `\textbf{}`, `\section{}` or `\item`.
+- A paste goes where it lands: a list is no longer pasted into a heading.
+- A new table or equation goes where the caret is (not into the preamble, after the document
+  or after the list).
+- Empty paragraphs, theorems, quotes, titles and captions keep a line to type on.
+- Merged cells, a typed no-break space, Shift+Tab on a described item and Backspace on `~`
+  behave as they should.
+
 ## 0.19.1 (2026-11-27)
 
 0.19.0's Linux packages, a search in Settings, updates from within TeXCraft, and fixes. 0.19.0's
