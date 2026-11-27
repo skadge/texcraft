@@ -13,6 +13,8 @@ workspace = true
 [features]
 default = ["retex", "grammar"]
 retex = ["texcraft-compile/retex"]
+# TeX Live packages built in (texcraft-compile's `bundled`), for the desktop apps.
+bundled = ["retex", "texcraft-compile/bundled"]
 # Offline English grammar with Harper (docs/ROADMAP.md, E12): megabytes and many crates, so
 # the browser build leaves it out.
 grammar = ["dep:harper-core", "dep:getrandom03"]
