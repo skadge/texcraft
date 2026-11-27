@@ -621,7 +621,8 @@ fn link(app: &mut App, f: &Frame<'_>, url: &str, text: &str) {
         return;
     }
     match f.doc.pieces(f.text, a, h).as_slice() {
-        [one] => {
+        // Text, not a chip or a formula (a label made a link breaks its float).
+        [one] if f.doc.lines.get(a.min(h).line).and_then(|l| l.atom_after(a.min(h).at)).as_ref() != Some(one) => {
             let open = format!("\\href{{{url}}}{{");
             let changes = [Change { range: one.start..one.start, text: open.clone() }, Change { range: one.end..one.end, text: "}".to_owned() }];
             let caret = one.end + open.len() + 1;
@@ -826,7 +827,7 @@ fn delete(app: &mut App, f: &Frame<'_>, back: bool) {
         // An empty style the caret stands in (Bold pressed, nothing typed) goes too.
         let mut changes = vec![Change { range: r.clone(), text: String::new() }];
         let mut caret = r.start;
-        if let Some(empty) = edit::empty_style_at(f.text, caret_byte(app)).filter(|e| e.end <= r.start || r.end <= e.start) {
+        if let Some(empty) = edit::empty_styles_at(f.text, caret_byte(app)).filter(|e| e.end <= r.start || r.end <= e.start) {
             if !back {
                 caret = empty.start;
             }

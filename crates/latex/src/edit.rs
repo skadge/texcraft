@@ -927,13 +927,25 @@ pub fn empty_style_at(text: &str, at: usize) -> Option<Range<usize>> {
 /// `\section{|}`, `\section{\textbf{|}}` whole): what a block inserted from there does not
 /// leave behind.
 pub fn empty_markup_at(text: &str, at: usize) -> Option<Range<usize>> {
+    empty_wrappers_at(text, at, true)
+}
+
+/// The empty styles the caret at source offset `at` stands in, nested ones whole
+/// (`\textbf{\textit{|}}`, Bold then Italic pressed): Backspace and Delete take them with what
+/// they delete.
+pub fn empty_styles_at(text: &str, at: usize) -> Option<Range<usize>> {
+    empty_wrappers_at(text, at, false)
+}
+
+/// The outermost of the empty styles (and headings, with `headings`) nested around `at`.
+fn empty_wrappers_at(text: &str, at: usize, headings: bool) -> Option<Range<usize>> {
     let tree = tree::parse(text);
     let mut frames = Vec::new();
     path(&tree, at, &mut frames);
     let mut found: Option<Range<usize>> = None;
     for f in frames.iter().rev() {
         let Frame::Command { node, name, arg } = f else { break };
-        let wraps = view::styled(name, Style::default()).is_some() || view::heading_level(name).is_some();
+        let wraps = view::styled(name, Style::default()).is_some() || (headings && view::heading_level(name).is_some());
         let inner = trimmed(text, arg.inner.clone());
         if !wraps || !arg.closed || !(inner.is_empty() || found.as_ref() == Some(&inner)) {
             break;
@@ -1338,7 +1350,7 @@ pub fn set_heading(text: &str, at: usize, name: &str) -> Option<Vec<Change>> {
     let para = trimmed(text, paragraph_at(&blocks, at)?.range.clone());
     // A paragraph ending in a lone backslash would escape the closing brace; one that is a
     // command's argument (a letter's opening) is not body text.
-    if ends_in_backslash(text, para.end) || in_argument(&tree, para.start) {
+    if ends_in_backslash(text, para.end) || in_argument(&tree, para.start) || !text.get(para.clone()).is_some_and(braces_balanced) {
         return None;
     }
     Some(vec![change(para.start..para.start, format!("\\{name}{{")), change(para.end..para.end, "}")])
@@ -1445,6 +1457,31 @@ fn list_changes(text: &str, at: usize, name: &str) -> Option<Vec<Change>> {
 fn ends_in_backslash(text: &str, end: usize) -> bool {
     let before = text.get(..end).unwrap_or_default();
     (before.len() - before.trim_end_matches('\\').len()) % 2 == 1
+}
+
+/// Whether the braces of `s` (not escaped ones) close as they open: wrapped in a command's
+/// braces, it keeps them whole (a `$}$` would close the heading made of it).
+fn braces_balanced(s: &str) -> bool {
+    let mut depth = 0i64;
+    let mut slashes = 0;
+    for c in s.chars() {
+        match c {
+            '\\' => {
+                slashes += 1;
+                continue;
+            }
+            '{' if slashes % 2 == 0 => depth += 1,
+            '}' if slashes % 2 == 0 => {
+                depth -= 1;
+                if depth < 0 {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+        slashes = 0;
+    }
+    depth == 0
 }
 
 /// Whether source offset `at` is in a command's argument.

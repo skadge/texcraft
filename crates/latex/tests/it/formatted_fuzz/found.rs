@@ -472,3 +472,23 @@ fn a_displayed_formula_is_not_put_in_a_heading() {
     let e = after("\\section{}", &[Op::Math("display", "x".to_owned())]);
     assert_eq!(e.text, "\\section{}", "the formula went into the heading");
 }
+
+#[test]
+fn backspace_in_nested_empty_styles_takes_them_all() {
+    let e = after("ab.", &[Op::End { shift: false }, Op::Bar("bold"), Op::Bar("italic"), Op::Backspace]);
+    assert_eq!(e.text, "ab");
+}
+
+#[test]
+fn a_paragraph_whose_braces_do_not_close_is_not_made_a_heading() {
+    let e = after("$}$", &[Op::Bar("heading_1")]);
+    assert_eq!(e.text, "$}$");
+}
+
+#[test]
+fn a_label_chip_alone_is_not_made_a_link() {
+    let text = "\\begin{figure}\n\\caption{Cap}\n\\label{fig:a}\n\\end{figure}";
+    let e =
+        after(text, &[Op::End { shift: false }, Op::Left { shift: true, word: false }, Op::Link("https://example.org".to_owned(), String::new())]);
+    assert!(!e.text.contains("\\href"), "{:?}", e.text);
+}

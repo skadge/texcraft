@@ -393,7 +393,9 @@ fn expected_view(before: &Before<'_>, op: &Op, done: &Done, after: &Shown) -> Re
         let typed_at = doc.locate(&e.text, edit::typing_point(&e.text, e.head), e.hint).unwrap_or(h);
         let (lo, hi) = done.selection_deleted.unwrap_or((typed_at, typed_at));
         let strict = lo.line == hi.line && !changes_typography(s) && matches!(op, Op::Type(_)) && done.steps == 1;
-        let at = edit::insertion(&before.editor.text, &doc, (lo, hi)).filter(|_| lo != hi).unwrap_or(before.editor.head);
+        let at = edit::insertion(&before.editor.text, &doc, (lo, hi))
+            .filter(|_| lo != hi)
+            .unwrap_or_else(|| edit::typing_point(&before.editor.text, before.editor.head));
         let listed = edit::paste(&before.editor.text, at, s).contains("\\item ");
         let s = if matches!(op, Op::Paste(_)) && listed { pasted(s) } else { s.clone() };
         Some((edited(before.shown, (lo.line, lo.at), (hi.line, hi.at), &s), strict))
