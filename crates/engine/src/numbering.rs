@@ -8,7 +8,7 @@ use std::sync::Arc;
 use texcraft_latex::auxfile::{self, Aux, CiteStyle, Missing};
 use texcraft_latex::document::{self, Entry};
 use texcraft_latex::numbers::{self, Numbers};
-use texcraft_latex::view::TheoremKind;
+use texcraft_latex::view::Declared;
 use texcraft_project::ProjectPath;
 
 #[derive(Default)]
@@ -35,8 +35,9 @@ impl State {
 #[derive(Debug, Clone, Default)]
 pub struct Numbered {
     pub numbers: Numbers,
-    /// The theorem-like environments the main file declares, for the view of each file.
-    pub theorems: Vec<TheoremKind>,
+    /// What the main file declares for the view of each file: its theorem-like environments, its
+    /// macros, the names its class and language print.
+    pub declared: Arc<Declared>,
     pub cite_style: Option<CiteStyle>,
     /// The main file, from which includes are found.
     pub main: Option<ProjectPath>,
@@ -62,7 +63,7 @@ impl crate::Session {
         let main_text = main.as_ref().and_then(|m| project.text(m).ok()).unwrap_or_default();
         let numbered = Numbered {
             numbers: main.as_ref().map(|m| numbers::number(m.as_str(), &read, &exists, aux)).unwrap_or_default(),
-            theorems: numbers::declared(main_text),
+            declared: Arc::new(Declared::of(main_text)),
             cite_style: main.as_ref().map(|_| CiteStyle::of(main_text)),
             main,
         };
@@ -116,7 +117,7 @@ pub(crate) fn report(s: &mut crate::Session, path: &ProjectPath) -> crate::Resul
     let numbered = s.numbered();
     let text: Arc<str> = Arc::from(s.project().text(path).map_err(|e| e.to_string())?);
     let line_of = |byte: usize| text.get(..byte).map_or(0, |t| t.matches('\n').count()) + 1;
-    let blocks = view::view_with(&text, &numbered.theorems);
+    let blocks = view::view_with(&text, &numbered.declared.theorems);
     let mut chips = Vec::new();
     let mut parts = Vec::new();
     view::walk(&blocks, &mut |b| {

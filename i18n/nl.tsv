@@ -2587,3 +2587,12 @@ unit	{n} MB	{n} MB
 	Shown on slides {spec} only (\\{command}).	Alleen getoond op dia's {spec} (\\{command}).
 	\\{command}, a command this document defines: its arguments are edited here as text.	\\{command}, een opdracht die dit document definieert: de argumenten worden hier als tekst bewerkt.
 	A bibliography entry: cite it with \\cite{key}.	Een bibliografie-item: citeer het met \\cite{key}.
+	Slide {n}	Dia {n}
+	From slide {n}	Vanaf dia {n}
+	Up to slide {n}	Tot en met dia {n}
+	Slides {a} to {b}	Dia's {a} tot en met {b}
+	In turn	Om de beurt
+	On its step only	Alleen bij zijn stap
+	{slides}: alert	{slides}: uitgelicht
+	{slides}: shown	{slides}: zichtbaar
+	{slides}: hidden	{slides}: verborgen

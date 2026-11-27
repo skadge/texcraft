@@ -48,9 +48,11 @@ fn a_space_typed_at_a_paragraphs_end_keeps_the_caret_in_that_paragraph() {
 
 #[test]
 fn bold_pressed_with_no_word_at_a_lines_end_keeps_the_caret_on_that_line() {
-    let e = after("See\\footnote{x}\n\nNext.", &[Op::End { shift: false }, Op::Bar("bold")]);
-    assert!(e.text.contains("\\footnote{x}\\textbf{}"), "{:?}", e.text);
+    let mut e = after("See\\footnote{x}\n\nNext.", &[Op::End { shift: false }, Op::Bar("bold")]);
     assert!(before_caret(&e).starts_with("See"), "the caret is not on the line it is typing in: {:?}", before_caret(&e));
+    typed(&mut e, "y");
+    assert!(e.text.contains("\\footnote{x}\\textbf{y}"), "{:?}", e.text);
+    assert!(before_caret(&e).starts_with("See"), "the caret is not on the line it typed in: {:?}", before_caret(&e));
 }
 
 #[test]
@@ -85,7 +87,7 @@ fn text_put_just_after_a_control_word_is_kept_apart_from_its_name() {
     let e = after("\\begin{itemize}\\item\\item x\\end{itemize}", &[Op::Paste("word".to_owned())]);
     assert!(e.text.contains("\\item word"), "{:?}", e.text);
     // A bold word unbolded right after `\item`.
-    let e = after("\\begin{itemize}\\item\\textbf{o}\\end{itemize}", &[Op::Bar("bold")]);
+    let e = after("\\begin{itemize}\\item\\textbf{o}\\end{itemize}", &[Op::DoubleClick(0, 0), Op::Bar("bold")]);
     assert_eq!(e.text, "\\begin{itemize}\\item o\\end{itemize}");
     // Three dots typed before a word.
     let e = after("word", &[Op::Type(".".to_owned()), Op::Type(".".to_owned()), Op::Type(".".to_owned())]);
@@ -520,4 +522,97 @@ fn an_empty_author_or_date_with_maketitle_and_the_title_block_deleted_show_no_so
     assert!(!shows_source(text), "an empty title block or its empty fields show as source");
     let e = after(text, &[Op::SelectAll, Op::Backspace]);
     assert!(!shows_source(&e.text), "what the deletion left shows as source: {:?}", e.text);
+}
+
+#[test]
+fn a_style_pressed_with_nothing_selected_waits_for_the_text_typed() {
+    let mut e = after("One two.", &[Op::End { shift: false }, Op::Bar("bold"), Op::Bar("italic")]);
+    assert_eq!(e.text, "One two.", "the source holds the styles before anything is typed");
+    assert_eq!(e.pending.len(), 2);
+    typed(&mut e, "x");
+    assert_eq!(e.text, "One two.\\textbf{\\textit{x}}");
+    typed(&mut e, "y");
+    assert_eq!(e.text, "One two.\\textbf{\\textit{xy}}", "the typing goes on in the styles");
+    // Moved away, the style pressed is dropped.
+    let mut e = after("One two.", &[Op::End { shift: false }, Op::Bar("bold"), Op::Left { shift: false, word: false }]);
+    typed(&mut e, "x");
+    assert_eq!(e.text, "One twox.");
+    // Pressed twice, nothing is pending.
+    let mut e = after("One two.", &[Op::End { shift: false }, Op::Bar("code"), Op::Bar("code")]);
+    typed(&mut e, "x");
+    assert_eq!(e.text, "One two.x");
+}
+
+#[test]
+fn a_style_pressed_at_the_end_of_styled_text_ends_it_for_the_text_typed() {
+    let mut e = after("Say \\textbf{loud}", &[Op::End { shift: false }, Op::Bar("bold")]);
+    typed(&mut e, " ");
+    typed(&mut e, "soft");
+    assert!(e.text.starts_with("Say \\textbf{loud"), "{:?}", e.text);
+    assert!(e.text.ends_with("}soft"), "the word typed is still bold: {:?}", e.text);
+    // In the middle of the styled text (after a space), the text typed goes in a gap in it.
+    let text = "\\textit{one two}";
+    let mut e = Editor::new(text);
+    e.anchor = text.find("two").unwrap_or(0);
+    e.head = e.anchor;
+    assert!(e.run(&Op::Bar("italic")).is_ok());
+    typed(&mut e, "x");
+    assert_eq!(e.text, "\\textit{one }x\\textit{two}");
+}
+
+#[test]
+fn deleting_a_styled_runs_last_letter_leaves_no_empty_style_and_the_next_letter_styled() {
+    let mut e = after("A \\textbf{b}", &[Op::End { shift: false }, Op::Backspace]);
+    assert!(!e.text.contains("textbf"), "an empty \\textbf{{}} was left: {:?}", e.text);
+    typed(&mut e, "c");
+    assert_eq!(e.text, "A \\textbf{c}");
+}
+
+#[test]
+fn select_all_from_a_frames_subtitle_into_a_nested_list_leaves_no_empty_item() {
+    let text = "\\begin{document}\\begin{frame}{}{Sub}\\begin{itemize}\\item\\begin{itemize}\\item Deep.\\end{itemize}\\end{itemize}\\end{frame}\\end{document}";
+    let e = after(text, &[Op::SelectAll, Op::Backspace]);
+    assert!(!e.text.contains("\\item"), "an item was left with nothing in it: {:?}", e.text);
+}
+
+#[test]
+fn deleting_the_first_paragraph_whole_leaves_the_caret_on_its_empty_line() {
+    let e = after("First.\n\nSecond.", &[Op::End { shift: true }, Op::Backspace]);
+    let shown = e.shown();
+    let doc = shown.doc();
+    let at = doc.locate(&e.text, e.head, None).and_then(|p| doc.source(p));
+    assert_eq!(at, Some(e.head), "the view shows the caret in the next paragraph: {:?}", e.text);
+}
+
+#[test]
+fn bold_over_a_figure_leaves_its_label_out_of_the_style() {
+    let text = "\\begin{figure}\\caption{A kiln}\\label{fig:k}\\end{figure}";
+    let e = after(text, &[Op::SelectAll, Op::Bar("bold")]);
+    assert!(e.text.contains("\\label{fig:k}\\end{figure}") && !e.text.contains("\\textbf{\\label"), "{:?}", e.text);
+}
+
+#[test]
+fn a_paragraph_of_a_no_break_space_made_a_heading_is_its_text() {
+    let e = after("\n", &[Op::Type("\u{a0}".to_owned()), Op::Bar("heading_3")]);
+    assert!(!e.text.contains("\\subsubsection{}"), "an empty heading was added after the paragraph: {:?}", e.text);
+}
+
+#[test]
+fn an_author_in_a_paragraph_made_a_list_stays_in_the_title_block() {
+    let e = after("\\begin{document}Text \\author{Ann} more.\\maketitle\\end{document}", &[Op::Bar("enumerate")]);
+    assert!(e.text.contains("\\item"), "{:?}", e.text);
+    assert!(!shows_source(&e.text), "the author became source in the list: {:?}", e.text);
+}
+
+#[test]
+fn a_letter_typed_in_a_waiting_style_and_deleted_leaves_the_command_after_it_whole() {
+    let e = after("\\begin{document}\\tableofcontents", &[Op::Bar("italic"), Op::Type("a".to_owned()), Op::Backspace]);
+    assert_eq!(e.text, "\\begin{document}\\tableofcontents", "the command after the style lost its name");
+}
+
+#[test]
+fn a_no_break_space_typed_in_a_waiting_style_is_not_styled() {
+    let e = after("\\begin{document}.\\end{document}", &[Op::Bar("bold"), Op::Type("\u{a0}".to_owned())]);
+    assert!(!e.text.contains("textbf"), "{:?}", e.text);
+    assert!(!e.pending.is_empty(), "the style no longer waits for a word");
 }

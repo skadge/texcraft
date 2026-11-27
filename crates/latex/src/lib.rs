@@ -18,6 +18,7 @@ pub mod edit;
 pub mod figure;
 pub mod fold;
 pub mod keep;
+pub mod names;
 pub mod numbers;
 pub mod passage;
 pub mod prose;

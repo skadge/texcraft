@@ -6,6 +6,7 @@ mod figure;
 mod fold;
 mod formatted_fuzz;
 mod lex;
+mod names;
 mod passage;
 mod prose;
 mod refs;

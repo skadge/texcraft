@@ -23,7 +23,7 @@ use egui::text::CCursor;
 use egui::{Rect, Sense, pos2, vec2};
 use texcraft_buffer::{EditKind, Selection, Transaction};
 use texcraft_engine::project::ProjectPath;
-use texcraft_latex::edit::{self, Change, Doc, Pos};
+use texcraft_latex::edit::{self, Change, Doc, PendingStyle, Pos};
 
 use crate::App;
 use crate::formatted::{DrawnLine, span_rects, text_id};
@@ -63,6 +63,39 @@ pub(crate) struct Editing {
     /// The lines last drawn and the buffer's version they show, while the find bar is open (it
     /// finds only what they show).
     pub shown: Option<(u64, Doc)>,
+    /// Bold, Italic or Code pressed with nothing selected: the styles the text typed next takes
+    /// (the buttons show them), while the caret and the text stay as they were then (the
+    /// buffer's version and the caret's byte).
+    pub pending_style: Vec<PendingStyle>,
+    pending_at: Option<(u64, usize)>,
+}
+
+/// The buffer's version and the caret's byte: what a pending style is kept for.
+fn caret_state(app: &App) -> (u64, usize) {
+    (app.editor.source.doc.buffer.version(), caret_byte(app))
+}
+
+/// `styles` pending for the caret and the buffer as they are now.
+fn arm(app: &mut App, styles: Vec<PendingStyle>) {
+    let now = caret_state(app);
+    let e = &mut app.editor.formatted.editing;
+    e.pending_at = (!styles.is_empty()).then_some(now);
+    e.pending_style = styles;
+}
+
+/// The styles pending, dropped once the caret moved, a selection was made or the text changed.
+pub(crate) fn pending_styles(app: &mut App) -> &[PendingStyle] {
+    let collapsed = {
+        let r = app.editor.source.doc.selection.primary();
+        r.anchor == r.head
+    };
+    let now = caret_state(app);
+    let e = &mut app.editor.formatted.editing;
+    if !collapsed || e.pending_at != Some(now) {
+        e.pending_style.clear();
+        e.pending_at = None;
+    }
+    &app.editor.formatted.editing.pending_style
 }
 
 /// The caret's source byte.
@@ -320,6 +353,13 @@ fn commit(app: &mut App, f: &Frame<'_>, changes: &[Change], after: (usize, usize
     } else {
         (changes.to_vec(), after)
     };
+    // An empty style the edit leaves the caret in goes: its style waits for the text typed next.
+    let (changes, after, emptied) = if after.0 == after.1 {
+        let (changes, caret, styles) = edit::without_emptied(f.text, changes, after.0);
+        (changes, (caret, caret), styles)
+    } else {
+        (changes, after, Vec::new())
+    };
     // Nothing joins a control word to the letters after it (`\item` and an unbolded word).
     let (changes, added) = edit::kept_apart(f.text, &changes);
     let after = (edit::kept_apart_offset(&added, after.0), edit::kept_apart_offset(&added, after.1));
@@ -349,6 +389,9 @@ fn commit(app: &mut App, f: &Frame<'_>, changes: &[Change], after: (usize, usize
     d.selection = after;
     if kind == EditKind::Other {
         d.buffer.seal();
+    }
+    if !emptied.is_empty() {
+        arm(app, emptied);
     }
     true
 }
@@ -599,6 +642,17 @@ fn insert_atom(app: &mut App, f: &Frame<'_>, source: &str) {
     let end = edit::typing_point(f.text, if a == h { caret_byte(app) } else { f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app)) });
     let after_word = f.text.get(..end).and_then(|s| s.chars().next_back()).is_some_and(char::is_alphanumeric);
     let inserted = if after_word { format!("~{source}") } else { source.to_owned() };
+    // In the styles pressed before it.
+    if a == h {
+        let pending = pending_styles(app).to_vec();
+        if !pending.is_empty()
+            && let Some(e) = edit::styled_typing(f.text, caret_byte(app), &inserted, &pending)
+        {
+            app.editor.formatted.editing.pending_style.clear();
+            commit(app, f, &e.changes, (e.caret, e.caret), EditKind::Other);
+            return;
+        }
+    }
     let caret = end + inserted.len();
     commit(app, f, &[Change { range: end..end, text: inserted }], (caret, caret), EditKind::Other);
 }
@@ -681,6 +735,21 @@ fn type_text(app: &mut App, f: &Frame<'_>, s: &str) {
     }
     let kind = if a == h { EditKind::Typing { at: f.now } } else { EditKind::Other };
     let at = caret_byte(app);
+    let pending = if a == h { pending_styles(app).to_vec() } else { Vec::new() };
+    if !pending.is_empty() {
+        if s.chars().all(char::is_whitespace) {
+            // A space is not styled (it shows nothing): the styles wait for the next word.
+            let source = edit::joined(f.text, insertion(app, f), s);
+            replace(app, f, &source, kind);
+            arm(app, pending);
+            return;
+        }
+        if let Some(e) = edit::styled_typing(f.text, at, &edit::escape(s), &pending) {
+            app.editor.formatted.editing.pending_style.clear();
+            commit(app, f, &e.changes, (e.caret, e.caret), kind);
+            return;
+        }
+    }
     // After a command shown as text (`\dots`), a letter would lengthen its name and TeX would
     // skip a space: an empty group ends it (a space, after `\item`).
     let source = edit::joined(f.text, insertion(app, f), &edit::escape(s));
@@ -972,12 +1041,12 @@ fn vertical(app: &mut App, f: &Frame<'_>, up: bool, shift: bool) {
     let Some(d) = f.lines.get(h.line) else { return };
     let caret = d.galley.pos_from_cursor(CCursor::new(h.at)).translate(d.origin.to_vec2());
     let x = *app.editor.formatted.editing.want_x.get_or_insert(caret.center().x);
-    let y = if up { caret.top() - 2.0 } else { caret.bottom() + 2.0 };
-    let inside = |d: &DrawnLine| {
-        let (Some(first), Some(last)) = (d.galley.rows.first(), d.galley.rows.last()) else { return false };
-        d.origin.y + first.min_y() <= y && y <= d.origin.y + last.max_y()
-    };
-    let to = if inside(d) {
+    // The row above or below in the same line (a wrapped paragraph, a long title), by its index:
+    // a row taller than the caret (a heading's) is left by one press too.
+    let row = row_index(&d.galley, h.at);
+    let other_row = if up { row.checked_sub(1) } else { Some(row + 1).filter(|r| *r < d.galley.rows.len()) };
+    let to = if let Some(r) = other_row.and_then(|r| d.galley.rows.get(r)) {
+        let y = d.origin.y + (r.min_y() + r.max_y()) / 2.0;
         Pos { line: h.line, at: stop_at(d, egui::pos2(x, y)) }
     } else {
         let other = match d.cell {
@@ -1055,6 +1124,19 @@ fn line_edge(app: &mut App, f: &Frame<'_>, home: bool, shift: bool, whole: bool)
     set_selection(app, f, if shift { a } else { to }, to);
 }
 
+/// The index of the galley row holding position `at`.
+fn row_index(galley: &egui::Galley, at: usize) -> usize {
+    let mut start = 0;
+    for (i, row) in galley.rows.iter().enumerate() {
+        let with_break = row.char_count_including_newline().0;
+        if at < start + with_break || i + 1 == galley.rows.len() {
+            return i;
+        }
+        start += with_break;
+    }
+    0
+}
+
 /// The first and last character positions of the galley row holding position `at`.
 fn row_bounds(galley: &egui::Galley, at: usize) -> (usize, usize) {
     let mut start = 0;
@@ -1118,8 +1200,7 @@ fn copy(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, cut: bool) {
 /// source wrapped in the command, or unwrapped when it is all in one already.
 fn style(app: &mut App, f: &Frame<'_>, name: &str) {
     let Some((a, h)) = selection(app, f) else { return };
-    // In an empty style just made (Italic pressed, nothing typed): pressed again, it goes; another
-    // goes in it, for the text to come; else the word at the caret.
+    // In an empty style of the source (`\textbf{}`): pressed again, it goes.
     let empty = edit::empty_style_at(f.text, caret_byte(app));
     if a == h
         && let Some(r) = empty.clone().filter(|r| f.text.get(r.clone()).is_some_and(|s| s.starts_with(&format!("\\{name}{{"))))
@@ -1127,15 +1208,22 @@ fn style(app: &mut App, f: &Frame<'_>, name: &str) {
         commit(app, f, &[Change { range: r.clone(), text: String::new() }], (r.start, r.start), EditKind::Other);
         return;
     }
-    let empty = empty.is_some();
-    let (a, h) = if a == h && !empty { word_at(f, h).unwrap_or((a, h)) } else { (a.min(h), a.max(h)) };
+    // Inside a word, the word; else the style waits for the text typed next.
+    let (a, h) = if a == h { word_inside(f, h).unwrap_or((a, h)) } else { (a.min(h), a.max(h)) };
     if a == h {
-        // Nothing to wrap: an empty command, and the caret in it, where typing goes (in a heading
-        // or a caption, not after its label).
-        let at = edit::typing_point(f.text, caret_byte(app));
-        let inserted = format!("\\{name}{{}}");
-        let caret = at + inserted.len() - 1;
-        commit(app, f, &[Change { range: at..at, text: inserted }], (caret, caret), EditKind::Other);
+        let here = crate::formatted_bar::here(app);
+        let styled = match name {
+            "textbf" => here.bold,
+            "texttt" => here.code,
+            _ => here.italic,
+        };
+        let mut pending = pending_styles(app).to_vec();
+        edit::press_pending(&mut pending, name, styled);
+        if !pending.is_empty() && edit::styled_typing(f.text, caret_byte(app), "x", &pending).is_none() {
+            say(app, tl!("Select all of the styled text to take its style away."));
+            return;
+        }
+        arm(app, pending);
         return;
     }
     // Each line's runs, without the breaks between paragraphs.
@@ -1172,6 +1260,16 @@ fn map_before(changes: &[Change], at: usize) -> usize {
         delta += c.text.len() as isize - (c.range.end - c.range.start) as isize;
     }
     at.saturating_add_signed(delta)
+}
+
+/// The word around caret `h` when `h` is inside it (letters on both sides), as Bold takes it.
+fn word_inside(f: &Frame<'_>, h: Pos) -> Option<(Pos, Pos)> {
+    let chars = f.chars(h.line);
+    let is_word = |i: usize| chars.get(i).is_some_and(|c| c.is_alphanumeric());
+    if h.at == 0 || !is_word(h.at) || !is_word(h.at - 1) {
+        return None;
+    }
+    word_at(f, h)
 }
 
 /// The word around caret `h`, when it is inside one.

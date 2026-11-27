@@ -134,9 +134,11 @@ fn local(before: &Before<'_>, op: &Op, done: &Done) -> Result<(), Failure> {
     // A title block stands for its `\maketitle` and the arguments of the `\title`, `\author` and
     // `\date` it shows, wherever they are.
     let extent = |b: &Block| match &b.kind {
-        BlockKind::Title { slots, .. } => {
-            let starts = slots.iter().flatten().map(|s| s.start).chain([b.range.start]);
-            let ends = slots.iter().flatten().map(|s| s.end).chain([b.range.end]);
+        // Every `\author` it shows too, not only the last (whose braces are its slot).
+        BlockKind::Title { slots, title, author, date } => {
+            let shown = || title.iter().chain(author).chain(date).map(|i| i.range.clone());
+            let starts = slots.iter().flatten().map(|s| s.start).chain(shown().map(|r| r.start)).chain([b.range.start]);
+            let ends = slots.iter().flatten().map(|s| s.end).chain(shown().map(|r| r.end)).chain([b.range.end]);
             starts.min().unwrap_or(b.range.start)..ends.max().unwrap_or(b.range.end)
         }
         _ => b.range.clone(),
@@ -206,11 +208,13 @@ fn leftovers(text: &str, caret: usize) -> Leftovers {
                 Kind::Command { name, args, .. } => {
                     let empty =
                         args.iter().rev().find(|a| !a.optional).filter(|a| text.get(a.inner.clone()).is_some_and(|s| s.trim_ascii().is_empty()));
-                    if let Some(a) = empty
-                        && !(a.inner.start <= caret && caret <= a.inner.end)
-                    {
+                    // An empty heading is a line the caret may stand in (Heading 1 pressed on
+                    // an empty line); a style pressed with nothing selected waits in the view, so
+                    // an empty one is a leftover even where the caret is.
+                    if let Some(a) = empty {
+                        let holds_caret = a.inner.start <= caret && caret <= a.inner.end;
                         if view::heading_level(name).is_some() {
-                            out.headings += 1;
+                            out.headings += usize::from(!holds_caret);
                         } else if STYLES.contains(&name.as_str()) && !followed_by_letter(text, nodes, i) {
                             out.styles += 1;
                         }
@@ -269,8 +273,10 @@ fn no_leftovers(before: &Editor, after: &Editor, enter: bool) -> Result<(), Fail
         return Ok(());
     }
     let (b, a) = (leftovers(&before.text, before.head), leftovers(&after.text, after.head));
-    // An empty item made on purpose (Enter at an item's start) and left as it was is not new.
-    let b = Leftovers { items: b.items.max(leftovers(&before.text, usize::MAX).items), ..b };
+    // An empty item or heading made on purpose (Enter at an item's start, Heading 1 on an empty
+    // line) and left as it was is not new, wherever the caret goes.
+    let anywhere = leftovers(&before.text, usize::MAX);
+    let b = Leftovers { items: b.items.max(anywhere.items), headings: b.headings.max(anywhere.headings), ..b };
     let more = |x: usize, y: usize| y > x;
     // Enter on an empty heading, as in a word processor, leaves it.
     if (more(b.items, a.items) && !enter) || more(b.lists, a.lists) || more(b.styles, a.styles) || (more(b.headings, a.headings) && !enter) {
@@ -307,8 +313,8 @@ fn sourced(line: &ViewLine) -> Vec<bool> {
 fn words(s: &str) -> String {
     let mut out = String::new();
     // An empty group after a command shown as source is the edit's (it keeps typed text apart from
-    // the command's name); a title block with no title and no author shows `\maketitle`.
-    let s = s.replace("{}", "").replace("\\maketitle", "");
+    // the command's name); a title block with no title and no author shows its chip.
+    let s = s.replace("{}", "").replace("\\maketitle", "").replace("maketitle", "");
     for c in s.chars().filter(|c| !c.is_whitespace()) {
         match c {
             '’' => out.push('\''),
@@ -419,10 +425,11 @@ fn expected_view(before: &Before<'_>, op: &Op, done: &Done, after: &Shown) -> Re
         return Ok(());
     }
     // A paste made after a deletion of structure reads where that deletion left the caret (a
-    // heading, where lines that start with a bullet or a number stay text).
+    // heading, where lines that start with a bullet or a number stay text; the body, where they
+    // make a list).
     if let (Op::Paste(s), Some((lo, hi))) = (op, done.selection_deleted)
         && done.steps > 1
-        && words(&edited(before.shown, (lo.line, lo.at), (hi.line, hi.at), s)).to_lowercase() == g
+        && [s.clone(), pasted(s)].iter().any(|s| words(&edited(before.shown, (lo.line, lo.at), (hi.line, hi.at), s)).to_lowercase() == g)
     {
         return Ok(());
     }

@@ -5,8 +5,11 @@
 //! [`InlineKind::Source`]): nothing is hidden except comments and the commands whose whole effect
 //! is shown another way (a style, a heading level, a list marker).
 
+use std::cell::RefCell;
 use std::ops::Range;
+use std::sync::Arc;
 
+use crate::names::Names;
 use crate::table::{self, Table, Unsupported};
 use crate::tree::{self, Arg, Kind, Node};
 
@@ -319,6 +322,63 @@ const PLACEHOLDERS: &[&str] = &[
 /// the specification as a chip and the argument as text.
 pub(crate) const OVERLAY_WRAPPERS: &[&str] = &["only", "uncover", "visible", "invisible", "onslide", "alert", "structure"];
 
+/// A part of an overlay specification (`3-`, `alert@3`; `3-| alert@3` has two): an action, when
+/// it names one, and the slides it is on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OverlayPart {
+    /// `alert`, `uncover`, `only`…; `None` for the command's own.
+    pub action: Option<String>,
+    pub slides: Vec<Slides>,
+}
+
+/// Slides of an overlay specification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Slides {
+    /// `3`.
+    One(u32),
+    /// `3-`.
+    From(u32),
+    /// `-3`.
+    UpTo(u32),
+    /// `2-4`.
+    Between(u32, u32),
+    /// `+-`: from the next step on.
+    FromNext,
+    /// `+`: the next step only.
+    Next,
+}
+
+/// An overlay specification without its angle brackets (`3-| alert@3`) read part by part; `None`
+/// for one the view does not read (a mode, `beamer:2`; an offset, `+(1)-`).
+pub fn overlay_parts(spec: &str) -> Option<Vec<OverlayPart>> {
+    let number = |s: &str| s.trim().parse::<u32>().ok();
+    spec.split('|')
+        .map(|part| {
+            let (action, ranges) = match part.split_once('@') {
+                Some((a, r)) => (Some(a.trim().to_owned()), r),
+                None => (None, part),
+            };
+            if action.as_ref().is_some_and(|a| a.is_empty() || !a.chars().all(|c| c.is_ascii_alphabetic())) {
+                return None;
+            }
+            let slides = ranges
+                .split(',')
+                .map(|r| match r.trim() {
+                    "+-" => Some(Slides::FromNext),
+                    "+" => Some(Slides::Next),
+                    r => match r.split_once('-') {
+                        None => number(r).map(Slides::One),
+                        Some(("", b)) => number(b).map(Slides::UpTo),
+                        Some((a, "")) => number(a).map(Slides::From),
+                        Some((a, b)) => Some(Slides::Between(number(a)?, number(b)?)),
+                    },
+                })
+                .collect::<Option<Vec<Slides>>>()?;
+            Some(OverlayPart { action, slides })
+        })
+        .collect()
+}
+
 /// The parts of a letter (the letter class) shown as paragraphs of their text.
 const LETTER_PARTS: &[&str] = &["opening", "closing", "ps", "encl", "cc"];
 
@@ -420,6 +480,66 @@ pub(crate) fn shown_as_text(text: &str, env: &str) -> bool {
     CONTAINERS.contains(&env) || theorem_kind(env, &theorems(text)).is_some()
 }
 
+/// What the main file declares that the view of a file it includes uses: its theorem-like
+/// environments, its macros (`\newcommand` in its preamble), and the names its class and language
+/// print.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Declared {
+    pub theorems: Vec<TheoremKind>,
+    pub macros: Vec<Macro>,
+    pub names: Names,
+}
+
+impl Declared {
+    /// What the main file `main` declares.
+    pub fn of(main: &str) -> Self {
+        Declared { theorems: theorems(main), macros: macros(main), names: crate::names::names(main) }
+    }
+}
+
+thread_local! {
+    /// The declarations of the file being shown and edited ([`within`]).
+    static AROUND: RefCell<Option<Arc<Declared>>> = const { RefCell::new(None) };
+}
+
+/// Runs `f` with `declared` (the main file's, [`Declared::of`]) known to the view and the edits
+/// of a file ([`view`], [`crate::edit`]), as for a file the main file includes: its macros show
+/// as text there, its names print. What the file itself declares comes first.
+pub fn within<R>(declared: Arc<Declared>, f: impl FnOnce() -> R) -> R {
+    struct Restore(Option<Arc<Declared>>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let old = self.0.take();
+            AROUND.with(|a| *a.borrow_mut() = old);
+        }
+    }
+    let _restore = Restore(AROUND.with(|a| a.borrow_mut().replace(declared)));
+    f()
+}
+
+/// The declarations [`within`] gives, if any.
+pub fn around() -> Option<Arc<Declared>> {
+    AROUND.with(|a| a.borrow().clone())
+}
+
+/// The macros known in `text`: its own, then those declared around it ([`within`]).
+pub(crate) fn known_macros(text: &str) -> Vec<Macro> {
+    let mut out = macros(text);
+    if let Some(d) = around() {
+        out.extend(d.macros.iter().filter(|m| !out.iter().any(|o| o.name == m.name)).cloned().collect::<Vec<_>>());
+    }
+    out
+}
+
+/// The names `text` prints: its own when it is a main file (it has `\documentclass`), else those
+/// declared around it ([`within`]), else English's.
+pub fn names_of(text: &str) -> Names {
+    if text.contains("\\documentclass") {
+        return crate::names::names(text);
+    }
+    around().map(|d| d.names.clone()).unwrap_or_default()
+}
+
 /// The view of `text`.
 pub fn view(text: &str) -> Vec<Block> {
     build(text, &tree::parse(text))
@@ -438,7 +558,13 @@ pub fn build(text: &str, tree: &[Node]) -> Vec<Block> {
 
 fn build_with(text: &str, tree: &[Node], declared: &[TheoremKind]) -> Vec<Block> {
     let mut known = theorems(text);
-    known.extend(declared.iter().filter(|d| !known.iter().any(|k| k.env == d.env)).cloned().collect::<Vec<_>>());
+    let around = around();
+    let others = declared.iter().chain(around.iter().flat_map(|d| d.theorems.iter()));
+    for d in others {
+        if !known.iter().any(|k| k.env == d.env) {
+            known.push(d.clone());
+        }
+    }
     let document = tree.iter().position(|n| matches!(&n.kind, Kind::Environment { name, .. } if name == "document"));
     let Some((at, Some(Node { kind: Kind::Environment { body, .. }, range }))) = document.map(|i| (i, tree.get(i))) else {
         return View::new(text, tree, &[], known).flow(tree);
@@ -470,6 +596,8 @@ struct View<'a> {
     shows_title: bool,
     /// The commands the document defines whose calls show as text.
     macros: Vec<Macro>,
+    /// What it prints (a letter's "encl:"), worked out when a letter needs it.
+    names: std::cell::OnceCell<Names>,
 }
 
 /// The last required argument.
@@ -921,7 +1049,20 @@ impl<'a> View<'a> {
         let document = |n: &&Node| matches!(&n.kind, Kind::Environment { name, .. } if name == "document");
         let preamble = top.iter().take_while(|n| !document(n) && !maketitle(n));
         let shows_title = top.iter().chain(body).any(|n| maketitle(&n));
+        // They set what it prints wherever they are before it (in a group, a list: `\author` sets
+        // it for the whole document).
+        fn nested<'n>(n: &'n Node, out: &mut Vec<&'n Node>) {
+            out.push(n);
+            match &n.kind {
+                Kind::Group { body, .. } | Kind::Environment { body, .. } => body.iter().for_each(|m| nested(m, out)),
+                _ => {}
+            }
+        }
+        let mut before = Vec::new();
         for n in preamble.chain(body.iter().take_while(|n| !maketitle(n))) {
+            nested(n, &mut before);
+        }
+        for n in before {
             if let Kind::Command { name, args, .. } = &n.kind
                 && let Some(slot) = ["title", "author", "date"].iter().position(|t| t == name)
                 && let Some(arg) = required(args)
@@ -933,8 +1074,8 @@ impl<'a> View<'a> {
                 kept.push(arg);
             }
         }
-        let macros = macros(text).into_iter().filter(Macro::shown).collect();
-        View { text, titles, theorems, shows_title, macros }
+        let macros = known_macros(text).into_iter().filter(Macro::shown).collect();
+        View { text, titles, theorems, shows_title, macros, names: std::cell::OnceCell::new() }
     }
 
     fn src(&self, range: &Range<usize>) -> &'a str {
@@ -992,8 +1133,20 @@ impl<'a> View<'a> {
                 } else if LETTER_PARTS.contains(&name.as_str())
                     && let Some(arg) = required(args).filter(|a| a.closed)
                 {
-                    // Its text, edited where it stands (in its braces).
-                    return Some(Block { kind: BlockKind::Paragraph(self.inlines(&arg.body, style)), range: arg.inner.clone() });
+                    // Its text, edited where it stands (in its braces), after the name the page
+                    // prints before it ("encl: ").
+                    let mut inlines = self.inlines(&arg.body, style);
+                    let names = || self.names.get_or_init(|| names_of(self.text));
+                    let label = match name.as_str() {
+                        "encl" => Some(&names().enclosure),
+                        "cc" => Some(&names().copies),
+                        _ => None,
+                    };
+                    if let Some(label) = label {
+                        let at = arg.inner.start;
+                        inlines.insert(0, text_inline(&format!("{label}: "), style, at..at));
+                    }
+                    return Some(Block { kind: BlockKind::Paragraph(inlines), range: arg.inner.clone() });
                 } else {
                     let level = heading_level(name)?;
                     let arg = required(args)?;

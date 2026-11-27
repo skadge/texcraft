@@ -338,3 +338,52 @@ fn on_a_phone_bold_and_italic_stay_on_the_toolbar_and_the_paragraph_styles_go_to
     h.run();
     assert!(h.query_by_label_contains("Heading 1").is_some(), "the paragraph styles are not in the More menu");
 }
+
+#[test]
+fn a_style_pressed_with_nothing_selected_shows_pressed_and_waits_for_the_text_typed() {
+    let original = "Some words here.\n";
+    let mut h = formatted(original, &[]);
+    key(&mut h, egui::Modifiers::NONE, egui::Key::End);
+    h.get_by_role_and_label(Role::Button, "Bold").click();
+    h.run();
+    h.run();
+    assert_eq!(text(&mut h), original, "the source holds a style before anything is typed");
+    assert!(pressed(&h, "Bold"), "Bold pressed with nothing selected is not shown pressed");
+    h.event(egui::Event::Text(" New".to_owned()));
+    h.run();
+    h.run();
+    assert!(text(&mut h).contains("here. \\textbf{New}"), "{:?}", text(&mut h));
+    assert!(pressed(&h, "Bold"));
+    // Pressed again at the bold text's end: what is typed next is not bold.
+    h.get_by_role_and_label(Role::Button, "Bold").click();
+    h.run();
+    h.run();
+    assert!(!pressed(&h, "Bold"), "Bold pressed off is still shown pressed");
+    h.event(egui::Event::Text("er".to_owned()));
+    h.run();
+    h.run();
+    assert!(text(&mut h).contains("\\textbf{New}er"), "{:?}", text(&mut h));
+    // A style pressed, then the caret moved: it is no longer pending.
+    h.get_by_role_and_label(Role::Button, "Italic").click();
+    h.run();
+    h.run();
+    assert!(pressed(&h, "Italic"));
+    key(&mut h, egui::Modifiers::NONE, egui::Key::ArrowLeft);
+    assert!(!pressed(&h, "Italic"), "a style pressed stays pending after the caret moved");
+}
+
+#[test]
+fn down_goes_through_a_wrapped_title_to_the_lines_after_it() {
+    let title = "How Many Times Can You Fold a Sheet of Paper in Half Before It Refuses to Bend Again, and Why Does It Stop";
+    let original = format!("\\title{{{title}}}\n\\author{{Ann}}\n\\begin{{document}}\n\\maketitle\n\nBody.\n\\end{{document}}\n");
+    let mut h = formatted(&original, &[]);
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::Home);
+    for _ in 0..6 {
+        key(&mut h, egui::Modifiers::NONE, egui::Key::ArrowDown);
+    }
+    h.event(egui::Event::Text("x".to_owned()));
+    h.run();
+    h.run();
+    let after = text(&mut h);
+    assert!(after.contains(&format!("\\title{{{title}}}")), "Down stayed in the title: {after:?}");
+}

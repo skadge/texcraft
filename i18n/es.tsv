@@ -2587,3 +2587,12 @@ unit	{n} MB	{n} MB
 	Shown on slides {spec} only (\\{command}).	Solo se muestra en las diapositivas {spec} (\\{command}).
 	\\{command}, a command this document defines: its arguments are edited here as text.	\\{command}, una orden que define este documento: sus argumentos se editan aquí como texto.
 	A bibliography entry: cite it with \\cite{key}.	Una entrada de la bibliografía: cítela con \\cite{key}.
+	Slide {n}	Diapositiva {n}
+	From slide {n}	Desde la diapositiva {n}
+	Up to slide {n}	Hasta la diapositiva {n}
+	Slides {a} to {b}	Diapositivas {a} a {b}
+	In turn	Por turnos
+	On its step only	Solo en su paso
+	{slides}: alert	{slides}: resaltado
+	{slides}: shown	{slides}: visible
+	{slides}: hidden	{slides}: oculto

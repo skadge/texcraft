@@ -2587,3 +2587,12 @@ unit	{n} MB	{n} MB
 	Shown on slides {spec} only (\\{command}).	Nur auf den Folien {spec} gezeigt (\\{command}).
 	\\{command}, a command this document defines: its arguments are edited here as text.	\\{command}, ein Befehl, den dieses Dokument definiert: seine Argumente werden hier als Text bearbeitet.
 	A bibliography entry: cite it with \\cite{key}.	Ein Literatureintrag: zitieren Sie ihn mit \\cite{key}.
+	Slide {n}	Folie {n}
+	From slide {n}	Ab Folie {n}
+	Up to slide {n}	Bis Folie {n}
+	Slides {a} to {b}	Folien {a} bis {b}
+	In turn	Nacheinander
+	On its step only	Nur in seinem Schritt
+	{slides}: alert	{slides}: hervorgehoben
+	{slides}: shown	{slides}: sichtbar
+	{slides}: hidden	{slides}: verborgen
