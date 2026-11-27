@@ -5,6 +5,35 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.22.0 (2026-11-27)
+
+Missing packages on the desktop asked about once, and more of the formatted view.
+
+### Missing packages on the desktop
+
+- Settings › Building › Missing packages: Download automatically (from TeX Live's own repository
+  for the year of your TeX Live), Install them myself (the build says which package and how), or
+  Don't download. The first time a package is missing, TeXCraft asks, keeps the answer, and says
+  where to change it. Before, the desktop downloaded without asking.
+- A build that stopped on a missing package says so in the status bar ("Failed: epigraph is not
+  installed"), instead of "Failed with 0 errors".
+
+### Formatted view
+
+- Bold, Italic or Code pressed with nothing selected waits for the text you type, instead of
+  leaving an empty `\textbf{}` in the source.
+- Slide overlays read in words ("From slide 3"); a letter shows "encl:" and "cc:"; the
+  bibliography is headed as the class prints it; the contents' names and `\today` follow the
+  document's language.
+- Commands defined in the main file work in its included files.
+- Up and Down leave a title or heading that wraps; Select All across a slide's subtitle and a
+  list, a label inside bold, and more fixed.
+
+### Web
+
+- A page opened before an update says TeXCraft was updated and to reload, instead of failing
+  every build; the site keeps the previous version's engine for pages already open.
+
 ## 0.21.1 (2026-11-27)
 
 ### Fixes

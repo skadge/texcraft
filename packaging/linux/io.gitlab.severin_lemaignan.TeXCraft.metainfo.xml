@@ -41,6 +41,17 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.22.0" date="2026-11-27" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.22.0</url>
+      <description>
+        <p>Missing packages asked about once, and more of the formatted view.</p>
+        <ul>
+          <li>A setting for missing packages: download, install yourself, or neither</li>
+          <li>Styles pressed with nothing selected wait for the text typed</li>
+          <li>Slides, letters and bibliographies read as the page prints them</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.21.1" date="2026-11-27" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.21.1</url>
       <description>
