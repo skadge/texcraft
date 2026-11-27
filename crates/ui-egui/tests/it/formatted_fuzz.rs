@@ -122,7 +122,9 @@ fn formatted(main: &str) -> Harness<'static, App> {
     assert!(s.execute("file.write", &json!({"path": "main.tex", "text": main})).is_ok());
     assert!(s.execute("file.open", &json!({"path": "main.tex"})).is_ok());
     let app = crate::support::app(s);
-    let mut h = Harness::builder().with_size(SIZE).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    // A character no font has (中 without craft-fonts, as on CI) is drawn as a box, as in the app:
+    // this test checks editing, not which fonts are installed.
+    let mut h = Harness::builder().with_size(SIZE).allow_missing_glyphs().build_ui_state(|ui, app: &mut App| app.frame(ui), app);
     h.run();
     h.get_by_label("Formatted").click();
     h.run();
