@@ -5,7 +5,11 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
-## 0.20.0 (2026-11-27)
+## 0.20.1 (2026-11-27)
+
+0.20.0's changes, below: 0.20.0's release stopped at a test, so it was not published.
+
+## 0.20.0 (2026-11-27, not published)
 
 The browser downloads the LaTeX packages it lacks, and many fixes to the formatted view.
 

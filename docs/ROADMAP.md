@@ -1,6 +1,6 @@
 # TeXCraft roadmap
 
-**Last updated:** 2026-11-26 · **Current release:** 0.20.0
+**Last updated:** 2026-11-26 · **Current release:** 0.20.1
 
 TeXCraft is a LaTeX editor for the desktop and the browser: a project of files, a source editor and
 the PDF side by side, rebuilt as you type by [retex](https://gitlab.com/severin-lemaignan/retex).
@@ -100,7 +100,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | W5 | ✅ 0.4.0 | Projects in the browser | Saved by name, listed on the start page, with their comments; a warning before leaving with unsaved changes. |
 | W6 | ✅ 0.4.0 | Templates in the browser | Served with the browser version; a template makes a named project. |
 | W7 | ✅ 0.4.0 | Whole projects and draft images | Files outside the main document's folder are found; draft images work. |
-| W8 | ✅ 0.20.0 | Missing packages | A package the browser's TeX tree lacks is downloaded during the build, once, from a copy of TeX Live of the tree's year; the log lists what was downloaded, and why not when the server refuses (Settings › Building › Package server; Off). |
+| W8 | ✅ 0.20.1 | Missing packages | A package the browser's TeX tree lacks is downloaded during the build, once, from a copy of TeX Live of the tree's year; the log lists what was downloaded, and why not when the server refuses (Settings › Building › Package server; Off). |
 | W9 | ✅ 0.5.0 | Faster first builds | A read list per project: the TeX files its builds read are kept, and fetched together before its first build of a visit, so the build no longer stops for each package beyond a plain article's. ✅ 0.16.0: a project's first build ever fetches together what its class and packages read (the tree's list for each), and says so ("Downloading LaTeX packages: 12 of 34 files…") instead of naming the same files again at each stop (#16). |
 | W10 | ✅ 0.5.0 | Safe updates | The engine's files are named after their contents at each build (the page names the worker's), and the TeX tree's files carry its index's version, so a browser never keeps an old engine or mixes trees after an update. |
 | W11 | ⬜ | Cloud storage and embedding | Opening and saving to cloud storage; TeXCraft embedded in another page. |

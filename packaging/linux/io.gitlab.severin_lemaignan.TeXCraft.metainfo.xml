@@ -41,8 +41,8 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.20.0" date="2026-11-27" type="development">
-      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.20.0</url>
+    <release version="0.20.1" date="2026-11-27" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.20.1</url>
       <description>
         <p>The browser downloads the LaTeX packages it lacks, and many fixes to the formatted view.</p>
         <ul>
