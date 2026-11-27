@@ -643,7 +643,14 @@ impl Engine {
         post("line", id, &[("text", "{\"type\":\"progress\",\"note\":\"loading the typesetting engine\"}".into())], &[]);
         log::info!("loading retex.wasm and the tree's index");
         let retex = retex_url();
-        let wasm = fetch_bytes(&retex).await?;
+        // Gone from the site: the site was updated since this page was loaded, and its engine with it.
+        let wasm = fetch_bytes(&retex).await.map_err(|e| {
+            if e.ends_with("HTTP 404") {
+                "TeXCraft has been updated since this page was opened: reload the page to use the new version.".to_owned()
+            } else {
+                e
+            }
+        })?;
         let module = JsFuture::from(WebAssembly::compile(&Uint8Array::from(wasm.as_slice()).into())).await.map_err(|e| format!("{retex}: {e:?}"))?;
         let index = String::from_utf8(fetch_fresh(&format!("{TREE_SITE}tree/index.txt")).await?).map_err(|_| "tree/index.txt is not UTF-8")?;
         self.web.fetched.borrow_mut().version = format!("?v={:016x}", fnv(index.as_bytes()));
