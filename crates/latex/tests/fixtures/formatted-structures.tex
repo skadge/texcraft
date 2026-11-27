@@ -1,0 +1,109 @@
+\documentclass{article}
+% A document of the structures papers use, for the formatted view's random-edit runs.
+\usepackage{amsthm,multirow,listings}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem*{remark}{Remark}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\tool}{\textsc{Kiln}}
+\newcommand{\note}[1]{\textit{#1}}
+\title{Structures % the title goes on
+of a Paper}
+\author{Ann Writer}
+\date{}
+\begin{document}
+\maketitle
+% The abstract, then the sections.
+\begin{abstract}
+We study \tool{} on $\R^n$, % why
+and say \note{why} it matters.
+\end{abstract}
+
+\section{Setting}\label{sec:setting}
+% A comment between blocks.
+
+\begin{definition}[Kiln]\label{def:kiln}
+A \emph{kiln} is an oven % for clay
+for pottery.
+\end{definition}
+
+\begin{lemma}
+Every kiln is warm.
+\end{lemma}
+\begin{proof}
+By Definition~\ref{def:kiln}. % short
+\end{proof}
+
+\begin{theorem}[Main]\label{thm:main}
+Kilns fire clay.
+
+A second paragraph of the theorem.
+\end{theorem}
+
+\begin{remark}
+Unnumbered.
+\end{remark}
+
+\subsection{Lists three deep}
+
+\begin{enumerate}
+  \item One
+  \begin{itemize}
+    \item Two % a comment in an item
+    \begin{enumerate}
+      \item Three
+      \begin{itemize}
+        \item Four
+      \end{itemize}
+    \end{enumerate}
+    \item Two again
+  \end{itemize}
+  \item Back to one
+\end{enumerate}
+
+\section{Tables}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Firing times.}\label{tab:times}
+  \begin{tabular}{|l|c|r|}
+    \hline
+    \multicolumn{2}{|c|}{Kiln} & Hours \\
+    \hline
+    \multirow{2}{*}{Gas} & small & 4 \\
+     & large & 9 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{tabular}{ll}
+  a & b \\ % row comment
+  c & d \\
+\end{tabular}
+
+\section{Code}
+
+Inline \verb|x_1 = 2| and a listing:
+
+\begin{verbatim}
+fire(kiln, 1200)
+  % not a comment
+\end{verbatim}
+
+\begin{lstlisting}[language=Python]
+def fire(k): return k
+\end{lstlisting}
+
+\input{sections/method}
+\include{appendix}
+
+Text before the references.%
+No space after this comment.
+
+\begin{thebibliography}{9}
+\bibitem{knuth84} D. Knuth, \emph{The TeXbook}, 1984.
+\bibitem[Ann]{ann} A. Writer, Kilns, 2001.
+\end{thebibliography}
+\end{document}

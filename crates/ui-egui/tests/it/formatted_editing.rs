@@ -291,3 +291,41 @@ fn a_click_at_a_paragraphs_start_adds_no_empty_line_above_it() {
     click(&mut h, egui::pos2(r.min.x + 1.0, r.center().y));
     assert_eq!(line_texts(&h), before, "the click made a line appear");
 }
+
+#[test]
+fn backspace_after_a_logo_deletes_it_whole_and_undo_brings_it_back() {
+    let original = "The \\LaTeX{} way\n";
+    let mut h = formatted(original);
+    // Right over "The " and the logo: one step for the logo.
+    for _ in 0..5 {
+        key(&mut h, egui::Modifiers::NONE, egui::Key::ArrowRight);
+    }
+    key(&mut h, egui::Modifiers::NONE, egui::Key::Backspace);
+    assert_eq!(text(&mut h), "The  way\n", "Backspace did not delete the logo whole");
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::Z);
+    assert_eq!(text(&mut h), original, "undo did not bring the logo back");
+}
+
+#[test]
+fn a_heading_made_from_a_list_item_leaves_the_list() {
+    let mut h = formatted("\\begin{itemize}\n  \\item One\n  \\item Two\n\\end{itemize}\n");
+    key(&mut h, egui::Modifiers::NONE, egui::Key::ArrowDown);
+    texcraft_ui_egui::ui_cmd::run(h.state_mut(), "edit.heading_1");
+    h.run();
+    let t = text(&mut h);
+    let end = t.find("\\end{itemize}").unwrap_or(0);
+    assert!(t.find("\\section{Two}").is_some_and(|s| s > end), "the heading is not after the list: {t:?}");
+    let headings: Vec<String> =
+        h.query_all(egui_kittest::kittest::by().role(egui::accesskit::Role::Heading)).filter_map(|n| n.accesskit_node().label()).collect();
+    assert!(headings.iter().any(|l| l.contains("Two")), "Two is not shown as a heading: {headings:?}");
+}
+
+#[test]
+fn an_input_methods_deletion_of_several_characters_deletes_them_all() {
+    // A phone's correction deletes the word before the caret, then types its replacement.
+    let mut h = formatted("Hello there\n");
+    key(&mut h, egui::Modifiers::NONE, egui::Key::End);
+    h.event(egui::Event::Ime(egui::ImeEvent::DeleteSurrounding { before_chars: 5, after_chars: 0 }));
+    h.run();
+    assert_eq!(text(&mut h), "Hello \n", "not every character the input method deleted went");
+}

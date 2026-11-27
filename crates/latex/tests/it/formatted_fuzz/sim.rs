@@ -52,6 +52,8 @@ pub enum Op {
     Link(String, String),
     Math(&'static str, String),
     Table(&'static str, u32),
+    /// An image chosen in the picker or dropped on the view: a new figure (`figure.insert`).
+    Figure,
 }
 
 /// What a step changed and how: what the checks need to know.
@@ -61,8 +63,9 @@ pub struct Done {
     pub changes: Vec<Change>,
     /// The text typed or pasted where the caret was, the selection deleted first.
     pub typed: Option<String>,
-    /// A character deleted next to the caret: its line and place.
-    pub char_deleted: Option<Pos>,
+    /// A character deleted next to the caret: its line and place, and how many characters of the
+    /// view it was (a command shown as a word, `\LaTeX`, is deleted whole).
+    pub char_deleted: Option<(Pos, usize)>,
     /// The selection deleted: from, to.
     pub selection_deleted: Option<(Pos, Pos)>,
     /// A change of structure that keeps the words.
@@ -114,6 +117,7 @@ impl Editor {
         let after = (edit::kept_apart_offset(&added, after.0), edit::kept_apart_offset(&added, after.1));
         let changes = changes.as_slice();
         let new = edit::apply(&self.text, changes);
+        let after = if after.0 == after.1 { (edit::out_of_ligature(&new, after.0), edit::out_of_ligature(&new, after.1)) } else { after };
         for b in [after.0, after.1] {
             if b > new.len() || !new.is_char_boundary(b) {
                 return Err(Broken(format!("the caret after the edit, byte {b}, is not a place in the text ({} bytes)", new.len())));
@@ -213,7 +217,7 @@ impl Editor {
             Op::Cite(key) => self.insert_atom(&doc, (a, h), &format!("\\cite{{{key}}}"), &mut done)?,
             Op::Ref(key) => self.insert_atom(&doc, (a, h), &format!("\\ref{{{key}}}"), &mut done)?,
             Op::Footnote(t) => {
-                let end = edit::typing_point(&self.text, doc.source(a.max(h)).unwrap_or(self.head));
+                let end = edit::typing_point(&self.text, if a == h { self.head } else { doc.source(a.max(h)).unwrap_or(self.head) });
                 let source = format!("\\footnote{{{}}}", edit::escape(t));
                 let caret = end + source.len();
                 self.commit(&[Change { range: end..end, text: source }], (caret, caret), &mut done)?;
@@ -225,6 +229,7 @@ impl Editor {
                 _ => self.new_block(&format!("\\begin{{equation}}\n  {latex}\n\\end{{equation}}"), None, &mut done)?,
             },
             Op::Table(name, n) => self.table_op(name, *n, &mut done)?,
+            Op::Figure => self.figure(&mut done)?,
         }
         Ok(done)
     }
@@ -319,7 +324,13 @@ impl Editor {
         }
         let at = changes.first().map_or(at, |c| c.range.start.min(at));
         let caret = at + caret.min(source.len());
-        let caret = if source.is_empty() && a != h { edit::into_item(&edit::apply(&self.text, &changes), caret) } else { caret };
+        let caret = if source.is_empty() && a != h {
+            let caret = edit::deleted_caret(&self.text, &doc, (a, h), &changes).unwrap_or(caret);
+            let after = edit::apply(&self.text, &changes);
+            edit::in_float(&after, edit::into_item(&after, caret))
+        } else {
+            caret
+        };
         self.commit(&changes, (caret, caret), done)
     }
 
@@ -369,7 +380,11 @@ impl Editor {
             return Ok(());
         }
         if let Some(r) = if back { line.char_before(h.at) } else { line.char_after(h.at) } {
-            done.char_deleted = Some(if back { Pos { line: h.line, at: h.at - 1 } } else { h });
+            let width = line.char_width(h.at, back);
+            done.char_deleted = Some((if back { Pos { line: h.line, at: h.at - width } } else { h }, width));
+            if let Some((field, caret)) = edit::emptied_field(&self.text, &r) {
+                return self.commit(&[Change { range: field, text: String::new() }], (caret, caret), done);
+            }
             let mut changes = vec![Change { range: r.clone(), text: String::new() }];
             let mut caret = r.start;
             if let Some(empty) = edit::empty_style_at(&self.text, self.head).filter(|e| e.end <= r.start || r.end <= e.start) {
@@ -441,9 +456,8 @@ impl Editor {
             if here.heading.is_some() && here.heading == view::heading_level(name) {
                 return Ok(());
             }
-            if let Some(changes) = edit::set_heading(&self.text, at, name) {
-                let at = edit::map_inside(&changes, at);
-                self.commit(&changes, (at, at), done)?;
+            if let Some(e) = edit::heading(&self.text, at, name) {
+                self.commit(&e.changes, (e.caret, e.caret), done)?;
             }
             return Ok(());
         }
@@ -461,11 +475,8 @@ impl Editor {
                     _ => self.style(v, (a, h), name, done),
                 }
             }
-            "body" => match edit::set_body(&self.text, at) {
-                Some(changes) => {
-                    let at = edit::map_offset(&changes, at);
-                    self.commit(&changes, (at, at), done)
-                }
+            "body" => match edit::body(&self.text, at) {
+                Some(e) => self.commit(&e.changes, (e.caret, e.caret), done),
                 None => Ok(()),
             },
             "itemize" | "enumerate" => {
@@ -486,7 +497,8 @@ impl Editor {
 
     fn style(&mut self, v: &Shown, (a, h): (Pos, Pos), name: &str, done: &mut Done) -> Result<(), Broken> {
         let doc = v.doc();
-        let (a, h) = if a == h { word_at(v, h).unwrap_or((a, h)) } else { (a.min(h), a.max(h)) };
+        let empty = edit::empty_style_at(&self.text, self.head).is_some();
+        let (a, h) = if a == h && !empty { word_at(v, h).unwrap_or((a, h)) } else { (a.min(h), a.max(h)) };
         if a == h {
             let at = self.head;
             let inserted = format!("\\{name}{{}}");
@@ -511,7 +523,7 @@ impl Editor {
     }
 
     fn insert_atom(&mut self, doc: &Doc, (a, h): (Pos, Pos), source: &str, done: &mut Done) -> Result<(), Broken> {
-        let end = edit::typing_point(&self.text, doc.source(a.max(h)).unwrap_or(self.head));
+        let end = edit::typing_point(&self.text, if a == h { self.head } else { doc.source(a.max(h)).unwrap_or(self.head) });
         let after_word = self.text.get(..end).and_then(|s| s.chars().next_back()).is_some_and(char::is_alphanumeric);
         let inserted = if after_word { format!("~{source}") } else { source.to_owned() };
         let caret = end + inserted.len();
@@ -534,11 +546,7 @@ impl Editor {
 
     fn new_block(&mut self, source: &str, select: Option<&str>, done: &mut Done) -> Result<(), Broken> {
         let caret = self.head;
-        let blocks = view::view(&self.text);
-        let shown = |b: &&view::Block| !matches!(b.kind, view::BlockKind::Preamble);
-        let after =
-            blocks.iter().filter(shown).find(|b| b.range.end >= caret).map_or_else(|| edit::empty_view_caret(&self.text, caret), |b| b.range.end);
-        let at = edit::item_end(&self.text, caret).unwrap_or(after);
+        let at = edit::block_point(&self.text, caret);
         let before = self.text.get(..at).unwrap_or_default();
         let lead = if before.is_empty() || before.ends_with("\n\n") {
             ""
@@ -550,7 +558,32 @@ impl Editor {
         let inserted = format!("{lead}{source}\n");
         let start = at + lead.len();
         let sel = select.and_then(|s| source.find(s).map(|i| (start + i, start + i + s.len()))).unwrap_or((start, start));
-        self.commit(&[Change { range: at..at, text: inserted }], sel, done)
+        let (changes, sel) = edit::dropping_empty_style(&self.text, caret, Change { range: at..at, text: inserted }, sel);
+        self.commit(&changes, sel, done)
+    }
+
+    /// A figure as the window inserts it for an image picked or dropped (`App::figure_for_drop`,
+    /// the engine's `figure.insert`): on lines of its own where a block goes, the caret in its
+    /// caption.
+    fn figure(&mut self, done: &mut Done) -> Result<(), Broken> {
+        if let Some(empty) = edit::empty_markup_at(&self.text, self.head) {
+            self.commit(&[Change { range: empty.clone(), text: String::new() }], (empty.start, empty.start), done)?;
+        }
+        let at = edit::block_point(&self.text, self.head);
+        let changes = texcraft_latex::figure::FigureChanges {
+            image: Some("img/kiln.png".to_owned()),
+            width: Some(0.8),
+            placement: Some("htbp".to_owned()),
+            caption: None,
+            label: Some("fig:kiln".to_owned()),
+        };
+        let (before, after) = (self.text.get(..at).unwrap_or_default(), self.text.get(at..).unwrap_or_default());
+        let lead = if before.is_empty() || before.ends_with('\n') { "" } else { "\n" };
+        let trail = if after.is_empty() || after.starts_with('\n') { "" } else { "\n" };
+        let change = Change { range: at..at, text: format!("{lead}{}{trail}", texcraft_latex::figure::new_figure(&changes)) };
+        // The caret in its caption.
+        let caret = change.text.find("\\caption{").map_or(at, |i| at + i + "\\caption{".len());
+        self.commit(&[change], (caret, caret), done)
     }
 
     /// A table toolbar's operation on the cell holding the caret, as `table.edit` makes it.

@@ -150,6 +150,8 @@ pub enum BlockKind {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FrontMatter {
     pub title: Vec<Inline>,
+    /// Inside the braces of its `\title` (where the caret stands in an empty one).
+    pub title_slot: Option<Range<usize>>,
     /// The keys of the notes on the title (`\tnoteref`).
     pub title_notes: Vec<String>,
     pub authors: Vec<Author>,
@@ -171,6 +173,8 @@ pub struct Author {
     pub notes: Vec<String>,
     /// Its `\ead`s, each as its text.
     pub emails: Vec<Vec<Inline>>,
+    /// Inside the braces of its name.
+    pub slot: Range<usize>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -180,6 +184,8 @@ pub struct Affiliation {
     /// Its text; for elsarticle's `organization={…}, city={…}` form, the values, `, ` between
     /// them (text standing for no source).
     pub text: Vec<Inline>,
+    /// Inside its braces.
+    pub slot: Range<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -187,6 +193,8 @@ pub struct Note {
     pub key: String,
     pub kind: NoteKind,
     pub text: Vec<Inline>,
+    /// Inside its braces.
+    pub slot: Range<usize>,
 }
 
 /// What a front matter's note is on.
@@ -388,6 +396,9 @@ struct View<'a> {
     titles: [Vec<&'a Arg>; 3],
     /// The theorem-like environments declared.
     theorems: Vec<TheoremKind>,
+    /// A `\maketitle` shows the title block: the `\title`, `\author` and `\date` of the body
+    /// before it are shown there, not where they stand too.
+    shows_title: bool,
 }
 
 /// The last required argument.
@@ -782,7 +793,13 @@ impl Flow {
 impl<'a> View<'a> {
     fn new(text: &'a str, top: &'a [Node], body: &'a [Node], theorems: Vec<TheoremKind>) -> Self {
         let mut titles: [Vec<&'a Arg>; 3] = Default::default();
-        for n in top.iter().chain(body) {
+        // What `\maketitle` prints is what was set before it: the preamble's, and the body's up to
+        // it (an `\author` after it, or after `\end{document}`, prints nothing there).
+        let maketitle = |n: &&Node| matches!(&n.kind, Kind::Command { name, .. } if name == "maketitle");
+        let document = |n: &&Node| matches!(&n.kind, Kind::Environment { name, .. } if name == "document");
+        let preamble = top.iter().take_while(|n| !document(n) && !maketitle(n));
+        let shows_title = top.iter().chain(body).any(|n| maketitle(&n));
+        for n in preamble.chain(body.iter().take_while(|n| !maketitle(n))) {
             if let Kind::Command { name, args, .. } = &n.kind
                 && let Some(slot) = ["title", "author", "date"].iter().position(|t| t == name)
                 && let Some(arg) = required(args)
@@ -794,7 +811,7 @@ impl<'a> View<'a> {
                 kept.push(arg);
             }
         }
-        View { text, titles, theorems }
+        View { text, titles, theorems, shows_title }
     }
 
     fn src(&self, range: &Range<usize>) -> &'a str {
@@ -941,7 +958,13 @@ impl<'a> View<'a> {
                 if k > 0
                     && let Some(before) = args.get(k - 1)
                 {
-                    out.push(Inline { kind: InlineKind::LineBreak, range: before.inner.end..arg.inner.start });
+                    // Deleting it joins the two when only the next `\author{` is between them;
+                    // else (the preamble's end between them) it stands for nothing.
+                    let between = before.inner.end..arg.inner.start;
+                    let rest = self.src(&between).trim_start_matches(|c: char| c == '}' || c.is_whitespace()).trim_end_matches('{');
+                    let joins = rest.strip_prefix("\\author").is_some_and(|r| !r.contains(['\\', '%', '{', '}']));
+                    let range = if joins { between } else { arg.inner.start..arg.inner.start };
+                    out.push(Inline { kind: InlineKind::LineBreak, range });
                 }
                 out.extend(self.inlines(&arg.body, Style::default()));
             }
@@ -981,24 +1004,29 @@ impl<'a> View<'a> {
                 continue;
             };
             match name.as_str() {
-                "title" => (fm.title, fm.title_notes) = self.marked(&arg.body),
+                "title" => {
+                    (fm.title, fm.title_notes) = self.marked(&arg.body);
+                    fm.title_slot = Some(arg.inner.clone());
+                }
                 "author" => {
                     let (name, notes) = self.marked(&arg.body);
                     let affiliations = key(args).split(',').map(|k| k.trim().to_owned()).filter(|k| !k.is_empty()).collect();
-                    fm.authors.push(Author { name, affiliations, notes, emails: Vec::new() });
+                    fm.authors.push(Author { name, affiliations, notes, emails: Vec::new(), slot: arg.inner.clone() });
                 }
                 "ead" => match fm.authors.last_mut() {
                     Some(a) => a.emails.push(self.inlines(&arg.body, Style::default())),
                     None => rest.push(n.clone()),
                 },
-                "affiliation" | "address" => fm.affiliations.push(Affiliation { key: key(args), text: self.affiliation(arg) }),
+                "affiliation" | "address" => {
+                    fm.affiliations.push(Affiliation { key: key(args), text: self.affiliation(arg), slot: arg.inner.clone() });
+                }
                 "tnotetext" | "cortext" | "fntext" => {
                     let kind = match name.as_str() {
                         "tnotetext" => NoteKind::Title,
                         "cortext" => NoteKind::Corresponding,
                         _ => NoteKind::Author,
                     };
-                    fm.notes.push(Note { key: key(args), kind, text: self.inlines(&arg.body, Style::default()) });
+                    fm.notes.push(Note { key: key(args), kind, text: self.inlines(&arg.body, Style::default()), slot: arg.inner.clone() });
                 }
                 _ => rest.push(n.clone()),
             }
@@ -1223,6 +1251,13 @@ impl<'a> View<'a> {
         }
         if let Some(chip) = self.chip(n, name, args) {
             out.push(chip);
+            return i + 1;
+        }
+        if let Some(slot) = ["title", "author", "date"].iter().position(|t| *t == name)
+            && self.shows_title
+            && let Some(arg) = required(args)
+            && self.titles.get(slot).is_some_and(|kept| kept.iter().any(|a| a.inner == arg.inner))
+        {
             return i + 1;
         }
         let kind = match (name, required(args)) {

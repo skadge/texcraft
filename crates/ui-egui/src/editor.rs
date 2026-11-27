@@ -60,7 +60,7 @@ fn session_text(project: &texcraft_engine::project::Project, path: Option<&Proje
 impl Editor {
     /// Shows another file's text, or takes the changes the session made to the shown one. The
     /// shown file's own edits must have gone to the session first ([`send_edits`]).
-    fn sync(&mut self, path: Option<&ProjectPath>, session: &texcraft_engine::Session) {
+    pub(crate) fn sync(&mut self, path: Option<&ProjectPath>, session: &texcraft_engine::Session) {
         let project = session.project();
         // The text shown in Suggest mode is not the file's: it is made again from the session
         // (`suggest::refresh`) while suggesting, and gives way to the file's otherwise.

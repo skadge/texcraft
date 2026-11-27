@@ -2,9 +2,10 @@
 //! view"): on documents of the corpus, random keys, typed text, clicks at random places in the
 //! text, drags, double and triple clicks, the toolbar's buttons, undo and redo, with the fonts the
 //! build has. After each action: nothing panicked, the frame settles, the keyboard stays in the
-//! text, the caret is in a line of the view inside the window, a letter typed shows just before
-//! the caret without moving its line by more than a line, and undo then redo of an edit give back
-//! the texts before and after it byte for byte.
+//! text, the caret is in a line of the view inside the window, a letter typed (or composed with an
+//! input method) shows just before the caret without moving its line by more than a line, one undo
+//! takes a word typed letter by letter back whole, and undo then redo of an edit give back the
+//! texts before and after it byte for byte.
 //!
 //! `TEXCRAFT_FUZZ_WINDOW_CASES` sets the number of cases (a few by default), `TEXCRAFT_FUZZ_SEED`
 //! the first seed.
@@ -26,6 +27,8 @@ const DOCS: &[(&str, &str)] = &[
     ("mixed", include_str!("../../../latex/tests/fixtures/formatted-mixed.tex")),
     ("lists", include_str!("../../../latex/tests/fixtures/formatted-lists.tex")),
     ("fragment", include_str!("../../../latex/tests/fixtures/formatted-fragment.tex")),
+    ("structures", include_str!("../../../latex/tests/fixtures/formatted-structures.tex")),
+    ("beamer", include_str!("../../../latex/tests/fixtures/formatted-beamer.tex")),
     ("frontmatter", include_str!("../../../latex/tests/fixtures/frontmatter.tex")),
     ("article", include_str!("../../../../templates/builtin/article/main.tex")),
     ("thesis/background", include_str!("../../../../templates/builtin/thesis/chapters/background.tex")),
@@ -71,6 +74,10 @@ enum Act {
     Button(&'static str),
     Undo,
     Redo,
+    /// A word typed letter by letter, a frame each.
+    Word(&'static str),
+    /// Text composed with an input method: marked text, then committed.
+    Compose(&'static str, &'static str),
 }
 
 const BUTTONS: &[&str] = &["Bold", "Italic", "Code", "Bulleted List", "Numbered List", "Outdent Item", "Indent Item"];
@@ -106,8 +113,10 @@ fn act(rng: &mut Rng) -> Act {
         60..=74 => Act::Click { line: rng.below(1000), x: rng.unit(), times: 1, shift: rng.below(5) == 0 },
         75..=79 => Act::Click { line: rng.below(1000), x: rng.unit(), times: 2 + rng.below(2), shift: false },
         80..=84 => Act::Drag { from: (rng.below(1000), rng.unit()), to: (rng.below(1000), rng.unit()) },
-        85..=92 => Act::Button(BUTTONS[rng.below(BUTTONS.len())]),
-        93..=97 => Act::Undo,
+        85..=90 => Act::Button(BUTTONS[rng.below(BUTTONS.len())]),
+        91..=92 => Act::Word(["kiln", "Clay", "fire"][rng.below(3)]),
+        93 => Act::Compose(["zhong", "nihon"][rng.below(2)], ["中文", "日本"][rng.below(2)]),
+        94..=97 => Act::Undo,
         _ => Act::Redo,
     }
 }
@@ -189,6 +198,17 @@ fn perform(h: &mut Harness<'_, App>, a: &Act) -> bool {
             let Some(b) = h.query_by_role_and_label(Role::Button, label) else { return true };
             b.click();
         }
+        Act::Word(w) => {
+            for c in w.chars() {
+                h.event(egui::Event::Text(c.to_string()));
+                h.step();
+            }
+        }
+        Act::Compose(marked, committed) => {
+            h.event(egui::Event::Ime(egui::ImeEvent::Preedit { text: (*marked).to_owned(), active_range_chars: None }));
+            h.step();
+            h.event(egui::Event::Ime(egui::ImeEvent::Commit((*committed).to_owned())));
+        }
         Act::Undo => h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z),
         Act::Redo => h.key_press_modifiers(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::Z),
     }
@@ -253,12 +273,17 @@ fn step(h: &mut Harness<'_, App>, a: &Act, history: &mut Vec<String>) -> Result<
     if rect.max.y < 0.0 || rect.min.y > SIZE.y {
         return fail("caret-offscreen", format!("the caret's line is at {rect:?}, outside the window"));
     }
-    if let Act::Type(s) = a
+    let typed = match a {
+        Act::Type(s) => Some(s.as_str()),
+        Act::Word(s) | Act::Compose(_, s) => Some(*s),
+        _ => None,
+    };
+    if let Some(s) = typed
         && s.chars().all(char::is_alphabetic)
         && after != before
     {
         let shown: String = value.chars().take(at).collect();
-        if !shown.ends_with(s.as_str()) {
+        if !shown.ends_with(s) {
             return fail("caret-misplaced", format!("typed {s:?}, the caret's line reads {:?} before the caret", shown));
         }
         if let Some((r0, ..)) = caret_before
@@ -266,6 +291,11 @@ fn step(h: &mut Harness<'_, App>, a: &Act, history: &mut Vec<String>) -> Result<
         {
             return fail("layout-jump", format!("the caret's line moved from y {} to {} on typing a letter", r0.min.y, rect.min.y));
         }
+    }
+    if let Act::Word(w) = a
+        && after != before
+    {
+        one_undo_per_word(h, w, (&before, &after))?;
     }
     if after != before && !matches!(a, Act::Undo | Act::Redo) {
         undo_redo(h, (&before, &after), history)?;
@@ -289,6 +319,22 @@ fn undo_redo(h: &mut Harness<'_, App>, (before, after): (&str, &str), history: &
     if redone != after {
         return fail("redo", format!("redo gave {redone:?}, the edit made {after:?}"));
     }
+    Ok(())
+}
+
+/// One undo after a word typed letter by letter takes the whole word back, not its last letter
+/// (it may take more: the typing before it, when the word goes on from it). Redo puts it back.
+fn one_undo_per_word(h: &mut Harness<'_, App>, word: &str, (before, after): (&str, &str)) -> Result<(), Failure> {
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+    h.run();
+    let undone = text(h);
+    // Some of the word left: undo went back a letter, not a word.
+    let left = (1..word.len()).any(|k| after.replacen(word, &word[..k], 1) == undone);
+    if left || undone == after {
+        return fail("undo-word", format!("one undo after typing {word:?} gave {undone:?}, before the word {before:?}"));
+    }
+    h.key_press_modifiers(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::Z);
+    h.run();
     Ok(())
 }
 

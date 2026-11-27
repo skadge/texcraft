@@ -183,7 +183,7 @@ impl Builder<'_> {
     fn caption_slot(&self, range: &Range<usize>) -> Option<usize> {
         let src = self.text.get(range.clone())?;
         let at = src.find("\\caption{")? + "\\caption{".len();
-        src.get(at..)?.starts_with('}').then_some(range.start + at)
+        Some(range.start + at)
     }
 
     fn caption(&mut self, range: &Range<usize>, name: &str, caption: &[Inline], label: Option<&Inline>) {
@@ -234,20 +234,27 @@ impl Builder<'_> {
     }
 
     fn front_matter(&mut self, fm: &FrontMatter) {
-        let span = |inlines: &[Inline]| {
-            let start = inlines.iter().map(|i| i.range.start).min().unwrap_or(0);
-            start..inlines.iter().map(|i| i.range.end).max().unwrap_or(0).max(start)
+        let span = |inlines: &[Inline], or: usize| {
+            let start = inlines.iter().map(|i| i.range.start).min().unwrap_or(or);
+            start..inlines.iter().map(|i| i.range.end).max().unwrap_or(or).max(start)
         };
-        if !fm.title.is_empty() {
-            let range = span(&fm.title);
+        let caret = self.caret;
+        let here = |text: &[Inline], slot: &Range<usize>| caret.filter(|c| text.is_empty() && slot.start <= *c && *c <= slot.end);
+        let title_at = fm.title_slot.as_ref().and_then(|s| here(&fm.title, s));
+        if !fm.title.is_empty() || title_at.is_some() {
+            let range = span(&fm.title, title_at.unwrap_or(0));
             let mut inlines = fm.title.clone();
             if !fm.title_notes.is_empty() {
                 inlines.push(decoration("*", range.end));
             }
-            self.paragraph(&inlines, &range, None, None);
+            self.paragraph(&inlines, &range, title_at, None);
         }
         for author in &fm.authors {
-            let range = span(&author.name);
+            let at = here(&author.name, &author.slot);
+            if author.name.is_empty() && author.emails.is_empty() && at.is_none() {
+                continue;
+            }
+            let range = span(&author.name, at.unwrap_or(author.slot.start));
             let mut inlines = author.name.clone();
             if !author.affiliations.is_empty() || !author.notes.is_empty() {
                 inlines.push(decoration("1", range.end));
@@ -257,23 +264,31 @@ impl Builder<'_> {
                 inlines.push(decoration("\u{2003}", at));
                 inlines.extend(email.iter().cloned());
             }
-            self.paragraph(&inlines, &range, None, None);
+            self.paragraph(&inlines, &range, at, None);
         }
         let numbered = fm.affiliations.len() > 1 || fm.affiliations.iter().any(|a| !a.key.is_empty());
         for (i, a) in fm.affiliations.iter().enumerate() {
-            let range = span(&a.text);
+            let at = here(&a.text, &a.slot);
+            if a.text.is_empty() && at.is_none() {
+                continue;
+            }
+            let range = span(&a.text, at.unwrap_or(a.slot.start));
             let mut inlines = Vec::new();
             if numbered {
                 inlines.push(decoration(&format!("{}\u{2009}", i + 1), range.start));
             }
             inlines.extend(a.text.iter().cloned());
-            self.paragraph(&inlines, &range, None, None);
+            self.paragraph(&inlines, &range, at, None);
         }
         for note in &fm.notes {
-            let range = span(&note.text);
+            let at = here(&note.text, &note.slot);
+            if note.text.is_empty() && at.is_none() {
+                continue;
+            }
+            let range = span(&note.text, at.unwrap_or(note.slot.start));
             let mut inlines = vec![decoration("*\u{2009}", range.start)];
             inlines.extend(note.text.iter().cloned());
-            self.paragraph(&inlines, &range, None, None);
+            self.paragraph(&inlines, &range, at, None);
         }
         self.blocks(&fm.blocks);
     }

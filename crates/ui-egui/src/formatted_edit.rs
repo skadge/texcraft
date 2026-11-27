@@ -20,7 +20,7 @@
 
 use craft_ui::ime::{Composer, Edit};
 use egui::text::CCursor;
-use egui::{Rect, Sense, vec2};
+use egui::{Rect, Sense, pos2, vec2};
 use texcraft_buffer::{EditKind, Selection, Transaction};
 use texcraft_engine::project::ProjectPath;
 use texcraft_latex::edit::{self, Change, Doc, Pos};
@@ -318,6 +318,8 @@ fn commit(app: &mut App, f: &Frame<'_>, changes: &[Change], after: (usize, usize
         .collect();
     let Ok(tx) = Transaction::new(list) else { return false };
     let new = edit::apply(f.text, changes);
+    // Not inside a dash or a quote the view shows as one character with the one typed.
+    let after = if after.0 == after.1 { (edit::out_of_ligature(&new, after.0), edit::out_of_ligature(&new, after.1)) } else { after };
     let chars = |b: usize| new.get(..b).map_or(0, |s| s.chars().count());
     let after = Selection::single(chars(after.0), chars(after.1));
     if kind == EditKind::Other {
@@ -428,11 +430,48 @@ fn input(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, edit: Edit) {
         }
         Edit::Copy => copy(app, ctx, f, false),
         Edit::Cut => copy(app, ctx, f, true),
-        Edit::DeleteSurrounding { before_chars, .. } | Edit::DeleteSurroundingBytes { before_bytes: before_chars, .. } => {
-            delete(app, f, before_chars > 0);
+        Edit::DeleteSurrounding { before_chars, after_chars } => delete_surrounding(app, f, (before_chars, after_chars)),
+        Edit::DeleteSurroundingBytes { before_bytes, after_bytes } => {
+            // Whole characters of the line inside the counts.
+            let Some((_, h)) = selection(app, f) else { return };
+            let chars = f.chars(h.line);
+            let before: String = chars.get(..h.at).unwrap_or_default().iter().collect();
+            let after: String = chars.get(h.at..).unwrap_or_default().iter().collect();
+            delete_surrounding(app, f, craft_ui::ime::surrounding_chars(&before, &after, before_bytes, after_bytes));
         }
         Edit::Preedit { .. } => {}
     }
+}
+
+/// The characters an input method deletes around the caret (a phone's Backspace, a correction
+/// replacing a word): those of the caret's line as one deletion; one next to an atom (a chip, a
+/// formula) as Backspace or Delete there, which selects it.
+fn delete_surrounding(app: &mut App, f: &Frame<'_>, (before, after): (usize, usize)) {
+    let Some((a, h)) = selection(app, f) else { return };
+    let Some(line) = f.doc.lines.get(h.line).filter(|_| a == h) else { return };
+    let mut ranges = Vec::new();
+    let mut v = h.at;
+    for _ in 0..before {
+        let Some(r) = line.char_before(v) else { break };
+        ranges.push(r);
+        v = line.prev_stop(v).unwrap_or(0);
+    }
+    let mut w = h.at;
+    for _ in 0..after {
+        let Some(r) = line.char_after(w) else { break };
+        ranges.push(r);
+        w = line.next_stop(w).unwrap_or(w);
+    }
+    if ranges.is_empty() {
+        if before + after > 0 {
+            delete(app, f, before > 0);
+        }
+        return;
+    }
+    ranges.sort_by_key(|r| r.start);
+    let caret = ranges.first().map_or(0, |r| r.start);
+    let changes: Vec<Change> = ranges.into_iter().map(|range| Change { range, text: String::new() }).collect();
+    commit(app, f, &changes, (caret, caret), EditKind::Deleting { at: f.now });
 }
 
 fn run_command(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, id: &str, params: &serde_json::Value) {
@@ -451,10 +490,9 @@ fn run_command(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, id: &str, para
         if id.starts_with("edit.heading_") && here.heading.is_some() && here.heading == texcraft_latex::view::heading_level(name) {
             return;
         }
-        match edit::set_heading(f.text, at, name) {
-            Some(changes) => {
-                let at = edit::map_inside(&changes, at);
-                commit(app, f, &changes, (at, at), EditKind::Other);
+        match edit::heading(f.text, at, name) {
+            Some(e) => {
+                commit(app, f, &e.changes, (e.caret, e.caret), EditKind::Other);
             }
             None => say(app, tl!("Put the caret in a paragraph or a heading to make it a heading.")),
         }
@@ -478,10 +516,9 @@ fn run_command(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, id: &str, para
                 _ => style(app, f, name),
             }
         }
-        "edit.body" => match edit::set_body(f.text, at) {
-            Some(changes) => {
-                let at = edit::map_offset(&changes, at);
-                commit(app, f, &changes, (at, at), EditKind::Other);
+        "edit.body" => match edit::body(f.text, at) {
+            Some(e) => {
+                commit(app, f, &e.changes, (e.caret, e.caret), EditKind::Other);
             }
             None => say(app, tl!("The caret is in body text already.")),
         },
@@ -538,7 +575,8 @@ fn structure(app: &mut App, f: &Frame<'_>, e: Option<edit::SourceEdit>, why: &st
 /// with a no-break space before it, as LaTeX writes them.
 fn insert_atom(app: &mut App, f: &Frame<'_>, source: &str) {
     let Some((a, h)) = selection(app, f) else { return };
-    let end = edit::typing_point(f.text, f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app)));
+    // At the caret itself when nothing is selected (in an empty style just made, Italic pressed).
+    let end = edit::typing_point(f.text, if a == h { caret_byte(app) } else { f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app)) });
     let after_word = f.text.get(..end).and_then(|s| s.chars().next_back()).is_some_and(char::is_alphanumeric);
     let inserted = if after_word { format!("~{source}") } else { source.to_owned() };
     let caret = end + inserted.len();
@@ -548,7 +586,8 @@ fn insert_atom(app: &mut App, f: &Frame<'_>, source: &str) {
 /// `source` after the selection (or at the caret), the caret after it.
 fn insert_after_selection(app: &mut App, f: &Frame<'_>, source: &str) {
     let Some((a, h)) = selection(app, f) else { return };
-    let end = edit::typing_point(f.text, f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app)));
+    // At the caret itself when nothing is selected (in an empty style just made, Italic pressed).
+    let end = edit::typing_point(f.text, if a == h { caret_byte(app) } else { f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app)) });
     let caret = end + source.len();
     commit(app, f, &[Change { range: end..end, text: source.to_owned() }], (caret, caret), EditKind::Other);
 }
@@ -576,12 +615,7 @@ fn link(app: &mut App, f: &Frame<'_>, url: &str, text: &str) {
 /// first `select` of it selected, else the caret at its start.
 fn new_block(app: &mut App, f: &Frame<'_>, source: &str, select: Option<&str>) {
     let caret = caret_byte(app);
-    let blocks = texcraft_latex::view::view(f.text);
-    // Not in the preamble (the caret in the title's text is there): after the title block.
-    let shown = |b: &&texcraft_latex::view::Block| !matches!(b.kind, texcraft_latex::view::BlockKind::Preamble);
-    // In a list item, in that item; else after the block.
-    let after = blocks.iter().filter(shown).find(|b| b.range.end >= caret).map_or_else(|| edit::empty_view_caret(f.text, caret), |b| b.range.end);
-    let at = edit::item_end(f.text, caret).unwrap_or(after);
+    let at = edit::block_point(f.text, caret);
     let before = f.text.get(..at).unwrap_or_default();
     let lead = if before.is_empty() || before.ends_with("\n\n") {
         ""
@@ -593,7 +627,9 @@ fn new_block(app: &mut App, f: &Frame<'_>, source: &str, select: Option<&str>) {
     let inserted = format!("{lead}{source}\n");
     let start = at + lead.len();
     let sel = select.and_then(|s| source.find(s).map(|i| (start + i, start + i + s.len()))).unwrap_or((start, start));
-    commit(app, f, &[Change { range: at..at, text: inserted }], sel, EditKind::Other);
+    // An empty style the caret stood in (Bold pressed, nothing typed) is not left behind.
+    let (changes, sel) = edit::dropping_empty_style(f.text, caret, Change { range: at..at, text: inserted }, sel);
+    commit(app, f, &changes, sel, EditKind::Other);
 }
 
 fn say(app: &mut App, message: &str) {
@@ -695,8 +731,15 @@ fn replace_at(app: &mut App, f: &Frame<'_>, (source, caret): (&str, usize), kind
     // Nothing changes before it.
     let at = changes.first().map_or(at, |c| c.range.start.min(at));
     let caret = at + caret.min(source.len());
-    // A deletion of whole items leaves the caret in the item after them, not before its `\item`.
-    let caret = if source.is_empty() && a != h { edit::into_item(&edit::apply(f.text, &changes), caret) } else { caret };
+    // A deletion holding its first line whole leaves the caret where what is left of its last line
+    // starts; one of whole items, in the item after them, not before its `\item`.
+    let caret = if source.is_empty() && a != h {
+        let caret = edit::deleted_caret(f.text, &f.doc, (a, h), &changes).unwrap_or(caret);
+        let after = edit::apply(f.text, &changes);
+        edit::in_float(&after, edit::into_item(&after, caret))
+    } else {
+        caret
+    };
     commit(app, f, &changes, (caret, caret), kind);
 }
 
@@ -751,6 +794,11 @@ fn delete(app: &mut App, f: &Frame<'_>, back: bool) {
     }
     let ch = if back { line.char_before(h.at) } else { line.char_after(h.at) };
     if let Some(r) = ch {
+        // An e-mail's last character takes its command: the view has no place for an empty one.
+        if let Some((field, caret)) = edit::emptied_field(f.text, &r) {
+            commit(app, f, &[Change { range: field, text: String::new() }], (caret, caret), EditKind::Other);
+            return;
+        }
         // An empty style the caret stands in (Bold pressed, nothing typed) goes too.
         let mut changes = vec![Change { range: r.clone(), text: String::new() }];
         let mut caret = r.start;
@@ -1034,7 +1082,10 @@ fn copy(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, cut: bool) {
 /// source wrapped in the command, or unwrapped when it is all in one already.
 fn style(app: &mut App, f: &Frame<'_>, name: &str) {
     let Some((a, h)) = selection(app, f) else { return };
-    let (a, h) = if a == h { word_at(f, h).unwrap_or((a, h)) } else { (a.min(h), a.max(h)) };
+    // In an empty style just made (Italic pressed, nothing typed): the other style in it, for the
+    // text to come; else the word at the caret.
+    let empty = edit::empty_style_at(f.text, caret_byte(app)).is_some();
+    let (a, h) = if a == h && !empty { word_at(f, h).unwrap_or((a, h)) } else { (a.min(h), a.max(h)) };
     if a == h {
         // Nothing to wrap: an empty command, and the caret in it.
         let at = caret_byte(app);
@@ -1125,6 +1176,14 @@ fn paint(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, painter: &egui::Pain
     let c = d.galley.pos_from_cursor(CCursor::new(h.at)).translate(d.origin.to_vec2());
     let c = if c.height() < 1.0 { Rect::from_min_size(c.min - vec2(0.0, t.reading_size * 0.6), vec2(0.0, t.reading_size * 1.2)) } else { c };
     painter.rect_filled(Rect::from_min_size(c.min, vec2(2.0, c.height())), 0.0, t.text);
+    // The text an input method is composing, underlined at the caret until it is committed.
+    if let Some(pre) = app.editor.formatted.editing.composer.preedit() {
+        let g = ctx.fonts_mut(|fonts| fonts.layout_no_wrap(pre.text.to_owned(), t.reading(t.reading_size, false, false), t.text));
+        let r = Rect::from_min_size(c.min, vec2(g.size().x, c.height().max(g.size().y)));
+        painter.rect_filled(r, 0.0, t.surface);
+        painter.galley(pos2(r.min.x, r.center().y - g.size().y / 2.0), g, t.text);
+        painter.hline(r.x_range(), r.bottom(), egui::Stroke::new(1.0, t.text));
+    }
     app.editor.formatted.editing.composer.set_caret(ctx, c);
 }
 

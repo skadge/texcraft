@@ -11,3 +11,9 @@
   items, a theorem, a proof, a quote, a figure, a table with a merged cell, links, verbatim text,
   and an included file's kind of text (no document environment). Our own work, under the
   repository's licence.
+- `formatted-structures.tex`, `formatted-beamer.tex`: documents written for the same runs, of
+  what papers and talks hold that the others do not: theorem-like environments of several styles,
+  macros of `\newcommand`, comments everywhere, lists four deep, a table with `\multicolumn` and
+  `\multirow`, verbatim and `lstlisting`, `\input` and `\include`, a bibliography environment,
+  and a beamer talk's frames, columns and blocks. Our own work, under the repository's licence;
+  the names are invented.

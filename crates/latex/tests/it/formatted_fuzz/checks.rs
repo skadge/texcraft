@@ -41,7 +41,40 @@ pub fn after_step(before: &Before<'_>, op: &Op, done: &Done, after: &Editor) -> 
     balanced_stays(before.editor, after)?;
     no_leftovers(before.editor, after, enter)?;
     no_new_source(before.shown, &shown, op)?;
+    selection_kept(before, op, &shown, after)?;
     expected_view(before, op, done, &shown)
+}
+
+/// The view's text from the selection's start to its end (a line end between lines).
+fn selected(shown: &Shown, e: &Editor) -> Option<String> {
+    let doc = shown.doc();
+    let (a, h) = e.selection(&doc)?;
+    let (lo, hi) = (a.min(h), a.max(h));
+    let mut out = String::new();
+    for i in lo.line..=hi.line {
+        let chars = &shown.lines.get(i)?.chars;
+        let from = if i == lo.line { lo.at } else { 0 };
+        let to = if i == hi.line { hi.at } else { chars.len() };
+        out.extend(chars.get(from..to.max(from)).unwrap_or_default());
+        if i < hi.line {
+            out.push('\n');
+        }
+    }
+    Some(out)
+}
+
+/// A style button pressed on a selection keeps that text selected (for the next button).
+fn selection_kept(before: &Before<'_>, op: &Op, shown: &Shown, after: &Editor) -> Result<(), Failure> {
+    let e = before.editor;
+    if !matches!(op, Op::Bar("bold" | "italic" | "code")) || e.anchor == e.head {
+        return Ok(());
+    }
+    // A selection the view shows as nothing (from an empty line to the start of the next) is a caret.
+    let (Some(was), Some(now)) = (selected(before.shown, e).filter(|w| !w.trim().is_empty()), selected(shown, after)) else { return Ok(()) };
+    if words(&was) != words(&now) {
+        return fail("selection-lost", format!("{:?} was selected, {:?} is after the button", was, now));
+    }
+    Ok(())
 }
 
 /// The caret stands where the view shows it: a key typed next shows where the view shows the
@@ -53,12 +86,6 @@ fn caret_shown(shown: &Shown, e: &Editor) -> Result<(), Failure> {
     }
     let Some(at) = doc.locate(&e.text, e.head, None).and_then(|p| doc.source(p)) else { return Ok(()) };
     if at == e.head {
-        return Ok(());
-    }
-    // Known, not fixed: inside a run of dashes or quotes the view shows as one character (`--|-`
-    // after typing in it), the caret shows at the run's start.
-    let lig = |c: char| matches!(c, '-' | '`' | '\'');
-    if e.text.get(..e.head).is_some_and(|s| s.ends_with(lig)) && e.text.get(e.head..).is_some_and(|s| s.starts_with(lig)) {
         return Ok(());
     }
     let typed = |b: usize| {
@@ -93,7 +120,7 @@ pub fn context(text: &str, at: usize) -> String {
 
 /// The changes stay in the blocks the selection touches and the space around them.
 fn local(before: &Before<'_>, op: &Op, done: &Done) -> Result<(), Failure> {
-    if matches!(op, Op::Bar("table") | Op::Math("equation", _)) {
+    if matches!(op, Op::Bar("table") | Op::Math("equation", _) | Op::Figure) {
         return Ok(());
     }
     let e = before.editor;
@@ -343,8 +370,8 @@ fn expected_view(before: &Before<'_>, op: &Op, done: &Done, after: &Shown) -> Re
     let Some((_, h)) = before.editor.selection(&doc) else { return Ok(()) };
     let got = after.plain();
     let changes_typography = |s: &str| s.contains(['-', '`', '\'', '.', '\n', '\t', '\r']) || s.contains("  ");
-    let expected = if let Some(p) = done.char_deleted {
-        Some((edited(before.shown, (p.line, p.at), (p.line, p.at + 1), ""), true))
+    let expected = if let Some((p, width)) = done.char_deleted {
+        Some((edited(before.shown, (p.line, p.at), (p.line, p.at + width), ""), true))
     } else if let Some(s) = &done.typed {
         // Typed after a heading's label, it goes in the heading ([`edit::typing_point`]).
         let e = before.editor;
@@ -366,6 +393,8 @@ fn expected_view(before: &Before<'_>, op: &Op, done: &Done, after: &Shown) -> Re
     // Strict: the same lines with the same words; else the same words.
     let lines = |s: &str| normal(s).lines().map(words).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n");
     let (w, g) = if strict { (lines(&want), lines(&got)) } else { (words(&want), words(&got)) };
+    // Small capitals show typed letters as capitals.
+    let (w, g) = (w.to_lowercase(), g.to_lowercase());
     if w == g {
         return Ok(());
     }

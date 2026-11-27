@@ -1,6 +1,7 @@
 //! The documents the property runs edit: TeXCraft's own templates and examples, the crate's
 //! fixtures (`formatted-*.tex` written for these runs: lists, tables, figures, theorems, styles,
-//! formulas, references), and the `.tex` files under `TEXCRAFT_FUZZ_CORPUS`, read at run time and
+//! formulas, references; theorems, deep lists, tables with merged cells, code, a bibliography, a
+//! beamer talk), and the `.tex` files under `TEXCRAFT_FUZZ_CORPUS`, read at run time and
 //! never committed.
 
 use std::path::Path;
@@ -20,6 +21,8 @@ pub fn committed() -> Vec<Doc> {
         doc("mixed", include_str!("../../fixtures/formatted-mixed.tex")),
         doc("lists", include_str!("../../fixtures/formatted-lists.tex")),
         doc("fragment", include_str!("../../fixtures/formatted-fragment.tex")),
+        doc("structures", include_str!("../../fixtures/formatted-structures.tex")),
+        doc("beamer", include_str!("../../fixtures/formatted-beamer.tex")),
         doc("article", include_str!("../../../../../templates/builtin/article/main.tex")),
         doc("example", include_str!("../../../../../templates/builtin/example/main.tex")),
         doc("example/introduction", include_str!("../../../../../templates/builtin/example/sections/introduction.tex")),

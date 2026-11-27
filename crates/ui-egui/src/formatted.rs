@@ -1838,19 +1838,27 @@ fn front_matter(ui: &mut egui::Ui, cx: &mut Cx<'_>, fm: &FrontMatter, depth: usi
     let para =
         |size: f32, color: Color32, role: egui::Role| Para { size, bold: role == egui::Role::Heading, color, role, empty_at: None, cell: None };
     ui.add_space(t.reading_size);
-    if !fm.title.is_empty() {
-        let range = span_of(&fm.title, 0);
+    // An empty field shows while the caret is in it (its text just deleted).
+    let caret = cx.caret;
+    let here = move |text: &[Inline], slot: &Range<usize>| caret.filter(|c| text.is_empty() && slot.start <= *c && *c <= slot.end);
+    let title_at = fm.title_slot.as_ref().and_then(|s| here(&fm.title, s));
+    if !fm.title.is_empty() || title_at.is_some() {
+        let range = span_of(&fm.title, title_at.unwrap_or(0));
         let mut inlines = fm.title.clone();
         let signs = note_signs(fm, &fm.title_notes);
         if !signs.is_empty() {
             inlines.push(mark(signs.join(","), range.end));
         }
-        let r = paragraph(ui, cx, &inlines, &range, &para(t.heading_sizes[0], t.text, egui::Role::Heading));
+        let r = paragraph(ui, cx, &inlines, &range, &Para { empty_at: title_at, ..para(t.heading_sizes[0], t.text, egui::Role::Heading) });
         ui.ctx().accesskit_node_builder(r.id, |node| node.set_level(1));
         ui.add_space(t.reading_size * 0.75);
     }
     for author in &fm.authors {
-        let range = span_of(&author.name, 0);
+        let at = here(&author.name, &author.slot);
+        if author.name.is_empty() && author.emails.is_empty() && at.is_none() {
+            continue;
+        }
+        let range = span_of(&author.name, at.unwrap_or(author.slot.start));
         let mut inlines = author.name.clone();
         let numbers =
             author.affiliations.iter().map(|k| fm.affiliations.iter().position(|a| &a.key == k).map_or_else(|| k.clone(), |i| (i + 1).to_string()));
@@ -1868,7 +1876,7 @@ fn front_matter(ui: &mut egui::Ui, cx: &mut Cx<'_>, fm: &FrontMatter, depth: usi
                 i
             }));
         }
-        let _ = paragraph(ui, cx, &inlines, &range, &para(t.reading_size * 1.1, t.text, egui::Role::Paragraph));
+        let _ = paragraph(ui, cx, &inlines, &range, &Para { empty_at: at, ..para(t.reading_size * 1.1, t.text, egui::Role::Paragraph) });
         ui.add_space(t.reading_size * 0.2);
     }
     if !fm.affiliations.is_empty() {
@@ -1876,23 +1884,31 @@ fn front_matter(ui: &mut egui::Ui, cx: &mut Cx<'_>, fm: &FrontMatter, depth: usi
     }
     let numbered = fm.affiliations.len() > 1 || fm.affiliations.iter().any(|a| !a.key.is_empty());
     for (i, a) in fm.affiliations.iter().enumerate() {
-        let range = span_of(&a.text, 0);
+        let at = here(&a.text, &a.slot);
+        if a.text.is_empty() && at.is_none() {
+            continue;
+        }
+        let range = span_of(&a.text, at.unwrap_or(a.slot.start));
         let mut inlines = Vec::new();
         if numbered {
             inlines.push(mark(format!("{}\u{2009}", i + 1), range.start));
         }
         inlines.extend(a.text.iter().cloned());
-        let _ = paragraph(ui, cx, &inlines, &range, &para(t.reading_size * 0.85, t.text_muted, egui::Role::Paragraph));
+        let _ = paragraph(ui, cx, &inlines, &range, &Para { empty_at: at, ..para(t.reading_size * 0.85, t.text_muted, egui::Role::Paragraph) });
     }
     if !fm.notes.is_empty() {
         ui.add_space(t.reading_size * 0.5);
     }
     for note in &fm.notes {
-        let range = span_of(&note.text, 0);
+        let at = here(&note.text, &note.slot);
+        if note.text.is_empty() && at.is_none() {
+            continue;
+        }
+        let range = span_of(&note.text, at.unwrap_or(note.slot.start));
         let sign = note_signs(fm, std::slice::from_ref(&note.key)).concat();
         let mut inlines = vec![mark(format!("{sign}\u{2009}"), range.start)];
         inlines.extend(note.text.iter().cloned());
-        let _ = paragraph(ui, cx, &inlines, &range, &para(t.reading_size * 0.85, t.text_muted, egui::Role::Paragraph));
+        let _ = paragraph(ui, cx, &inlines, &range, &Para { empty_at: at, ..para(t.reading_size * 0.85, t.text_muted, egui::Role::Paragraph) });
     }
     cx.align = align;
     if !fm.blocks.is_empty() {

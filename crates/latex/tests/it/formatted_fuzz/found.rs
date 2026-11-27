@@ -241,3 +241,136 @@ fn a_table_or_an_equation_inserted_in_an_empty_document_goes_in_its_body() {
         assert!(e.text.find("\\begin{t").or(e.text.find("\\begin{eq")).is_some_and(|i| i < end), "{:?}", e.text);
     }
 }
+
+#[test]
+fn a_dash_typed_before_a_dash_run_leaves_the_caret_after_the_dash_it_makes() {
+    // `a|--b` shows as `a–b`; a dash typed after `a` makes an em dash, the caret after it.
+    let mut e = after("a--b", &[Op::Click(0, 1)]);
+    assert_eq!(before_caret(&e), "a");
+    typed(&mut e, "-");
+    assert_eq!(before_caret(&e), "a\u{2014}", "the caret is not after the dash it typed");
+    typed(&mut e, "x");
+    assert_eq!(before_caret(&e), "a\u{2014}x", "the text typed next went inside the dash: {:?}", e.text);
+    // Quotes too: a backquote typed before one makes an opening double quote.
+    let mut e = after("a`b", &[Op::Click(0, 1)]);
+    typed(&mut e, "`");
+    typed(&mut e, "x");
+    assert_eq!(before_caret(&e), "a\u{201c}x", "{:?}", e.text);
+}
+
+#[test]
+fn a_logo_is_one_caret_step_and_backspace_after_it_deletes_it_whole() {
+    let text = "The \\LaTeX{} way";
+    let e = Editor::new(text);
+    let line = &e.shown().lines[0].line;
+    assert!((1.."LaTeX".len()).all(|k| !line.is_stop("The ".len() + k)), "the caret stops inside the logo");
+    // Right four times, then once more: past the whole logo.
+    let mut e = after(text, &[Op::End { shift: false }]);
+    for _ in 0.." way".len() {
+        assert!(e.run(&Op::Left { shift: false, word: false }).is_ok());
+    }
+    assert_eq!(before_caret(&e), "The LaTeX");
+    assert!(e.run(&Op::Backspace).is_ok());
+    assert_eq!(e.text, "The  way", "Backspace did not delete the logo whole");
+    let mut e = after(text, &[Op::Click(0, 4), Op::Delete]);
+    assert!(e.run(&Op::Type("x".to_owned())).is_ok());
+    assert!(!e.text.contains("LaTeX"), "Delete before the logo left it: {:?}", e.text);
+}
+
+#[test]
+fn a_heading_made_in_a_list_item_leaves_the_list() {
+    let text = "\\begin{itemize}\n  \\item One\n  \\item Two\n  \\item Three\n\\end{itemize}";
+    let mut e = after(text, &[Op::Down { shift: false }, Op::End { shift: false }, Op::Bar("heading_1")]);
+    let h = view::view(&e.text);
+    assert!(matches!(h.get(1).map(|b| &b.kind), Some(BlockKind::Heading { .. })), "Two is not a heading between the lists: {:?}", e.text);
+    assert_eq!(h.iter().filter(|b| matches!(b.kind, BlockKind::List { .. })).count(), 2, "{:?}", e.text);
+    typed(&mut e, "x");
+    assert!(e.text.contains("\\section{Twox}"), "the caret left the heading: {:?}", e.text);
+    // Nested two deep: out of both.
+    let nested = "\\begin{itemize}\n  \\item A\n  \\begin{itemize}\n    \\item B\n  \\end{itemize}\n\\end{itemize}";
+    let e = after(nested, &[Op::Down { shift: false }, Op::Bar("heading_2")]);
+    assert!(edit::here(&e.text, e.head).list.is_none(), "the heading is still in a list: {:?}", e.text);
+    assert!(e.text.contains("\\subsection{B}"), "{:?}", e.text);
+}
+
+#[test]
+fn bold_over_runs_with_a_line_end_between_them_leaves_no_empty_style() {
+    let e = after("\\begin{document}{a b}\n{c d}\\end{document}", &[Op::SelectAll, Op::Bar("bold")]);
+    assert!(!e.text.contains("\\textbf{\n}"), "the line end between the runs was made bold: {:?}", e.text);
+}
+
+#[test]
+fn a_reference_inserted_after_pressing_italic_goes_in_the_italic() {
+    let e = after("Word, more", &[Op::Click(0, 5), Op::Bar("italic"), Op::Ref("r".to_owned())]);
+    assert!(e.text.contains("\\textit{\\ref{r}}"), "{:?}", e.text);
+}
+
+#[test]
+fn italic_then_bold_with_nothing_typed_nests_the_styles_for_the_text_to_come() {
+    let mut e = after("e t", &[Op::Bar("italic"), Op::Backspace, Op::Bar("bold")]);
+    typed(&mut e, "x");
+    assert!(e.text.contains("\\textit{\\textbf{x}}"), "{:?}", e.text);
+}
+
+#[test]
+fn deleting_a_paragraph_and_the_start_of_a_theorem_leaves_the_caret_before_what_is_left() {
+    let mut e = after("Para.\\begin{theorem}Claim\\end{theorem}", &[Op::Down { shift: true }, Op::Right { shift: true, word: false }, Op::Backspace]);
+    typed(&mut e, "x");
+    assert!(e.text.contains("\\begin{theorem}xlaim"), "the text typed next went outside the theorem: {:?}", e.text);
+}
+
+#[test]
+fn enter_before_a_trailing_declaration_shows_the_new_paragraph() {
+    let mut e = after("\\begin{document}{Bold\\bfseries}\n\nNext\\end{document}", &[Op::End { shift: false }, Op::Enter]);
+    typed(&mut e, "x");
+    assert!(e.text.contains("\\bfseries}\n\nx\n\nNext"), "the line was broken inside the declaration's group: {:?}", e.text);
+}
+
+#[test]
+fn a_heading_whose_whole_text_a_selection_deletes_goes_unless_it_starts_there() {
+    // From the title's end to a heading's middle and on: the heading's command goes with its text.
+    let text = "\\title{T}\\begin{document}\\maketitle\n\n\\section{Head}\n\nBody\\end{document}";
+    let e = after(text, &[Op::End { shift: false }, Op::Down { shift: true }, Op::Down { shift: true }, Op::End { shift: true }, Op::Delete]);
+    assert!(!e.text.contains("\\section{}"), "an empty heading was left: {:?}", e.text);
+}
+
+#[test]
+fn text_typed_just_before_a_headings_label_goes_in_the_heading() {
+    let text = "\\section{Head}\\label{sec:h}\n\nBody";
+    let mut e = after(text, &[Op::End { shift: false }, Op::Left { shift: false, word: false }]);
+    typed(&mut e, "s");
+    assert!(e.text.starts_with("\\section{Heads}"), "{:?}", e.text);
+}
+
+#[test]
+fn a_table_inserted_after_pressing_bold_leaves_no_empty_bold() {
+    let e = after("Word", &[Op::End { shift: false }, Op::Bar("bold"), Op::Bar("table")]);
+    assert!(!e.text.contains("\\textbf{}"), "{:?}", e.text);
+}
+
+#[test]
+fn a_selection_ending_in_a_labelled_item_keeps_its_label() {
+    let text = "\\begin{description}\\item[Term]\\item\\end{description}";
+    let e = after(text, &[Op::End { shift: false }, Op::Down { shift: true }, Op::Backspace]);
+    assert!(e.text.contains("Term"), "the label went with an item the selection did not hold: {:?}", e.text);
+}
+
+#[test]
+fn an_author_after_maketitle_is_not_in_the_title_block() {
+    let text = "\\title{T}\\author{A}\\begin{document}\\maketitle\n\nText.\n\n\\author{Late}\\end{document}";
+    let blocks = view::view(text);
+    let Some(BlockKind::Title { author, .. }) = blocks.iter().map(|b| &b.kind).find(|k| matches!(k, BlockKind::Title { .. })) else {
+        panic!("no title block: {blocks:?}");
+    };
+    let shown: Vec<_> = author
+        .iter()
+        .filter_map(|i| match &i.kind {
+            view::InlineKind::Text { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(shown, ["A"], "the title block shows an author it does not print");
+    // Deleting the title block's text cannot reach across the body.
+    let e = after(text, &[Op::Down { shift: false }, Op::End { shift: false }, Op::Backspace]);
+    assert!(e.text.contains("\\begin{document}\\maketitle"), "{:?}", e.text);
+}

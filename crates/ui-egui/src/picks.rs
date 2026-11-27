@@ -175,15 +175,38 @@ impl App {
             return;
         }
         crate::editor::send_edits(self);
-        let Ok(text) = self.session.project().text(&path).map(str::to_owned) else { return };
-        let caret = crate::formatted_edit::caret_byte(self).min(text.len());
-        let blocks = texcraft_latex::view::view(&text);
-        let at = blocks.iter().find(|b| b.range.end >= caret).map_or(text.len(), |b| b.range.end);
+        let Ok(mut text) = self.session.project().text(&path).map(str::to_owned) else { return };
+        let mut caret = crate::formatted_edit::caret_byte(self).min(text.len());
+        // An empty style or heading the caret stands in (Bold pressed, nothing typed) is not left.
+        if let Some(empty) = texcraft_latex::edit::empty_markup_at(&text, caret) {
+            let d = &mut self.editor.source.doc;
+            let (s, e) = (d.buffer.byte_to_char(empty.start), d.buffer.byte_to_char(empty.end));
+            let before = d.selection.clone();
+            let after = texcraft_buffer::Selection::single(s, s);
+            if d.buffer.edit(texcraft_buffer::Transaction::replace(s, e, ""), &before, &after, texcraft_buffer::EditKind::Other).is_ok() {
+                d.selection = after;
+                crate::editor::send_edits(self);
+                text = self.session.project().text(&path).map(str::to_owned).unwrap_or(text);
+                caret = empty.start;
+            }
+        }
+        // Where a table goes: in the item holding the caret, not in the preamble or after the body.
+        let at = texcraft_latex::edit::block_point(&text, caret);
         let stem = image.rsplit('/').next().unwrap_or(image).rsplit_once('.').map_or(image, |(s, _)| s).to_owned();
         let label: String = stem.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | ':')).collect();
         let chars = text.get(..at).map_or(0, |s| s.chars().count());
         let params = json!({"path": path.as_str(), "at": chars, "image": image, "width": 0.8, "placement": "htbp", "label": format!("fig:{label}")});
-        if self.run("figure.insert", params).is_some() {
+        if let Some(done) = self.run("figure.insert", params) {
+            // The caret in the new figure's caption, where its text goes next.
+            let caption = done["inserted"].as_str().and_then(|s| s.find("\\caption{")).map(|i| at + i + "\\caption{".len());
+            self.editor.sync(Some(&path), &self.session);
+            if let Some(byte) = caption {
+                let d = &mut self.editor.source.doc;
+                let c = d.buffer.byte_to_char(byte.min(d.buffer.text().len()));
+                d.selection = texcraft_buffer::Selection::single(c, c);
+                d.buffer.seal();
+                self.editor.formatted.editing.reveal = true;
+            }
             let said = tl!("{image} is in a new figure: give it a caption with Edit Figure….").replace("{image}", image);
             self.view.status = Some((said, false));
         }
