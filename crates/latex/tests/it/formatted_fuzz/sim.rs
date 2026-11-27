@@ -549,7 +549,11 @@ impl Editor {
             return self.replace(v, (a, h), &source, done);
         }
         if let [one] = v.doc().pieces(&self.text, a, h).as_slice()
-            && v.doc().lines.get(a.min(h).line).and_then(|l| l.atom_after(a.min(h).at)).as_ref() != Some(one)
+            && !v
+                .doc()
+                .lines
+                .get(a.min(h).line)
+                .is_some_and(|l| l.parts().iter().any(|p| matches!(p, edit::Part::Atom { range, .. } if range == one)))
         {
             let open = format!("\\href{{{url}}}{{");
             let changes = [Change { range: one.start..one.start, text: open.clone() }, Change { range: one.end..one.end, text: "}".to_owned() }];

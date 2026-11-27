@@ -492,3 +492,14 @@ fn a_label_chip_alone_is_not_made_a_link() {
         after(text, &[Op::End { shift: false }, Op::Left { shift: true, word: false }, Op::Link("https://example.org".to_owned(), String::new())]);
     assert!(!e.text.contains("\\href"), "{:?}", e.text);
 }
+
+#[test]
+fn a_selection_of_a_label_chip_and_the_gap_before_it_is_not_made_a_link() {
+    let text = "\\begin{figure}\n\\caption{Cap}\n\\label{fig:a}\n\\end{figure}";
+    let left = Op::Left { shift: false, word: false };
+    let e = after(
+        text,
+        &[Op::End { shift: false }, left.clone(), left, Op::End { shift: true }, Op::Link("https://example.org".to_owned(), "site".to_owned())],
+    );
+    assert!(!e.text.contains("\\href"), "{:?}", e.text);
+}

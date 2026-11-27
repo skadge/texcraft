@@ -622,7 +622,13 @@ fn link(app: &mut App, f: &Frame<'_>, url: &str, text: &str) {
     }
     match f.doc.pieces(f.text, a, h).as_slice() {
         // Text, not a chip or a formula (a label made a link breaks its float).
-        [one] if f.doc.lines.get(a.min(h).line).and_then(|l| l.atom_after(a.min(h).at)).as_ref() != Some(one) => {
+        [one]
+            if !f
+                .doc
+                .lines
+                .get(a.min(h).line)
+                .is_some_and(|l| l.parts().iter().any(|p| matches!(p, edit::Part::Atom { range, .. } if range == one))) =>
+        {
             let open = format!("\\href{{{url}}}{{");
             let changes = [Change { range: one.start..one.start, text: open.clone() }, Change { range: one.end..one.end, text: "}".to_owned() }];
             let caret = one.end + open.len() + 1;
