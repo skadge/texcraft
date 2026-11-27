@@ -249,7 +249,8 @@ What it does:
   - the command line and agents: the session only.
   Never in the preferences, the library, a log or a command's result (tokens do not print; tests
   look for them in every result).
-- **Sign Out** (Settings › Accounts; `forge.sign_out {service}`): forgets the sign-in at once and,
+- **Disconnect…** (Settings › Accounts, asking first; `accounts.disconnect {host}`, or
+  `forge.sign_out {service}` for the sign-in alone): forgets the sign-in at once and,
   on GitLab, revokes the token (`/oauth/revoke`) in the background; a failed revocation is said.
   GitHub lets only an application's server revoke its tokens, so signing out of GitHub says to
   remove TeXCraft under GitHub's Settings › Applications.
@@ -279,14 +280,37 @@ Not yet: GitHub in the browser (it needs a token exchange on a server); the bran
 when a stored browser project opens again; in the browser, the dialog the user was in when the page
 left for GitLab is not opened again on return.
 
+### Connections: Settings › Accounts (done)
+
+One list of every place TeXCraft reaches for the user (docs/design/connections.md): each forge
+(gitlab.com, github.com, each server added) with its sign-in or token, and each other git server
+(Overleaf's, any host) with its token, read from the stores above; nothing new is stored but the
+default connection's address (`default_connection` in the preferences). Each row says who is
+signed in, its state (signed in, token, signed out, expired, signing in), where it is kept, and
+has Sign In, Sign In Again, Allow Commits, Set as Default, Replace…, Disconnect… and Remove
+Server…. Add a Connection… offers GitLab, GitHub, a GitLab server, a GitHub Enterprise Server,
+Overleaf and another git server, then the sign-in, the server's registration or a token; a
+forge's token is checked (`/user`, who it is for) before it is kept. Import a Project opens on
+the default connection's card, and Save Project to… on it.
+
+- `accounts.list`: the rows (never a token), the default, where things are kept, what can be
+  added here and with which commands.
+- `accounts.add {kind, host?, token, background?}`: a token connection.
+- `accounts.disconnect {instance | host}`: signs out (revoking on GitLab), forgets the tokens kept
+  and given; linked projects stay, and ask at their next sync.
+- `accounts.set_default {instance | null}`.
+
+Everything kept by earlier versions (sign-ins, tokens, servers, hosts) is listed as it is, with
+no new sign-in.
+
 ### Self-managed servers (done)
 
 A company's or a university's GitLab, or a GitHub Enterprise Server, has no TeXCraft application
 until someone registers one there: the user for themselves, or the administrator for everyone.
 TeXCraft says exactly what to register, then signs in there as on gitlab.com.
 
-- **Adding a server** (Settings › Accounts › Add a GitLab Server… or Add a GitHub Enterprise
-  Server…; or, in the Open dialog, "Add git.example.org for Signing In…" when the project's host
+- **Adding a server** (Settings › Accounts › Add a Connection… › GitLab Server or GitHub
+  Enterprise Server; or, in the Open dialog, "Add git.example.org for Signing In…" when the project's host
   has no application yet):
   1. The user types the server's address (any page on it will do: its scheme and host are kept;
      HTTPS only, but on `localhost`). gitlab.com and github.com are known already.

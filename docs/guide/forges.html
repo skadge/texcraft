@@ -58,14 +58,14 @@
         <dt>Sign In with GitHub <span class="tag">Desktop only</span></dt>
         <dd>The dialog shows a code, with <span class="ui">Copy Code</span> and <span class="ui">Open GitHub's Page</span>; enter the code on GitHub's page. In the browser, GitHub's sign-in does not answer web pages, so use a token there.</dd>
         <dt>A personal access token</dt>
-        <dd>Choose <span class="ui">Use a personal access token instead</span> in the dialog, and paste the token in the <span class="ui">Personal access token</span> field. With <span class="ui">Remember on this computer</span> (ticked at first), TeXCraft keeps the token in your system's keychain, so that the next import from the same service, Push, Pull and Sync need no token, after a restart too; in the browser, <span class="ui">Remember in this tab</span> keeps it in the tab's session storage until you close the tab. Untick it and the token is kept only while TeXCraft runs (in the browser, while the page is open). A token is never written to the preferences or a log. <a href="settings.html#accounts">Settings › Accounts</a> lists the tokens kept, with <span class="ui">Replace…</span> and <span class="ui">Forget</span>.
+        <dd>Choose <span class="ui">Use a personal access token instead</span> in the dialog, and paste the token in the <span class="ui">Personal access token</span> field. With <span class="ui">Remember on this computer</span> (ticked at first), TeXCraft keeps the token in your system's keychain, so that the next import from the same service, Push, Pull and Sync need no token, after a restart too; in the browser, <span class="ui">Remember in this tab</span> keeps it in the tab's session storage until you close the tab. Untick it and the token is kept only while TeXCraft runs (in the browser, while the page is open). A token is never written to the preferences or a log. <a href="settings.html#accounts">Settings › Accounts</a> lists the tokens kept, with <span class="ui">Replace…</span> and <span class="ui">Disconnect…</span>.
           <ul>
             <li>GitLab: the <code>read_api</code> scope to open a project, <code>api</code> to commit or make a repository.</li>
             <li>GitHub: a fine-grained token with access to the repository, with Contents read-only to open it, read and write to commit, and Pull requests read and write to open a pull request; Administration read and write to make a repository. A classic token needs the <code>repo</code> scope.</li>
           </ul>
         </dd>
       </dl>
-      <p><span class="ui">Sign Out</span>, in Settings › Accounts, forgets the sign-in at once. On GitLab it also withdraws TeXCraft's access; on GitHub, remove TeXCraft under your GitHub account's settings, in the applications you have authorised.</p>
+      <p><span class="ui">Disconnect…</span>, in Settings › Accounts, asks first, then forgets the sign-in. On GitLab it also withdraws TeXCraft's access; on GitHub, remove TeXCraft under your GitHub account's settings, in the applications you have authorised.</p>
 
       <h2 id="open">Importing a project from GitLab or GitHub</h2>
       <!-- screenshot: Import a Project's GitLab page with suggestions and the branch list (a test account, no real names) -->
@@ -134,7 +134,7 @@
       <h2 id="servers">Your organisation's servers</h2>
       <p>A company's or a university's GitLab, or a GitHub Enterprise Server, works as gitlab.com and github.com do, once TeXCraft is registered on it as an application, by you for yourself or by its administrator for everyone.</p>
       <ol>
-        <li>In <a href="settings.html#accounts">Settings › Accounts</a>, choose <span class="ui">Add a GitLab Server…</span> or <span class="ui">Add a GitHub Enterprise Server…</span>, and type the server's address (any page on it will do). The Open dialog offers the same for a project on a server it does not know.</li>
+        <li>In <a href="settings.html#accounts">Settings › Accounts</a>, choose <span class="ui">Add a Connection…</span>, then <span class="ui">GitLab Server</span> or <span class="ui">GitHub Enterprise Server</span>, and type the server's address (any page on it will do). The Open dialog offers the same for a project on a server it does not know.</li>
         <li>TeXCraft checks that the server answers as GitLab or GitHub does, then shows what to register on it, each value with a <span class="ui">Copy</span> button, and a button opening the right page.</li>
         <li>Paste the <span class="ui">Application ID</span> (on GitHub, the <span class="ui">Client ID</span>) you get, and choose <span class="ui">Add Server</span>. Then sign in with its own Sign In button.</li>
       </ol>
