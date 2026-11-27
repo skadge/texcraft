@@ -58,6 +58,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("edit.ai_review", "Review This Section with AI", "Edit", None),
     ui("edit.reject_all", "Reject All Suggestions", "Edit", None),
     ui("app.settings", "Settings…", "Edit", Some("Cmd+,")),
+    // Settings › Accounts' Add a Connection… (`{"kind": "gitlab"}` at that card's page).
+    ui("app.add_connection", "Add a Connection…", "Edit", None),
     // Every command in a searchable list (`commands.rs`): what the menus leave out is there.
     ui("view.commands", "All Commands…", "Edit", Some("Cmd+Shift+P")),
     // `{"how": "shorter"}`, or `{"how": "translate", "language": "French"}`: the Edit menu's and
@@ -611,6 +613,7 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         // Importing replaces the project: unsaved changes are asked about first. `forge.open`
         // opens Import a Project at the GitLab or GitHub card (`{url, service}` fill it in).
         "project.import_dialog" => crate::import::run(app, params),
+        "app.add_connection" => crate::accounts::run(app, params),
         "forge.open" => crate::import::run_forge_open(app, params),
         "forge.commit" => crate::forge::ask_commit(app),
         "forge.pull" => crate::forge::pull(app),

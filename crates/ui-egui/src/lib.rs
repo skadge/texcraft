@@ -11,6 +11,7 @@
 pub mod i18n;
 pub mod theme;
 
+mod accounts;
 mod ai;
 mod ai_ask;
 mod ai_make;
@@ -339,6 +340,7 @@ impl App {
         session.restore_ai(prefs.ai.clone());
         session.restore_forge_servers(prefs.forge_servers.clone());
         session.restore_git_hosts(prefs.git_hosts.clone());
+        session.restore_default_connection(prefs.default_connection.clone());
         session.settings.spelling = prefs.spelling.clone();
         session.settings.grammar = prefs.grammar.clone();
         session.settings.hidden_messages = prefs.hidden_messages.clone();

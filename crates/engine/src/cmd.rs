@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 
 use crate::{Result, Session};
 
+pub(crate) mod accounts;
 mod ai;
 mod build;
 pub(crate) mod clone;
@@ -95,6 +96,7 @@ pub fn all() -> &'static [CommandSpec] {
         v.extend(history::specs());
         v.extend(forge::specs());
         v.extend(forge_auth::specs());
+        v.extend(accounts::specs());
         v.extend(forge_pick::specs());
         v.extend(git::specs());
         v.extend(clone::specs());

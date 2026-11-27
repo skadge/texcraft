@@ -142,10 +142,12 @@ fn signing_in_from_the_dialog_then_imports_with_no_token() {
     assert!(h.query_by_label_contains("Imported paper (main) into").is_some(), "the project was not imported with the sign-in");
     assert!(dir.join("paper/.git").is_dir(), "not cloned into the documents folder");
 
-    // Settings › Accounts: who, and Sign Out.
+    // Settings › Accounts: the sign-in made in Import a Project is a connection there, with
+    // who and Disconnect (one store, one list).
     ui_cmd::run(h.state_mut(), "app.settings");
     h.run();
     h.get_by_label("Accounts").click();
     h.run();
-    assert!(h.query_by_role_and_label(Role::Button, "Sign Out").is_some());
+    assert!(h.query_by_label("Ada Lovelace (@ada)").is_some(), "who is signed in is not in the list");
+    assert!(h.query_by_role_and_label(Role::Button, "Disconnect…: gitlab.com").is_some());
 }

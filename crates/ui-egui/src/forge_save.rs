@@ -51,9 +51,10 @@ pub(crate) struct Saved {
     pub push_error: Option<String>,
 }
 
-/// Opens the dialog for `service`, with a name made from the project's.
+/// Opens the dialog for `service`, with a name made from the project's, on the default
+/// connection when it is one of `service`'s.
 pub(crate) fn ask(app: &mut App, service: Service) {
-    let instance = texcraft_engine::forge::oauth::instance(service).to_owned();
+    let instance = servers(app, service).into_iter().next().unwrap_or_else(|| texcraft_engine::forge::oauth::instance(service).to_owned());
     let use_token = app.session.forge_sign_in_unavailable_at(service, &instance).is_some();
     app.view.dialog = Some(Dialog::ForgeSave(Box::new(SaveForm {
         service,
@@ -74,11 +75,33 @@ pub(crate) fn ask(app: &mut App, service: Service) {
     })));
 }
 
-/// The servers of `service` the dialog offers: its public one, then those added.
+/// The connections of `service` the dialog offers, which can all create repositories: the
+/// default first, then its public server and those added.
 fn servers(app: &App, service: Service) -> Vec<String> {
     let mut out = vec![texcraft_engine::forge::oauth::instance(service).to_owned()];
     out.extend(app.session.forge_servers().into_iter().filter(|s| s.service == service).map(|s| s.instance));
+    if let Some((default, _)) = app.session.default_connection().filter(|(_, s)| *s == service)
+        && let Some(at) = out.iter().position(|i| *i == default)
+    {
+        let first = out.remove(at);
+        out.insert(0, first);
+    }
     out
+}
+
+/// How a connection is named in the server list: its host, and who is connected there.
+fn connection_name(app: &App, service: Service, instance: &str) -> String {
+    let host = texcraft_engine::forge::servers::host_of(instance);
+    let who = app.session.forge_signed_in_at(instance).filter(|g| g.service == service).and_then(|g| g.user.as_ref()).map(|u| u.username.clone());
+    let mut name = match who {
+        Some(who) => tl!("{host} · signed in as @{username}").replace("{host}", host).replace("{username}", &who),
+        None if app.session.forge_reaches(instance, service) => tl!("{host} · token").replace("{host}", host),
+        None => tl!("{host} · not connected").replace("{host}", host),
+    };
+    if app.session.default_connection().is_some_and(|(i, _)| i == instance) {
+        name = format!("{name} · {}", tl!("Default"));
+    }
+    name
 }
 
 /// Asks where the account can make repositories, once per server and key, when it can be asked.
@@ -182,7 +205,7 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
         _ => return,
     };
     let view = sign_in_view(app, service, &instance);
-    let servers = servers(app, service);
+    let servers: Vec<(String, String)> = servers(app, service).into_iter().map(|i| (connection_name(app, service, &i), i)).collect();
     let mut outcome = Outcome::Open;
     let mut action = None;
     let mut open_page = None;
@@ -248,7 +271,7 @@ fn save_form(
     form: &mut SaveForm,
     browser: bool,
     view: &crate::forge::SignInView,
-    servers: &[String],
+    servers: &[(String, String)],
     action: &mut Option<SignInAction>,
 ) -> Outcome {
     title(ui, t, say(form.service, tl!("Save Project to GitLab"), tl!("Save Project to GitHub")));
@@ -276,12 +299,12 @@ fn save_form(
     ui.label(RichText::new(what).font(t.small()).color(t.text_muted));
     if servers.len() > 1 {
         ui.add_space(t.unit * 2.0);
-        let label = ui.label(RichText::new(tl!("Server")).color(t.text_muted));
-        let shown = texcraft_engine::forge::servers::host_of(&form.instance).to_owned();
+        let label = ui.label(RichText::new(tl!("Connection")).color(t.text_muted));
+        let shown = servers.iter().find(|(_, i)| *i == form.instance).map_or_else(|| form.instance.clone(), |(n, _)| n.clone());
         let mut chosen = None;
         let combo = craft_ui::ComboBox::from_id_salt("forge-save-server").width(ui.available_width()).selected_text(shown).show_ui(ui, |ui| {
-            for s in servers {
-                if ui.selectable_label(*s == form.instance, texcraft_engine::forge::servers::host_of(s)).clicked() {
+            for (name, s) in servers {
+                if ui.selectable_label(*s == form.instance, name).clicked() {
                     chosen = Some(s.clone());
                 }
             }

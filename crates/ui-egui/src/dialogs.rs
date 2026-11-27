@@ -70,6 +70,8 @@ pub(crate) enum Dialog {
     ForgeSave(Box<crate::forge_save::SaveForm>),
     ForgeServer(crate::forge_server::ServerForm),
     ForgeProposal(crate::forge_server::ProposalForm),
+    /// Add a Connection (Settings › Accounts), or the question before Disconnect or Remove Server.
+    Connection(Box<crate::accounts::Form>),
     /// A token for a remote's server, for a Sync, a push or a pull.
     GitToken(Box<crate::sync::TokenForm>),
     Figure(Box<crate::figure_dialog::FigureForm>),
@@ -108,6 +110,7 @@ impl Dialog {
             Dialog::ForgeSave(_) => "forge_save",
             Dialog::ForgeServer(_) => "forge_server",
             Dialog::ForgeProposal(_) => "forge_proposal",
+            Dialog::Connection(_) => "connection",
             Dialog::GitToken(_) => "git_token",
             Dialog::Figure(_) => "figure",
             Dialog::AiMake(_) => "ai_make",
@@ -138,6 +141,7 @@ fn own_window(app: &mut App, ctx: &egui::Context) -> bool {
         Some(Dialog::ForgeSave(_)) => crate::forge_save::dialog,
         Some(Dialog::GitToken(_)) => crate::sync::dialog,
         Some(Dialog::Import(_)) => crate::import::dialog,
+        Some(Dialog::Connection(_)) => crate::accounts::dialog,
         Some(Dialog::ForgeCommit(_) | Dialog::ForgeResolve(_) | Dialog::ForgeMergeRequest(_)) => crate::forge::dialog,
         _ => return false,
     };
@@ -177,6 +181,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         | Dialog::ForgeSave(_)
         | Dialog::ForgeServer(_)
         | Dialog::ForgeProposal(_)
+        | Dialog::Connection(_)
         | Dialog::GitToken(_)
         | Dialog::AiMake(_)
         | Dialog::AiReference(_)

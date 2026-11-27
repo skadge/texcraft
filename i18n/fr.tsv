@@ -1879,8 +1879,8 @@ unit	{n} s	{n} s
 @msg	TeX Live has no package {package}	TeX Live n'a pas de paquet {package}
 @msg	TeX Live package {package}	Paquet TeX Live {package}
 @msg	TeXCraft cannot wait for GitLab's answer on {addr} ({e}): another program, or another TeXCraft signing in, uses it. Try again, or use a personal access token.	TeXCraft ne peut pas attendre la réponse de GitLab sur {addr} ({e}) : un autre programme, ou un autre TeXCraft en cours de connexion, l'utilise. Réessayez, ou utilisez un jeton d'accès personnel.
-@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a GitHub Enterprise Server…, or forge.add_server), or use a personal access token.	TeXCraft n'a pas d'application sur ce serveur : ajoutez-la d'abord (Paramètres › Comptes › Ajouter un serveur GitHub Enterprise…, ou forge.add_server), ou utilisez un jeton d'accès personnel.
-@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a GitLab Server…, or forge.add_server), or use a personal access token.	TeXCraft n'a pas d'application sur ce serveur : ajoutez-la d'abord (Paramètres › Comptes › Ajouter un serveur GitLab…, ou forge.add_server), ou utilisez un jeton d'accès personnel.
+@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a Connection… › GitHub Enterprise Server, or forge.add_server), or use a personal access token.	TeXCraft n'a pas d'application sur ce serveur : ajoutez-la d'abord (Paramètres › Comptes › Ajouter une connexion… › Serveur GitHub Enterprise, ou forge.add_server), ou utilisez un jeton d'accès personnel.
+@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a Connection… › GitLab Server, or forge.add_server), or use a personal access token.	TeXCraft n'a pas d'application sur ce serveur : ajoutez-la d'abord (Paramètres › Comptes › Ajouter une connexion… › Serveur GitLab, ou forge.add_server), ou utilisez un jeton d'accès personnel.
 @msg	TeXCraft is not signed in to {value}.	TeXCraft n'est pas connecté à {value}.
 @msg	TeXCraft is signed in to {value} to read only: committing needs permission to write. Sign in again allowing commits (forge.sign_in with write), then commit.	TeXCraft est connecté à {value} en lecture seule : valider nécessite l'autorisation d'écrire. Reconnectez-vous en autorisant les commits (forge.sign_in avec write), puis validez.
 @msg	TeXCraft is signed in to {value} to read only: this needs permission to write. Sign in again allowing commits (forge.sign_in with write), then try again.	TeXCraft est connecté à {value} en lecture seule : ceci nécessite l'autorisation d'écrire. Reconnectez-vous en autorisant les commits (forge.sign_in avec write), puis réessayez.
@@ -2432,8 +2432,8 @@ unit	{n} s	{n} s
 	New token for {host}	Nouveau jeton pour {host}
 	Keep	Conserver
 	Remember in this tab	Mémoriser dans cet onglet
-	Kept in the system's keychain, so that Sync, push, pull and later imports need no token. Settings › Accounts lists it, with Replace… and Forget.	Conservé dans le trousseau du système, pour que Synchroniser, envoyer, récupérer et les importations suivantes n'aient pas besoin de jeton. Réglages › Comptes le liste, avec Remplacer… et Oublier.
-	Kept in this tab's session storage until the tab is closed. Settings › Accounts lists it, with Replace… and Forget.	Conservé dans le stockage de session de cet onglet jusqu'à sa fermeture. Réglages › Comptes le liste, avec Remplacer… et Oublier.
+	Kept in the system's keychain, so that Sync, push, pull and later imports need no token. Settings › Accounts lists it, with Replace… and Disconnect….	Conservé dans le trousseau du système, pour que Synchroniser, envoyer, récupérer et les importations suivantes n'aient pas besoin de jeton. Réglages › Comptes le liste, avec Remplacer… et Déconnecter….
+	Kept in this tab's session storage until the tab is closed. Settings › Accounts lists it, with Replace… and Disconnect….	Conservé dans le stockage de session de cet onglet jusqu'à sa fermeture. Réglages › Comptes le liste, avec Remplacer… et Déconnecter….
 	This page has no storage for it: the token is kept while the page is open only.	Cette page n'a pas de stockage pour lui : le jeton n'est conservé que tant que la page est ouverte.
 	This computer has no keychain TeXCraft can use: the token is kept while TeXCraft runs only.	Cet ordinateur n'a pas de trousseau que TeXCraft puisse utiliser : le jeton n'est conservé que tant que TeXCraft fonctionne.
 	Kept while this page is open, then forgotten.	Conservé tant que cette page est ouverte, puis oublié.
@@ -2444,7 +2444,7 @@ unit	{n} s	{n} s
 	Receiving the files…	Réception des fichiers…
 	Import failed	Échec de l'importation
 	Importing…	Importation…
-	Kept in the system's keychain, so that Sync, push and pull ask no more. Settings › Accounts lists it, with Replace… and Forget.	Conservé dans le trousseau du système, pour que Synchroniser, envoyer et récupérer ne le demandent plus. Réglages › Comptes le liste, avec Remplacer… et Oublier.
+	Kept in the system's keychain, so that Sync, push and pull ask no more. Settings › Accounts lists it, with Replace… and Disconnect….	Conservé dans le trousseau du système, pour que Synchroniser, envoyer et récupérer ne le demandent plus. Réglages › Comptes le liste, avec Remplacer… et Déconnecter….
 	Fetching your projects…	Récupération de vos projets…
 	Fetching your repositories…	Récupération de vos dépôts…
 	Still fetching your projects…	Récupération de vos projets en cours…
@@ -2625,3 +2625,75 @@ unit	{n} MB	{n} Mo
 @msg	Failed: {package} is not installed	Échec : {package} n’est pas installé
 @msg	Failed: {file} was not found	Échec : {file} est introuvable
 @msg	Failed: see the build log	Échec : voir le journal de compilation
+	Add a Connection	Ajouter une connexion
+	Add a Connection…	Ajouter une connexion…
+	Allow Commits	Autoriser les commits
+	Any HTTPS host and a token	N'importe quel hôte HTTPS et un jeton
+	Back to connections	Retour aux connexions
+	Checked with the service, then kept in the system's keychain; never in the preferences.	Vérifié auprès du service, puis conservé dans le trousseau du système ; jamais dans les préférences.
+	Checked with the service, then kept in this tab's session storage until the tab is closed.	Vérifié auprès du service, puis conservé dans le stockage de session de cet onglet jusqu'à sa fermeture.
+	Checked with the service, then kept while TeXCraft runs.	Vérifié auprès du service, puis conservé tant que TeXCraft tourne.
+	Checking the token…	Vérification du jeton…
+	Connect TeXCraft to where your projects live	Reliez TeXCraft aux endroits où sont vos projets
+	Connect to GitHub	Se connecter à GitHub
+	Connect to GitLab	Se connecter à GitLab
+	Connect to Overleaf	Se connecter à Overleaf
+	Connect to a Git Server	Se connecter à un serveur git
+	Connect to a GitHub Enterprise Server	Se connecter à un serveur GitHub Enterprise
+	Connect to a GitLab Server	Se connecter à un serveur GitLab
+	Connected to {host} as @{username}.	Connecté à {host} en tant que @{username}.
+	Connected to {host}.	Connecté à {host}.
+	Connected: it is in the list of connections.	Connecté : la connexion figure dans la liste.
+	Connection	Connexion
+	Default	Par défaut
+	Disconnect	Déconnecter
+	Disconnect from {host}?	Se déconnecter de {host} ?
+	Disconnected from {host}.	Déconnecté de {host}.
+	Disconnect…	Déconnecter…
+	Expired	Expirée
+	This session only	Cette session seulement
+	Git server over HTTPS	Serveur git en HTTPS
+	GitHub Enterprise Server	Serveur GitHub Enterprise
+	GitLab and GitHub	GitLab et GitHub
+	In the keychain	Dans le trousseau
+	Kept in the system's keychain; Sync, push, pull and imports from this server use it.	Conservé dans le trousseau du système ; Synchroniser, envoyer, récupérer et les importations depuis ce serveur l'utilisent.
+	In this tab	Dans cet onglet
+	Kept in this tab's session storage until the tab is closed.	Conservé dans le stockage de session de cet onglet jusqu'à sa fermeture.
+	Kept while TeXCraft runs.	Conservé tant que TeXCraft tourne.
+	Not signed in	Non connecté
+	Opens and commits	Ouvre et fait des commits
+	Other Git Server	Autre serveur git
+	Other git servers	Autres serveurs git
+	Overleaf	Overleaf
+	Projects linked to it stay as they are; their next Sync asks you to sign in or for a token.	Les projets qui y sont liés restent tels quels ; leur prochaine synchronisation vous demande de vous connecter ou un jeton.
+	Provided by your organisation	Fourni par votre organisation
+	Read only until the first commit	Lecture seule jusqu'au premier commit
+	Remove Server…	Retirer le serveur…
+	Remove {host}?	Retirer {host} ?
+	Self-managed GitLab	GitLab auto-hébergé
+	Set as Default	Définir par défaut
+	Sign In Again	Se reconnecter
+	Sign in to GitLab or GitHub, add your organisation's server, or keep a token for Overleaf or another git server. Then Import a Project, Sync and Save Project to… reach them without asking again.	Connectez-vous à GitLab ou GitHub, ajoutez le serveur de votre organisation ou conservez un jeton pour Overleaf ou un autre serveur git. Importer un projet, Synchroniser et Enregistrer le projet sur… y accèdent ensuite sans redemander.
+	Sign-ins and tokens are kept in the system's keychain, never in the preferences.	Les connexions et les jetons sont conservés dans le trousseau du système, jamais dans les préférences.
+	Sign-ins and tokens are kept in this tab's session storage: a reload keeps them, closing the tab forgets them.	Les connexions et les jetons sont conservés dans le stockage de session de cet onglet : un rechargement les garde, fermer l'onglet les oublie.
+	Sign-ins and tokens are kept while TeXCraft runs only.	Les connexions et les jetons ne sont conservés que tant que TeXCraft tourne.
+	Signed in	Connecté
+	Signed out	Déconnecté
+	Signing in lets TeXCraft list your GitHub repositories, import them, commit and make new ones. A personal access token works too.	Une fois connecté, TeXCraft peut lister vos dépôts GitHub, les importer, faire des commits et en créer. Un jeton d'accès personnel convient aussi.
+	Signing in lets TeXCraft list your GitLab projects, import them, commit and make new ones. A personal access token works too.	Une fois connecté, TeXCraft peut lister vos projets GitLab, les importer, faire des commits et en créer. Un jeton d'accès personnel convient aussi.
+	Signing in…	Connexion en cours…
+	TeXCraft signs out of {host}, removes its token, and forgets the server and its application.	TeXCraft se déconnecte de {host}, retire son jeton et oublie le serveur et son application.
+	TeXCraft signs out of {host}, revoking the sign-in where the service allows it, and removes its token from where it is kept.	TeXCraft se déconnecte de {host}, révoque la connexion là où le service le permet, et retire son jeton de là où il est conservé.
+	The desktop app connects to it; projects from it can be imported here as zip files.	L'application de bureau s'y connecte ; ses projets peuvent être importés ici en fichiers zip.
+	The keychain cannot be read, so sign-ins are kept for this session only: {why}	Le trousseau ne peut pas être lu, les connexions ne valent donc que pour cette session : {why}
+	The sign-in expired: sign in again	La connexion a expiré : reconnectez-vous
+	Use a Token…	Utiliser un jeton…
+	Where your projects live: Import a Project, Sync and Save Project to… use these.	Là où sont vos projets : Importer un projet, Synchroniser et Enregistrer le projet sur… les utilisent.
+	Your organisation's GitHub	Le GitHub de votre organisation
+	Your organisation's GitLab	Le GitLab de votre organisation
+	{host} is the default connection.	{host} est la connexion par défaut.
+	{host} · not connected	{host} · non connecté
+	{host} · signed in as @{username}	{host} · connecté en tant que @{username}
+	{host} · token	{host} · jeton
+	Token for {username}	Jeton de {username}
+	Token kept	Jeton conservé

@@ -16,15 +16,15 @@ use texcraft_engine::forge::fake::{FakeGitLab, Script};
 use texcraft_engine::forge::oauth::{self, Clients};
 use texcraft_engine::forge::{Request, Sending, Service, Transport};
 
-const ACCESS: &str = "gl-oauth-access-1";
-const REFRESH: &str = "gl-oauth-refresh-1";
+pub(crate) const ACCESS: &str = "gl-oauth-access-1";
+pub(crate) const REFRESH: &str = "gl-oauth-refresh-1";
 
 /// A keychain in memory, shared between sessions (a restart).
 #[derive(Clone, Default)]
-struct Keychain(Arc<Mutex<BTreeMap<String, String>>>);
+pub(crate) struct Keychain(pub(crate) Arc<Mutex<BTreeMap<String, String>>>);
 
 impl Keychain {
-    fn dump(&self) -> String {
+    pub(crate) fn dump(&self) -> String {
         format!("{:?}", self.0.lock().unwrap_or_else(PoisonError::into_inner))
     }
 }
@@ -59,11 +59,11 @@ impl Transport for Router {
     }
 }
 
-fn fake() -> FakeGitLab {
+pub(crate) fn fake() -> FakeGitLab {
     FakeGitLab::new("https://gitlab.com", "group/paper", ACCESS, &[("main.tex", b"\\documentclass{article}\n")])
 }
 
-fn session(script: &Script, fake: &FakeGitLab, keychain: &Keychain) -> Session {
+pub(crate) fn session(script: &Script, fake: &FakeGitLab, keychain: &Keychain) -> Session {
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
     let (script, fake) = (script.clone(), fake.clone());
     s.set_forge_transport(move || Box::new(Router { script: script.clone(), fake: fake.clone() }));
@@ -75,7 +75,7 @@ fn session(script: &Script, fake: &FakeGitLab, keychain: &Keychain) -> Session {
 }
 
 /// Polls the session until a forge operation ends.
-fn outcome(s: &mut Session) -> Result<Value, String> {
+pub(crate) fn outcome(s: &mut Session) -> Result<Value, String> {
     let end = Instant::now() + Duration::from_secs(10);
     while Instant::now() < end {
         if let Some(done) = s.poll_forge() {
@@ -112,7 +112,7 @@ fn tokens(scope: &str) -> Value {
 }
 
 /// Signed in to GitLab on the desktop with `scope`; everything the commands returned.
-fn sign_in_gitlab(s: &mut Session, script: &Script, scope: &str) -> Result<String, String> {
+pub(crate) fn sign_in_gitlab(s: &mut Session, script: &Script, scope: &str) -> Result<String, String> {
     script.answer(200, tokens(scope));
     script.answer(200, json!({"name": "Ada Lovelace", "username": "ada"}));
     let started = s.execute("forge.sign_in", &json!({"service": "gitlab"}))?;

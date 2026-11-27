@@ -317,6 +317,11 @@ impl Grant {
         }
     }
 
+    /// Whether it can be renewed when the access token expires: the forge gave a refresh token.
+    pub fn renewable(&self) -> bool {
+        self.refresh.is_some()
+    }
+
     /// Whether the access token has expired by `now` (seconds since 1970), or is about to.
     pub fn expired(&self, now: i64) -> bool {
         self.expires_at.is_some_and(|at| now + MARGIN >= at)
@@ -502,17 +507,23 @@ pub async fn revoke(transport: &dyn Transport, client_id: &str, grant: &Grant) -
 
 /// Who `grant` signs in as: GitLab's `/api/v4/user`, GitHub's `/user`.
 pub async fn user(transport: &dyn Transport, grant: &Grant) -> Result<User> {
-    let (url, mut headers) = match grant.service {
-        Service::GitLab => (format!("{}/api/v4/user", grant.instance), vec![("Accept".to_owned(), "application/json".to_owned())]),
+    token_user(transport, grant.service, &grant.instance, &grant.access).await
+}
+
+/// Who `token` is for on `instance` of `service`: a personal access token checked before it is
+/// kept (Settings › Accounts › Add a Connection…). A 401 is [`Error::Unauthorized`].
+pub async fn token_user(transport: &dyn Transport, service: Service, instance: &str, token: &Token) -> Result<User> {
+    let (url, mut headers) = match service {
+        Service::GitLab => (format!("{instance}/api/v4/user"), vec![("Accept".to_owned(), "application/json".to_owned())]),
         Service::GitHub => (
-            format!("{}/user", github_api(&grant.instance)),
+            format!("{}/user", github_api(instance)),
             vec![("Accept".to_owned(), "application/vnd.github+json".to_owned()), ("X-GitHub-Api-Version".to_owned(), "2022-11-28".to_owned())],
         ),
     };
-    headers.push(("Authorization".to_owned(), grant.access.header()));
+    headers.push(("Authorization".to_owned(), token.header()));
     let request = Request { method: "GET", url, headers, body: None, max_body: MAX_JSON };
-    let response = transport.send(request).await.map_err(|why| Error::Network { forge: grant.service, why })?;
-    let response = crate::http::check(grant.service, response, "who is signed in")?;
+    let response = transport.send(request).await.map_err(|why| Error::Network { forge: service, why })?;
+    let response = crate::http::check(service, response, "who is signed in")?;
     let v: Value = serde_json::from_slice(&response.body).map_err(|e| Error::Invalid(e.to_string()))?;
     let username = v["username"].as_str().or_else(|| v["login"].as_str()).ok_or_else(|| Error::Invalid("the user has no username".to_owned()))?;
     let name = v["name"].as_str().filter(|n| !n.trim().is_empty()).unwrap_or(username);

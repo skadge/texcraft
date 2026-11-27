@@ -429,9 +429,11 @@ fn an_overleaf_project_is_cloned_with_its_git_token() {
     h.run();
     h.get_by_label("Accounts").click();
     h.run();
-    h.get_by_role_and_label(Role::Button, "Forget: git.overleaf.com").click();
+    h.get_by_role_and_label(Role::Button, "Disconnect…: git.overleaf.com").click();
     h.run();
-    assert!(said(&h, "Forgot the token kept for git.overleaf.com."));
+    h.get_by_role_and_label(Role::Button, "Disconnect").click();
+    h.run();
+    assert!(said(&h, "Disconnected from git.overleaf.com."));
     assert!(h.state_mut().take_changed_prefs().is_some_and(|p| p.git_hosts.is_empty()), "the host is still in the preferences");
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -636,17 +638,19 @@ fn a_github_token_remembered_serves_the_next_import_and_is_listed_to_replace_and
     h.run();
     h.get_by_label("Accounts").click();
     h.run();
-    assert!(h.query_by_role_and_label(Role::Button, "Forget: github.com").is_some(), "the token kept is not listed");
+    assert!(h.query_by_role_and_label(Role::Button, "Disconnect…: github.com").is_some(), "the token kept is not listed");
     h.get_by_role_and_label(Role::Button, "Replace…: github.com").click();
     h.run();
     type_into(&mut h, "New token for github.com", "github_pat_new_one");
     h.get_by_role_and_label(Role::Button, "Keep").click();
     h.run();
     assert!(said(&h, "Replaced the token kept for github.com."));
-    h.get_by_role_and_label(Role::Button, "Forget: github.com").click();
+    h.get_by_role_and_label(Role::Button, "Disconnect…: github.com").click();
     h.run();
-    assert!(said(&h, "Forgot the token kept for github.com."));
-    assert!(h.query_by_role_and_label(Role::Button, "Forget: github.com").is_none(), "still listed once forgotten");
+    h.get_by_role_and_label(Role::Button, "Disconnect").click();
+    h.run();
+    assert!(said(&h, "Disconnected from github.com."));
+    assert!(h.query_by_role_and_label(Role::Button, "Disconnect…: github.com").is_none(), "still listed once disconnected");
     // The preferences have the host at most, never a token.
     let prefs = h.state_mut().take_changed_prefs().expect("the preferences changed");
     let text = format!("{prefs:?}");
