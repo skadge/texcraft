@@ -2542,3 +2542,4 @@ unit	{n} s	{n} s
 @msg	gitlab.com answered HTTP {status}	gitlab.com respondeu HTTP {status}
 @msg	gitlab.com could not be reached: {e}	Não foi possível contactar o gitlab.com: {e}
 @msg	the parameter `check` (true or false) is missing	falta o parâmetro `check` (true ou false)
+@msg	{label}, from the tip of the day	{label}, da dica do dia

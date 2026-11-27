@@ -15,7 +15,10 @@ const PHONE: egui::Vec2 = egui::vec2(400.0, 820.0);
 fn harness(size: egui::Vec2) -> Result<Harness<'static, App>, String> {
     let s = Session::with_backend(Box::new(Unavailable("tests".into())));
     let prefs = Prefs { auto_compile: false, ..Prefs::default() };
-    let mut h = Harness::builder().with_size(size).build_ui_state(|ui, app: &mut App| app.frame(ui), App::with_prefs(s, prefs));
+    let mut app = App::with_prefs(s, prefs);
+    // A fixed day: which tip of the day shows must not decide what these tests find.
+    app.set_today(chrono::NaiveDate::from_ymd_opt(2026, 11, 26).unwrap_or_default());
+    let mut h = Harness::builder().with_size(size).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
     h.state_mut().show_start_page();
     run(&mut h);
     Ok(h)

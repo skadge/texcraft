@@ -234,8 +234,14 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new(crate::i18n::t(tip.text)).color(t.text));
                 if let Some(action) = &tip.action {
-                    let link = egui::Button::new(RichText::new(crate::i18n::t(action.label)).color(t.accent)).frame(false);
-                    if ui.add(link).clicked() {
+                    let label = crate::i18n::t(action.label);
+                    let link = egui::Button::new(RichText::new(label).color(t.accent)).frame(false);
+                    let r = ui.add(link);
+                    // Its name says it is the tip's, so it never reads as the button of the same
+                    // name elsewhere ("New Project", "Keyboard Shortcuts"), and starts with what it shows.
+                    let name = tf!("{label}, from the tip of the day", label = label);
+                    r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+                    if r.clicked() {
                         run = Some((action.command, (action.params)()));
                     }
                 }

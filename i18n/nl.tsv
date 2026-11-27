@@ -2542,3 +2542,4 @@ unit	{n} s	{n} s
 @msg	gitlab.com answered HTTP {status}	gitlab.com antwoordde HTTP {status}
 @msg	gitlab.com could not be reached: {e}	gitlab.com was niet bereikbaar: {e}
 @msg	the parameter `check` (true or false) is missing	de parameter `check` (true of false) ontbreekt
+@msg	{label}, from the tip of the day	{label}, uit de tip van de dag
