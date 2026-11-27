@@ -148,7 +148,7 @@ pub(super) fn card(
 }
 
 /// Inside the braces of an empty `\caption{}` of the figure at `range`.
-fn caption_slot(cx: &Cx<'_>, range: &Range<usize>) -> Option<usize> {
+pub(super) fn caption_slot(cx: &Cx<'_>, range: &Range<usize>) -> Option<usize> {
     let src = cx.text.get(range.clone())?;
     let at = src.find("\\caption{")? + "\\caption{".len();
     src[at..].starts_with('}').then_some(range.start + at)
@@ -189,6 +189,9 @@ fn caption_line(ui: &mut egui::Ui, cx: &mut Cx<'_>, (range, inner, pad): (&Range
             ui.set_width(inner);
             let para = Para { size: t.reading_size * 0.9, bold: false, color: t.text, role: egui::Role::FigureCaption, empty_at, cell: None };
             let _ = paragraph(ui, cx, &inlines, range, &para);
+            if caption.is_empty() && empty_at.is_none() {
+                super::inert(cx);
+            }
         });
     });
 }

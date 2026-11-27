@@ -213,11 +213,25 @@ pub struct Pos {
 }
 
 impl Doc {
-    /// Where source offset `byte` is shown: in line `hint` if it spans it, else in the first line
-    /// that does, else at the start of the first line after it.
-    pub fn locate(&self, byte: usize, hint: Option<usize>) -> Option<Pos> {
+    /// Where source offset `byte` of `text` is shown: in line `hint` if it has a stop there, else
+    /// in the first line that has; else in the line that spans it (`hint` first); else in the first
+    /// line it is next to with nothing shown between them (a space typed at the line's end, an
+    /// empty `\textbf{}` there, the line's end); else at the start of the first line after it.
+    pub fn locate(&self, text: &str, byte: usize, hint: Option<usize>) -> Option<Pos> {
         let spans = |i: usize| self.lines.get(i).and_then(Line::span).is_some_and(|s| s.start <= byte && byte <= s.end);
-        let line = hint.filter(|h| spans(*h)).or_else(|| (0..self.lines.len()).find(|i| spans(*i)));
+        let next_to = |i: usize| {
+            self.lines.get(i).and_then(Line::span).is_some_and(|s| {
+                // After its end, a line end too (the text typed there joins the line's).
+                (s.end < byte && text.get(s.end..byte).is_some_and(|t| t.matches('\n').count() < 2 && invisible(t)))
+                    || (byte < s.start && text.get(byte..s.start).is_some_and(shows_nothing))
+            })
+        };
+        // A line with a stop at it first: a line can span others (a table's caption above it and
+        // its label below), its stops are its own.
+        let exact = |i: usize| self.lines.get(i).is_some_and(|l| l.stops.iter().any(|s| s.1 == byte));
+        let line = hint.filter(|h| exact(*h)).or_else(|| (0..self.lines.len()).find(|i| exact(*i)));
+        let line = line.or_else(|| hint.filter(|h| spans(*h))).or_else(|| (0..self.lines.len()).find(|i| spans(*i)));
+        let line = line.or_else(|| (0..self.lines.len()).find(|i| next_to(*i)));
         let line = line.or_else(|| {
             let after = (0..self.lines.len()).filter(|i| self.lines.get(*i).and_then(Line::span).is_some_and(|s| s.start > byte));
             after.min_by_key(|i| self.lines.get(*i).and_then(Line::span).map_or(usize::MAX, |s| s.start))
@@ -263,13 +277,15 @@ impl Doc {
     pub fn deleted(&self, text: &str, a: Pos, b: Pos) -> Vec<Range<usize>> {
         let (a, b) = (a.min(b), a.max(b));
         let pieces = self.pieces(text, a, b);
-        if a.line == b.line {
-            return pieces;
-        }
-        match (self.source(a), self.source(b)) {
-            (Some(sa), Some(sb)) if sa < sb => deletion(text, pieces, sa..sb),
+        let sel = match (self.source(a), self.source(b)) {
+            (Some(sa), Some(sb)) if sa < sb => Some(sa..sb),
+            _ => None,
+        };
+        let out = match &sel {
+            Some(sel) if a.line != b.line => deletion(text, pieces, sel.clone()),
             _ => pieces,
-        }
+        };
+        emptied(text, out, sel)
     }
 }
 
@@ -302,6 +318,41 @@ pub fn deletion(text: &str, pieces: Vec<Range<usize>>, sel: Range<usize>) -> Vec
         out.push(sel.clone());
     }
     merge(out)
+}
+
+/// `ranges` (to delete, sorted and merged) with the style commands and headings whose whole text
+/// they hold and that start after the first of them: their commands and braces go with their
+/// text, not left empty where the caret is not (one the deletion starts in keeps its command, for
+/// the text typed next).
+fn emptied(text: &str, ranges: Vec<Range<usize>>, sel: Option<Range<usize>>) -> Vec<Range<usize>> {
+    fn walk(text: &str, nodes: &[Node], (first, sel): (usize, &Option<Range<usize>>), out: &mut Vec<Range<usize>>) {
+        for n in nodes {
+            match &n.kind {
+                Kind::Command { name, args, .. } => {
+                    args.iter().for_each(|a| walk(text, &a.body, (first, sel), out));
+                    let wraps = view::styled(name, Style::default()).is_some() || view::heading_level(name).is_some();
+                    let Some(arg) = args.iter().rev().find(|a| !a.optional) else { continue };
+                    let inner = trimmed(text, arg.inner.clone());
+                    // Its text deleted, or empty already and inside the selection.
+                    let held = if inner.is_empty() {
+                        sel.as_ref().is_some_and(|s| s.start <= inner.start && inner.start <= s.end)
+                    } else {
+                        out.iter().any(|r| r.start <= inner.start && inner.end <= r.end)
+                    };
+                    if wraps && arg.closed && held && n.range.start > first {
+                        out.push(n.range.clone());
+                        *out = merge(std::mem::take(out));
+                    }
+                }
+                Kind::Group { body, .. } | Kind::Environment { body, .. } => walk(text, body, (first, sel), out),
+                _ => {}
+            }
+        }
+    }
+    let Some(first) = ranges.first().map(|r| r.start) else { return ranges };
+    let mut out = merge(ranges);
+    walk(text, &tree::parse(text), (first, &sel), &mut out);
+    out
 }
 
 /// The source of the list items (at any depth in `nodes`) that `sel` holds whole: each run of them
@@ -368,6 +419,104 @@ fn line_end(text: &str, pos: usize) -> usize {
     if after.get(..line).is_some_and(|l| l.trim().is_empty()) { pos + line } else { pos }
 }
 
+/// Whether source `s`, on one line, shows nothing: spaces, braces and the openings of style
+/// commands (`\textbf{`).
+fn shows_nothing(s: &str) -> bool {
+    !s.contains('\n') && invisible(s)
+}
+
+/// Whether source `s` shows nothing: white space, braces and the openings of style commands
+/// (`\textbf{`), as an empty paragraph just made holds.
+pub fn invisible(s: &str) -> bool {
+    invisible_len(s) == s.len()
+}
+
+/// How many bytes `s` starts with that show nothing ([`invisible`]).
+pub fn invisible_len(s: &str) -> usize {
+    let mut rest = s;
+    loop {
+        rest = rest.trim_start_matches(|c: char| c.is_whitespace() || c == '{' || c == '}');
+        if let Some(comment) = rest.strip_prefix('%') {
+            rest = comment.find('\n').map_or("", |n| &comment[n..]);
+            continue;
+        }
+        let Some(after) = rest.strip_prefix('\\') else { return s.len() - rest.len() };
+        let name_len = after.len() - after.trim_start_matches(|c: char| c.is_ascii_alphabetic()).len();
+        let (name, open) = after.split_at(name_len);
+        match open.strip_prefix('{') {
+            Some(r) if view::styled(name, Style::default()).is_some() => rest = r,
+            _ => return s.len() - rest.len(),
+        }
+    }
+}
+
+/// Where the caret stands in a view with no line at all (everything deleted, or only what is
+/// shown as source): at `caret` when it is in the document's body (or there is no
+/// `\begin{document}`), else at the body's start.
+pub fn empty_view_caret(text: &str, caret: usize) -> usize {
+    const BEGIN: &str = "\\begin{document}";
+    let Some(start) = text.find(BEGIN).map(|i| i + BEGIN.len()) else { return caret.min(text.len()) };
+    let end = text.get(start..).and_then(|s| s.find("\\end{document}")).map_or(text.len(), |i| start + i);
+    if (start..=end).contains(&caret) { caret } else { start }
+}
+
+/// Where what shows nothing before source offset `at` starts ([`invisible`]: white space, empty
+/// groups and styles), looking back a few dozen bytes.
+pub fn invisible_before(text: &str, at: usize) -> usize {
+    let mut start = at;
+    let mut p = at;
+    while p > 0 && at - p < 64 {
+        p -= 1;
+        while !text.is_char_boundary(p) {
+            p -= 1;
+        }
+        if text.get(p..at).is_some_and(invisible) {
+            start = p;
+        }
+    }
+    start
+}
+
+/// Where text replacing the selection from `a` to `b` goes: where the first run it deletes starts
+/// when the selection's first line has one, else where the selection starts (an empty heading).
+pub fn insertion(text: &str, doc: &Doc, (a, b): (Pos, Pos)) -> Option<usize> {
+    let (lo, hi) = (a.min(b), a.max(b));
+    let line = doc.lines.get(lo.line)?;
+    let to = if hi.line == lo.line { hi.at } else { line.len() };
+    match line.pieces(lo.at, to).first() {
+        Some(r) => Some(r.start),
+        None => doc.source(lo).or_else(|| doc.pieces(text, lo, hi).first().map(|r| r.start)),
+    }
+}
+
+/// The selection from `a` to `b` replaced by `source` when deleting it takes structure (whole
+/// list items, [`Doc::deleted`]): the deletion, then `source` where it leaves the caret, as one
+/// change; the caret at byte `caret` of `source`.
+pub fn replace_structure(text: &str, doc: &Doc, (a, b): (Pos, Pos), (source, caret): (&str, usize)) -> Option<SourceEdit> {
+    let deleted: Vec<Change> = doc.deleted(text, a, b).into_iter().map(|r| change(r, "")).collect();
+    let at = into_item(&apply(text, &deleted), deleted.first()?.range.start);
+    let without = apply(text, &deleted);
+    let joined = joined(&without, at, source);
+    let after = apply(&without, &[change(at..at, joined.clone())]);
+    let one = minimal_change(0, text, &after)?;
+    Some(SourceEdit { changes: vec![one], caret: at + caret.min(source.len()) + (joined.len() - source.len()) })
+}
+
+/// Where text typed at source offset `at` goes: at the end of a heading's text when `at` is just
+/// after the label shown with it (End in a heading puts the caret after its label), else `at`.
+pub fn typing_point(text: &str, at: usize) -> usize {
+    let blocks = view::view(text);
+    let mut found = None;
+    view::walk(&blocks, &mut |b| {
+        if let BlockKind::Heading { label: Some(label), .. } = &b.kind
+            && label.range.end == at
+        {
+            found = view::heading_text(text, &b.range).map(|r| r.end);
+        }
+    });
+    found.unwrap_or(at)
+}
+
 /// Ranges sorted, with those that touch or overlap made one.
 fn merge(mut ranges: Vec<Range<usize>>) -> Vec<Range<usize>> {
     ranges.retain(|r| r.start < r.end);
@@ -396,8 +545,8 @@ pub fn offsets(text: &str, range: Range<usize>, shown: &str) -> Option<Vec<usize
     while let Some(&c) = chars.get(k) {
         let rest = src.get(i..)?;
         let first = rest.chars().next()?;
-        if first.is_whitespace() {
-            let run = rest.len() - rest.trim_start().len();
+        if first.is_ascii_whitespace() {
+            let run = rest.len() - rest.trim_ascii_start().len();
             if c == ' ' {
                 out.push(base + i);
                 k += 1;
@@ -434,6 +583,10 @@ pub fn offsets(text: &str, range: Range<usize>, shown: &str) -> Option<Vec<usize
                 }
                 out.extend(std::iter::repeat_n(base + i, n));
                 i += 1 + letters;
+                // The empty group that ends its name.
+                if src.get(i..).is_some_and(|r| r.starts_with("{}")) {
+                    i += 2;
+                }
                 k += n;
                 continue;
             }
@@ -524,6 +677,83 @@ pub fn after_control_word(text: &str, at: usize) -> bool {
     }
     let slashes = name.len() - name.trim_end_matches('\\').len();
     slashes % 2 == 1
+}
+
+/// `source` to insert at source offset `at`, kept apart from a control word just before it
+/// (`\item`, `\dots`) whose name a letter would lengthen and after which TeX skips a space: a
+/// space after `\item`, else an empty group, in front of it.
+pub fn joined(text: &str, at: usize, source: &str) -> String {
+    if !source.starts_with(|c: char| c.is_alphabetic() || c.is_whitespace()) || !after_control_word(text, at) {
+        return source.to_owned();
+    }
+    let before = text.get(..at).unwrap_or_default();
+    let name = &before[before.trim_end_matches(|c: char| c.is_ascii_alphabetic()).len()..];
+    if name == "item" && !source.starts_with(char::is_whitespace) { format!(" {source}") } else { format!("{{}}{source}") }
+}
+
+/// `changes` (in order, not overlapping) of `text`, with what keeps a control word apart from the
+/// letters an edit puts after it (`\item` and `\textbf{o}` unbolded made `\itemo`, `\dots`
+/// typed before a word): a space after `\item`, else an empty group. Also where (in the text
+/// after the changes given) something was added, and how many bytes, for [`kept_apart_offset`].
+pub fn kept_apart(text: &str, changes: &[Change]) -> (Vec<Change>, Vec<(usize, usize)>) {
+    let mut out = changes.to_vec();
+    let mut added = Vec::new();
+    let mut shift = 0usize;
+    for k in 0..out.len() {
+        let after = apply(text, &out);
+        let Some(c) = out.get(k) else { break };
+        if c.text.is_empty() && c.range.is_empty() {
+            continue;
+        }
+        // Where this change's text ends in the text after them all.
+        let delta: isize = out.iter().take(k).map(|d| d.text.len() as isize - (d.range.end - d.range.start) as isize).sum();
+        let end = c.range.start.saturating_add_signed(delta) + c.text.len();
+        let letter = after.get(end..).is_some_and(|r| r.starts_with(|ch: char| ch.is_ascii_alphabetic()));
+        if !letter || !after_control_word(&after, end) {
+            continue;
+        }
+        let before = after.get(..end).unwrap_or_default();
+        let name = before.get(before.trim_end_matches(|ch: char| ch.is_ascii_alphabetic()).len()..).unwrap_or_default();
+        let sep = if name == "item" { " " } else { "{}" };
+        added.push((end - shift, sep.len()));
+        shift += sep.len();
+        if let Some(c) = out.get_mut(k) {
+            c.text.push_str(sep);
+        }
+    }
+    (out, added)
+}
+
+/// Byte `at` of the text after the changes [`kept_apart`] was given, in the text after those it
+/// returned: after what it added at it or before it.
+pub fn kept_apart_offset(added: &[(usize, usize)], at: usize) -> usize {
+    at + added.iter().filter(|(pos, _)| *pos <= at).map(|(_, len)| len).sum::<usize>()
+}
+
+/// The empty style command the caret at source offset `at` stands in (`\textbf{|}`, Bold pressed
+/// and nothing typed): Backspace and Delete take it with what they delete.
+pub fn empty_style_at(text: &str, at: usize) -> Option<Range<usize>> {
+    let tree = tree::parse(text);
+    let mut frames = Vec::new();
+    path(&tree, at, &mut frames);
+    match frames.last() {
+        Some(Frame::Command { node, name, arg }) if view::styled(name, Style::default()).is_some() && arg.inner.is_empty() && arg.closed => {
+            Some(node.range.clone())
+        }
+        _ => None,
+    }
+}
+
+/// Where the caret goes in pasted `source` ([`paste`]): at its end, or at the end of its last
+/// item when it ends with a list (not after the list's `\end`, which the view does not show).
+pub fn paste_caret(source: &str) -> usize {
+    for name in ["itemize", "enumerate"] {
+        let end = format!("\n\\end{{{name}}}");
+        if source.ends_with(&end) {
+            return source.len() - end.len();
+        }
+    }
+    source.len()
 }
 
 /// A change of the source: `range` replaced by `text`.
@@ -686,6 +916,17 @@ pub fn enter(text: &str, at: usize) -> Option<SourceEdit> {
     let (found, styles) = context(text, &frames)?;
     let closes = "}".repeat(styles.len());
     let opens: String = styles.iter().map(|(_, open)| open.as_str()).collect();
+    // On an empty style (Bold pressed, nothing typed): it goes, and the line breaks there.
+    if let Some((outer, _)) = styles.first()
+        && text.get(outer.range.clone()) == Some(format!("{opens}{closes}").as_str())
+    {
+        let start = outer.range.start;
+        let without = apply(text, &[change(outer.range.clone(), "")]);
+        let e = enter(&without, start)?;
+        let after = apply(&without, &e.changes);
+        let one = minimal_change(0, text, &after)?;
+        return Some(SourceEdit { changes: vec![one], caret: e.caret });
+    }
     match found {
         Context::Heading(node) => {
             let blocks = view::build(text, &tree);
@@ -696,11 +937,18 @@ pub fn enter(text: &str, at: usize) -> Option<SourceEdit> {
         Context::Item(_) if styles.is_empty() && item_is_empty(text, &frames, at) => outdent(text, at),
         Context::Item(body) => {
             let item = body.iter().rev().find(|n| matches!(&n.kind, Kind::Command { name, .. } if name == "item") && n.range.start < at)?;
+            // At the very start of a styled run: the new item goes before its command, the caret
+            // staying in it.
+            let start = styles.first().map(|(n, _)| n.range.start).filter(|s| text.get(*s..at) == Some(opens.as_str()));
+            let (point, closes, opens) = match start {
+                Some(start) => (start, String::new(), String::new()),
+                None => (at, closes, opens),
+            };
             let line_start = text.get(..item.range.start)?.rfind('\n').map_or(0, |n| n + 1);
             let indent = text.get(line_start..item.range.start).filter(|s| s.trim().is_empty()).unwrap_or_default();
-            let space = space_around(text, at, false);
+            let space = space_around(text, point, false);
             let inserted = format!("{closes}\n{indent}\\item {opens}");
-            let caret = space.start + inserted.len();
+            let caret = space.start + inserted.len() + (at - point);
             Some(SourceEdit { changes: vec![change(space, inserted)], caret })
         }
         Context::Paragraph => {
@@ -715,6 +963,13 @@ pub fn enter(text: &str, at: usize) -> Option<SourceEdit> {
             }
             if at <= para.range.start {
                 return Some(open_paragraph(text, outer.map_or(at, |r| r.start)));
+            }
+            // At the very start of a styled run, the break goes before its command: none is left
+            // empty before it.
+            if let Some(start) = outer.as_ref().map(|r| r.start).filter(|s| text.get(*s..at) == Some(opens.as_str())) {
+                let space = space_around(text, start, true);
+                let changes = vec![change(space.clone(), "\n\n")];
+                return Some(SourceEdit { caret: map_offset(&changes, at), changes });
             }
             let space = space_around(text, at, true);
             let inserted = format!("{closes}\n\n{opens}");
@@ -881,7 +1136,7 @@ pub fn set_list(text: &str, at: usize, name: &str) -> Option<SourceEdit> {
     let changes = list_changes(text, at, name);
     match changes {
         Some(changes) => {
-            let caret = map_offset(&changes, at);
+            let caret = map_inside(&changes, at);
             Some(SourceEdit { changes, caret })
         }
         None => new_list(text, at, name),
@@ -1136,6 +1391,70 @@ pub fn map_offset(changes: &[Change], at: usize) -> usize {
     at.saturating_add_signed(delta)
 }
 
+/// A place between two blocks of the view (or before the first, or after the last, of a
+/// sequence): where the block before it ends and the next starts, and whether they are paragraphs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Between {
+    pub prev: usize,
+    pub next: usize,
+    /// The block before is a paragraph (false at the start of a sequence).
+    pub prev_paragraph: bool,
+    /// The block after is a paragraph (false after the last block).
+    pub next_paragraph: bool,
+}
+
+/// Whether the caret at source offset `c` stands in an empty paragraph of its own at `b`: what is
+/// typed there makes a paragraph between the blocks (Enter just made it, or a deletion left it).
+/// Only white space and empty styles are around it, and nothing joins it to a paragraph next to
+/// it: a blank line, or a block that is not a paragraph, on each side.
+pub fn empty_paragraph_at(text: &str, c: usize, b: Between) -> bool {
+    // Just after a block that is not a paragraph (a list, a heading), or at the start of a
+    // sequence, is a place of its own.
+    let inside = (b.prev < c || (b.prev == c && !b.prev_paragraph && c > 0)) && c <= b.next;
+    if !inside || (c == b.next && b.next_paragraph) {
+        return false;
+    }
+    let (Some(before), Some(after)) = (text.get(b.prev..c), text.get(c..b.next)) else { return false };
+    let apart_before = before.matches('\n').count() >= 2 || !b.prev_paragraph;
+    let apart_after = after.matches('\n').count() >= 2 || !b.next_paragraph;
+    invisible(before) && invisible(after) && apart_before && apart_after
+}
+
+/// The caret at source offset `at` moved into the list item that follows it when it stands in a
+/// list's body before its first `\item` (where a deletion of whole items can leave it), so that
+/// what is typed next goes in that item.
+pub fn into_item(text: &str, at: usize) -> usize {
+    let tree = tree::parse(text);
+    let mut frames = Vec::new();
+    path(&tree, at, &mut frames);
+    let Some(Frame::Environment { name, body, .. }) = frames.last() else { return at };
+    if !is_list(name) || list_at(&frames, at).is_some() {
+        return at;
+    }
+    let is_item = |n: &&Node| matches!(&n.kind, Kind::Command { name, .. } if name == "item");
+    let Some(item) = body.iter().find(is_item).filter(|n| n.range.start >= at) else { return at };
+    if !text.get(at..item.range.start).is_some_and(|s| s.trim().is_empty()) {
+        return at;
+    }
+    item.range.end + usize::from(text.get(item.range.end..item.range.end + 1) == Some(" "))
+}
+
+/// Like [`map_offset`] for changes that wrap text (an opening and a closing inserted around it):
+/// byte `at` stays inside, after the opening inserted there and before the closing.
+pub fn map_inside(changes: &[Change], at: usize) -> usize {
+    let mut delta: isize = 0;
+    for (k, c) in changes.iter().enumerate() {
+        if c.range.start > at || (c.range.start == at && (c.range.end > at || k > 0)) {
+            break;
+        }
+        if at < c.range.end {
+            return c.range.start.saturating_add_signed(delta);
+        }
+        delta += c.text.len() as isize - (c.range.end - c.range.start) as isize;
+    }
+    at.saturating_add_signed(delta)
+}
+
 /// A list around a source offset: the list's node and name, the `\item`s of its body (indices),
 /// and which of them holds the offset.
 struct ListAt<'a> {
@@ -1198,7 +1517,11 @@ impl ListAt<'_> {
             let at = c.start + usize::from(text.get(c.start..c.start + 1) == Some(" "));
             return sel.start <= at && at <= sel.end;
         }
-        sel.start <= c.start && c.end <= sel.end
+        // What shows nothing at its ends (`\textbf{`, `}`) is not left out by a selection of its
+        // text.
+        // `a` is before `b`, or only what shows nothing is between them.
+        let reaches = |a: usize, b: usize| a <= b || text.get(b..a).is_some_and(invisible);
+        reaches(sel.start, c.start) && reaches(c.end, sel.end)
     }
 
     /// Where the next item, or the list's `\end`, starts.
@@ -1290,7 +1613,8 @@ pub fn indent(text: &str, at: usize) -> Option<SourceEdit> {
             change(content.end..content.end, format!(" \\end{{{name}}}")),
         ],
     };
-    let caret = map_offset(&changes, at.max(content.start));
+    // In the item, before the inner list's `\end` (an empty item's caret is where both go).
+    let caret = map_inside(&changes, at.clamp(content.start, content.end));
     Some(SourceEdit { changes, caret })
 }
 
@@ -1351,10 +1675,22 @@ pub fn outdent(text: &str, at: usize) -> Option<SourceEdit> {
         }
     }
     changes.retain(|c| !(c.range.is_empty() && c.text.is_empty()));
-    let caret = map_offset(&changes, at.clamp(content.start, content.end));
+    // Between what goes before the item and what goes after it.
+    let caret = map_inside(&changes, at.clamp(content.start, content.end));
     // After the space an empty item keeps.
     let caret = caret + usize::from(list.outer && content.is_empty());
     Some(SourceEdit { changes, caret })
+}
+
+/// Where the text of the list item holding source offset `at` ends (where a block inserted from
+/// it goes, in the item); `None` outside a list.
+pub fn item_end(text: &str, at: usize) -> Option<usize> {
+    let tree = tree::parse(text);
+    let mut frames = Vec::new();
+    path(&tree, at, &mut frames);
+    let list = list_at(&frames, at)?;
+    let c = list.content(text, list.k)?;
+    Some(c.end.max(at.min(c.start.max(c.end))))
 }
 
 /// Whether source offset `at` is where the text of the list item holding it starts.

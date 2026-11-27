@@ -86,6 +86,9 @@ pub enum BlockKind {
         title: Vec<Inline>,
         author: Vec<Inline>,
         date: Vec<Inline>,
+        /// Inside the braces of the last `\title`, `\author` and `\date`: where the text of one
+        /// with none yet goes.
+        slots: [Option<Range<usize>>; 3],
     },
     /// `\part` (level 0) to `\subparagraph` (level 6), with the `\label` that follows it.
     Heading {
@@ -407,6 +410,33 @@ pub fn heading_level(name: &str) -> Option<u8> {
     Some(level)
 }
 
+/// The text of the heading whose source is `text[range]`: inside the braces of its argument.
+pub fn heading_text(text: &str, range: &Range<usize>) -> Option<Range<usize>> {
+    let nodes = tree::parse(text.get(range.clone())?);
+    match &nodes.first()?.kind {
+        Kind::Command { args, .. } => {
+            let inner = &required(args)?.inner;
+            Some(range.start + inner.start..range.start + inner.end)
+        }
+        _ => None,
+    }
+}
+
+/// Where the text of a heading goes (where the caret stands in an empty one).
+pub fn heading_slot(text: &str, range: &Range<usize>) -> Option<usize> {
+    heading_text(text, range).map(|r| r.start)
+}
+
+/// Where the body of the environment whose source is `text[range]` starts: after its `\begin`
+/// and its arguments (where the caret stands in an empty theorem or quote).
+pub fn body_start(text: &str, range: &Range<usize>) -> Option<usize> {
+    let nodes = tree::parse(text.get(range.clone())?);
+    match &nodes.first()?.kind {
+        Kind::Environment { begin, .. } => Some(range.start + begin.end),
+        _ => None,
+    }
+}
+
 /// Calls `f` with each block of `blocks` and of the blocks inside them, in reading order.
 pub fn walk<'b>(blocks: &'b [Block], f: &mut dyn FnMut(&'b Block)) {
     for b in blocks {
@@ -433,7 +463,7 @@ pub fn inlines_of(b: &Block) -> Vec<&Inline> {
     }
     let mut out = Vec::new();
     match &b.kind {
-        BlockKind::Title { title, author, date } => [title, author, date].into_iter().for_each(|i| add(i, &mut out)),
+        BlockKind::Title { title, author, date, .. } => [title, author, date].into_iter().for_each(|i| add(i, &mut out)),
         BlockKind::Heading { content, label, .. } => {
             add(content, &mut out);
             out.extend(label.iter());
@@ -623,7 +653,8 @@ fn typography(s: &str) -> String {
     let mut chars = s.chars().peekable();
     let mut space = false;
     while let Some(c) = chars.next() {
-        if c.is_whitespace() {
+        // A no-break space is a character of its own, not a space TeX collapses.
+        if c.is_ascii_whitespace() {
             space = true;
             continue;
         }
@@ -683,11 +714,15 @@ struct Flow {
     blocks: Vec<Block>,
     para: Vec<Inline>,
     style: Style,
+    /// The commands and groups the paragraph's inlines come from: its range covers them whole, so
+    /// that what wraps the paragraph (a heading, a list) wraps them, not their insides.
+    wraps: Option<Range<usize>>,
 }
 
 impl Flow {
     fn flush(&mut self, text: &str) {
         let para = std::mem::take(&mut self.para);
+        let wraps = self.wraps.take();
         // An `\input` or `\include` on a line of its own: the file in its place, the paragraph's
         // text before and after it apart.
         let alone = |r: &Range<usize>| {
@@ -697,10 +732,11 @@ impl Flow {
             let line_after = after.split('\n').next().unwrap_or_default();
             line_before.trim().is_empty() && (line_after.trim().is_empty() || line_after.trim_start().starts_with('%'))
         };
+        let split = para.iter().any(|i| matches!(&i.kind, InlineKind::Chip { kind: ChipKind::File, .. }) && alone(&i.range));
         let mut part = Vec::new();
         for i in para {
             if matches!(&i.kind, InlineKind::Chip { kind: ChipKind::File, .. }) && alone(&i.range) {
-                self.paragraph(std::mem::take(&mut part));
+                self.paragraph(std::mem::take(&mut part), None);
                 if let InlineKind::Chip { command, key, .. } = i.kind {
                     self.blocks.push(Block { kind: BlockKind::Include { command, name: key }, range: i.range });
                 }
@@ -708,19 +744,22 @@ impl Flow {
                 part.push(i);
             }
         }
-        self.paragraph(part);
+        self.paragraph(part, wraps.filter(|_| !split));
     }
 
-    fn paragraph(&mut self, mut para: Vec<Inline>) {
+    fn paragraph(&mut self, mut para: Vec<Inline>, wraps: Option<Range<usize>>) {
         if let Some(Inline { kind: InlineKind::Text { text, .. }, .. }) = para.first_mut() {
-            *text = text.trim_start().to_owned();
+            *text = text.trim_ascii_start().to_owned();
         }
         if let Some(Inline { kind: InlineKind::Text { text, .. }, .. }) = para.last_mut() {
-            *text = text.trim_end().to_owned();
+            *text = text.trim_ascii_end().to_owned();
         }
         para.retain(|i| !matches!(&i.kind, InlineKind::Text { text, .. } if text.is_empty()));
         if let (Some(first), Some(last)) = (para.first(), para.last()) {
-            let range = first.range.start..last.range.end;
+            let mut range = first.range.start..last.range.end;
+            if let Some(w) = wraps {
+                range = range.start.min(w.start)..range.end.max(w.end);
+            }
             self.blocks.push(Block { kind: BlockKind::Paragraph(para), range });
         }
     }
@@ -784,6 +823,9 @@ impl<'a> View<'a> {
                 && f.attach_label(label)
             {
                 continue;
+            }
+            if !inlines.is_empty() && matches!(n.kind, Kind::Command { .. } | Kind::Group { .. }) {
+                f.wraps = Some(f.wraps.take().map_or(n.range.clone(), |w| w.start.min(n.range.start)..w.end.max(n.range.end)));
             }
             for inline in inlines {
                 match inline.kind {
@@ -905,7 +947,8 @@ impl<'a> View<'a> {
             }
             out
         });
-        BlockKind::Title { title, author, date }
+        let slots = self.titles.each_ref().map(|args| args.last().map(|a| a.inner.clone()));
+        BlockKind::Title { title, author, date, slots }
     }
 
     fn environment(&self, name: &str, body: &[Node], closed: bool) -> BlockKind {
@@ -1064,10 +1107,10 @@ impl<'a> View<'a> {
             }
         }
         if let Some(Inline { kind: InlineKind::Text { text, .. }, .. }) = out.first_mut() {
-            *text = text.trim_start().to_owned();
+            *text = text.trim_ascii_start().to_owned();
         }
         if let Some(Inline { kind: InlineKind::Text { text, .. }, .. }) = out.last_mut() {
-            *text = text.trim_end().to_owned();
+            *text = text.trim_ascii_end().to_owned();
         }
         out.retain(|i| !matches!(&i.kind, InlineKind::Text { text, .. } if text.is_empty()));
         out
@@ -1167,6 +1210,14 @@ impl<'a> View<'a> {
             return i + 1;
         }
         if let Some(text) = logo(name) {
+            // The empty group that ends its name (`\textasciitilde{}`, typed as `~`) goes with it.
+            if let Some(Node { kind: Kind::Group { body, closed: true }, range: group }) = nodes.get(i + 1)
+                && body.is_empty()
+                && group.start == range.end
+            {
+                out.push(text_inline(text, *style, range.start..group.end));
+                return i + 2;
+            }
             out.push(text_inline(text, *style, range));
             return i + 1;
         }

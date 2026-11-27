@@ -498,6 +498,13 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
                         ui.add_space(t.reading_size);
                     }
                     draw_blocks(ui, &mut cx, &blocks, 0);
+                    // A text with nothing to type in (everything deleted, or only what is shown as
+                    // source): a line for the caret, so that typing has a place and the keyboard
+                    // stays.
+                    if cx.lines.is_empty() {
+                        let at = edit::empty_view_caret(cx.text, cx.edit_caret.unwrap_or(cx.text.len()));
+                        empty_line(ui, &mut cx, at, true);
+                    }
                     // A finger's drag on the text scrolls the view (#26).
                     for d in &cx.lines {
                         crate::touch::scroll(ui, &d.response);
@@ -756,7 +763,17 @@ fn run_table_action(app: &mut App, path: &ProjectPath, text: &str, mut action: s
     action["at"] = serde_json::json!(text.get(..byte + 1).map_or(0, |s| s.chars().count()));
     action["path"] = serde_json::json!(path.as_str());
     crate::editor::send_edits(app);
-    if let Some(done) = app.run("table.edit", action)
+    let done = app.run("table.edit", action);
+    // The caret in the cell's text, not before a `\multicolumn` a merge made.
+    crate::editor::catch_up_now(app);
+    let d = &app.editor.source.doc;
+    let (text, at) = (d.buffer.text(), d.buffer.char_to_byte(d.selection.primary().head));
+    let snapped = texcraft_latex::table::cell_caret(&text, at);
+    if snapped != at {
+        let c = d.buffer.byte_to_char(snapped);
+        app.editor.source.select(c, c);
+    }
+    if let Some(done) = done
         && done.get("loaded").and_then(serde_json::Value::as_bool) == Some(false)
     {
         let main = app.session.project().main().map_or_else(|| path.file_name().to_owned(), |m| m.as_str().to_owned());
@@ -884,12 +901,22 @@ fn measure(ui: &egui::Ui, t: &Tokens) -> f32 {
 }
 
 fn draw_blocks(ui: &mut egui::Ui, cx: &mut Cx<'_>, blocks: &[Block], depth: usize) {
+    let para = |b: &Block| matches!(b.kind, BlockKind::Paragraph(_));
+    // Before the first block, from the white space before it (Enter at the start of a container's
+    // or an included file's first paragraph).
+    if let Some(first) = blocks.first().filter(|b| !matches!(b.kind, BlockKind::Preamble)) {
+        let start = edit::invisible_before(cx.text, first.range.start);
+        let at = edit::Between { prev: start, next: first.range.start, prev_paragraph: false, next_paragraph: para(first) };
+        phantom(ui, cx, at, false);
+    }
     for (i, block) in blocks.iter().enumerate() {
         if i > 0 {
             ui.add_space(gap_before(&cx.t, &block.kind));
         }
         if let Some(prev) = i.checked_sub(1).and_then(|p| blocks.get(p)) {
-            phantom(ui, cx, (block_end(prev), block.range.start), false);
+            let at =
+                edit::Between { prev: block_end(cx.text, prev), next: block.range.start, prev_paragraph: para(prev), next_paragraph: para(block) };
+            phantom(ui, cx, at, false);
         }
         let top = ui.cursor().top();
         draw_block(ui, cx, block, depth);
@@ -901,8 +928,12 @@ fn draw_blocks(ui: &mut egui::Ui, cx: &mut Cx<'_>, blocks: &[Block], depth: usiz
             cx.scroll_to = None;
         }
     }
+    // After the last block, in what shows nothing up to what ends the sequence (`\end{document}`,
+    // the next `\item`, the end of the text).
     if let Some(last) = blocks.last() {
-        phantom(ui, cx, (block_end(last), cx.text.len()), true);
+        let end = block_end(cx.text, last);
+        let next = end + edit::invisible_len(cx.text.get(end..).unwrap_or_default());
+        phantom(ui, cx, edit::Between { prev: end, next, prev_paragraph: para(last), next_paragraph: false }, true);
     }
 }
 
@@ -929,7 +960,7 @@ fn draw_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, block: &Block, depth: usize) {
     let range = &block.range;
     match &block.kind {
         BlockKind::Preamble => preamble(ui, cx, range),
-        BlockKind::Title { title, author, date } => title_block(ui, cx, range, [title, author, date]),
+        BlockKind::Title { title, author, date, slots } => title_block(ui, cx, range, [title, author, date], slots),
         BlockKind::Heading { level, content, label, .. } => heading(ui, cx, range, *level, content, label.as_ref()),
         BlockKind::Paragraph(inlines) => {
             let size = cx.t.reading_size;
@@ -942,15 +973,24 @@ fn draw_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, block: &Block, depth: usize) {
             );
         }
         BlockKind::List { kind, items } => list(ui, cx, *kind, items, depth),
-        BlockKind::Container { name, blocks } => container(ui, cx, name, blocks, depth),
+        BlockKind::Container { name, blocks } => container(ui, cx, name, &or_empty(cx.text, range, blocks), depth),
         BlockKind::FrontMatter(fm) => front_matter(ui, cx, fm, depth),
-        BlockKind::Theorem { kind, title, blocks, .. } => theorem(ui, cx, range, kind, title, blocks, depth),
+        BlockKind::Theorem { kind, title, blocks, .. } => theorem(ui, cx, range, kind, title, &or_empty(cx.text, range, blocks), depth),
         BlockKind::Include { name, .. } => include(ui, cx, range, name, depth),
         BlockKind::Formula { source, env, closed } => formula(ui, cx, range, source, env.as_deref(), *closed),
         BlockKind::Figure { image, caption, label } => fig::card(ui, cx, range, image.as_ref(), caption, label.as_ref()),
         BlockKind::Table(tb) => table::table_block(ui, cx, range, tb),
         BlockKind::UnsupportedTable(why) => table::unsupported(ui, cx, range, why),
         BlockKind::Source => source_block(ui, cx, range),
+    }
+}
+
+/// The blocks of an environment shown formatted, or an empty paragraph at its body's start when it
+/// has none: the caret has a line to stand in.
+fn or_empty(text: &str, range: &Range<usize>, blocks: &[Block]) -> Vec<Block> {
+    match texcraft_latex::view::body_start(text, range).filter(|_| blocks.is_empty()) {
+        Some(at) => vec![Block { kind: BlockKind::Paragraph(Vec::new()), range: at..at }],
+        None => blocks.to_vec(),
     }
 }
 
@@ -1397,10 +1437,12 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
     let role = para.role;
     r.widget_info(|| egui::WidgetInfo::labeled(role, true, plain_text.trim()));
     let mut line = line_of(&pieces, para.empty_at.unwrap_or(range.start));
-    if let Some(at) = para.empty_at.filter(|_| line.first_stop().is_none()) {
-        // Only what the view adds ("Figure."): the caret stands after it, at `at`.
+    if let Some(at) = para.empty_at.filter(|_| !line.parts().iter().any(|p| matches!(p, Part::Text(_)))) {
+        // No text, only what the view adds ("Figure.") and atoms (a label): the caret stands at
+        // `at`, before the atoms after it.
         let mut parts = line.parts().to_vec();
-        parts.push(Part::Text(vec![at]));
+        let i = parts.iter().position(|p| matches!(p, Part::Atom { range, .. } if range.start >= at)).unwrap_or(parts.len());
+        parts.insert(i, Part::Text(vec![at]));
         line = Line::new(parts);
     }
     if let Some(byte) = cx.reveal
@@ -1420,6 +1462,14 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
     r
 }
 
+/// The line just drawn made one the caret does not stand in: a float's "Figure." line with no
+/// caption to type in (only its label after it), where typed text would break the float.
+fn inert(cx: &mut Cx<'_>) {
+    if let Some(d) = cx.lines.last_mut() {
+        d.line = Line::new(d.line.parts().iter().map(|p| Part::Decoration(p.chars())).collect());
+    }
+}
+
 /// The run a piece opens in the source editor: a formula, a command shown as source.
 fn atom_of(p: &Piece) -> Option<Atom> {
     match p.kind {
@@ -1429,23 +1479,30 @@ fn atom_of(p: &Piece) -> Option<Atom> {
     }
 }
 
-/// Where a block ends in the view: a heading after the label shown with it.
-fn block_end(block: &Block) -> usize {
+/// Where a block ends in the view: a heading after the label shown with it, the preamble after
+/// `\begin{document}`.
+fn block_end(text: &str, block: &Block) -> usize {
+    const BEGIN: &str = "\\begin{document}";
     match &block.kind {
         BlockKind::Heading { label: Some(label), .. } => block.range.end.max(label.range.end),
+        BlockKind::Preamble if text.get(block.range.end..).is_some_and(|s| s.starts_with(BEGIN)) => block.range.end + BEGIN.len(),
         _ => block.range.end,
     }
 }
 
-/// An empty paragraph between source offsets `prev` and `next` (another block or the end of the
-/// text), when the caret stands alone between blank lines there: Enter just made it.
-fn phantom(ui: &mut egui::Ui, cx: &mut Cx<'_>, (prev, next): (usize, usize), last: bool) {
-    let Some(c) = cx.caret.filter(|c| prev < *c && *c <= next) else { return };
-    let (Some(before), Some(after)) = (cx.text.get(prev..c), cx.text.get(c..next)) else { return };
-    let alone = before.trim().is_empty() && before.matches('\n').count() >= 2 && (after.trim().is_empty() || c == next);
-    if !alone || cx.lines.iter().any(|d| d.phantom) {
+/// An empty paragraph at `at`, between two blocks, when the caret stands in one there
+/// ([`edit::empty_paragraph_at`]): Enter just made it, or a deletion left it.
+fn phantom(ui: &mut egui::Ui, cx: &mut Cx<'_>, at: edit::Between, last: bool) {
+    let Some(c) = cx.caret.filter(|c| edit::empty_paragraph_at(cx.text, *c, at)) else { return };
+    if cx.lines.iter().any(|d| d.phantom) {
         return;
     }
+    empty_line(ui, cx, c, last);
+}
+
+/// An empty line of text standing for source offset `c`, the space between paragraphs before it
+/// (`last`) or after it.
+fn empty_line(ui: &mut egui::Ui, cx: &mut Cx<'_>, c: usize, last: bool) {
     let t = cx.t;
     let size = t.reading_size;
     if last {
@@ -1682,11 +1739,22 @@ fn code(ui: &mut egui::Ui, cx: &mut Cx<'_>, src: &str, offset: usize, corner: Op
     r
 }
 
-fn title_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, [title, author, date]: [&Vec<Inline>; 3]) {
+fn title_block(
+    ui: &mut egui::Ui,
+    cx: &mut Cx<'_>,
+    range: &Range<usize>,
+    [title, author, date]: [&Vec<Inline>; 3],
+    slots: &[Option<Range<usize>>; 3],
+) {
     let t = cx.t;
     let align = std::mem::replace(&mut cx.align, Align::Center);
     ui.add_space(t.reading_size);
-    if title.is_empty() && author.is_empty() {
+    // An empty title or author shows while the caret is in it (its text just deleted).
+    let caret_in = |slot: &Option<Range<usize>>| cx.caret.filter(|c| slot.as_ref().is_some_and(|s| s.start <= *c && *c <= s.end));
+    let (title_at, author_at) = (caret_in(&slots[0]).filter(|_| title.is_empty()), caret_in(&slots[1]).filter(|_| author.is_empty()));
+    let date_at = caret_in(&slots[2]).filter(|_| date.is_empty());
+    let (title_here, author_here) = (title_at.is_some(), author_at.is_some());
+    if title.is_empty() && author.is_empty() && !title_here && !author_here {
         let tip = [Inline { kind: InlineKind::Source, range: range.clone() }];
         let _ = paragraph(
             ui,
@@ -1696,34 +1764,36 @@ fn title_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, [title,
             &Para { size: t.reading_size, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at: None, cell: None },
         );
     }
-    if !title.is_empty() {
+    if !title.is_empty() || title_here {
+        let empty_at = title_at;
         let r = paragraph(
             ui,
             cx,
             title,
             range,
-            &Para { size: t.heading_sizes[0], bold: true, color: t.text, role: egui::Role::Heading, empty_at: None, cell: None },
+            &Para { size: t.heading_sizes[0], bold: true, color: t.text, role: egui::Role::Heading, empty_at, cell: None },
         );
         ui.ctx().accesskit_node_builder(r.id, |node| node.set_level(1));
     }
-    if !author.is_empty() {
+    if !author.is_empty() || author_here {
         ui.add_space(t.reading_size * 0.75);
+        let empty_at = author_at;
         let _ = paragraph(
             ui,
             cx,
             author,
             range,
-            &Para { size: t.reading_size * 1.1, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at: None, cell: None },
+            &Para { size: t.reading_size * 1.1, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at, cell: None },
         );
     }
-    if !date.is_empty() {
+    if !date.is_empty() || date_at.is_some() {
         ui.add_space(t.reading_size * 0.25);
         let _ = paragraph(
             ui,
             cx,
             date,
             range,
-            &Para { size: t.reading_size, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at: None, cell: None },
+            &Para { size: t.reading_size, bold: false, color: t.text_muted, role: egui::Role::Paragraph, empty_at: date_at, cell: None },
         );
     }
     ui.add_space(t.reading_size * 0.75);
@@ -1848,7 +1918,9 @@ fn heading(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, level: u8, 
         });
         inlines.push(label.clone());
     }
-    let r = paragraph(ui, cx, &inlines, range, &Para { size, bold: true, color: t.text, role: egui::Role::Heading, empty_at: None, cell: None });
+    // An empty heading's caret stands inside its braces.
+    let empty_at = if content.is_empty() { texcraft_latex::view::heading_slot(cx.text, range) } else { None };
+    let r = paragraph(ui, cx, &inlines, range, &Para { size, bold: true, color: t.text, role: egui::Role::Heading, empty_at, cell: None });
     // Part and chapter are the first level, section the second, and so on.
     let aria = usize::from(level.max(1));
     ui.ctx().accesskit_node_builder(r.id, |node| node.set_level(aria));

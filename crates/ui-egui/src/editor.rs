@@ -152,6 +152,12 @@ pub(crate) fn send_edits(app: &mut App) -> bool {
     sent
 }
 
+/// The editor takes the session's edits of the shown file now (not on its next frame).
+pub(crate) fn catch_up_now(app: &mut App) {
+    let current = app.session.current().cloned();
+    app.editor.sync(current.as_ref(), &app.session);
+}
+
 /// After the session edited `path` (an edit the user asked for, such as made LaTeX inserted):
 /// the editor takes the edit now, undoable, and selects characters `start..end` of the file.
 pub(crate) fn select_after_edit(app: &mut App, path: &ProjectPath, start: usize, end: usize) {
