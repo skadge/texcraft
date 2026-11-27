@@ -4,6 +4,7 @@ mod auxfile;
 mod edit;
 mod figure;
 mod fold;
+mod formatted_fuzz;
 mod lex;
 mod passage;
 mod prose;
