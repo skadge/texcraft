@@ -213,7 +213,7 @@ impl Editor {
             Op::Cite(key) => self.insert_atom(&doc, (a, h), &format!("\\cite{{{key}}}"), &mut done)?,
             Op::Ref(key) => self.insert_atom(&doc, (a, h), &format!("\\ref{{{key}}}"), &mut done)?,
             Op::Footnote(t) => {
-                let end = doc.source(a.max(h)).unwrap_or(self.head);
+                let end = edit::typing_point(&self.text, doc.source(a.max(h)).unwrap_or(self.head));
                 let source = format!("\\footnote{{{}}}", edit::escape(t));
                 let caret = end + source.len();
                 self.commit(&[Change { range: end..end, text: source }], (caret, caret), &mut done)?;
@@ -511,7 +511,7 @@ impl Editor {
     }
 
     fn insert_atom(&mut self, doc: &Doc, (a, h): (Pos, Pos), source: &str, done: &mut Done) -> Result<(), Broken> {
-        let end = doc.source(a.max(h)).unwrap_or(self.head);
+        let end = edit::typing_point(&self.text, doc.source(a.max(h)).unwrap_or(self.head));
         let after_word = self.text.get(..end).and_then(|s| s.chars().next_back()).is_some_and(char::is_alphanumeric);
         let inserted = if after_word { format!("~{source}") } else { source.to_owned() };
         let caret = end + inserted.len();

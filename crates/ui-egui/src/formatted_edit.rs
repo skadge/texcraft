@@ -538,7 +538,7 @@ fn structure(app: &mut App, f: &Frame<'_>, e: Option<edit::SourceEdit>, why: &st
 /// with a no-break space before it, as LaTeX writes them.
 fn insert_atom(app: &mut App, f: &Frame<'_>, source: &str) {
     let Some((a, h)) = selection(app, f) else { return };
-    let end = f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app));
+    let end = edit::typing_point(f.text, f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app)));
     let after_word = f.text.get(..end).and_then(|s| s.chars().next_back()).is_some_and(char::is_alphanumeric);
     let inserted = if after_word { format!("~{source}") } else { source.to_owned() };
     let caret = end + inserted.len();
@@ -548,7 +548,7 @@ fn insert_atom(app: &mut App, f: &Frame<'_>, source: &str) {
 /// `source` after the selection (or at the caret), the caret after it.
 fn insert_after_selection(app: &mut App, f: &Frame<'_>, source: &str) {
     let Some((a, h)) = selection(app, f) else { return };
-    let end = f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app));
+    let end = edit::typing_point(f.text, f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app)));
     let caret = end + source.len();
     commit(app, f, &[Change { range: end..end, text: source.to_owned() }], (caret, caret), EditKind::Other);
 }

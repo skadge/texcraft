@@ -503,18 +503,43 @@ pub fn replace_structure(text: &str, doc: &Doc, (a, b): (Pos, Pos), (source, car
 }
 
 /// Where text typed at source offset `at` goes: at the end of a heading's text when `at` is just
-/// after the label shown with it (End in a heading puts the caret after its label), else `at`.
+/// after the label shown with it (End in a heading puts the caret after its label), at the end of
+/// a float's caption when `at` is next to its label, else `at`.
 pub fn typing_point(text: &str, at: usize) -> usize {
     let blocks = view::view(text);
     let mut found = None;
     view::walk(&blocks, &mut |b| {
-        if let BlockKind::Heading { label: Some(label), .. } = &b.kind
-            && label.range.end == at
-        {
-            found = view::heading_text(text, &b.range).map(|r| r.end);
+        let label = match &b.kind {
+            BlockKind::Heading { label: Some(label), .. } => {
+                if label.range.end == at {
+                    found = view::heading_text(text, &b.range).map(|r| r.end);
+                }
+                return;
+            }
+            BlockKind::Figure { label: Some(label), .. } => label,
+            BlockKind::Table(t) => match t.float.as_ref().and_then(|f| f.label.as_ref()) {
+                Some(label) => label,
+                None => return,
+            },
+            _ => return,
+        };
+        // A float's caption line: at the end of its caption (typed text after the label would
+        // break the float).
+        if label.range.end == at || label.range.start == at {
+            found = caption_end(text, &b.range);
         }
     });
     found.unwrap_or(at)
+}
+
+/// Where the text of the `\caption` of the float whose source is `text[range]` ends.
+fn caption_end(text: &str, range: &Range<usize>) -> Option<usize> {
+    let nodes = tree::parse(text.get(range.clone())?);
+    let Some(Node { kind: Kind::Environment { body, .. }, .. }) = nodes.first() else { return None };
+    body.iter().find_map(|n| match &n.kind {
+        Kind::Command { name, args, .. } if name == "caption" => args.iter().rev().find(|a| !a.optional).map(|a| range.start + a.inner.end),
+        _ => None,
+    })
 }
 
 /// Ranges sorted, with those that touch or overlap made one.
@@ -1659,11 +1684,17 @@ pub fn outdent(text: &str, at: usize) -> Option<SourceEdit> {
             changes.push(change(content.end..next, format!("{space}\n{at_begin}{begin_src}\n{}", indent_at(text, next))));
         }
     } else {
-        // A paragraph between the parts of the list.
+        // A paragraph between the parts of the list, starting with the item's label if it had
+        // one (`\item[Term]`), its text kept.
+        let label = match &head.kind {
+            Kind::Command { args, .. } => args.iter().find(|a| a.optional).and_then(|a| text.get(a.inner.clone())).filter(|l| !l.trim().is_empty()),
+            _ => None,
+        };
+        let label = label.map(|l| format!("{} ", l.trim())).unwrap_or_default();
         if first {
-            changes.push(change(space_before(text, begin.start)..content.start, "\n\n"));
+            changes.push(change(space_before(text, begin.start)..content.start, format!("\n\n{label}")));
         } else {
-            changes.push(change(space_before(text, head.range.start)..content.start, format!("\n{at_begin}\\end{{{name}}}\n\n")));
+            changes.push(change(space_before(text, head.range.start)..content.start, format!("\n{at_begin}\\end{{{name}}}\n\n{label}")));
         }
         if last {
             let after = space_after(text, end.end);

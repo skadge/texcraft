@@ -172,14 +172,28 @@ fn slice(text: &str, rng: &mut Rng) -> String {
     } else {
         head.to_owned()
     };
-    let breaks: Vec<usize> = body.match_indices("\n\n").map(|(i, _)| i + 2).collect();
-    let start = if breaks.is_empty() { 0 } else { breaks[rng.below(breaks.len())] };
-    let mut end = (start + 1500 + rng.below(1500)).min(body.len());
-    while !body.is_char_boundary(end) {
-        end += 1;
+    let breaks: Vec<usize> = body.match_indices("\n\n").map(|(i, _)| i + 2).chain([body.len()]).collect();
+    // From a paragraph break to another, balanced when one of a few tries is: a slice that cuts an
+    // environment in half tests hostile input more than editing.
+    let window = |rng: &mut Rng| {
+        let k = rng.below(breaks.len());
+        let start = if k == 0 { 0 } else { breaks[k - 1] };
+        let end = breaks.iter().copied().filter(|e| *e > start).take_while(|e| *e <= start + 3000).last().unwrap_or(body.len().min(start + 3000));
+        let mut end = end.min(body.len());
+        while !body.is_char_boundary(end) {
+            end += 1;
+        }
+        body.get(start..end).unwrap_or_default().to_owned()
+    };
+    let mut part = window(rng);
+    for _ in 0..8 {
+        if checks::balanced(&part) {
+            break;
+        }
+        part = window(rng);
     }
     let tail = if begin.is_some() { "\n\\end{document}\n" } else { "" };
-    format!("{head}\n{}{tail}", body.get(start..end).unwrap_or_default())
+    format!("{head}\n{part}{tail}")
 }
 
 #[derive(Debug, Clone)]

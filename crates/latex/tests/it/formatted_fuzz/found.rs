@@ -215,3 +215,20 @@ fn deleting_whole_items_whose_text_ends_in_a_styled_word_takes_their_items() {
     assert_eq!(view::view(&e.text).len(), 1);
     assert!(!e.text.contains("textbf"), "{:?}", e.text);
 }
+
+#[test]
+fn typing_or_citing_at_the_end_of_a_caption_line_goes_in_the_caption() {
+    let text = "\\begin{figure}\n\\includegraphics{a}\n\\caption{Cap}\n\\label{fig:a}\n\\end{figure}";
+    let mut e = after(text, &[Op::End { shift: false }]);
+    typed(&mut e, "x");
+    assert!(e.text.contains("\\caption{Capx}"), "{:?}", e.text);
+    let e = after(text, &[Op::End { shift: false }, Op::Cite("k".to_owned())]);
+    assert!(e.text.contains("\\caption{Cap~\\cite{k}}"), "{:?}", e.text);
+    assert!(!shows_source(&e.text), "the figure became source: {:?}", e.text);
+}
+
+#[test]
+fn shift_tab_on_a_labelled_item_keeps_its_label_in_the_paragraph() {
+    let e = after("Before.\n\n\\begin{description}\\item[Term] Its text.\\end{description}", &[Op::Down { shift: false }, Op::ShiftTab]);
+    assert!(e.text.contains("Term Its text."), "{:?}", e.text);
+}
