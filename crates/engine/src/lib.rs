@@ -51,6 +51,7 @@ pub use cmd::git::{Hosting as GitHosting, hosting as git_hosting};
 /// What the end of an update check or installation was ([`Session::poll_update`]).
 pub use cmd::update::{Event as UpdateEvent, State as Updates};
 pub use texcraft_compile::engine_choice;
+pub use texcraft_compile::missing;
 pub use texcraft_compile::packages;
 pub use texcraft_compile::{
     Diagnostic, Draft, Engine, Export, MAX_BLEED_MM, Options as BuildOptions, Outcome, Output, PdfX, Progress, Severity, Status,
@@ -96,6 +97,10 @@ pub struct Settings {
     /// (`build.package_server`); the desktop build ignores it.
     #[serde(default)]
     pub package_server: texcraft_compile::packages::PackageServer,
+    /// What the desktop build does when a document needs a TeX Live package that is not
+    /// installed (`build.missing_packages`); the browser build follows `package_server`.
+    #[serde(default)]
+    pub missing_packages: texcraft_compile::missing::MissingPackages,
 }
 
 fn yes() -> bool {
@@ -115,6 +120,7 @@ impl Default for Settings {
             autosave: true,
             updates: update::Saved::default(),
             package_server: Default::default(),
+            missing_packages: Default::default(),
         }
     }
 }
@@ -262,6 +268,20 @@ pub struct Session {
     saved_outputs: std::collections::BTreeMap<&'static str, PathBuf>,
     /// The latest release and what this copy can do about it (docs/ROADMAP.md, A8).
     update: cmd::update::State,
+    /// What a window asks about missing packages ([`Session::take_package_question`]).
+    packages: PackageQuestion,
+}
+
+/// The question of what to do about missing packages, while the setting is Ask: only a window
+/// asks it (the CLI and agents never do), once a session.
+#[derive(Debug, Default)]
+struct PackageQuestion {
+    /// A window will ask.
+    asks: bool,
+    /// It was asked in this session.
+    asked: bool,
+    /// What the window is to ask about, until it takes it.
+    pending: Option<texcraft_compile::missing::Lack>,
 }
 
 impl Session {
@@ -335,6 +355,7 @@ impl Session {
             grammar: grammar::State::default(),
             saved_outputs: std::collections::BTreeMap::new(),
             update: cmd::update::State::default(),
+            packages: PackageQuestion::default(),
         }
     }
 
@@ -624,6 +645,29 @@ impl Session {
         }
     }
 
+    /// What the desktop build does about missing TeX Live packages; a change builds again, so a
+    /// document that lacked a package can get it.
+    pub fn set_missing_packages(&mut self, missing: texcraft_compile::missing::MissingPackages) {
+        if missing != self.settings.missing_packages {
+            self.settings.missing_packages = missing;
+            self.built_revision = None;
+        }
+    }
+
+    /// A window asks what to do the first time a build lacks a TeX Live package while the setting
+    /// is Ask ([`Session::take_package_question`]); without one (the CLI, agents) nothing asks,
+    /// and nothing is downloaded.
+    pub fn set_asks_about_packages(&mut self, on: bool) {
+        self.packages.asks = on;
+    }
+
+    /// What the window is to ask about, once: the first package (or TeX Live itself) a build of
+    /// this session lacked while the setting was Ask. Closing the question without an answer
+    /// keeps Ask; the next session asks again.
+    pub fn take_package_question(&mut self) -> Option<texcraft_compile::missing::Lack> {
+        self.packages.pending.take()
+    }
+
     /// Whether the engine keeps build files that `build.clean` can delete.
     pub fn can_clean(&self) -> bool {
         match &self.builder {
@@ -755,6 +799,7 @@ impl Session {
         job.choose_engine();
         job.project = self.project_key();
         job.packages = self.settings.package_server.clone();
+        job.missing_packages = self.settings.missing_packages;
         Ok(job)
     }
 
@@ -978,6 +1023,7 @@ impl Session {
         self.built_engine = job.choose_engine();
         job.project = self.project_key();
         job.packages = self.settings.package_server.clone();
+        job.missing_packages = self.settings.missing_packages;
         self.built_revision = Some(self.revision);
         self.built_review = self.review.revision;
         match &mut self.builder {
@@ -1079,6 +1125,15 @@ impl Session {
                 Some(x) => Ok((p.standard, x.clone())),
                 None => Err(format!("The print build wrote no {}: see the Print messages in the build log.", p.standard.name())),
             });
+        }
+        let q = &mut self.packages;
+        if q.asks
+            && !q.asked
+            && self.settings.missing_packages == texcraft_compile::missing::MissingPackages::Ask
+            && let Some(lack) = outcome.missing.first()
+        {
+            q.asked = true;
+            q.pending = Some(lack.clone());
         }
         self.last.insert(outcome)
     }
