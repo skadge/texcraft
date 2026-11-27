@@ -277,7 +277,7 @@ web:
     - cargo xtask templates-site dist/web
     # The TeX tree and its seed (a native retex of the pinned version, built into
     # target/retex-native and cached with target/).
-    - cargo xtask tree-site dist/web
+    - cargo xtask tree-site dist/web --bundle
     - du -sh dist/web dist/web/tree
     - mkdir -p out
     - tar -C dist -czf "out/texcraft-web-$VERSION.tar.gz" web
