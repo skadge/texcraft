@@ -317,3 +317,24 @@ fn the_toolbars_groups_stay_clear_of_the_more_menu() {
         }
     }
 }
+
+#[test]
+fn on_a_phone_bold_and_italic_stay_on_the_toolbar_and_the_paragraph_styles_go_to_more() {
+    let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    assert!(s.execute("file.write", &json!({"path": "main.tex", "text": "Some words.\n"})).is_ok());
+    assert!(s.execute("file.open", &json!({"path": "main.tex"})).is_ok());
+    let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
+    let mut h = Harness::builder().with_size(egui::vec2(390.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    h.run();
+    h.get_by_label("Formatted").click();
+    h.run();
+    let more = h.get_by_label("More formatting").rect();
+    for name in ["Bold", "Italic"] {
+        let r = h.query_by_role_and_label(Role::Button, name).map(|n| n.rect());
+        assert!(r.is_some_and(|r| r.right() <= more.left()), "{name} is not on the phone's toolbar, left of More");
+    }
+    h.get_by_role_and_label(Role::Button, "More formatting").click();
+    h.run();
+    h.run();
+    assert!(h.query_by_label_contains("Heading 1").is_some(), "the paragraph styles are not in the More menu");
+}
