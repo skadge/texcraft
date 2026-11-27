@@ -807,7 +807,8 @@ impl Engine {
                 Ended::Crashed(why) if resumed => {
                     // Resuming from the preamble's snapshot failed (#56): from the start, as a
                     // reload would, and without snapshots for the rest of the visit.
-                    log::warn!("build {id}: the run resumed from the preamble's snapshot stopped ({why}); running from the start");
+                    let why = crashed(&why, &std::mem::take(&mut self.web.out.borrow_mut().text));
+                    log::warn!("build {id}: the run resumed from the preamble's snapshot failed, running from the start: {why}");
                     self.snapshot = None;
                     self.no_resume = true;
                 }
