@@ -23,6 +23,7 @@ use texcraft_project::{Project, ProjectPath};
 pub mod engine_choice;
 #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
 pub mod formulas;
+pub mod packages;
 pub mod places;
 pub mod prefetch;
 pub mod records;
@@ -50,6 +51,9 @@ pub struct Job {
     /// Which project this is, for an engine that keeps something per project: the browser's
     /// worker keeps the TeX files a project's builds read, to fetch them at once next time.
     pub project: Option<String>,
+    /// Where the browser's engine downloads the TeX Live packages its tree lacks
+    /// ([`packages`]); the desktop's retex has its own settings.
+    pub packages: packages::PackageServer,
 }
 
 impl Job {
@@ -57,7 +61,7 @@ impl Job {
     pub fn from_project(project: &Project, id: u64) -> Option<Job> {
         let main = project.main()?.clone();
         let files = project.files().map(|(p, c)| (p.clone(), Arc::<[u8]>::from(c.as_bytes()))).collect();
-        Some(Job { files, main, id, options: Options::default(), project: None })
+        Some(Job { files, main, id, options: Options::default(), project: None, packages: packages::PackageServer::Default })
     }
 }
 
@@ -391,6 +395,9 @@ pub enum Event {
     Step { what: String },
     /// The browser's engine fetches the TeX files the build needs: `done` of `total` so far.
     Fetching { done: u32, total: u32 },
+    /// A TeX Live package the tree lacks is downloaded (`package-download`, retex 2.5): its name
+    /// and its archive's size in bytes; `None` for the list of TeX Live's packages.
+    Package { name: Option<String>, bytes: u64 },
     /// The PDF of a pass that is not the last (retex 2.3.0), to show while the next passes run;
     /// its references may be undefined.
     Draft {
@@ -425,6 +432,10 @@ pub struct Progress {
     /// engine fetches them; until the build reads a file it has not read before.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fetching: Option<(u32, u32)>,
+    /// The TeX Live package being downloaded and its size in bytes (`None`: the list of
+    /// packages), until the build reads a file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package: Option<(Option<String>, u64)>,
     /// The pass whose PDF is the build's draft, when one was written.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub draft: Option<u32>,
@@ -444,11 +455,14 @@ impl Progress {
                 self.reading = None;
                 self.step = None;
                 self.fetching = None;
+                self.package = None;
             }
             Event::File { name } => {
                 self.reading = Some(name);
                 self.fetching = None;
+                self.package = None;
             }
+            Event::Package { name, bytes } => self.package = Some((name, bytes)),
             Event::Step { what } => self.step = Some(what),
             Event::Fetching { done, total } => self.fetching = Some((done, total)),
             Event::Draft { pass, .. } => self.draft = Some(pass),

@@ -81,6 +81,8 @@ pub struct Prefs {
     pub first_steps_seen: bool,
     /// The kinds of build message hidden in every project (Hide Messages Like This).
     pub hidden_messages: Vec<String>,
+    /// Where the browser build downloads missing TeX Live packages (Settings › Building).
+    pub package_server: texcraft_engine::packages::PackageServer,
     /// The folder Import a Project makes its clones and unzipped projects in, once one was
     /// chosen with Change… (the system's documents folder until then).
     pub clone_folder: Option<String>,
@@ -145,6 +147,7 @@ impl Default for Prefs {
             spelling: texcraft_engine::SpellingOptions::default(),
             grammar: texcraft_engine::GrammarOptions::default(),
             hidden_messages: Vec::new(),
+            package_server: Default::default(),
             words: Vec::new(),
             recent_symbols: Vec::new(),
             ai_complete: false,

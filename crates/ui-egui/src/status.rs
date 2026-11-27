@@ -125,7 +125,19 @@ fn state(app: &App) -> (Option<&'static str>, egui::Color32, String) {
 /// file being read, or the step between passes.
 pub(crate) fn progress_now(p: &texcraft_engine::Progress) -> String {
     let n = |v: u32| v.to_string();
-    if let Some((done, total)) = p.fetching {
+    if let Some((name, bytes)) = &p.package {
+        // The browser's engine downloads a TeX Live package its own TeX files lack.
+        let size = if *bytes >= 1_000_000 {
+            crate::i18n::measure(*bytes as f64 / 1e6, 1, "{n} MB")
+        } else {
+            crate::i18n::measure(bytes.div_ceil(1000) as f64, 0, "{n} kB")
+        };
+        match name {
+            Some(name) if *bytes > 0 => tl!("Downloading the LaTeX package {name} ({size})…").replace("{name}", name).replace("{size}", &size),
+            Some(name) => tl!("Downloading the LaTeX package {name}…").replace("{name}", name),
+            None => tl!("Downloading the list of TeX Live packages…").to_owned(),
+        }
+    } else if let Some((done, total)) = p.fetching {
         // The browser's engine fetches the TeX files the document needs, then reads them again.
         if done >= total {
             tl!("Reading the downloaded LaTeX packages…").to_owned()

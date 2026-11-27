@@ -4,7 +4,8 @@
 //!
 //! Messages to the worker: `{type: "build", id, main, dir, names, contents, args, project}` (the
 //! main document's name and folder, the project's files as their paths in the project and their
-//! bytes, retex's extra arguments, which project it is: [`Job::project`]). From it: `{type: "line", id, text}` (a progress record), `{type: "draft", id,
+//! bytes, retex's extra arguments, which project it is: [`Job::project`], where missing packages
+//! come from: [`Job::packages`]). From it: `{type: "line", id, text}` (a progress record), `{type: "draft", id,
 //! pass, pdf}`, `{type: "done", id, code, output, pdf?, synctex?, seconds}` or `{type: "done",
 //! id, error}`.
 
@@ -293,6 +294,7 @@ fn message(kind: &str, id: f64, job: &Job) -> Object {
         ("contents", contents.into()),
         ("args", args.into()),
         ("project", job.project.as_deref().map_or(JsValue::UNDEFINED, JsValue::from)),
+        ("packages", String::from(job.packages.clone()).into()),
     ] {
         let _ = Reflect::set(&msg, &k.into(), &v);
     }

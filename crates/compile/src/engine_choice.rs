@@ -519,6 +519,7 @@ mod tests {
             options: crate::Options { engine: Engine::LuaLatex, ..crate::Options::default() },
             id: 0,
             project: None,
+            packages: Default::default(),
         };
         assert_eq!(job.choose_engine(), None);
         assert_eq!(job.options.engine, Engine::LuaLatex);

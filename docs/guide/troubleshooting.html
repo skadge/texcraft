@@ -60,12 +60,13 @@
       <p>On the desktop, TeXCraft uses your TeX Live (2025 or 2026) when one is installed. A package your document needs and your TeX Live lacks is downloaded from TeX Live the first time; without any TeX Live, TeXCraft keeps a TeX tree of its own and fills it as documents need it. Either way the first build of a new package needs the network.</p>
 
       <h3 id="browser-packages">Packages in the browser <span class="tag">Browser only</span></h3>
-      <p>The browser version serves its own TeX tree: the common classes and packages, and those of every template. A document that needs a package outside it fails to build, and the log names the file it could not find.</p>
+      <p>The browser version serves its own TeX tree: the common classes and packages, and those of every template. A package outside it is downloaded during the build from TeXCraft's package server, a copy of TeX Live of the same year as the tree. The status line says <span class="ui">Downloading the LaTeX package …</span> with the package's size, and the build log lists each package downloaded. A package is downloaded once: the browser keeps it for later builds and visits, also after TeXCraft is updated.</p>
       <ul>
-        <li>If the package is a single file (a <code>.sty</code> or <code>.cls</code>), adding that file to the project usually works.</li>
-        <li>Otherwise, build the project in the desktop app, which downloads what it needs.</li>
+        <li><strong>The first build in a browser</strong> also downloads TeX Live's list of packages (about 3 MB) and reads it, which takes a few seconds more.</li>
+        <li><strong>The package server is busy or not available:</strong> the build goes on without the package and fails where the document needs it; the log says that the server refused, and names the package. TeXCraft does not ask again for a while (a minute after a busy answer, ten minutes when the server is not available); compile again later.</li>
+        <li><strong>A package TeX Live does not have</strong> cannot be downloaded: the log names the file it could not find. If the package is a single file (a <code>.sty</code> or <code>.cls</code>), adding that file to the project usually works.</li>
+        <li><strong>Turning downloads off, or another server:</strong> <span class="ui">Settings › Building › Package server</span>: <span class="ui">Off</span> builds without downloading anything; <span class="ui">Another server</span> takes the https:// address of a TeX Live mirror laid out by year, then snapshot, whose server lets TeXCraft's site read it (see <a href="building.html#browser-packages">Building</a>).</li>
       </ul>
-      <p class="not-yet"><strong>Not yet:</strong> downloading missing packages during the build in the browser.</p>
       <p>The first build of each visit downloads the TeX files the project reads, which can take a few seconds; they are kept for the next visit.</p>
 
       <h2 id="install">Installing and starting</h2>

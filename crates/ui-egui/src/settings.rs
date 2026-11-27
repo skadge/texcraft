@@ -717,7 +717,70 @@ fn building(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         Some(r)
     });
     output(app, ui, t, options);
+    // Only the browser's engine downloads packages through TeXCraft; the desktop's retex has its
+    // own settings.
+    if cfg!(target_arch = "wasm32") {
+        package_server(app, ui, t);
+    }
     hidden_messages(app, ui, t);
+}
+
+/// Where the browser build downloads the TeX Live packages its own TeX files lack: TeXCraft's
+/// server, another one (its address typed, applied with Enter) or none (`build.package_server`).
+fn package_server(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    use texcraft_engine::packages::PackageServer;
+    let server = app.session.settings.package_server.clone();
+    let help = tl!(
+        "The LaTeX packages a document needs and the browser's own TeX files lack are downloaded from this server, once. Off: the build goes on without them."
+    );
+    let choices = [tl!("TeXCraft's server"), tl!("Another server"), tl!("Off")];
+    let custom = matches!(server, PackageServer::Custom(_)) || app.view.package_server_draft.is_some();
+    let shown = match server {
+        PackageServer::Off if !custom => 2,
+        _ if custom => 1,
+        _ => 0,
+    };
+    let mut chosen = None;
+    setting(ui, t, tl!("Package server"), help, |ui| {
+        let combo = craft_ui::ComboBox::from_id_salt("settings-package-server").width(200.0).selected_text(choices[shown]).show_ui(ui, |ui| {
+            for (i, name) in choices.iter().enumerate() {
+                if ui.selectable_label(i == shown, *name).clicked() {
+                    chosen = Some(i);
+                }
+            }
+        });
+        let _ = combo.response.accessible_name(tl!("Package server"));
+        None
+    });
+    match chosen {
+        Some(0) => {
+            app.view.package_server_draft = None;
+            app.run("build.package_server", json!({"server": "default"}));
+        }
+        Some(1) if !custom => app.view.package_server_draft = Some(String::new()),
+        Some(2) => {
+            app.view.package_server_draft = None;
+            app.run("build.package_server", json!({"server": "off"}));
+        }
+        _ => {}
+    }
+    if !(custom || chosen == Some(1)) {
+        return;
+    }
+    let mut text = app.view.package_server_draft.clone().unwrap_or_else(|| server.base().unwrap_or_default().to_owned());
+    let mut apply = false;
+    let help =
+        tl!("The https:// address of a TeX Live mirror laid out by year, then snapshot, whose server lets this site read it. Press Enter to use it.");
+    setting(ui, t, tl!("Server address"), help, |ui| {
+        let r = ui.add(egui::TextEdit::singleline(&mut text).hint_text("https://…/tlnet").desired_width(260.0));
+        apply = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        Some(r)
+    });
+    if apply && app.run("build.package_server", json!({"server": text.trim()})).is_some() {
+        app.view.package_server_draft = None;
+    } else {
+        app.view.package_server_draft = Some(text);
+    }
 }
 
 /// The kinds of build message hidden from the log (Hide Like This), this project's then every

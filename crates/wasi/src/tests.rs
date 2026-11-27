@@ -7,6 +7,8 @@ struct Fake {
     loads: Vec<String>,
     opened: Vec<String>,
     out: Vec<u8>,
+    /// What the host has at paths the file system lacks.
+    served: HashMap<String, Missing>,
 }
 
 impl Platform for Fake {
@@ -29,6 +31,9 @@ impl Platform for Fake {
     fn stderr(&mut self, _bytes: &[u8]) {}
     fn opened(&mut self, source: &str) {
         self.opened.push(source.to_owned());
+    }
+    fn missing(&mut self, path: &str) -> Missing {
+        self.served.get(path).cloned().unwrap_or(Missing::Absent)
     }
 }
 
@@ -225,4 +230,24 @@ fn the_arguments_fit_the_sizes_announced() {
     let end = r.m[last as usize..].iter().position(|b| *b == 0).unwrap() as u32 + last + 1;
     assert_eq!(end - 2048, size);
     assert_eq!(&r.m[last as usize..end as usize - 1], b"doc.tex");
+}
+
+#[test]
+fn a_file_the_host_serves_stops_the_run_until_it_is_added() {
+    let archive = "/tlnet/20261126/archive/pgf.tar.xz";
+    let mut fake = Fake::default();
+    fake.served.insert(archive.into(), Missing::Fetch("tlnet:pgf".into()));
+    fake.served.insert("/tlnet/20261126/archive/refused.tar.xz".into(), Missing::Unavailable);
+    let fs = FileSystem::new();
+    let mut run = Run::new(fs.clone(), fake);
+    let (ptr, len) = run.place(archive.as_bytes());
+    let open = PathOpen { path: PathArg { fd: 3, ptr, len }, oflags: 0, fdflags: 0, at: OUT };
+    assert_eq!(run.wasi.path_open(&mut run.m, open), Err(Stop::Fetch("tlnet:pgf".into())));
+    assert_eq!(run.open("/tlnet/20261126/archive/refused.tar.xz", 0, 0), Err(errno::IO), "refused: not the same as absent");
+    assert_eq!(run.open("/tlnet/20261126/archive/other.tar.xz", 0, 0), Err(errno::NOENT));
+    // The host fetched it: the next run reads it.
+    fs.add(archive, b"xz".to_vec(), 0);
+    let mut run = Run::new(fs, Fake::default());
+    let fd = run.open(archive, 0, 0).unwrap();
+    assert_eq!(run.read(fd, 8).unwrap(), b"xz");
 }

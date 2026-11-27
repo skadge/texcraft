@@ -51,6 +51,7 @@ pub use cmd::git::{Hosting as GitHosting, hosting as git_hosting};
 /// What the end of an update check or installation was ([`Session::poll_update`]).
 pub use cmd::update::{Event as UpdateEvent, State as Updates};
 pub use texcraft_compile::engine_choice;
+pub use texcraft_compile::packages;
 pub use texcraft_compile::{
     Diagnostic, Draft, Engine, Export, MAX_BLEED_MM, Options as BuildOptions, Outcome, Output, PdfX, Progress, Severity, Status,
 };
@@ -91,6 +92,10 @@ pub struct Settings {
     /// The daily update check, and when it last answered (`app.update_settings`).
     #[serde(default)]
     pub updates: update::Saved,
+    /// Where the browser build downloads the TeX Live packages its tree lacks
+    /// (`build.package_server`); the desktop build ignores it.
+    #[serde(default)]
+    pub package_server: texcraft_compile::packages::PackageServer,
 }
 
 fn yes() -> bool {
@@ -109,6 +114,7 @@ impl Default for Settings {
             hidden_messages: Vec::new(),
             autosave: true,
             updates: update::Saved::default(),
+            package_server: Default::default(),
         }
     }
 }
@@ -609,6 +615,15 @@ impl Session {
         }
     }
 
+    /// Where the browser build downloads missing TeX Live packages from; a change builds again,
+    /// so a document that lacked a package can get it.
+    pub fn set_package_server(&mut self, server: texcraft_compile::packages::PackageServer) {
+        if server != self.settings.package_server {
+            self.settings.package_server = server;
+            self.built_revision = None;
+        }
+    }
+
     /// Whether the engine keeps build files that `build.clean` can delete.
     pub fn can_clean(&self) -> bool {
         match &self.builder {
@@ -739,6 +754,7 @@ impl Session {
         job.options = self.settings.build;
         job.choose_engine();
         job.project = self.project_key();
+        job.packages = self.settings.package_server.clone();
         Ok(job)
     }
 
@@ -961,6 +977,7 @@ impl Session {
         job.options = self.settings.build;
         self.built_engine = job.choose_engine();
         job.project = self.project_key();
+        job.packages = self.settings.package_server.clone();
         self.built_revision = Some(self.revision);
         self.built_review = self.review.revision;
         match &mut self.builder {

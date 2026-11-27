@@ -191,6 +191,9 @@ pub(crate) struct View {
     pub draft: Option<texcraft_engine::Draft>,
     /// The name typed in Settings › Review before a key is made.
     pub identity_draft: String,
+    /// Settings › Building's address of another package server, while it is typed (the browser
+    /// build); `None` when the field shows the setting.
+    pub package_server_draft: Option<String>,
     /// The project's name being edited in the top bar.
     pub rename: Option<top_bar::Rename>,
     /// The menu bar, while the keyboard is in it (F10, or Alt alone).
@@ -337,6 +340,7 @@ impl App {
         session.settings.grammar = prefs.grammar.clone();
         session.settings.hidden_messages = prefs.hidden_messages.clone();
         session.settings.updates = prefs.updates.clone();
+        session.settings.package_server = prefs.package_server.clone();
         session.set_user_words(&prefs.words);
         let (layout, side) = (prefs.layout(), prefs.side());
         let keys = keys::Keys::new(prefs.shortcuts.clone());
@@ -376,6 +380,7 @@ impl App {
                 progress: None,
                 draft: None,
                 identity_draft: prefs::system_user_name(),
+                package_server_draft: None,
                 rename: None,
                 menu_nav: None,
                 menu_ids: Vec::new(),
@@ -465,6 +470,7 @@ impl App {
         current.grammar = self.session.settings.grammar.clone();
         current.hidden_messages = self.session.settings.hidden_messages.clone();
         current.updates = self.session.settings.updates.clone();
+        current.package_server = self.session.settings.package_server.clone();
         current.words = self.session.user_words();
         if current != self.prefs {
             self.prefs = current;
