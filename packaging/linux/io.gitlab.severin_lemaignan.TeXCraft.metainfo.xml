@@ -41,6 +41,12 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.21.1" date="2026-11-27" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.21.1</url>
+      <description>
+        <p>A fix for the web editor: builds after the first one no longer stop with an engine error.</p>
+      </description>
+    </release>
     <release version="0.21.0" date="2026-11-27" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.21.0</url>
       <description>

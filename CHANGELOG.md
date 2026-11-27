@@ -5,6 +5,15 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.21.1 (2026-11-27)
+
+### Fixes
+
+- Web: after the first build, a build could stop with "the typesetting engine stopped:
+  JsValue(WebAssembly.Exception)" (seen with slides) until the page was reloaded (#56). Such a
+  build is now built again from the start, as a reload did; the engine's own message is kept, to
+  find the cause.
+
 ## 0.21.0 (2026-11-27)
 
 The formatted view reads slides, theses, reports, letters, CVs and homework as documents, and
