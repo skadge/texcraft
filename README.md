@@ -93,7 +93,7 @@
 TeXCraft builds with [retex](https://gitlab.com/severin-lemaignan/retex), a TeX engine written in Rust that runs inside it. A few things work that a LaTeX setup usually needs extra tools for:
 
 - **More image formats.** `\includegraphics` takes **SVG** directly (no Inkscape, no `-shell-escape`), **JPEG XL**, **WebP**, GIF and TIFF, as well as PNG, JPEG and PDF.
-- **No TeX installation needed.** A package the document needs and the installed TeX Live lacks is downloaded from TeX Live; without a TeX Live at all, retex keeps a tree of its own.
+- **No TeX installation needed.** The desktop app carries the TeX Live packages of common documents (the article, report, book and letter classes, the AMS packages, graphics, hyperref, geometry, TikZ, fontspec and unicode-math with Latin Modern, English hyphenation): those build with no TeX Live installed and no network. Any other package is downloaded from TeX Live the first time a document needs it; an installed TeX Live of the same year is used first.
 - **Bibliographies and indexes without external programs.** BibTeX, biber and makeindex are built into the engine (no Perl, no Java), and run as many times as the document needs within one build.
 - **minted without Python.** Code listings are highlighted in process, without Python, Pygments or `-shell-escape`.
 - **Colour emoji** in documents, through OpenType colour fonts.
@@ -111,7 +111,7 @@ cargo run --release -p texcraft-cli -- compile examples/article   # build withou
 cargo xtask ci                                                    # fmt, clippy, tests, layering, wasm32 build
 ```
 
-TeXCraft needs Rust 1.95 (`rust-toolchain.toml` selects it) and finds TeX Live as retex does: an installed TeX Live 2025 or 2026, or the tree retex downloads.
+TeXCraft needs Rust 1.95 (`rust-toolchain.toml` selects it). TeX Live is optional: the desktop apps build with retex's bundle of TeX Live 2026 packages (retex's `bundled` feature, the crate `retex-data`), searched after an installed TeX Live of the same year; a TeX Live 2025 is used on its own, and packages neither has are downloaded.
 
 The interface uses Inter from [storytold/craft-fonts](https://github.com/storytold/craft-fonts), an optional build input: clone it into `./craft-fonts`, which `.cargo/config.toml` points `CRAFT_FONTS_DIR` at. Without it, egui's bundled fonts are used.
 

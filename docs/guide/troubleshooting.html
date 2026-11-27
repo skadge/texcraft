@@ -69,12 +69,16 @@
       </ul>
       <p>The first build of each visit downloads the TeX files the project reads, which can take a few seconds; they are kept for the next visit.</p>
 
+      <h3 id="builtin-packages">Packages built in <span class="tag">Desktop only</span></h3>
+      <p>The desktop app carries the TeX Live 2026 packages of common documents, so these build with no TeX Live installed and without the network: the article, report, book and letter classes, the AMS packages (amsmath, amssymb, amsthm), graphicx, xcolor, hyperref, geometry, url, the tools packages (array, tabularx, multicol, verbatim, calc), babel with English, TikZ and PGF, standalone, fontspec and unicode-math with the Latin Modern fonts, and BibTeX's standard styles. The first build after installing TeXCraft unpacks them into its cache, which takes a few seconds.</p>
+      <p>A TeX Live installed on your computer comes first: one of 2026 is used with the built-in packages behind it, one of 2025 on its own. A package that neither has is missing, as above. Common packages that are not built in include beamer (presentations), booktabs, enumitem, biblatex, siunitx and the publishers' classes, and Latin Modern's Type 1 fonts, which <code>\usepackage[T1]{fontenc}</code> needs. Of TeXCraft's own templates, the letter and the CV build from the built-in packages alone; the article, the thesis and the example need booktabs, the homework sheet enumitem and the slides beamer, so on a computer without TeX Live their first build needs one of these downloaded.</p>
+
       <h2 id="install">Installing and starting</h2>
       <dl>
         <dt>The AppImage does not start</dt>
         <dd>It needs glibc 2.36 or newer (Debian 12, Ubuntu 24.04, Fedora 37 and later; not Ubuntu 22.04) and FUSE 3 (<code>fusermount3</code>). Without FUSE, run it with <code>--appimage-extract-and-run</code>. Make sure it is executable (<code>chmod +x</code>).</dd>
         <dt>The Flatpak does not use my TeX Live</dt>
-        <dd>The sandbox cannot see it. The Flatpak keeps its own TeX tree inside its sandbox and downloads packages into it, so its first build needs the network. It can open projects in your home folder.</dd>
+        <dd>The sandbox cannot see it. The Flatpak builds with its <a href="#builtin-packages">built-in packages</a> and keeps the packages it downloads inside its sandbox. It can open projects in your home folder.</dd>
         <dt>Windows or macOS refuses to open it</dt>
         <dd>These builds are not signed yet. On Windows choose <span class="ui">More info › Run anyway</span>; on macOS, right-click the app and choose <span class="ui">Open</span> the first time.</dd>
         <dt>"The preferences cannot be saved"</dt>

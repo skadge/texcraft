@@ -20,8 +20,8 @@ finish-args:
   - --share=ipc
   # wgpu draws through Vulkan or GL on the GPU.
   - --device=dri
-  # retex downloads TeX Live packages as documents need them (and, here, its whole tree: see
-  # below), and New Project downloads publishers' templates from TeX Live. The control channel
+  # retex downloads the TeX Live packages its built-in ones lack as documents need them, and New
+  # Project downloads publishers' templates from TeX Live. The control channel
   # (`texcraft --control`) listens on the loopback, which the host shares through this too.
   - --share=network
   # Project folders. A project is a folder of .tex files, figures and bibliographies, with the
@@ -35,9 +35,10 @@ finish-args:
   - --filesystem=home
   # Where things live inside the sandbox (no setting needed): XDG_CACHE_HOME is
   # ~/.var/app/io.gitlab.severin_lemaignan.TeXCraft/cache, so retex keeps its formats and caches in
-  # cache/retex/<version>/ and its own TeX Live tree in cache/retex/texlive/ there. A TeX Live
-  # installed on the host is not visible (the runtime's /usr replaces the host's), so retex uses
-  # its own tree: the first build downloads its bootstrap packages. TeXCraft's own data (settings,
+  # cache/retex/<version>/, its built-in TeX Live packages (unpacked at the first build) in
+  # cache/retex/bundle/ and the packages it downloads in cache/retex/texlive/ there. A TeX Live
+  # installed on the host is not visible (the runtime's /usr replaces the host's), so common
+  # documents build from the built-in packages, offline too. TeXCraft's own data (settings,
   # kept templates, thumbnails, control tokens) is under ~/.var/app/io.gitlab.severin_lemaignan.TeXCraft/.
 
 modules:
