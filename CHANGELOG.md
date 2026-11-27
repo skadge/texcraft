@@ -5,7 +5,31 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
-## 0.19.0 (2026-11-26)
+## 0.19.1 (2026-11-27)
+
+0.19.0's Linux packages, a search in Settings, updates from within TeXCraft, and fixes. 0.19.0's
+release stopped at its check, so its Linux packages were not published; they are in this one.
+
+### Updates
+
+- TeXCraft looks for a new release once a day (Settings › Appearance › Check for updates; it asks
+  gitlab.com and sends nothing about you) and Help › Check for Updates…. The notice in the status
+  bar opens What's New. An AppImage updates itself (the download checked against the release's
+  checksums, the old file kept until the new one starts); Flatpak updates come through Flatpak;
+  on Windows and macOS the new download is offered; the browser offers to reload.
+
+### Settings
+
+- A search across every section, by name and description, in your language or English (#54);
+  each section opens at its top (#55).
+
+### Fixes
+
+- After a Sync from the browser, the badge no longer says a change is waiting (#53).
+- A PDF page zoomed far is drawn at the largest size the graphics card takes, instead of failing.
+- The tip of the day's button is named as the tip's, apart from the button of the same label.
+
+## 0.19.0 (2026-11-26, Linux packages not published)
 
 Merges that see words, a switch for AI, pdfLaTeX when a document needs it, and fixes from the
 third round of testing (#43–#52).

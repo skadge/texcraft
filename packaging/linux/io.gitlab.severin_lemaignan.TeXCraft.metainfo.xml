@@ -41,6 +41,19 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.19.1" date="2026-11-27" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.19.1</url>
+      <description>
+        <p>A search in Settings, updates from within TeXCraft, and fixes; with 0.19.0's changes.</p>
+        <ul>
+          <li>Updates found and installed from within TeXCraft</li>
+          <li>A search across every setting</li>
+          <li>Edits to different sentences of one paragraph merge by themselves</li>
+          <li>pdfLaTeX chosen from the document</li>
+          <li>One switch to turn every AI feature off</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.19.0" date="2026-11-26" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.19.0</url>
       <description>
