@@ -5,6 +5,33 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.21.0 (2026-11-27)
+
+The formatted view reads slides, theses, reports, letters, CVs and homework as documents, and
+many more of its edits are fixed.
+
+### Documents shown as text
+
+- Slides: each frame is a card with its title; lists, columns and blocks are text to edit;
+  overlays (`\pause`, `<2->`) are small marks.
+- A title page, a bibliography (numbered entries with their keys), a letter's recipient, and
+  the table of contents, lists of figures, page breaks and `\today` as named marks.
+- A call of the document's own simple commands (`\cventry`, `\exercise`) shows its text to edit,
+  styled as the command sets it.
+- Lists with options such as `[label=(\alph*)]` are lists, numbered as the label says.
+
+### Editing
+
+- Find and Replace open over the formatted view and search the text it shows, also across bold
+  or italic; a replacement keeps the style.
+- "LaTeX" and the other logos are deleted whole with one Backspace.
+- A heading made from a list item leaves the list first.
+- Pressing Bold and going elsewhere no longer leaves an empty `\textbf{}`; typing never lands in
+  a `%` comment; a display formula in a heading or caption is refused, with the reason.
+- Text being composed with an input method shows at the caret.
+- On a phone, Bold, Italic and Code stay on the toolbar.
+- Delete Row leaves the caret in a cell, and many more carets stay where the text is.
+
 ## 0.20.1 (2026-11-27)
 
 0.20.0's changes, below: 0.20.0's release stopped at a test, so it was not published.

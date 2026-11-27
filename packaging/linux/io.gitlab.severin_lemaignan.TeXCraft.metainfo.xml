@@ -41,6 +41,17 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.21.0" date="2026-11-27" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.21.0</url>
+      <description>
+        <p>The formatted view reads slides, theses, letters and CVs as documents, and many edits are fixed.</p>
+        <ul>
+          <li>Slides, title pages, bibliographies and simple user commands shown as text to edit</li>
+          <li>Find and Replace over the formatted view</li>
+          <li>Many fixes to typing, deleting and the caret in the formatted view</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.20.1" date="2026-11-27" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.20.1</url>
       <description>
