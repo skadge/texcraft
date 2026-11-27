@@ -272,10 +272,25 @@ pub(crate) fn run_forge_open(app: &mut App, params: &Value) {
     app.guard(crate::dialogs::Next::Import(Some(source), address));
 }
 
-/// Opens Import a Project, at `source` if given, `address` filled in.
+/// The card of the default connection (Settings › Accounts › Set as Default), if it has one:
+/// gitlab.com's, github.com's, or the GitLab Server card for a GitLab server.
+fn default_source(app: &App) -> Option<Source> {
+    let (instance, service) = app.session.default_connection()?;
+    match service {
+        _ if instance == texcraft_engine::forge::oauth::instance(service) => {
+            Some(if service == Service::GitLab { Source::GitLab } else { Source::GitHub })
+        }
+        Service::GitLab => Some(Source::GitLabServer),
+        // GitHub Enterprise servers are not in this dialog (docs/design/import-dialog.md).
+        Service::GitHub => None,
+    }
+}
+
+/// Opens Import a Project, at `source` if given, `address` filled in; the grid opens with the
+/// default connection's card focused.
 pub(crate) fn open_at(app: &mut App, source: Option<Source>, address: &str) {
-    let mut form =
-        ImportForm { page: Page::Grid, focus_card: Some(Source::GitLab), focus_field: false, into: Into::default(), remember: true, error: None };
+    let first = default_source(app).unwrap_or(Source::GitLab);
+    let mut form = ImportForm { page: Page::Grid, focus_card: Some(first), focus_field: false, into: Into::default(), remember: true, error: None };
     app.view.dialog = None;
     match source {
         Some(source) => {
@@ -336,7 +351,8 @@ fn choose(app: &mut App, mut form: ImportForm, source: Source, address: &str) {
             let instance = if source == Source::GitLabServer {
                 let servers = gitlab_servers(app);
                 let named = texcraft_engine::forge::Address::parse_as(address, Some(service)).ok().map(|a| a.instance);
-                match named.filter(|i| *i != public).or_else(|| servers.iter().find(|s| s.2).or(servers.first()).map(|s| s.0.clone())) {
+                let default = app.session.default_connection().filter(|(i, s)| *s == service && servers.iter().any(|v| v.0 == *i)).map(|(i, _)| i);
+                match named.filter(|i| *i != public).or(default).or_else(|| servers.iter().find(|s| s.2).or(servers.first()).map(|s| s.0.clone())) {
                     Some(i) => i,
                     None => {
                         // No server yet: the add step first, then back here.
@@ -404,10 +420,26 @@ fn forge_page(app: &App, service: Service, instance: String, address: &str) -> O
 }
 
 /// What a card's line says, and how.
-struct Line {
-    text: String,
-    signed_in: bool,
-    unavailable: bool,
+pub(crate) struct Line {
+    pub text: String,
+    pub signed_in: bool,
+    pub unavailable: bool,
+}
+
+/// What a card shows besides its line: its title and its icon (the service's mark, drawn in the
+/// text colour, or ours, in the accent). Import's cards and Add a Connection's share it.
+#[derive(Clone, Copy)]
+pub(crate) struct Look<'a> {
+    pub title: &'a str,
+    pub icon: &'a str,
+    pub brand: bool,
+}
+
+impl Source {
+    fn look(self) -> Look<'static> {
+        let (icon, brand) = self.icon();
+        Look { title: self.title(), icon, brand }
+    }
 }
 
 /// What the dialog shows that comes from the session, gathered before it is drawn.
@@ -445,14 +477,16 @@ fn info(app: &App, ctx: &egui::Context) -> Info {
             .and_then(|g| g.user.as_ref().map(|u| u.username.clone()))
     };
     let servers = gitlab_servers(app);
+    let default = default_source(app);
     let line = |source: Source| -> Line {
         let plain = |text: &str| Line { text: text.to_owned(), signed_in: false, unavailable: false };
         let off = || Line { text: tl!("Desktop app only").to_owned(), signed_in: false, unavailable: true };
         match source {
             Source::GitLab | Source::GitHub => match account(source.service().unwrap_or_default()) {
                 Some(who) => Line { text: tl!("Signed in as {username}").replace("{username}", &who), signed_in: true, unavailable: false },
-                None if browser && source == Source::GitHub => plain(tl!("Personal access token")),
-                None => plain(tl!("Sign in or use a token")),
+                None => token_line(app, source.service().unwrap_or_default()).unwrap_or_else(|| {
+                    plain(if browser && source == Source::GitHub { tl!("Personal access token") } else { tl!("Sign in or use a token") })
+                }),
             },
             Source::Overleaf | Source::Git if browser => off(),
             Source::Overleaf => plain(tl!("Clone address and token")),
@@ -489,11 +523,19 @@ fn info(app: &App, ctx: &egui::Context) -> Info {
     };
     let parent = app.prefs.clone_folder.as_ref().map(PathBuf::from).or_else(|| app.documents.clone());
     let kept_token = crate::import::forge_form(&app.view.dialog).is_some_and(|f| app.session.has_kept_token(&crate::forge::instance_of_form(f)));
+    // The default connection's card says so on its line (and in its name).
+    let marked = |source: Source| {
+        let mut l = line(source);
+        if default == Some(source) {
+            l.text = format!("{} · {}", l.text, tl!("Default"));
+        }
+        l
+    };
     Info {
         browser,
         narrow: crate::sheet::narrow(ctx, &app.tokens),
         running: app.session.clone_phase(),
-        lines: Source::ALL.iter().map(|s| (*s, line(*s))).collect(),
+        lines: Source::ALL.iter().map(|s| (*s, marked(*s))).collect(),
         view,
         unknown,
         servers,
@@ -504,6 +546,20 @@ fn info(app: &App, ctx: &egui::Context) -> Info {
         limit: texcraft_engine::project::size_words(texcraft_engine::forge::MAX_PROJECT),
         now: ctx.input(|i| i.time),
     }
+}
+
+/// A card's line for a service reached with a token (kept, or given in this session) rather than
+/// a sign-in: who it is for, when it was checked.
+pub(crate) fn token_line(app: &App, service: Service) -> Option<Line> {
+    let instance = texcraft_engine::forge::oauth::instance(service);
+    if !app.session.forge_reaches(instance, service) {
+        return None;
+    }
+    let text = match app.session.token_user(instance) {
+        Some(u) => tl!("Token for {username}").replace("{username}", &u.username),
+        None => tl!("Token kept").to_owned(),
+    };
+    Some(Line { text, signed_in: true, unavailable: false })
 }
 
 /// The host an HTTPS address names.
@@ -980,9 +1036,9 @@ fn header(ui: &mut egui::Ui, t: &Tokens, title: &str, on_page: bool, info: &Info
 /// The two groups of cards. Returns the card chosen.
 fn grid(ui: &mut egui::Ui, t: &Tokens, info: &Info, focus: Option<Source>) -> Option<Source> {
     let width = ui.available_width();
-    let columns = (((width + GAP) / (CARD_MIN + GAP)).floor() as usize).clamp(1, 4);
+    let columns = columns(width, 4);
     let list = info.narrow || columns < 2;
-    let card_width = (width - GAP * (columns as f32 - 1.0)) / columns as f32;
+    let card_width = card_width(width, columns);
     let mut chosen = None;
     // Every card, in order: its source, its response, its row and column.
     let mut cells: Vec<(Source, egui::Response, usize, usize)> = Vec::new();
@@ -996,22 +1052,16 @@ fn grid(ui: &mut egui::Ui, t: &Tokens, info: &Info, focus: Option<Source>) -> Op
             ui.add_space(t.unit * 1.5);
             if list {
                 for (i, (source, line)) in sources.iter().enumerate() {
-                    let r = list_row(ui, t, *source, line);
+                    let r = list_row(ui, t, source.look(), line);
                     cells.push((*source, r, row_base + i, 0));
                 }
                 row_base += sources.len();
             } else {
                 for (r, chunk) in sources.chunks(columns).enumerate() {
-                    let galleys: Vec<_> = chunk.iter().map(|(s, l)| card_text(ui, t, *s, l, card_width)).collect();
-                    let height = galleys.iter().map(|(a, b)| 10.0 + 18.0 + 6.0 + a.size().y + 2.0 + b.size().y + 10.0).fold(CARD_HEIGHT, f32::max);
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = GAP;
-                        for (c, ((source, line), (title, text))) in chunk.iter().zip(galleys).enumerate() {
-                            let resp = card(ui, t, *source, line, (title, text), vec2(card_width, height));
-                            cells.push((*source, resp, row_base + r, c));
-                        }
-                    });
-                    ui.add_space(GAP - ui.spacing().item_spacing.y);
+                    let looks: Vec<(Look<'_>, &Line)> = chunk.iter().map(|(s, l)| (s.look(), l)).collect();
+                    for (c, resp) in cards_row(ui, t, &looks, card_width).into_iter().enumerate() {
+                        cells.push((chunk[c].0, resp, row_base + r, c));
+                    }
                 }
                 row_base += sources.len().div_ceil(columns);
             }
@@ -1032,7 +1082,7 @@ fn grid(ui: &mut egui::Ui, t: &Tokens, info: &Info, focus: Option<Source>) -> Op
 
 /// The arrows move the keyboard between the cards in two dimensions; Home and End to the first
 /// and last.
-fn arrows(ui: &egui::Ui, cells: &[(Source, egui::Response, usize, usize)]) {
+pub(crate) fn arrows<S>(ui: &egui::Ui, cells: &[(S, egui::Response, usize, usize)]) {
     let Some(at) = cells.iter().position(|(_, r, ..)| r.has_focus()) else { return };
     let keys = [Key::ArrowLeft, Key::ArrowRight, Key::ArrowUp, Key::ArrowDown, Key::Home, Key::End];
     let Some(key) = ui.input(|i| keys.into_iter().find(|k| i.modifiers.is_none() && i.key_pressed(*k))) else { return };
@@ -1053,24 +1103,49 @@ fn arrows(ui: &egui::Ui, cells: &[(Source, egui::Response, usize, usize)]) {
     }
 }
 
+/// How many columns of cards at least `CARD_MIN` wide fit in `width`, up to `most`.
+pub(crate) fn columns(width: f32, most: usize) -> usize {
+    (((width + GAP) / (CARD_MIN + GAP)).floor() as usize).clamp(1, most)
+}
+
+/// A row of cards `width` wide each, as tall as the tallest; their responses, in order.
+pub(crate) fn cards_row(ui: &mut egui::Ui, t: &Tokens, cards: &[(Look<'_>, &Line)], width: f32) -> Vec<egui::Response> {
+    let galleys: Vec<_> = cards.iter().map(|(look, l)| card_text(ui, t, look.title, l, width)).collect();
+    let height = galleys.iter().map(|(a, b)| 10.0 + 18.0 + 6.0 + a.size().y + 2.0 + b.size().y + 10.0).fold(CARD_HEIGHT, f32::max);
+    let mut out = Vec::new();
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = GAP;
+        for ((look, line), (title, text)) in cards.iter().zip(galleys) {
+            out.push(card(ui, t, *look, line, (title, text), vec2(width, height)));
+        }
+    });
+    ui.add_space(GAP - ui.spacing().item_spacing.y);
+    out
+}
+
+/// The width of a card when `columns` share `width`.
+pub(crate) fn card_width(width: f32, columns: usize) -> f32 {
+    (width - GAP * (columns as f32 - 1.0)) / columns as f32
+}
+
 /// A card's title and line, laid out for its width.
-fn card_text(ui: &egui::Ui, t: &Tokens, source: Source, line: &Line, width: f32) -> (std::sync::Arc<egui::Galley>, std::sync::Arc<egui::Galley>) {
+fn card_text(ui: &egui::Ui, t: &Tokens, title: &str, line: &Line, width: f32) -> (std::sync::Arc<egui::Galley>, std::sync::Arc<egui::Galley>) {
     let room = width - 24.0;
     let colour = if line.unavailable { t.text_muted } else { t.text };
-    let title = ui.painter().layout(source.title().to_owned(), t.strong(), colour, room);
+    let title = ui.painter().layout(title.to_owned(), t.strong(), colour, room);
     let text_room = room - if line.signed_in || line.unavailable { 16.0 } else { 0.0 };
     let text = ui.painter().layout(line.text.clone(), t.small(), t.text_muted, text_room);
     (title, text)
 }
 
 /// The accessible name of a card: its title, then its line.
-fn card_name(source: Source, line: &Line) -> String {
-    format!("{}, {}", source.title(), line.text)
+fn card_name(title: &str, line: &Line) -> String {
+    format!("{title}, {}", line.text)
 }
 
 /// Marks a card's node: a button, unavailable here when it is (still focusable: it explains).
-fn describe(ui: &egui::Ui, r: &egui::Response, source: Source, line: &Line) {
-    let name = card_name(source, line);
+fn describe(ui: &egui::Ui, r: &egui::Response, title: &str, line: &Line) {
+    let name = card_name(title, line);
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
     if line.unavailable {
         ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(tl!("Not available here: choose it to see why")));
@@ -1080,13 +1155,13 @@ fn describe(ui: &egui::Ui, r: &egui::Response, source: Source, line: &Line) {
 fn card(
     ui: &mut egui::Ui,
     t: &Tokens,
-    source: Source,
+    look: Look<'_>,
     line: &Line,
     (title, text): (std::sync::Arc<egui::Galley>, std::sync::Arc<egui::Galley>),
     size: egui::Vec2,
 ) -> egui::Response {
     let (rect, r) = ui.allocate_exact_size(size, Sense::click());
-    describe(ui, &r, source, line);
+    describe(ui, &r, look.title, line);
     if !ui.is_rect_visible(rect) {
         return r;
     }
@@ -1099,7 +1174,7 @@ fn card(
     } else {
         painter.rect_stroke(rect, radius, egui::Stroke::new(1.0, t.separator), egui::StrokeKind::Inside);
     }
-    let (icon, brand) = source.icon();
+    let (icon, brand) = (look.icon, look.brand);
     let icon_colour = if line.unavailable {
         t.text_muted
     } else if brand {
@@ -1135,15 +1210,15 @@ fn dashed(painter: &egui::Painter, rect: egui::Rect, stroke: egui::Stroke) {
 }
 
 /// A phone's row for a source: icon, title and line, and a chevron.
-fn list_row(ui: &mut egui::Ui, t: &Tokens, source: Source, line: &Line) -> egui::Response {
+pub(crate) fn list_row(ui: &mut egui::Ui, t: &Tokens, look: Look<'_>, line: &Line) -> egui::Response {
     let width = ui.available_width();
     let room = width - 18.0 - 12.0 - 24.0 - 8.0;
     let colour = if line.unavailable { t.text_muted } else { t.text };
-    let title = ui.painter().layout(source.title().to_owned(), t.strong(), colour, room);
+    let title = ui.painter().layout(look.title.to_owned(), t.strong(), colour, room);
     let text = ui.painter().layout(line.text.clone(), t.small(), t.text_muted, room - 16.0);
     let height = (title.size().y + text.size().y + 18.0).max(56.0);
     let (rect, r) = ui.allocate_exact_size(vec2(width, height), Sense::click());
-    describe(ui, &r, source, line);
+    describe(ui, &r, look.title, line);
     if !ui.is_rect_visible(rect) {
         return r;
     }
@@ -1153,7 +1228,7 @@ fn list_row(ui: &mut egui::Ui, t: &Tokens, source: Source, line: &Line) -> egui:
         painter.rect_filled(rect, t.corner(), fill);
     }
     painter.hline(rect.x_range(), rect.bottom() - 0.5, egui::Stroke::new(1.0, t.separator));
-    let (icon, brand) = source.icon();
+    let (icon, brand) = (look.icon, look.brand);
     let icon_colour = if line.unavailable {
         t.text_muted
     } else if brand {
@@ -1346,10 +1421,10 @@ fn remember_row(ui: &mut egui::Ui, t: &Tokens, remember: &mut bool, info: &Info)
         ui.checkbox(remember, label);
         let kept = match (*remember, info.kept) {
             (true, "keychain") => tl!(
-                "Kept in the system's keychain, so that Sync, push, pull and later imports need no token. Settings › Accounts lists it, with Replace… and Forget."
+                "Kept in the system's keychain, so that Sync, push, pull and later imports need no token. Settings › Accounts lists it, with Replace… and Disconnect…."
             ),
             (true, "tab") => {
-                tl!("Kept in this tab's session storage until the tab is closed. Settings › Accounts lists it, with Replace… and Forget.")
+                tl!("Kept in this tab's session storage until the tab is closed. Settings › Accounts lists it, with Replace… and Disconnect….")
             }
             (true, _) if info.browser => tl!("This page has no storage for it: the token is kept while the page is open only."),
             (true, _) => tl!("This computer has no keychain TeXCraft can use: the token is kept while TeXCraft runs only."),

@@ -89,6 +89,9 @@ pub struct Prefs {
     /// The git servers whose credential is kept in the keychain (Remember on this computer), by
     /// host; the credentials themselves are in the keychain, never here.
     pub git_hosts: Vec<String>,
+    /// The default connection (Settings › Accounts › Set as Default): a forge's address, such as
+    /// `https://gitlab.com`. Import a Project and Save Project to… start from it.
+    pub default_connection: Option<String>,
     /// The daily update check, and when it last answered.
     pub updates: texcraft_engine::update::Saved,
 }
@@ -156,6 +159,7 @@ impl Default for Prefs {
             first_steps_seen: false,
             clone_folder: None,
             git_hosts: Vec::new(),
+            default_connection: None,
             updates: texcraft_engine::update::Saved::default(),
         }
     }

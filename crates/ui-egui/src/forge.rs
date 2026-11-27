@@ -111,6 +111,8 @@ pub(crate) struct Check {
     opened_code: Option<String>,
     /// The revision of the session's servers last put in the preferences.
     servers_kept: u64,
+    /// The revision of the default connection last put in the preferences.
+    default_kept: u64,
 }
 
 /// What the sign-in part of a dialog or of Settings shows for a service.
@@ -821,8 +823,12 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
             app.forge_check.last = Some(ctx.input(|i| i.time));
             match done["operation"].as_str() {
                 Some("check_server") => crate::forge_server::checked(app, Ok(done)),
-                Some("sign_in") => signed_in(app, &done),
+                Some("sign_in") => {
+                    signed_in(app, &done);
+                    crate::accounts::signed_in(app, &done);
+                }
                 Some("sign_out") => signed_out(app, &done),
+                Some("add_token") => crate::accounts::added(app, &done),
                 Some("open") => opened(app, &done),
                 Some("pull") => pulled(app, &done),
                 Some("create_repository") => crate::forge_save::saved(app, &done),
@@ -840,6 +846,7 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
             app.forge_check.quiet = false;
         }
         Some(Err(e)) if crate::forge_server::checking(app) => crate::forge_server::checked(app, Err(e)),
+        Some(Err(e)) if crate::accounts::waiting(app) => crate::accounts::failed(app, &e),
         Some(Err(e)) => failed(app, was, e),
         None => {}
     }
@@ -848,6 +855,13 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
     if revision != app.forge_check.servers_kept {
         app.prefs.forge_servers = servers.to_vec();
         app.forge_check.servers_kept = revision;
+        app.prefs_changed = true;
+    }
+    // The default connection, by its address.
+    let (default, revision) = app.session.default_connection_saved();
+    if revision != app.forge_check.default_kept {
+        app.prefs.default_connection = default.map(str::to_owned);
+        app.forge_check.default_kept = revision;
         app.prefs_changed = true;
     }
     // The git servers whose credential the keychain keeps, by host (no secret in them).
@@ -1079,194 +1093,4 @@ pub(crate) fn badge(app: &mut App, ui: &mut egui::Ui) {
     if response.on_hover_text(commit).clicked() {
         crate::ui_cmd::run(app, "forge.commit");
     }
-}
-
-/// Settings' Accounts: for GitLab (gitlab.com), GitHub (github.com) and each server added, who is
-/// signed in, Sign In or Sign Out, and where the sign-in is kept; servers are added and removed
-/// here (`forge_server`).
-pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
-    let mut action = None;
-    let mut remove = None;
-    let mut add = None;
-    let mut forget: Option<String> = None;
-    let mut replace: Option<(String, String)> = None;
-    let servers = app.session.forge_servers();
-    let browser = app.session.library().is_some();
-    egui::ScrollArea::vertical().id_salt("forge-accounts").max_height(440.0).auto_shrink([false, true]).show(ui, |ui| {
-        ui.spacing_mut().item_spacing.y = t.unit * 3.0;
-        for service in [Service::GitLab, Service::GitHub] {
-            let view = sign_in_view(app, service, texcraft_engine::forge::oauth::instance(service));
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = t.unit * 2.0;
-                ui.label(RichText::new(say(service, tl!("GitLab (gitlab.com)"), tl!("GitHub (github.com)"))).font(t.strong()));
-                if let Some(a) = sign_in_part(ui, t, &view, true) {
-                    action = Some(a);
-                }
-            });
-        }
-        for server in &servers {
-            let view = sign_in_view(app, server.service, &server.instance);
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = t.unit * 2.0;
-                let kind = say(server.service, tl!("{host} (GitLab)"), tl!("{host} (GitHub Enterprise Server)")).replace("{host}", server.host());
-                ui.label(RichText::new(kind).font(t.strong()));
-                if server.provided {
-                    ui.label(RichText::new(tl!("Provided by your organisation.")).font(t.small()).color(t.text_muted));
-                }
-                if let Some(a) = sign_in_part(ui, t, &view, true) {
-                    action = Some(a);
-                }
-                if !server.provided {
-                    let r = ui.button(tl!("Remove Server"));
-                    let name = format!("{}: {}", tl!("Remove Server"), server.host());
-                    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
-                    if r.clicked() {
-                        remove = Some(server.instance.clone());
-                    }
-                }
-            });
-        }
-        // The tokens kept (Remember on this computer): the forges' and the git servers'.
-        if let Some(kept) = kept_tokens(app, ui, t) {
-            match kept {
-                Kept::Forget(host) => forget = Some(host),
-                Kept::Replace(host, token) => replace = Some((host, token)),
-            }
-        }
-        for problem in app.session.forge_server_problems() {
-            let text = tl!("Your organisation's list of servers has an entry TeXCraft left out: {problem}").replace("{problem}", &crate::i18n::msg(problem));
-            ui.label(RichText::new(text).font(t.small()).color(t.error));
-        }
-        ui.horizontal_wrapped(|ui| {
-            if ui.button(tl!("Add a GitLab Server…")).clicked() {
-                add = Some(Service::GitLab);
-            }
-            let ghes = ui.add_enabled(!browser, egui::Button::new(tl!("Add a GitHub Enterprise Server…")));
-            if ghes.on_disabled_hover_text(tl!("In the browser, GitHub needs a personal access token: GitHub's sign-in does not answer web pages.")).clicked() {
-                add = Some(Service::GitHub);
-            }
-        });
-        let kept = match app.session.forge_sign_in_kept() {
-            "keychain" => tl!("A sign-in is kept in the system's keychain, so TeXCraft stays signed in after a restart; never in the preferences."),
-            "tab" => tl!("A sign-in is kept in this tab's session storage: a reload keeps it, closing the tab forgets it. Signing out revokes it."),
-            _ => tl!("A sign-in is kept while TeXCraft runs only."),
-        };
-        ui.label(RichText::new(kept).font(t.small()).color(t.text_muted));
-        ui.label(
-            RichText::new(tl!(
-                "Your own GitLab, or a GitHub Enterprise Server: add it, register TeXCraft there as the dialog says, and sign in to it as to gitlab.com. Without that, a personal access token works too."
-            ))
-            .font(t.small())
-            .color(t.text_muted),
-        );
-    });
-    if let Some(action) = action {
-        act(app, action);
-    }
-    if let Some(host) = forget
-        && app.run("git.forget_credential", json!({"host": host})).is_some()
-    {
-        app.token_replace = None;
-        app.view.status = Some((tl!("Forgot the token kept for {host}.").replace("{host}", &host), false));
-    }
-    if let Some((host, token)) = replace
-        && app.run("git.keep_credential", json!({"host": host, "token": token.trim()})).is_some()
-    {
-        app.token_replace = None;
-        app.view.status = Some((tl!("Replaced the token kept for {host}.").replace("{host}", &host), false));
-    }
-    if let Some(instance) = remove
-        && let Some(done) = app.run("forge.remove_server", json!({"address": instance}))
-    {
-        let host = texcraft_engine::forge::servers::host_of(&instance).to_owned();
-        let said = tl!("Removed {host}.").replace("{host}", &host);
-        app.view.status = Some(match done["signed_out"]["warning"].as_str() {
-            Some(w) => (format!("{said} {}", crate::i18n::msg(w)), true),
-            None => (said, false),
-        });
-    }
-    if let Some(service) = add {
-        crate::forge_server::ask_add(app, service, "", crate::forge_server::Back::Settings);
-    }
-}
-
-/// What was chosen in the list of tokens kept.
-enum Kept {
-    Forget(String),
-    /// Replace…'s new token typed, and Keep pressed.
-    Replace(String, String),
-}
-
-/// Settings › Accounts' tokens kept on this computer (in the browser, in this tab), each by its
-/// service and host, with Replace… (a field for the new one in place) and Forget. Nothing when none
-/// is kept.
-fn kept_tokens(app: &mut App, ui: &mut egui::Ui, t: &Tokens) -> Option<Kept> {
-    let listed = app.session.execute("git.credentials", &json!({})).ok()?;
-    let rows: Vec<(String, String)> = listed["credentials"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|c| Some((c["host"].as_str()?.to_owned(), c["service"].as_str().unwrap_or("git").to_owned())))
-        .collect();
-    if rows.is_empty() {
-        return None;
-    }
-    let (heading, place) = match listed["kept"].as_str() {
-        Some("tab") => (tl!("Tokens kept in this tab"), tl!("Kept in this tab's session storage until the tab is closed; never in the preferences.")),
-        Some("keychain") => (tl!("Tokens kept on this computer"), tl!("Kept in the system's keychain; never in the preferences.")),
-        _ => (tl!("Tokens kept while TeXCraft runs"), tl!("This computer has no keychain TeXCraft can use: tokens are kept while it runs only.")),
-    };
-    let mut chosen = None;
-    ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing.y = t.unit * 2.0;
-        ui.label(RichText::new(heading).font(t.strong()));
-        ui.label(
-            RichText::new(tl!("Push, pull, Sync and the next import from these servers use them without asking. {place}").replace("{place}", place))
-                .font(t.small())
-                .color(t.text_muted),
-        );
-        for (host, service) in &rows {
-            let what = match service.as_str() {
-                "gitlab" => format!("GitLab ({host})"),
-                "github" => format!("GitHub ({host})"),
-                "overleaf" => format!("Overleaf ({host})"),
-                _ => host.clone(),
-            };
-            ui.horizontal_wrapped(|ui| {
-                ui.label(what);
-                let r = ui.button(tl!("Replace…"));
-                let name = format!("{}: {host}", tl!("Replace…"));
-                r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
-                if r.clicked() {
-                    app.token_replace = Some(crate::TokenReplace { host: host.clone(), token: String::new(), focus: true });
-                }
-                let r = ui.button(tl!("Forget"));
-                let name = format!("{}: {host}", tl!("Forget"));
-                r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
-                if r.clicked() {
-                    chosen = Some(Kept::Forget(host.clone()));
-                }
-            });
-            if let Some(form) = app.token_replace.as_mut().filter(|f| f.host == *host) {
-                let label = tl!("New token for {host}").replace("{host}", host);
-                let field = field(ui, t, &label, &mut form.token, "", true);
-                if std::mem::take(&mut form.focus) {
-                    field.request_focus();
-                }
-                let ready = !form.token.trim().is_empty();
-                let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                let mut cancel = false;
-                ui.horizontal(|ui| {
-                    if ui.add_enabled(ready, egui::Button::new(tl!("Keep"))).clicked() || (enter && ready) {
-                        chosen = Some(Kept::Replace(host.clone(), form.token.clone()));
-                    }
-                    cancel = ui.button(tl!("Cancel")).clicked();
-                });
-                if cancel {
-                    app.token_replace = None;
-                }
-            }
-        }
-    });
-    chosen
 }

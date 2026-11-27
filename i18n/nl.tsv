@@ -1879,8 +1879,8 @@ unit	{n} s	{n} s
 @msg	TeX Live has no package {package}	TeX Live heeft geen pakket {package}
 @msg	TeX Live package {package}	TeX Live-pakket {package}
 @msg	TeXCraft cannot wait for GitLab's answer on {addr} ({e}): another program, or another TeXCraft signing in, uses it. Try again, or use a personal access token.	TeXCraft kan niet wachten op het antwoord van GitLab op {addr} ({e}): een ander programma, of een andere TeXCraft die aanmeldt, gebruikt het. Probeer het opnieuw, of gebruik een persoonlijk toegangstoken.
-@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a GitHub Enterprise Server…, or forge.add_server), or use a personal access token.	TeXCraft heeft geen applicatie op deze server: voeg die eerst toe (Instellingen › Accounts › GitHub Enterprise Server toevoegen…, of forge.add_server), of gebruik een persoonlijk toegangstoken.
-@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a GitLab Server…, or forge.add_server), or use a personal access token.	TeXCraft heeft geen applicatie op deze server: voeg die eerst toe (Instellingen › Accounts › GitLab-server toevoegen…, of forge.add_server), of gebruik een persoonlijk toegangstoken.
+@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a Connection… › GitHub Enterprise Server, or forge.add_server), or use a personal access token.	TeXCraft heeft geen applicatie op deze server: voeg die eerst toe (Instellingen › Accounts › Verbinding toevoegen… › GitHub Enterprise Server, of forge.add_server), of gebruik een persoonlijk toegangstoken.
+@msg	TeXCraft has no application on this server: add it first (Settings › Accounts › Add a Connection… › GitLab Server, or forge.add_server), or use a personal access token.	TeXCraft heeft geen applicatie op deze server: voeg die eerst toe (Instellingen › Accounts › Verbinding toevoegen… › GitLab-server, of forge.add_server), of gebruik een persoonlijk toegangstoken.
 @msg	TeXCraft is not signed in to {value}.	TeXCraft is niet aangemeld bij {value}.
 @msg	TeXCraft is signed in to {value} to read only: committing needs permission to write. Sign in again allowing commits (forge.sign_in with write), then commit.	TeXCraft is bij {value} aangemeld om alleen te lezen: committen vereist schrijfrechten. Meld u opnieuw aan en sta commits toe (forge.sign_in met write), en commit daarna.
 @msg	TeXCraft is signed in to {value} to read only: this needs permission to write. Sign in again allowing commits (forge.sign_in with write), then try again.	TeXCraft is bij {value} aangemeld om alleen te lezen: dit vereist schrijfrechten. Meld u opnieuw aan en sta commits toe (forge.sign_in met write), en probeer het daarna opnieuw.
@@ -2432,8 +2432,8 @@ unit	{n} s	{n} s
 	New token for {host}	Nieuw token voor {host}
 	Keep	Bewaren
 	Remember in this tab	Onthouden in dit tabblad
-	Kept in the system's keychain, so that Sync, push, pull and later imports need no token. Settings › Accounts lists it, with Replace… and Forget.	Bewaard in de sleutelhanger van het systeem, zodat Synchroniseren, pushen, pullen en latere imports geen token nodig hebben. Instellingen › Accounts toont het, met Vervangen… en Vergeten.
-	Kept in this tab's session storage until the tab is closed. Settings › Accounts lists it, with Replace… and Forget.	Bewaard in de sessieopslag van dit tabblad tot het wordt gesloten. Instellingen › Accounts toont het, met Vervangen… en Vergeten.
+	Kept in the system's keychain, so that Sync, push, pull and later imports need no token. Settings › Accounts lists it, with Replace… and Disconnect….	Bewaard in de sleutelhanger van het systeem, zodat Synchroniseren, pushen, pullen en latere imports geen token nodig hebben. Instellingen › Accounts toont het, met Vervangen… en Ontkoppelen….
+	Kept in this tab's session storage until the tab is closed. Settings › Accounts lists it, with Replace… and Disconnect….	Bewaard in de sessieopslag van dit tabblad tot het wordt gesloten. Instellingen › Accounts toont het, met Vervangen… en Ontkoppelen….
 	This page has no storage for it: the token is kept while the page is open only.	Deze pagina heeft er geen opslag voor: het token wordt alleen bewaard zolang de pagina open is.
 	This computer has no keychain TeXCraft can use: the token is kept while TeXCraft runs only.	Deze computer heeft geen sleutelhanger die TeXCraft kan gebruiken: het token wordt alleen bewaard zolang TeXCraft draait.
 	Kept while this page is open, then forgotten.	Bewaard zolang deze pagina open is, daarna vergeten.
@@ -2444,7 +2444,7 @@ unit	{n} s	{n} s
 	Receiving the files…	Bestanden worden ontvangen…
 	Import failed	Import mislukt
 	Importing…	Bezig met importeren…
-	Kept in the system's keychain, so that Sync, push and pull ask no more. Settings › Accounts lists it, with Replace… and Forget.	Bewaard in de sleutelhanger van het systeem, zodat Synchroniseren, pushen en pullen er niet meer om vragen. Instellingen › Accounts toont het, met Vervangen… en Vergeten.
+	Kept in the system's keychain, so that Sync, push and pull ask no more. Settings › Accounts lists it, with Replace… and Disconnect….	Bewaard in de sleutelhanger van het systeem, zodat Synchroniseren, pushen en pullen er niet meer om vragen. Instellingen › Accounts toont het, met Vervangen… en Ontkoppelen….
 	Fetching your projects…	Je projecten worden opgehaald…
 	Fetching your repositories…	Je repository's worden opgehaald…
 	Still fetching your projects…	Je projecten worden nog opgehaald…
@@ -2596,3 +2596,75 @@ unit	{n} MB	{n} MB
 	{slides}: alert	{slides}: uitgelicht
 	{slides}: shown	{slides}: zichtbaar
 	{slides}: hidden	{slides}: verborgen
+	Add a Connection	Verbinding toevoegen
+	Add a Connection…	Verbinding toevoegen…
+	Allow Commits	Commits toestaan
+	Any HTTPS host and a token	Elke HTTPS-host en een token
+	Back to connections	Terug naar verbindingen
+	Checked with the service, then kept in the system's keychain; never in the preferences.	Gecontroleerd bij de dienst, daarna bewaard in de sleutelhanger van het systeem; nooit in de voorkeuren.
+	Checked with the service, then kept in this tab's session storage until the tab is closed.	Gecontroleerd bij de dienst, daarna bewaard in de sessieopslag van dit tabblad tot het wordt gesloten.
+	Checked with the service, then kept while TeXCraft runs.	Gecontroleerd bij de dienst, daarna bewaard zolang TeXCraft draait.
+	Checking the token…	Token wordt gecontroleerd…
+	Connect TeXCraft to where your projects live	Koppel TeXCraft aan de plekken van uw projecten
+	Connect to GitHub	Koppelen met GitHub
+	Connect to GitLab	Koppelen met GitLab
+	Connect to Overleaf	Koppelen met Overleaf
+	Connect to a Git Server	Koppelen met een git-server
+	Connect to a GitHub Enterprise Server	Koppelen met een GitHub Enterprise Server
+	Connect to a GitLab Server	Koppelen met een GitLab-server
+	Connected to {host} as @{username}.	Gekoppeld met {host} als @{username}.
+	Connected to {host}.	Gekoppeld met {host}.
+	Connected: it is in the list of connections.	Gekoppeld: de verbinding staat in de lijst.
+	Connection	Verbinding
+	Default	Standaard
+	Disconnect	Ontkoppelen
+	Disconnect from {host}?	Ontkoppelen van {host}?
+	Disconnected from {host}.	Ontkoppeld van {host}.
+	Disconnect…	Ontkoppelen…
+	Expired	Verlopen
+	This session only	Alleen deze sessie
+	Git server over HTTPS	Git-server via HTTPS
+	GitHub Enterprise Server	GitHub Enterprise Server
+	GitLab and GitHub	GitLab en GitHub
+	In the keychain	In de sleutelhanger
+	Kept in the system's keychain; Sync, push, pull and imports from this server use it.	Bewaard in de sleutelhanger van het systeem; Synchroniseren, pushen, pullen en imports van deze server gebruiken het.
+	In this tab	In dit tabblad
+	Kept in this tab's session storage until the tab is closed.	Bewaard in de sessieopslag van dit tabblad tot het wordt gesloten.
+	Kept while TeXCraft runs.	Bewaard zolang TeXCraft draait.
+	Not signed in	Niet aangemeld
+	Opens and commits	Opent en commit
+	Other Git Server	Andere git-server
+	Other git servers	Andere git-servers
+	Overleaf	Overleaf
+	Projects linked to it stay as they are; their next Sync asks you to sign in or for a token.	Gekoppelde projecten blijven zoals ze zijn; hun volgende synchronisatie vraagt om aan te melden of om een token.
+	Provided by your organisation	Geleverd door uw organisatie
+	Read only until the first commit	Alleen lezen tot de eerste commit
+	Remove Server…	Server verwijderen…
+	Remove {host}?	{host} verwijderen?
+	Self-managed GitLab	Zelfbeheerde GitLab
+	Set as Default	Als standaard instellen
+	Sign In Again	Opnieuw aanmelden
+	Sign in to GitLab or GitHub, add your organisation's server, or keep a token for Overleaf or another git server. Then Import a Project, Sync and Save Project to… reach them without asking again.	Meld u aan bij GitLab of GitHub, voeg de server van uw organisatie toe of bewaar een token voor Overleaf of een andere git-server. Daarna bereiken Een project importeren, Synchroniseren en Project opslaan naar… ze zonder opnieuw te vragen.
+	Sign-ins and tokens are kept in the system's keychain, never in the preferences.	Aanmeldingen en tokens worden bewaard in de sleutelhanger van het systeem, nooit in de voorkeuren.
+	Sign-ins and tokens are kept in this tab's session storage: a reload keeps them, closing the tab forgets them.	Aanmeldingen en tokens worden bewaard in de sessieopslag van dit tabblad: herladen houdt ze, het tabblad sluiten vergeet ze.
+	Sign-ins and tokens are kept while TeXCraft runs only.	Aanmeldingen en tokens worden alleen bewaard zolang TeXCraft draait.
+	Signed in	Aangemeld
+	Signed out	Afgemeld
+	Signing in lets TeXCraft list your GitHub repositories, import them, commit and make new ones. A personal access token works too.	Na aanmelden kan TeXCraft uw GitHub-repository's tonen, importeren, committen en nieuwe maken. Een persoonlijk toegangstoken werkt ook.
+	Signing in lets TeXCraft list your GitLab projects, import them, commit and make new ones. A personal access token works too.	Na aanmelden kan TeXCraft uw GitLab-projecten tonen, importeren, committen en nieuwe maken. Een persoonlijk toegangstoken werkt ook.
+	Signing in…	Bezig met aanmelden…
+	TeXCraft signs out of {host}, removes its token, and forgets the server and its application.	TeXCraft meldt zich af bij {host}, verwijdert het token en vergeet de server en de applicatie.
+	TeXCraft signs out of {host}, revoking the sign-in where the service allows it, and removes its token from where it is kept.	TeXCraft meldt zich af bij {host}, trekt de aanmelding in waar de dienst dat toestaat en verwijdert het token van waar het bewaard wordt.
+	The desktop app connects to it; projects from it can be imported here as zip files.	De desktop-app maakt er verbinding mee; projecten ervan kunnen hier als zipbestanden worden geïmporteerd.
+	The keychain cannot be read, so sign-ins are kept for this session only: {why}	De sleutelhanger kan niet worden gelezen, dus aanmeldingen gelden alleen voor deze sessie: {why}
+	The sign-in expired: sign in again	De aanmelding is verlopen: meld u opnieuw aan
+	Use a Token…	Token gebruiken…
+	Where your projects live: Import a Project, Sync and Save Project to… use these.	Waar uw projecten staan: Een project importeren, Synchroniseren en Project opslaan naar… gebruiken deze.
+	Your organisation's GitHub	De GitHub van uw organisatie
+	Your organisation's GitLab	De GitLab van uw organisatie
+	{host} is the default connection.	{host} is de standaardverbinding.
+	{host} · not connected	{host} · niet gekoppeld
+	{host} · signed in as @{username}	{host} · aangemeld als @{username}
+	{host} · token	{host} · token
+	Token for {username}	Token voor {username}
+	Token kept	Token bewaard

@@ -264,12 +264,15 @@ fn whole_section_terms(tab: usize) -> &'static [&'static str] {
     match tab {
         5 => &[tn!("Endpoint"), tn!("Model"), tn!("Token"), tn!("Connect"), tn!("Test Connection")],
         _ => &[
-            tn!("GitLab (gitlab.com)"),
-            tn!("GitHub (github.com)"),
+            tn!("Add a Connection…"),
             tn!("Sign In with GitLab"),
             tn!("Sign In with GitHub"),
-            tn!("Add a GitLab Server…"),
-            tn!("Add a GitHub Enterprise Server…"),
+            tn!("GitLab Server"),
+            tn!("GitHub Enterprise Server"),
+            tn!("Overleaf"),
+            tn!("Token"),
+            tn!("Disconnect…"),
+            tn!("Set as Default"),
         ],
     }
 }
@@ -332,7 +335,7 @@ fn section_at(app: &mut App, ui: &mut egui::Ui, t: &Tokens, tab: usize) {
         3 => keyboard(app, ui, t),
         4 => review(app, ui, t),
         5 => crate::ai::settings(app, ui, t),
-        _ => crate::forge::settings(app, ui, t),
+        _ => crate::accounts::settings(app, ui, t),
     }
 }
 

@@ -298,9 +298,13 @@ fn token_form(ui: &mut egui::Ui, t: &Tokens, form: &mut TokenForm, browser: bool
     ui.checkbox(&mut form.remember, if browser { tl!("Remember in this tab") } else { tl!("Remember on this computer") });
     let kept = match (form.remember, browser) {
         (true, false) => {
-            tl!("Kept in the system's keychain, so that Sync, push and pull ask no more. Settings › Accounts lists it, with Replace… and Forget.")
+            tl!(
+                "Kept in the system's keychain, so that Sync, push and pull ask no more. Settings › Accounts lists it, with Replace… and Disconnect…."
+            )
         }
-        (true, true) => tl!("Kept in this tab's session storage until the tab is closed. Settings › Accounts lists it, with Replace… and Forget."),
+        (true, true) => {
+            tl!("Kept in this tab's session storage until the tab is closed. Settings › Accounts lists it, with Replace… and Disconnect….")
+        }
         (false, false) => tl!("Kept while TeXCraft runs, then forgotten."),
         (false, true) => tl!("Kept while this page is open, then forgotten."),
     };

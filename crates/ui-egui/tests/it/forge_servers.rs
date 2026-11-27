@@ -82,7 +82,9 @@ fn a_gitlab_server_is_checked_registered_added_and_signed_in_to_from_settings() 
     h.run();
     h.get_by_label("Accounts").click();
     h.run();
-    h.get_by_role_and_label(Role::Button, "Add a GitLab Server…").click();
+    h.get_by_role_and_label(Role::Button, "Add a Connection…").click();
+    h.run();
+    h.get_by_role_and_label(Role::Button, "GitLab Server, Your organisation's GitLab").click();
     h.run();
 
     type_into(&mut h, "Server address", "git.example.org");
@@ -99,17 +101,15 @@ fn a_gitlab_server_is_checked_registered_added_and_signed_in_to_from_settings() 
     h.get_by_role_and_label(Role::Button, "Add Server").click();
     h.run();
 
-    // Back in Settings › Accounts, with the server and its own Sign In button.
-    assert!(h.query_by_label("git.example.org (GitLab)").is_some(), "the server is not listed");
+    // Back in Settings › Accounts, with the server's row and its own Sign In button.
+    assert!(h.query_by_label("Self-managed GitLab").is_some(), "the server is not listed");
     let Some(prefs) = h.state_mut().take_changed_prefs() else { panic!("the preferences did not change") };
     assert_eq!(prefs.forge_servers.len(), 1);
     assert_eq!((prefs.forge_servers[0].instance.as_str(), prefs.forge_servers[0].client_id.as_str()), (SERVER, "server-app"));
 
     script.answer(200, json!({"access_token": ACCESS, "refresh_token": "r", "expires_in": 7200, "scope": "read_api read_user"}));
     script.answer(200, json!({"name": "Ada Lovelace", "username": "ada"}));
-    let buttons: Vec<_> = h.query_all_by_role_and_label(Role::Button, "Sign In with GitLab").collect();
-    assert_eq!(buttons.len(), 2, "gitlab.com's and the server's");
-    buttons[1].click();
+    h.get_by_role_and_label(Role::Button, "Sign In with GitLab: git.example.org").click();
     h.run();
     let Some((_, SignInProgress::Browser { url })) = h.state().session().forge_signing_in() else { panic!("not waiting for the browser") };
     assert!(url.starts_with("https://git.example.org/oauth/authorize?"), "{url}");
@@ -138,7 +138,9 @@ fn a_server_that_does_not_answer_as_gitlab_is_said_and_the_address_kept() {
     h.run();
     h.get_by_label("Accounts").click();
     h.run();
-    h.get_by_role_and_label(Role::Button, "Add a GitLab Server…").click();
+    h.get_by_role_and_label(Role::Button, "Add a Connection…").click();
+    h.run();
+    h.get_by_role_and_label(Role::Button, "GitLab Server, Your organisation's GitLab").click();
     h.run();
     type_into(&mut h, "Server address", "wiki.example.org");
     h.get_by_role_and_label(Role::Button, "Check Server").click();
