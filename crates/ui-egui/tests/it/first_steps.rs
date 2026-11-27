@@ -203,13 +203,15 @@ fn tips_for_a_feature_this_build_lacks_are_not_shown() {
 #[test]
 fn a_tip_s_button_runs_its_command() {
     let mut h = start_page(desktop(), Prefs::default(), day(2026, 11, 26));
+    // The tip's button is named as the tip's, apart from the buttons of the same label.
+    let button = "Open Settings, from the tip of the day";
     for _ in 0..40 {
-        if h.query_by_role_and_label(Role::Button, "Open Settings").is_some() {
+        if h.query_by_role_and_label(Role::Button, button).is_some() {
             break;
         }
         click(&mut h, "Next Tip");
     }
-    click(&mut h, "Open Settings");
+    click(&mut h, button);
     assert_eq!(dialog(&mut h), "settings", "the tip's button did not open Settings");
 }
 

@@ -240,7 +240,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
                     // Its name says it is the tip's, so it never reads as the button of the same
                     // name elsewhere ("New Project", "Keyboard Shortcuts"), and starts with what it shows.
                     let name = tf!("{label}, from the tip of the day", label = label);
-                    r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+                    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
                     if r.clicked() {
                         run = Some((action.command, (action.params)()));
                     }
