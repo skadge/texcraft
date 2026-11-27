@@ -232,3 +232,12 @@ fn shift_tab_on_a_labelled_item_keeps_its_label_in_the_paragraph() {
     let e = after("Before.\n\n\\begin{description}\\item[Term] Its text.\\end{description}", &[Op::Down { shift: false }, Op::ShiftTab]);
     assert!(e.text.contains("Term Its text."), "{:?}", e.text);
 }
+
+#[test]
+fn a_table_or_an_equation_inserted_in_an_empty_document_goes_in_its_body() {
+    for op in [Op::Bar("table"), Op::Math("equation", "x".to_owned())] {
+        let e = after("\\begin{document}\n\\end{document}\n", &[op]);
+        let end = e.text.find("\\end{document}").unwrap_or(0);
+        assert!(e.text.find("\\begin{t").or(e.text.find("\\begin{eq")).is_some_and(|i| i < end), "{:?}", e.text);
+    }
+}

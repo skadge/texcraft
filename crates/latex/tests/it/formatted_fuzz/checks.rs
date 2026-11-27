@@ -26,7 +26,8 @@ pub struct Before<'a> {
 
 pub fn after_step(before: &Before<'_>, op: &Op, done: &Done, after: &Editor) -> Result<(), Failure> {
     // Enter makes an empty item on purpose (before the caret at an item's start).
-    let enter = matches!(op, Op::Enter);
+    // Tab and Shift+Tab move items, empty ones too (Shift+Tab gives back what Tab nested).
+    let enter = matches!(op, Op::Enter | Op::Tab | Op::ShiftTab);
     let nodes = tree::parse(&after.text);
     if !tree::tiles(&nodes, 0..after.text.len()) {
         return fail("tree-tiles", "the tree does not tile the text".to_owned());

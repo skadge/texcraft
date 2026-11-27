@@ -536,7 +536,8 @@ impl Editor {
         let caret = self.head;
         let blocks = view::view(&self.text);
         let shown = |b: &&view::Block| !matches!(b.kind, view::BlockKind::Preamble);
-        let after = blocks.iter().filter(shown).find(|b| b.range.end >= caret).map_or(self.text.len(), |b| b.range.end);
+        let after =
+            blocks.iter().filter(shown).find(|b| b.range.end >= caret).map_or_else(|| edit::empty_view_caret(&self.text, caret), |b| b.range.end);
         let at = edit::item_end(&self.text, caret).unwrap_or(after);
         let before = self.text.get(..at).unwrap_or_default();
         let lead = if before.is_empty() || before.ends_with("\n\n") {

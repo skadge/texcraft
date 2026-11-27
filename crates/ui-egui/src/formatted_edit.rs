@@ -580,7 +580,7 @@ fn new_block(app: &mut App, f: &Frame<'_>, source: &str, select: Option<&str>) {
     // Not in the preamble (the caret in the title's text is there): after the title block.
     let shown = |b: &&texcraft_latex::view::Block| !matches!(b.kind, texcraft_latex::view::BlockKind::Preamble);
     // In a list item, in that item; else after the block.
-    let after = blocks.iter().filter(shown).find(|b| b.range.end >= caret).map_or(f.text.len(), |b| b.range.end);
+    let after = blocks.iter().filter(shown).find(|b| b.range.end >= caret).map_or_else(|| edit::empty_view_caret(f.text, caret), |b| b.range.end);
     let at = edit::item_end(f.text, caret).unwrap_or(after);
     let before = f.text.get(..at).unwrap_or_default();
     let lead = if before.is_empty() || before.ends_with("\n\n") {
