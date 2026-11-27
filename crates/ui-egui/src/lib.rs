@@ -40,6 +40,7 @@ mod grammar;
 pub mod icons;
 mod insert_pick;
 mod keys;
+mod missing_packages;
 mod pdf_view;
 pub mod prefs;
 mod source;
@@ -312,6 +313,8 @@ pub struct App {
     importing: Option<import::Importing>,
     /// Settings › Accounts' Replace…: the server and the new token being typed.
     token_replace: Option<TokenReplace>,
+    /// What the engine asked to ask about missing packages, until no other dialog is open.
+    package_question: Option<texcraft_engine::missing::Lack>,
 }
 
 /// Settings › Accounts' Replace… of a token kept: for `host`, the new `token` typed.
@@ -341,6 +344,10 @@ impl App {
         session.settings.hidden_messages = prefs.hidden_messages.clone();
         session.settings.updates = prefs.updates.clone();
         session.settings.package_server = prefs.package_server.clone();
+        session.settings.missing_packages = prefs.missing_packages;
+        // On the desktop the window asks the first time a package is missing (the browser's
+        // engine has its own setting, Package server).
+        session.set_asks_about_packages(cfg!(not(target_arch = "wasm32")));
         session.set_user_words(&prefs.words);
         let (layout, side) = (prefs.layout(), prefs.side());
         let keys = keys::Keys::new(prefs.shortcuts.clone());
@@ -441,6 +448,7 @@ impl App {
             git_hosts_kept: 0,
             importing: None,
             token_replace: None,
+            package_question: None,
         };
         app.remember_project();
         app
@@ -471,6 +479,7 @@ impl App {
         current.hidden_messages = self.session.settings.hidden_messages.clone();
         current.updates = self.session.settings.updates.clone();
         current.package_server = self.session.settings.package_server.clone();
+        current.missing_packages = self.session.settings.missing_packages;
         current.words = self.session.user_words();
         if current != self.prefs {
             self.prefs = current;
@@ -945,6 +954,14 @@ impl App {
             thumbnail = outcome.pdf.is_some();
             // The build's result replaces any earlier message in the status bar.
             self.view.status = None;
+        }
+        if let Some(lack) = self.session.take_package_question() {
+            self.package_question = Some(lack);
+        }
+        if self.view.dialog.is_none()
+            && let Some(lack) = self.package_question.take()
+        {
+            missing_packages::ask(self, lack);
         }
         self.view.progress = self.session.progress();
         self.view.draft = self.session.draft_pdf().cloned();

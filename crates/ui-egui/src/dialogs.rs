@@ -84,6 +84,8 @@ pub(crate) enum Dialog {
     Drop(Box<crate::drop::DropForm>),
     /// What's New: the latest release, its notes and how to update.
     Updates,
+    /// The first build that lacked a TeX Live package: what to do about missing packages.
+    MissingPackages(Box<crate::missing_packages::Form>),
 }
 
 impl Dialog {
@@ -113,6 +115,7 @@ impl Dialog {
             Dialog::AiInstruct(_) => "ai_instruct",
             Dialog::Drop(_) => "drop",
             Dialog::Updates => "updates",
+            Dialog::MissingPackages(_) => "missing_packages",
         }
     }
 }
@@ -127,6 +130,7 @@ fn own_window(app: &mut App, ctx: &egui::Context) -> bool {
         Some(Dialog::AiInstruct(_)) => crate::ai::instruct_dialog,
         Some(Dialog::Drop(_)) => crate::drop::dialog,
         Some(Dialog::Updates) => crate::updates::dialog,
+        Some(Dialog::MissingPackages(_)) => crate::missing_packages::dialog,
         Some(Dialog::GoToFile(_)) => crate::goto_file::show,
         Some(Dialog::Commands(_)) => crate::commands::show,
         Some(Dialog::Choose(_)) => crate::insert_pick::show,
@@ -178,6 +182,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         | Dialog::AiReference(_)
         | Dialog::AiInstruct(_)
         | Dialog::Drop(_)
+        | Dialog::MissingPackages(_)
         | Dialog::Updates => {}
         Dialog::Figure(f) => outcome = crate::figure_dialog::form(ui, &t, f),
         Dialog::About => outcome = about(ui, &t, &engine),

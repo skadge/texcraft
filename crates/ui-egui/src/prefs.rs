@@ -83,6 +83,8 @@ pub struct Prefs {
     pub hidden_messages: Vec<String>,
     /// Where the browser build downloads missing TeX Live packages (Settings › Building).
     pub package_server: texcraft_engine::packages::PackageServer,
+    /// What the desktop build does about missing TeX Live packages (Settings › Building).
+    pub missing_packages: texcraft_engine::missing::MissingPackages,
     /// The folder Import a Project makes its clones and unzipped projects in, once one was
     /// chosen with Change… (the system's documents folder until then).
     pub clone_folder: Option<String>,
@@ -148,6 +150,7 @@ impl Default for Prefs {
             grammar: texcraft_engine::GrammarOptions::default(),
             hidden_messages: Vec::new(),
             package_server: Default::default(),
+            missing_packages: Default::default(),
             words: Vec::new(),
             recent_symbols: Vec::new(),
             ai_complete: false,

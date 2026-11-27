@@ -2587,3 +2587,28 @@ unit	{n} MB	{n} MB
 	Shown on slides {spec} only (\\{command}).	Alleen getoond op dia's {spec} (\\{command}).
 	\\{command}, a command this document defines: its arguments are edited here as text.	\\{command}, een opdracht die dit document definieert: de argumenten worden hier als tekst bewerkt.
 	A bibliography entry: cite it with \\cite{key}.	Een bibliografie-item: citeer het met \\cite{key}.
+
+# Missing packages on the desktop (B13)
+	Missing packages	Ontbrekende pakketten
+	Ask the first time	De eerste keer vragen
+	Download automatically	Automatisch downloaden
+	Install them myself	Zelf installeren
+	Don't download	Niet downloaden
+	When a document needs a LaTeX package your TeX Live lacks. Download automatically: during the build, from TeX Live's own repository for the year of your TeX Live, so it matches the rest (needs the network). Install them myself: the build's message names the package and how to install it. Don't download: the build stops at the missing package.	Wanneer een document een LaTeX-pakket nodig heeft dat uw TeX Live mist. Automatisch downloaden: tijdens het compileren, uit de repository van TeX Live voor het jaar van uw TeX Live, zodat het bij de rest past (netwerk nodig). Zelf installeren: de melding van het compileren noemt het pakket en hoe u het installeert. Niet downloaden: het compileren stopt bij het ontbrekende pakket.
+	{name} is not installed	{name} is niet geïnstalleerd
+	No TeX Live is installed	Er is geen TeX Live geïnstalleerd
+	What should TeXCraft do when a package is missing?	Wat moet TeXCraft doen als een pakket ontbreekt?
+	Download Automatically	Automatisch downloaden
+	During the build, from TeX Live's own repository for the year of your TeX Live, so it matches the rest. Needs the network.	Tijdens het compileren, uit de repository van TeX Live voor het jaar van uw TeX Live, zodat het bij de rest past. Netwerk nodig.
+	Install Them Myself	Zelf installeren
+	Nothing is downloaded; the build's message names the package and how to install it.	Er wordt niets gedownload; de melding van het compileren noemt het pakket en hoe u het installeert.
+	Don't Download	Niet downloaden
+	Nothing is downloaded; the build stops at the missing package.	Er wordt niets gedownload; het compileren stopt bij het ontbrekende pakket.
+	TeXCraft keeps your choice. You can change it at any time in Settings › Building › Missing packages.	TeXCraft onthoudt uw keuze. U kunt die altijd wijzigen in Instellingen › Bezig met bouwen › Ontbrekende pakketten.
+	Not Now	Niet nu
+	You can change this at any time in Settings › Building › Missing packages.	U kunt dit altijd wijzigen in Instellingen › Bezig met bouwen › Ontbrekende pakketten.
+	Downloading {name} and compiling again. {kept}	{name} wordt gedownload en opnieuw gecompileerd. {kept}
+	TeXCraft will not download packages. Install {name} yourself: the build log says how. {kept}	TeXCraft downloadt geen pakketten. Installeer {name} zelf: het compileerlogboek zegt hoe. {kept}
+	TeXCraft will not download packages; a build that needs {name} stops at it. {kept}	TeXCraft downloadt geen pakketten; compileren dat {name} nodig heeft, stopt daar. {kept}
+	TeXCraft did not download {name}. It asks again the next time it starts; Settings › Building › Missing packages decides for good.	TeXCraft heeft {name} niet gedownload. Bij de volgende start vraagt het opnieuw; Instellingen › Bezig met bouwen › Ontbrekende pakketten beslist voorgoed.
+@id	build.missing_packages	Ontbrekende pakketten

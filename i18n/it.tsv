@@ -2587,3 +2587,28 @@ unit	{n} MB	{n} MB
 	Shown on slides {spec} only (\\{command}).	Mostrato solo nelle diapositive {spec} (\\{command}).
 	\\{command}, a command this document defines: its arguments are edited here as text.	\\{command}, un comando definito da questo documento: i suoi argomenti si modificano qui come testo.
 	A bibliography entry: cite it with \\cite{key}.	Una voce della bibliografia: citala con \\cite{key}.
+
+# Missing packages on the desktop (B13)
+	Missing packages	Pacchetti mancanti
+	Ask the first time	Chiedi la prima volta
+	Download automatically	Scarica automaticamente
+	Install them myself	Li installo io
+	Don't download	Non scaricare
+	When a document needs a LaTeX package your TeX Live lacks. Download automatically: during the build, from TeX Live's own repository for the year of your TeX Live, so it matches the rest (needs the network). Install them myself: the build's message names the package and how to install it. Don't download: the build stops at the missing package.	Quando un documento richiede un pacchetto LaTeX che manca al tuo TeX Live. Scarica automaticamente: durante la compilazione, dal repository di TeX Live per l'anno del tuo TeX Live, così è coerente con il resto (serve la rete). Li installo io: il messaggio della compilazione indica il pacchetto e come installarlo. Non scaricare: la compilazione si ferma al pacchetto mancante.
+	{name} is not installed	{name} non è installato
+	No TeX Live is installed	Nessun TeX Live è installato
+	What should TeXCraft do when a package is missing?	Cosa deve fare TeXCraft quando manca un pacchetto?
+	Download Automatically	Scarica automaticamente
+	During the build, from TeX Live's own repository for the year of your TeX Live, so it matches the rest. Needs the network.	Durante la compilazione, dal repository di TeX Live per l'anno del tuo TeX Live, così è coerente con il resto. Serve la rete.
+	Install Them Myself	Li installo io
+	Nothing is downloaded; the build's message names the package and how to install it.	Non viene scaricato nulla; il messaggio della compilazione indica il pacchetto e come installarlo.
+	Don't Download	Non scaricare
+	Nothing is downloaded; the build stops at the missing package.	Non viene scaricato nulla; la compilazione si ferma al pacchetto mancante.
+	TeXCraft keeps your choice. You can change it at any time in Settings › Building › Missing packages.	TeXCraft ricorda la tua scelta. Puoi cambiarla in qualsiasi momento in Impostazioni › Compilazione › Pacchetti mancanti.
+	Not Now	Non ora
+	You can change this at any time in Settings › Building › Missing packages.	Puoi cambiarlo in qualsiasi momento in Impostazioni › Compilazione › Pacchetti mancanti.
+	Downloading {name} and compiling again. {kept}	Download di {name} e nuova compilazione. {kept}
+	TeXCraft will not download packages. Install {name} yourself: the build log says how. {kept}	TeXCraft non scaricherà pacchetti. Installa {name} tu stesso: il registro di compilazione spiega come. {kept}
+	TeXCraft will not download packages; a build that needs {name} stops at it. {kept}	TeXCraft non scaricherà pacchetti; una compilazione che richiede {name} si ferma lì. {kept}
+	TeXCraft did not download {name}. It asks again the next time it starts; Settings › Building › Missing packages decides for good.	TeXCraft non ha scaricato {name}. Lo chiederà di nuovo al prossimo avvio; Impostazioni › Compilazione › Pacchetti mancanti decide per sempre.
+@id	build.missing_packages	Pacchetti mancanti
