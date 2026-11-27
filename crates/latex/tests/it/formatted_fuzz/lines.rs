@@ -136,11 +136,11 @@ impl Builder<'_> {
                     caret.filter(|c| part.is_empty() && slot.as_ref().is_some_and(|s| s.start <= *c && *c <= s.end))
                 };
                 let (title_at, author_at) = (here(title, &slots[0]), here(author, &slots[1]));
-                if title.is_empty() && author.is_empty() && title_at.is_none() && author_at.is_none() {
+                let date_at = here(date, &slots[2]);
+                if title.is_empty() && author.is_empty() && date.is_empty() && title_at.is_none() && author_at.is_none() && date_at.is_none() {
                     let chip = InlineKind::Chip { kind: ChipKind::Placeholder, command: "maketitle".to_owned(), key: String::new() };
                     self.paragraph(&[Inline { kind: chip, range: range.clone() }], range, None, None);
                 }
-                let date_at = here(date, &slots[2]);
                 for (part, at) in [(title, title_at), (author, author_at), (date, date_at)] {
                     if !part.is_empty() || at.is_some() {
                         self.paragraph(part, range, at, None);

@@ -93,9 +93,10 @@ pub struct Editor {
 impl Editor {
     pub fn new(text: &str) -> Self {
         let mut e = Editor { text: text.to_owned(), anchor: 0, head: 0, hint: None, pending: Vec::new(), pending_at: None };
-        // The caret starts where the window puts it: the first stop of the first line.
+        // The caret starts where the window puts it: the first stop of the first line that has one
+        // (a figure with no caption first has none).
         let v = e.shown();
-        if let Some(b) = v.lines.first().and_then(|l| l.line.first_stop().and_then(|s| l.line.source_at(s))) {
+        if let Some(b) = v.lines.iter().find_map(|l| l.line.first_stop().and_then(|s| l.line.source_at(s))) {
             (e.anchor, e.head) = (b, b);
         }
         e
@@ -386,7 +387,7 @@ impl Editor {
         }
         if a == h && !self.pending.is_empty() {
             // A space is not styled (it would show nothing): the style waits for the next word.
-            if s.chars().all(|c| c == ' ') {
+            if s.chars().all(char::is_whitespace) {
                 let pending = std::mem::take(&mut self.pending);
                 let source = edit::joined(&self.text, self.insertion(&v.doc(), (a, h)), s);
                 done.typed = Some(s.to_owned());

@@ -134,9 +134,11 @@ fn local(before: &Before<'_>, op: &Op, done: &Done) -> Result<(), Failure> {
     // A title block stands for its `\maketitle` and the arguments of the `\title`, `\author` and
     // `\date` it shows, wherever they are.
     let extent = |b: &Block| match &b.kind {
-        BlockKind::Title { slots, .. } => {
-            let starts = slots.iter().flatten().map(|s| s.start).chain([b.range.start]);
-            let ends = slots.iter().flatten().map(|s| s.end).chain([b.range.end]);
+        // Every `\author` it shows too, not only the last (whose braces are its slot).
+        BlockKind::Title { slots, title, author, date } => {
+            let shown = || title.iter().chain(author).chain(date).map(|i| i.range.clone());
+            let starts = slots.iter().flatten().map(|s| s.start).chain(shown().map(|r| r.start)).chain([b.range.start]);
+            let ends = slots.iter().flatten().map(|s| s.end).chain(shown().map(|r| r.end)).chain([b.range.end]);
             starts.min().unwrap_or(b.range.start)..ends.max().unwrap_or(b.range.end)
         }
         _ => b.range.clone(),
@@ -271,8 +273,10 @@ fn no_leftovers(before: &Editor, after: &Editor, enter: bool) -> Result<(), Fail
         return Ok(());
     }
     let (b, a) = (leftovers(&before.text, before.head), leftovers(&after.text, after.head));
-    // An empty item made on purpose (Enter at an item's start) and left as it was is not new.
-    let b = Leftovers { items: b.items.max(leftovers(&before.text, usize::MAX).items), ..b };
+    // An empty item or heading made on purpose (Enter at an item's start, Heading 1 on an empty
+    // line) and left as it was is not new, wherever the caret goes.
+    let anywhere = leftovers(&before.text, usize::MAX);
+    let b = Leftovers { items: b.items.max(anywhere.items), headings: b.headings.max(anywhere.headings), ..b };
     let more = |x: usize, y: usize| y > x;
     // Enter on an empty heading, as in a word processor, leaves it.
     if (more(b.items, a.items) && !enter) || more(b.lists, a.lists) || more(b.styles, a.styles) || (more(b.headings, a.headings) && !enter) {
@@ -309,8 +313,8 @@ fn sourced(line: &ViewLine) -> Vec<bool> {
 fn words(s: &str) -> String {
     let mut out = String::new();
     // An empty group after a command shown as source is the edit's (it keeps typed text apart from
-    // the command's name); a title block with no title and no author shows `\maketitle`.
-    let s = s.replace("{}", "").replace("\\maketitle", "");
+    // the command's name); a title block with no title and no author shows its chip.
+    let s = s.replace("{}", "").replace("\\maketitle", "").replace("maketitle", "");
     for c in s.chars().filter(|c| !c.is_whitespace()) {
         match c {
             '’' => out.push('\''),

@@ -1875,7 +1875,8 @@ fn title_block(
     let (title_at, author_at) = (caret_in(&slots[0]).filter(|_| title.is_empty()), caret_in(&slots[1]).filter(|_| author.is_empty()));
     let date_at = caret_in(&slots[2]).filter(|_| date.is_empty());
     let (title_here, author_here) = (title_at.is_some(), author_at.is_some());
-    if title.is_empty() && author.is_empty() && !title_here && !author_here {
+    // Nothing set to print: the block is a chip (a date alone shows as its line).
+    if title.is_empty() && author.is_empty() && date.is_empty() && !title_here && !author_here && date_at.is_none() {
         let tip = [Inline {
             kind: InlineKind::Chip { kind: ChipKind::Placeholder, command: "maketitle".into(), key: String::new() },
             range: range.clone(),

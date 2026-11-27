@@ -1049,7 +1049,20 @@ impl<'a> View<'a> {
         let document = |n: &&Node| matches!(&n.kind, Kind::Environment { name, .. } if name == "document");
         let preamble = top.iter().take_while(|n| !document(n) && !maketitle(n));
         let shows_title = top.iter().chain(body).any(|n| maketitle(&n));
+        // They set what it prints wherever they are before it (in a group, a list: `\author` sets
+        // it for the whole document).
+        fn nested<'n>(n: &'n Node, out: &mut Vec<&'n Node>) {
+            out.push(n);
+            match &n.kind {
+                Kind::Group { body, .. } | Kind::Environment { body, .. } => body.iter().for_each(|m| nested(m, out)),
+                _ => {}
+            }
+        }
+        let mut before = Vec::new();
         for n in preamble.chain(body.iter().take_while(|n| !maketitle(n))) {
+            nested(n, &mut before);
+        }
+        for n in before {
             if let Kind::Command { name, args, .. } = &n.kind
                 && let Some(slot) = ["title", "author", "date"].iter().position(|t| t == name)
                 && let Some(arg) = required(args)

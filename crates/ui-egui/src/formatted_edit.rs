@@ -737,7 +737,7 @@ fn type_text(app: &mut App, f: &Frame<'_>, s: &str) {
     let at = caret_byte(app);
     let pending = if a == h { pending_styles(app).to_vec() } else { Vec::new() };
     if !pending.is_empty() {
-        if s.chars().all(|c| c == ' ') {
+        if s.chars().all(char::is_whitespace) {
             // A space is not styled (it shows nothing): the styles wait for the next word.
             let source = edit::joined(f.text, insertion(app, f), s);
             replace(app, f, &source, kind);

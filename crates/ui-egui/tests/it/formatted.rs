@@ -103,3 +103,10 @@ fn a_slides_overlays_say_when_they_show() {
     assert!(h.query_by_label_contains("From slide 2").is_some(), "the overlay <2-> does not read as From slide 2");
     assert!(h.query_by_label_contains("Slide 3: alert").is_some(), "the alert on slide 3 does not say so");
 }
+
+#[test]
+fn a_title_block_with_a_date_alone_shows_the_date_and_no_title_chip() {
+    let h = formatted_of("\\documentclass{article}\n\\begin{document}\n\\date{Spring}\n\\maketitle\n\nText.\n\\end{document}\n");
+    assert!(h.query_by_label_contains("Spring").is_some(), "the date does not show");
+    assert!(h.query_by_label("Title").is_none(), "a title block with a date shows the chip of an empty one");
+}
