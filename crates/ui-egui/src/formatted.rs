@@ -972,7 +972,10 @@ fn draw_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, block: &Block, depth: usize) {
                 &Para { size, bold: false, color: cx.t.text, role: egui::Role::Paragraph, empty_at: None, cell: None },
             );
         }
-        BlockKind::List { kind, items } => list(ui, cx, *kind, items, depth),
+        BlockKind::List { kind, items } => {
+            let label = list_label(cx.text, range);
+            list(ui, cx, (*kind, label.as_deref()), items, depth);
+        }
         BlockKind::Container { name, blocks } => container(ui, cx, name, &or_empty(cx.text, range, blocks), depth),
         BlockKind::FrontMatter(fm) => front_matter(ui, cx, fm, depth),
         BlockKind::Theorem { kind, title, blocks, .. } => theorem(ui, cx, range, kind, title, &or_empty(cx.text, range, blocks), depth),
@@ -1944,7 +1947,59 @@ fn heading(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, level: u8, 
 }
 
 /// A list's marker at `depth` for item `n` (from 0).
-fn marker(kind: ListKind, depth: usize, n: usize) -> String {
+/// The `label=` of a list's options (enumitem's `\begin{enumerate}[label=(\alph*)]`), its braces
+/// taken off.
+fn list_label(text: &str, range: &Range<usize>) -> Option<String> {
+    let src = text.get(range.clone())?;
+    let after = src.get(src.find('}')? + 1..)?.trim_start();
+    let options = after.strip_prefix('[')?;
+    let mut depth = 0usize;
+    let end = options.char_indices().find(|(_, c)| {
+        match c {
+            '{' => depth += 1,
+            '}' => depth = depth.saturating_sub(1),
+            ']' if depth == 0 => return true,
+            _ => {}
+        }
+        false
+    })?;
+    let options = options.get(..end.0)?;
+    let mut depth = 0usize;
+    let mut start = 0;
+    let mut parts = Vec::new();
+    for (i, c) in options.char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.push(options.get(start..i).unwrap_or_default());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(options.get(start..).unwrap_or_default());
+    let value = parts.iter().find_map(|p| p.trim().strip_prefix("label")?.trim_start().strip_prefix('='))?.trim();
+    let value = value.strip_prefix('{').and_then(|v| v.strip_suffix('}')).unwrap_or(value);
+    Some(value.to_owned())
+}
+
+/// An item's marker as a list's `label=` makes it (`(\alph*)` as "(a)"), when it is only text and
+/// counters the view knows.
+fn labelled(label: &str, n: usize) -> Option<String> {
+    let shown = label
+        .replace("\\alph*", &letters(n))
+        .replace("\\Alph*", &letters(n).to_uppercase())
+        .replace("\\roman*", &roman(n + 1))
+        .replace("\\Roman*", &roman(n + 1).to_uppercase())
+        .replace("\\arabic*", &(n + 1).to_string());
+    (!shown.is_empty() && !shown.contains(['\\', '{', '}', '$'])).then_some(shown)
+}
+
+fn marker((kind, label): (ListKind, Option<&str>), depth: usize, n: usize) -> String {
+    if let Some(shown) = label.and_then(|l| labelled(l, n)).filter(|_| kind != ListKind::Descriptions) {
+        return shown;
+    }
     match kind {
         ListKind::Bullets => ["•", "◦", "▪", "·"][depth % 4].to_owned(),
         ListKind::Numbers => match depth % 4 {
@@ -1997,7 +2052,7 @@ fn roman(n: usize) -> String {
     out
 }
 
-fn list(ui: &mut egui::Ui, cx: &mut Cx<'_>, kind: ListKind, items: &[Item], depth: usize) {
+fn list(ui: &mut egui::Ui, cx: &mut Cx<'_>, (kind, label): (ListKind, Option<&str>), items: &[Item], depth: usize) {
     let t = cx.t;
     let indent = if kind == ListKind::Descriptions { t.reading_size * 1.25 } else { t.reading_size * 1.75 };
     let line = (t.reading_size * t.reading_leading).round();
@@ -2007,7 +2062,7 @@ fn list(ui: &mut egui::Ui, cx: &mut Cx<'_>, kind: ListKind, items: &[Item], dept
         }
         let top = ui.cursor().top();
         let left = ui.cursor().left();
-        let mark = marker(kind, depth, n);
+        let mark = marker((kind, label), depth, n);
         if !mark.is_empty() {
             let at = pos2(left + indent - t.reading_size * 0.55, top + line / 2.0);
             let font =

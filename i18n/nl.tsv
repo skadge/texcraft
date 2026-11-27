@@ -2566,3 +2566,4 @@ unit	{n} MB	{n} MB
 @msg	The TeX package server has no TeX Live {year}.	De TeX-pakketserver heeft geen TeX Live {year}.
 @msg	The TeX package server is busy; the build continues without the missing package, and asks again later.	De TeX-pakketserver is bezet; het compileren gaat verder zonder het ontbrekende pakket en vraagt het later opnieuw.
 @msg	The TeX package server is not available right now; the build continues without the missing package.	De TeX-pakketserver is nu niet beschikbaar; het compileren gaat verder zonder het ontbrekende pakket.
+	A displayed formula cannot go in a heading, a caption or a footnote: put the caret in a paragraph.	Een losstaande formule kan niet in een kop, een bijschrift of een voetnoot staan: zet de cursor in een alinea.

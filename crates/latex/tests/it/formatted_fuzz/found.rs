@@ -374,3 +374,101 @@ fn an_author_after_maketitle_is_not_in_the_title_block() {
     let e = after(text, &[Op::Down { shift: false }, Op::End { shift: false }, Op::Backspace]);
     assert!(e.text.contains("\\begin{document}\\maketitle"), "{:?}", e.text);
 }
+
+#[test]
+fn text_typed_over_a_selection_ending_in_a_comment_goes_before_the_comment() {
+    let e = after("{%\n\n}", &[Op::SelectAll, Op::Type(".".to_owned())]);
+    assert!(super::checks::balanced(&e.text), "the typed text commented out the brace: {:?}", e.text);
+    assert_eq!(edit::out_of_comment("ab % c", 5), 3);
+    assert_eq!(edit::out_of_comment("50\\% c", 5), 5, "an escaped percent sign is no comment");
+}
+
+#[test]
+fn an_empty_caption_with_a_style_just_made_in_it_holds_the_caret() {
+    let text = "\\begin{figure}\n\\caption{}\n\\label{fig:a}\n\\end{figure}";
+    let mut e = after(text, &[Op::End { shift: false }, Op::Bar("italic")]);
+    typed(&mut e, "x");
+    assert!(e.text.contains("\\caption{\\textit{x}}"), "{:?}", e.text);
+    assert!(before_caret(&e).ends_with('x'), "the caret is not after the typed text: {:?}", before_caret(&e));
+}
+
+#[test]
+fn an_emptied_front_matter_field_keeps_a_line_for_the_caret() {
+    let text = "\\begin{document}\\begin{frontmatter}\\author{A}\\affiliation{Lab}\\end{frontmatter}\\end{document}";
+    let mut e = after(text, &[Op::Down { shift: false }, Op::End { shift: false }]);
+    for _ in 0.."Lab".len() {
+        assert!(e.run(&Op::Backspace).is_ok());
+    }
+    typed(&mut e, "Shop");
+    assert!(e.text.contains("\\affiliation{Shop}"), "{:?}", e.text);
+}
+
+#[test]
+fn body_text_on_an_empty_first_heading_leaves_a_line_for_the_caret() {
+    let mut e = after("\\section{}\\begin{theorem}T\\end{theorem}", &[Op::Bar("body")]);
+    typed(&mut e, "x");
+    assert!(e.text.find('x').is_some_and(|x| x < e.text.find("\\begin{theorem}").unwrap_or(0)), "{:?}", e.text);
+    assert_eq!(before_caret(&e), "x");
+}
+
+#[test]
+fn a_title_command_before_maketitle_in_the_body_shows_once() {
+    let text = "\\begin{document}\\author{Ann}\\maketitle\n\nText.\\end{document}";
+    let shown = super::lines::shown(text, None).plain();
+    assert_eq!(shown.matches("Ann").count(), 1, "{shown:?}");
+    assert!(!shown.contains("\\author"), "the command shows as its source too: {shown:?}");
+}
+
+#[test]
+fn a_list_with_options_is_shown_as_a_list_and_split_keeps_them() {
+    let text = "\\begin{enumerate}[label=(\\alph*)]\n  \\item One\n  \\item Two\n  \\item Three\n\\end{enumerate}";
+    assert!(!shows_source(text), "a list with enumitem's options is shown as source");
+    let e = after(text, &[Op::Down { shift: false }, Op::ShiftTab]);
+    assert_eq!(e.text.matches("[label=(\\alph*)]").count(), 2, "the list's second part lost its options: {:?}", e.text);
+}
+
+#[test]
+fn a_letter_shows_its_opening_paragraphs_and_closing_as_text() {
+    let text =
+        "\\begin{document}\n\\begin{letter}{Them \\\\ There}\n\\opening{Dear you,}\n\nBody.\n\n\\closing{Yours,}\n\\end{letter}\n\\end{document}";
+    assert!(!shows_source(text), "the letter is shown as its source");
+    let shown = super::lines::shown(text, None).plain();
+    for words in ["Dear you,", "Body.", "Yours,"] {
+        assert!(shown.contains(words), "{words:?} is not shown: {shown:?}");
+    }
+    let mut e = after(text, &[Op::End { shift: false }]);
+    typed(&mut e, " friend");
+    assert!(e.text.contains("\\opening{Dear you, friend}"), "{:?}", e.text);
+    // Not a heading or a list: it is the opening's text.
+    let e = after(text, &[Op::Bar("heading_1")]);
+    assert!(!e.text.contains("\\section"), "{:?}", e.text);
+}
+
+#[test]
+fn sizes_spacing_and_par_show_as_the_page_reads() {
+    let text = "{\\Huge Name}\\par\\vspace{0.3em}Title\\quad mail";
+    let shown = super::lines::shown(text, None);
+    assert!(!shows_source(text), "{:?}", shown.plain());
+    assert!(shown.lines.len() >= 2, "\\par does not end the paragraph: {:?}", shown.plain());
+}
+
+#[test]
+fn deleting_the_only_character_of_a_line_leaves_no_paragraph_break() {
+    let mut e = Editor::new("one\nx\ntwo");
+    let at = "one\n".len();
+    (e.anchor, e.head) = (at, at);
+    assert!(e.run(&Op::Delete).is_ok());
+    assert_eq!(view::view(&e.text).len(), 1, "a blank line split the paragraph: {:?}", e.text);
+}
+
+#[test]
+fn code_pressed_twice_with_nothing_typed_leaves_nothing() {
+    let e = after("Word, more", &[Op::Click(0, 5), Op::Bar("code"), Op::Bar("code")]);
+    assert_eq!(e.text, "Word, more");
+}
+
+#[test]
+fn a_displayed_formula_is_not_put_in_a_heading() {
+    let e = after("\\section{}", &[Op::Math("display", "x".to_owned())]);
+    assert_eq!(e.text, "\\section{}", "the formula went into the heading");
+}

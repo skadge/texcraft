@@ -282,9 +282,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 crate::suggest::banner(app, ui);
                 widgets::hairline(ui, &t);
             }
-            if !formatted {
-                crate::find_bar::show(app, ui);
-            }
+            crate::find_bar::show(app, ui);
         }
         match current {
             None => empty(ui, &t, "file-text", tl!("No file is open"), tl!("Choose a file in the project files to edit it.")),

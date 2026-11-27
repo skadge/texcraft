@@ -112,11 +112,13 @@ pub fn signature(name: &str) -> &'static [Spec] {
         "tnoteref" | "corref" | "fnref" => &[R],
         "item" => &[O],
         "newcommand" | "renewcommand" | "providecommand" => &[R, O, O, R],
-        // Environments.
-        "figure" | "figure*" | "table" | "table*" => &[O],
+        // Environments. A list's options (enumitem's `[label=(\alph*)]`).
+        "figure" | "figure*" | "table" | "table*" | "itemize" | "enumerate" | "description" => &[O],
         "tabular" | "array" => &[O, R],
         "tabular*" | "tabularx" => &[R, O, R],
         "minipage" => &[O, O, O, R],
+        // The letter class: its recipient, and the parts of a letter.
+        "letter" | "opening" | "closing" | "ps" | "encl" | "cc" => &[R],
         "thebibliography" => &[R],
         // Theorem-like environments: `\begin{theorem}[Pythagoras]`.
         "theorem" | "lemma" | "proposition" | "corollary" | "definition" | "example" | "remark" | "conjecture" | "claim" | "exercise" | "problem"

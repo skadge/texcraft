@@ -2566,3 +2566,4 @@ unit	{n} MB	{n} MB
 @msg	The TeX package server has no TeX Live {year}.	Der TeX-Paketserver hat kein TeX Live {year}.
 @msg	The TeX package server is busy; the build continues without the missing package, and asks again later.	Der TeX-Paketserver ist ausgelastet; die Kompilierung läuft ohne das fehlende Paket weiter und fragt später erneut.
 @msg	The TeX package server is not available right now; the build continues without the missing package.	Der TeX-Paketserver ist gerade nicht verfügbar; die Kompilierung läuft ohne das fehlende Paket weiter.
+	A displayed formula cannot go in a heading, a caption or a footnote: put the caret in a paragraph.	Eine abgesetzte Formel kann nicht in einer Überschrift, einer Beschriftung oder einer Fußnote stehen: Setzen Sie den Cursor in einen Absatz.

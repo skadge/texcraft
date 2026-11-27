@@ -2566,3 +2566,4 @@ unit	{n} MB	{n} MB
 @msg	The TeX package server has no TeX Live {year}.	O servidor de pacotes TeX não tem o TeX Live {year}.
 @msg	The TeX package server is busy; the build continues without the missing package, and asks again later.	O servidor de pacotes TeX está ocupado; a compilação continua sem o pacote em falta e voltará a pedi-lo mais tarde.
 @msg	The TeX package server is not available right now; the build continues without the missing package.	O servidor de pacotes TeX não está disponível de momento; a compilação continua sem o pacote em falta.
+	A displayed formula cannot go in a heading, a caption or a footnote: put the caret in a paragraph.	Uma fórmula destacada não pode ficar num título, numa legenda ou numa nota de rodapé: coloque o cursor num parágrafo.

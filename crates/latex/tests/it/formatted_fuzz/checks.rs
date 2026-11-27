@@ -27,7 +27,7 @@ pub struct Before<'a> {
 pub fn after_step(before: &Before<'_>, op: &Op, done: &Done, after: &Editor) -> Result<(), Failure> {
     // Enter makes an empty item on purpose (before the caret at an item's start).
     // Tab and Shift+Tab move items, empty ones too (Shift+Tab gives back what Tab nested).
-    let enter = matches!(op, Op::Enter | Op::Tab | Op::ShiftTab);
+    let enter = matches!(op, Op::Enter | Op::Tab | Op::ShiftTab | Op::Bar("itemize" | "enumerate"));
     let nodes = tree::parse(&after.text);
     if !tree::tiles(&nodes, 0..after.text.len()) {
         return fail("tree-tiles", "the tree does not tile the text".to_owned());
@@ -52,10 +52,13 @@ fn selected(shown: &Shown, e: &Editor) -> Option<String> {
     let (lo, hi) = (a.min(h), a.max(h));
     let mut out = String::new();
     for i in lo.line..=hi.line {
-        let chars = &shown.lines.get(i)?.chars;
+        let line = shown.lines.get(i)?;
+        let chars = &line.chars;
+        let keep = sourced(line);
         let from = if i == lo.line { lo.at } else { 0 };
         let to = if i == hi.line { hi.at } else { chars.len() };
-        out.extend(chars.get(from..to.max(from)).unwrap_or_default());
+        // What the view adds ("Figure.", a label's gap) is not the selection's text.
+        out.extend((from..to.max(from)).filter(|k| keep.get(*k).copied().unwrap_or(true)).filter_map(|k| chars.get(k)));
         if i < hi.line {
             out.push('\n');
         }
@@ -125,15 +128,25 @@ fn local(before: &Before<'_>, op: &Op, done: &Done) -> Result<(), Failure> {
     }
     let e = before.editor;
     let (lo, hi) = (e.anchor.min(e.head), e.anchor.max(e.head));
-    let blocks = &before.shown.blocks;
-    let touched: Vec<&Block> = blocks.iter().filter(|b| b.range.start <= hi && lo <= b.range.end).collect();
-    let (first, last) = match (touched.first(), touched.last()) {
-        (Some(f), Some(l)) => (f.range.start, l.range.end),
+    // A title block stands for its `\maketitle` and the arguments of the `\title`, `\author` and
+    // `\date` it shows, wherever they are.
+    let extent = |b: &Block| match &b.kind {
+        BlockKind::Title { slots, .. } => {
+            let starts = slots.iter().flatten().map(|s| s.start).chain([b.range.start]);
+            let ends = slots.iter().flatten().map(|s| s.end).chain([b.range.end]);
+            starts.min().unwrap_or(b.range.start)..ends.max().unwrap_or(b.range.end)
+        }
+        _ => b.range.clone(),
+    };
+    let blocks: Vec<std::ops::Range<usize>> = before.shown.blocks.iter().map(extent).collect();
+    let touched: Vec<&std::ops::Range<usize>> = blocks.iter().filter(|b| b.start <= hi && lo <= b.end).collect();
+    let (first, last) = match (touched.iter().map(|b| b.start).min(), touched.iter().map(|b| b.end).max()) {
+        (Some(f), Some(l)) => (f, l),
         _ => (lo, hi),
     };
     // And the blocks next to them (the caret may stand in empty markup just after a block).
-    let start = blocks.iter().filter(|b| b.range.end <= first).map(|b| b.range.start).max().unwrap_or(0);
-    let end = blocks.iter().filter(|b| b.range.start >= last).map(|b| b.range.end).min().unwrap_or(e.text.len());
+    let start = blocks.iter().filter(|b| b.end <= first).map(|b| b.start).max().unwrap_or(0);
+    let end = blocks.iter().filter(|b| b.start >= last).map(|b| b.end).min().unwrap_or(e.text.len());
     // The white space around them too.
     let start = e.text.get(..start).map_or(start, |s| s.trim_end().len());
     let end = e.text.get(end..).map_or(end, |s| end + s.len() - s.trim_start().len());
@@ -253,6 +266,8 @@ fn no_leftovers(before: &Editor, after: &Editor, enter: bool) -> Result<(), Fail
         return Ok(());
     }
     let (b, a) = (leftovers(&before.text, before.head), leftovers(&after.text, after.head));
+    // An empty item made on purpose (Enter at an item's start) and left as it was is not new.
+    let b = Leftovers { items: b.items.max(leftovers(&before.text, usize::MAX).items), ..b };
     let more = |x: usize, y: usize| y > x;
     // Enter on an empty heading, as in a word processor, leaves it.
     if (more(b.items, a.items) && !enter) || more(b.lists, a.lists) || more(b.styles, a.styles) || (more(b.headings, a.headings) && !enter) {
@@ -396,6 +411,14 @@ fn expected_view(before: &Before<'_>, op: &Op, done: &Done, after: &Shown) -> Re
     // Small capitals show typed letters as capitals.
     let (w, g) = (w.to_lowercase(), g.to_lowercase());
     if w == g {
+        return Ok(());
+    }
+    // A paste made after a deletion of structure reads where that deletion left the caret (a
+    // heading, where lines that start with a bullet or a number stay text).
+    if let (Op::Paste(s), Some((lo, hi))) = (op, done.selection_deleted)
+        && done.steps > 1
+        && words(&edited(before.shown, (lo.line, lo.at), (hi.line, hi.at), s)).to_lowercase() == g
+    {
         return Ok(());
     }
     let at = w.chars().zip(g.chars()).take_while(|(x, y)| x == y).count();

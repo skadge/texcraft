@@ -60,6 +60,9 @@ pub(crate) struct Editing {
     was_focused: bool,
     /// The selection last put in the primary selection (X11, Wayland).
     primary_sent: Option<(Pos, Pos)>,
+    /// The lines last drawn and the buffer's version they show, while the find bar is open (it
+    /// finds only what they show).
+    pub shown: Option<(u64, Doc)>,
 }
 
 /// The caret's source byte.
@@ -106,6 +109,12 @@ pub(crate) fn command(app: &mut App, id: &str, params: &serde_json::Value) -> Op
         | "edit.outdent" | "edit.table" | "edit.undo" | "edit.redo" | "edit.select_all" | "edit.cut" | "edit.copy" => {}
         "edit.cite" | "edit.ref" if !has("key") => {
             crate::insert_pick::open(app, if id == "edit.cite" { crate::insert_pick::Kind::Citation } else { crate::insert_pick::Kind::Reference });
+            return Some(true);
+        }
+        "edit.find" | "edit.replace" => {
+            // The bar over the view, finding what it shows.
+            let old = app.editor.find.take();
+            app.editor.find = Some(crate::find_bar::FindBar::open(&app.editor.source, id == "edit.replace", old));
             return Some(true);
         }
         "edit.figure" if !has("image") => {
@@ -220,6 +229,7 @@ pub(crate) fn finish(
     let focused = ctx.memory(|m| m.has_focus(id));
     let f = Frame { text, doc: Doc { lines: lines.iter().map(|d| d.line.clone()).collect() }, lines, now: ctx.input(|i| i.time) };
     let version = app.editor.source.doc.buffer.version();
+    app.editor.formatted.editing.shown = app.editor.find.is_some().then(|| (version, f.doc.clone()));
     // A caret that came from elsewhere (the source) goes to the nearest place the view shows.
     let e = &mut app.editor.formatted.editing;
     let gained = focused && !e.was_focused;
@@ -303,8 +313,15 @@ fn commit(app: &mut App, f: &Frame<'_>, changes: &[Change], after: (usize, usize
     if !editable(app) {
         return false;
     }
+    // An empty style the caret stood in and the edit leaves goes with it.
+    let collapsed = app.editor.source.doc.selection.primary();
+    let (changes, after) = if collapsed.anchor == collapsed.head {
+        edit::leaving_empty_markup(f.text, caret_byte(app), changes, after)
+    } else {
+        (changes.to_vec(), after)
+    };
     // Nothing joins a control word to the letters after it (`\item` and an unbolded word).
-    let (changes, added) = edit::kept_apart(f.text, changes);
+    let (changes, added) = edit::kept_apart(f.text, &changes);
     let after = (edit::kept_apart_offset(&added, after.0), edit::kept_apart_offset(&added, after.1));
     let changes = changes.as_slice();
     let d = &mut app.editor.source.doc;
@@ -548,6 +565,9 @@ fn run_command(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, id: &str, para
         "edit.footnote" => insert_after_selection(app, f, &format!("\\footnote{{{}}}", edit::escape(&param("text")))),
         "edit.link" => link(app, f, &param("url"), &param("text")),
         "edit.math_inline" => replace(app, f, &format!("\\({}\\)", param("latex")), EditKind::Other),
+        "edit.math_display" if !edit::takes_block(f.text, insertion(app, f)) => {
+            say(app, tl!("A displayed formula cannot go in a heading, a caption or a footnote: put the caret in a paragraph."));
+        }
         "edit.math_display" => replace(app, f, &format!("\\[ {} \\]", param("latex")), EditKind::Other),
         "edit.equation" => new_block(app, f, &format!("\\begin{{equation}}\n  {}\n\\end{{equation}}", param("latex")), None),
         "edit.table" => new_block(app, f, TABLE, Some("Heading")),
@@ -719,6 +739,8 @@ fn replace_at(app: &mut App, f: &Frame<'_>, (source, caret): (&str, usize), kind
         (false, true) => f.doc.deleted(f.text, a, h),
         (false, false) => f.doc.pieces(f.text, a, h),
     };
+    // A deletion of what is alone on its line takes the line's end (no blank line is left).
+    let pieces: Vec<_> = if source.is_empty() { pieces.into_iter().map(|r| edit::alone_on_line(f.text, r)).collect() } else { pieces };
     let mut changes: Vec<Change> = pieces.iter().map(|r| Change { range: r.clone(), text: String::new() }).collect();
     // The text goes where the selection starts: in its first run, or before them (in an empty
     // heading the selection starts in).
@@ -799,6 +821,8 @@ fn delete(app: &mut App, f: &Frame<'_>, back: bool) {
             commit(app, f, &[Change { range: field, text: String::new() }], (caret, caret), EditKind::Other);
             return;
         }
+        // Alone on its line, with that line's end: no blank line is left to end the paragraph.
+        let r = edit::alone_on_line(f.text, r);
         // An empty style the caret stands in (Bold pressed, nothing typed) goes too.
         let mut changes = vec![Change { range: r.clone(), text: String::new() }];
         let mut caret = r.start;
@@ -1082,13 +1106,21 @@ fn copy(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, cut: bool) {
 /// source wrapped in the command, or unwrapped when it is all in one already.
 fn style(app: &mut App, f: &Frame<'_>, name: &str) {
     let Some((a, h)) = selection(app, f) else { return };
-    // In an empty style just made (Italic pressed, nothing typed): the other style in it, for the
-    // text to come; else the word at the caret.
-    let empty = edit::empty_style_at(f.text, caret_byte(app)).is_some();
+    // In an empty style just made (Italic pressed, nothing typed): pressed again, it goes; another
+    // goes in it, for the text to come; else the word at the caret.
+    let empty = edit::empty_style_at(f.text, caret_byte(app));
+    if a == h
+        && let Some(r) = empty.clone().filter(|r| f.text.get(r.clone()).is_some_and(|s| s.starts_with(&format!("\\{name}{{"))))
+    {
+        commit(app, f, &[Change { range: r.clone(), text: String::new() }], (r.start, r.start), EditKind::Other);
+        return;
+    }
+    let empty = empty.is_some();
     let (a, h) = if a == h && !empty { word_at(f, h).unwrap_or((a, h)) } else { (a.min(h), a.max(h)) };
     if a == h {
-        // Nothing to wrap: an empty command, and the caret in it.
-        let at = caret_byte(app);
+        // Nothing to wrap: an empty command, and the caret in it, where typing goes (in a heading
+        // or a caption, not after its label).
+        let at = edit::typing_point(f.text, caret_byte(app));
         let inserted = format!("\\{name}{{}}");
         let caret = at + inserted.len() - 1;
         commit(app, f, &[Change { range: at..at, text: inserted }], (caret, caret), EditKind::Other);
@@ -1197,7 +1229,9 @@ fn accessibility(ui: &mut egui::Ui, response: &egui::Response, path: &ProjectPat
     let name = tl!("{file} formatted").replace("{file}", path.file_name());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::MultilineTextInput, true, &name));
     let run = |line: usize| id.with(("line", line));
-    let texts: Vec<String> = f.lines.iter().map(|d| d.galley.text().to_owned()).collect();
+    // Each character as read: a typeset formula, drawn over one space, reads as its LaTeX.
+    let read: Vec<Vec<String>> = f.lines.iter().map(|d| read_chars(f.text, d)).collect();
+    let texts: Vec<String> = read.iter().map(|chars| chars.concat()).collect();
     let position = |p: Pos| egui::accesskit::TextPosition { node: run(p.line).accesskit_id(), character_index: p.at };
     ui.ctx().accesskit_node_builder(id, |node| {
         node.set_role(egui::accesskit::Role::MultilineTextInput);
@@ -1206,7 +1240,7 @@ fn accessibility(ui: &mut egui::Ui, response: &egui::Response, path: &ProjectPat
         node.set_text_selection(egui::accesskit::TextSelection { anchor: position(a), focus: position(h) });
     });
     let child = ui.new_child(egui::UiBuilder::new().accessibility_parent(id));
-    for (i, (d, value)) in f.lines.iter().zip(texts).enumerate() {
+    for (i, ((d, value), chars)) in f.lines.iter().zip(texts).zip(read).enumerate() {
         let rect = d.galley.rect.translate(d.origin.to_vec2());
         let _ = child.interact(rect, run(i), Sense::hover());
         child.ctx().accesskit_node_builder(run(i), |node| {
@@ -1217,11 +1251,36 @@ fn accessibility(ui: &mut egui::Ui, response: &egui::Response, path: &ProjectPat
                 x1: rect.right().into(),
                 y1: rect.bottom().into(),
             });
-            let lengths: Vec<u8> = value.chars().map(|c| c.len_utf8() as u8).collect();
+            let lengths: Vec<u8> = chars.iter().map(|c| c.len().min(255) as u8).collect();
             node.set_value(value);
             node.set_character_lengths(lengths);
         });
     }
+}
+
+/// The characters of line `d` as a screen reader reads them: those drawn, but a typeset formula's
+/// one (a space the formula is drawn over) as the formula's LaTeX (at most 255 bytes, a character
+/// length's limit).
+fn read_chars(text: &str, d: &DrawnLine) -> Vec<String> {
+    let mut chars: Vec<String> = d.galley.text().chars().map(String::from).collect();
+    let mut at = 0;
+    for part in d.line.parts() {
+        if let edit::Part::Atom { chars: 1, range } = part
+            && chars.get(at).is_some_and(|c| c == "\u{a0}")
+            && let Some((math, _)) = d.atoms.iter().find(|a| &a.range == range).and_then(|a| a.math.as_ref())
+        {
+            let src = text.get(math.clone()).unwrap_or_default().split_whitespace().collect::<Vec<_>>().join(" ");
+            let mut end = src.len().min(255);
+            while !src.is_char_boundary(end) {
+                end -= 1;
+            }
+            if let (Some(c), false) = (chars.get_mut(at), src.is_empty()) {
+                *c = src.get(..end).unwrap_or_default().to_owned();
+            }
+        }
+        at += part.chars();
+    }
+    chars
 }
 
 /// The misspelled word at the caret, its bytes and text.

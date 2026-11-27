@@ -329,3 +329,23 @@ fn an_input_methods_deletion_of_several_characters_deletes_them_all() {
     h.run();
     assert_eq!(text(&mut h), "Hello \n", "not every character the input method deleted went");
 }
+
+#[test]
+fn an_image_inserted_as_a_figure_leaves_the_caret_in_its_caption() {
+    let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    assert!(s.execute("file.write", &json!({"path": "main.tex", "text": "\\begin{document}\nText.\n\\end{document}\n"})).is_ok());
+    assert!(s.execute("file.import", &json!({"path": "kiln.png", "data": "iVBORw0KGgo="})).is_ok());
+    let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
+    let mut h = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    h.run();
+    h.get_by_label("Formatted").click();
+    h.run();
+    h.get_by_label("main.tex formatted").focus();
+    h.run();
+    key(&mut h, egui::Modifiers::NONE, egui::Key::End);
+    texcraft_ui_egui::ui_cmd::run_with(h.state_mut(), "edit.figure", &json!({"image": "kiln.png"}));
+    h.run();
+    h.get_by_label("main.tex formatted").type_text("A kiln");
+    h.run();
+    assert!(text(&mut h).contains("\\caption{A kiln}"), "the typed text did not go in the caption: {:?}", text(&mut h));
+}

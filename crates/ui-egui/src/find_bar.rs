@@ -40,6 +40,13 @@ pub(crate) struct FindBar {
     /// Give the keyboard to the find field (and select its text) next frame.
     pub focus_find: bool,
     focus_replace: bool,
+    /// In the formatted view: its lines as last drawn, with the buffer's version they show. Only
+    /// matches in text the view shows are found there (not in commands' names), and a replacement
+    /// is text, escaped as typing escapes it.
+    pub view: Option<(u64, texcraft_latex::edit::Doc)>,
+    /// The find field changed while the view's lines were of an older text: go to the first match
+    /// once they are found.
+    go_to_first: bool,
 }
 
 const FIND_ID: &str = "texcraft-find-field";
@@ -69,6 +76,16 @@ impl FindBar {
         if self.computed.as_ref() == Some(&key) {
             return false;
         }
+        // The formatted view's lines are of an older text: found again once it shows this one.
+        let doc = match &self.view {
+            Some((version, doc)) if *version == b.version() => Some(doc),
+            Some(_) => {
+                self.matches.clear();
+                self.current = None;
+                return true;
+            }
+            None => None,
+        };
         self.computed = Some(key);
         self.matches.clear();
         self.error = None;
@@ -81,6 +98,7 @@ impl FindBar {
             Ok(ranges) => {
                 self.matches = ranges
                     .into_iter()
+                    .filter(|r| doc.is_none_or(|d| shown(d, &text, r)))
                     .map(|r| (b.byte_to_char(r.start), b.byte_to_char(r.end)))
                     .filter(|(s, e)| self.within.is_none_or(|(ws, we)| *s >= ws && *e <= we))
                     .collect();
@@ -125,6 +143,21 @@ impl FindBar {
     }
 }
 
+/// Whether the view `doc` shows source `r` of `text` as one run of its text.
+fn shown(doc: &texcraft_latex::edit::Doc, text: &str, r: &std::ops::Range<usize>) -> bool {
+    let Some(a) = doc.locate(text, r.start, None) else { return false };
+    let Some(b) = doc.locate(text, r.end, Some(a.line)) else { return false };
+    // (Where two runs meet, the view's place stands for the end of the first: what is between the
+    // places is the match itself.)
+    a.line == b.line && doc.pieces(text, a, b) == [r.clone()]
+}
+
+/// The replacement as source: in the formatted view (and not a regular expression's, which may
+/// name its groups), the text escaped as typing escapes it.
+fn replacement(bar: &FindBar) -> String {
+    if bar.view.is_some() && !bar.query.regex { texcraft_latex::edit::escape(&bar.replacement) } else { bar.replacement.clone() }
+}
+
 /// Shows the current match: selected, or with Vim the caret on its start.
 fn show_match(source: &mut SourceEditor, (s, e): (usize, usize)) {
     if source.vim.is_some() {
@@ -145,7 +178,7 @@ fn replace_one(bar: &mut FindBar, source: &mut SourceEditor) {
     let b = &source.doc.buffer;
     let text = b.text();
     let (bs, be) = (b.char_to_byte(s), b.char_to_byte(e));
-    let with = match bar.query.replacement_for(&text, bs..be, &bar.replacement) {
+    let with = match bar.query.replacement_for(&text, bs..be, &replacement(bar)) {
         Ok(w) => w,
         Err(err) => {
             bar.error = Some(err);
@@ -172,7 +205,7 @@ fn replace_all(bar: &mut FindBar, source: &mut SourceEditor) -> usize {
     let text = b.text();
     let mut changes = Vec::with_capacity(bar.matches.len());
     for (s, e) in &bar.matches {
-        match bar.query.replacement_for(&text, b.char_to_byte(*s)..b.char_to_byte(*e), &bar.replacement) {
+        match bar.query.replacement_for(&text, b.char_to_byte(*s)..b.char_to_byte(*e), &replacement(bar)) {
             Ok(with) => changes.push(Change { start: *s, end: *e, text: with }),
             Err(err) => {
                 bar.error = Some(err);
@@ -236,6 +269,13 @@ fn toggles(ui: &mut egui::Ui, t: &Tokens, bar: &mut FindBar, source: &SourceEdit
 /// The bar, when it is open.
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let Some(mut bar) = app.editor.find.take() else { return };
+    let formatted = app.session.current().is_some_and(|p| app.editor.formatted.shows(p));
+    bar.view = formatted.then(|| app.editor.formatted.editing.shown.clone()).flatten();
+    if formatted && bar.view.is_none() {
+        // Not drawn yet: an older text's version, found again next frame.
+        bar.view = Some((u64::MAX, texcraft_latex::edit::Doc::default()));
+    }
+    let shown_before = app.editor.source.doc.selection.clone();
     let t = app.tokens;
     let source = &mut app.editor.source;
     let mut close = false;
@@ -278,6 +318,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             if r.changed() {
                 bar.current = None;
                 bar.refresh(source);
+                bar.go_to_first = bar.computed.is_none();
                 if let Some(i) = bar.from(bar.origin) {
                     bar.current = Some(i);
                     show_match(source, bar.matches[i]);
@@ -357,14 +398,26 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         }
     });
     widgets::hairline(ui, &t);
-    bar.refresh(source);
+    if bar.refresh(source)
+        && bar.computed.is_some()
+        && std::mem::take(&mut bar.go_to_first)
+        && let Some(i) = bar.from(bar.origin)
+    {
+        bar.current = Some(i);
+        show_match(source, bar.matches[i]);
+    }
     if let Some(n) = replaced {
         app.view.status = Some((crate::i18n::trn(n, "Replaced {n} match", "Replaced {n} matches"), false));
+    }
+    if formatted && app.editor.source.doc.selection != shown_before {
+        // The formatted view shows the match the bar went to.
+        app.editor.formatted.editing.reveal = true;
     }
     if close {
         app.editor.source.matches.clear();
         app.editor.source.current_match = None;
         app.editor.focus = true;
+        app.editor.formatted.editing.focus = formatted;
         return;
     }
     app.editor.source.matches = bar.matches.clone();

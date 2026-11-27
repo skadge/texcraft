@@ -113,7 +113,9 @@ impl Editor {
     /// Makes `changes`, the selection then `after` (bytes of the new text).
     fn commit(&mut self, changes: &[Change], after: (usize, usize), done: &mut Done) -> Result<(), Broken> {
         check_changes(&self.text, changes)?;
-        let (changes, added) = edit::kept_apart(&self.text, changes);
+        let (changes, after) =
+            if self.anchor == self.head { edit::leaving_empty_markup(&self.text, self.head, changes, after) } else { (changes.to_vec(), after) };
+        let (changes, added) = edit::kept_apart(&self.text, &changes);
         let after = (edit::kept_apart_offset(&added, after.0), edit::kept_apart_offset(&added, after.1));
         let changes = changes.as_slice();
         let new = edit::apply(&self.text, changes);
@@ -225,6 +227,7 @@ impl Editor {
             Op::Link(url, t) => self.link(&v, (a, h), url, t, &mut done)?,
             Op::Math(kind, latex) => match *kind {
                 "inline" => self.replace(&v, (a, h), &format!("\\({latex}\\)"), &mut done)?,
+                "display" if !edit::takes_block(&self.text, self.insertion(&doc, (a, h))) => {}
                 "display" => self.replace(&v, (a, h), &format!("\\[ {latex} \\]"), &mut done)?,
                 _ => self.new_block(&format!("\\begin{{equation}}\n  {latex}\n\\end{{equation}}"), None, &mut done)?,
             },
@@ -315,6 +318,8 @@ impl Editor {
             (false, true) => doc.deleted(&self.text, a, h),
             (false, false) => doc.pieces(&self.text, a, h),
         };
+        // A deletion of what is alone on its line takes the line's end (no blank line is left).
+        let pieces: Vec<_> = if source.is_empty() { pieces.into_iter().map(|r| edit::alone_on_line(&self.text, r)).collect() } else { pieces };
         let mut changes: Vec<Change> = pieces.iter().map(|r| Change { range: r.clone(), text: String::new() }).collect();
         let at = self.insertion(&doc, (a, h));
         match changes.first_mut() {
@@ -385,6 +390,7 @@ impl Editor {
             if let Some((field, caret)) = edit::emptied_field(&self.text, &r) {
                 return self.commit(&[Change { range: field, text: String::new() }], (caret, caret), done);
             }
+            let r = edit::alone_on_line(&self.text, r);
             let mut changes = vec![Change { range: r.clone(), text: String::new() }];
             let mut caret = r.start;
             if let Some(empty) = edit::empty_style_at(&self.text, self.head).filter(|e| e.end <= r.start || r.end <= e.start) {
@@ -497,10 +503,17 @@ impl Editor {
 
     fn style(&mut self, v: &Shown, (a, h): (Pos, Pos), name: &str, done: &mut Done) -> Result<(), Broken> {
         let doc = v.doc();
-        let empty = edit::empty_style_at(&self.text, self.head).is_some();
+        let empty = edit::empty_style_at(&self.text, self.head);
+        if a == h
+            && let Some(r) = empty.clone().filter(|r| self.text.get(r.clone()).is_some_and(|s| s.starts_with(&format!("\\{name}{{"))))
+        {
+            return self.commit(&[Change { range: r.clone(), text: String::new() }], (r.start, r.start), done);
+        }
+        let empty = empty.is_some();
         let (a, h) = if a == h && !empty { word_at(v, h).unwrap_or((a, h)) } else { (a.min(h), a.max(h)) };
         if a == h {
-            let at = self.head;
+            // Where typing goes (in a heading or a caption, not after its label).
+            let at = edit::typing_point(&self.text, self.head);
             let inserted = format!("\\{name}{{}}");
             let caret = at + inserted.len() - 1;
             return self.commit(&[Change { range: at..at, text: inserted }], (caret, caret), done);

@@ -251,7 +251,10 @@ pub struct Item {
 }
 
 /// Text environments shown formatted, under their name.
-pub(crate) const CONTAINERS: &[&str] = &["abstract", "keyword", "quote", "quotation", "verse", "center", "flushleft", "flushright"];
+pub(crate) const CONTAINERS: &[&str] = &["abstract", "keyword", "quote", "quotation", "verse", "center", "flushleft", "flushright", "letter"];
+
+/// The parts of a letter (the letter class) shown as paragraphs of their text.
+const LETTER_PARTS: &[&str] = &["opening", "closing", "ps", "encl", "cc"];
 
 /// A theorem-like environment: how the document prints its name and numbers it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -561,6 +564,8 @@ pub(crate) fn declared(name: &str, s: Style) -> Option<Style> {
         "upshape" => Style { italic: false, ..s },
         "mdseries" => Style { bold: false, ..s },
         "normalfont" => Style::default(),
+        // Sizes: the view keeps one size for the text.
+        "tiny" | "scriptsize" | "footnotesize" | "small" | "normalsize" | "large" | "Large" | "LARGE" | "huge" | "Huge" => s,
         _ => return None,
     };
     Some(style)
@@ -575,6 +580,8 @@ pub(crate) fn logo(name: &str) -> Option<&'static str> {
         "ldots" | "dots" | "textellipsis" => "…",
         // elsarticle's keyword separator.
         "sep" => "·",
+        "quad" => "\u{2003}",
+        "qquad" => "\u{2003}\u{2003}",
         "textbackslash" => "\\",
         "textasciitilde" => "~",
         "textasciicircum" => "^",
@@ -823,7 +830,7 @@ impl<'a> View<'a> {
         let mut f = Flow::default();
         let mut i = 0;
         while let Some(n) = nodes.get(i) {
-            if n.kind == Kind::ParBreak {
+            if n.kind == Kind::ParBreak || matches!(&n.kind, Kind::Command { name, args, .. } if name == "par" && args.is_empty()) {
                 f.flush(self.text);
                 i += 1;
                 continue;
@@ -862,6 +869,11 @@ impl<'a> View<'a> {
             Kind::Command { name, star, args } => {
                 if name == "maketitle" {
                     self.title()
+                } else if LETTER_PARTS.contains(&name.as_str())
+                    && let Some(arg) = required(args).filter(|a| a.closed)
+                {
+                    // Its text, edited where it stands (in its braces).
+                    return Some(Block { kind: BlockKind::Paragraph(self.inlines(&arg.body, style)), range: arg.inner.clone() });
                 } else {
                     let level = heading_level(name)?;
                     let arg = required(args)?;
@@ -1272,6 +1284,9 @@ impl<'a> View<'a> {
                 InlineKind::Link { url, text: self.inlines(&arg.body, *style) }
             }
             ("and", _) => InlineKind::LineBreak,
+            // Space the page gets, not the text.
+            ("newline" | "linebreak", _) => InlineKind::LineBreak,
+            ("vspace" | "hspace" | "smallskip" | "medskip" | "bigskip" | "noindent", _) => return i + 1,
             _ => return self.unknown(nodes, i, out),
         };
         out.push(Inline { kind, range });
