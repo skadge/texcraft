@@ -405,6 +405,17 @@ pages:
     # README's, referenced as ../images/ from the guide, so they go to /images/.
     - cp -r docs/guide public/guide
     - cp -r docs/images public/images
+    # The engine's files of the version being replaced, so that a page opened before this deploy
+    # (or the browser's cached copy of it) still finds its engine; they are named after their
+    # contents, so they never clash with the new ones. Only the version just before is kept.
+    - apk add --no-cache curl
+    - |
+      old=$(curl -fsS "$CI_PAGES_URL/" | sed -n 's/.*name="texcraft-engine" content="engine-worker-\([0-9a-f]\{16\}\)_loader\.js".*/\1/p' | head -n 1) || old=""
+      if [ -n "$old" ] && [ ! -e "public/retex-$old.wasm" ]; then
+        for f in "engine-worker-${old}_loader.js" "engine-worker-${old}.js" "engine-worker-${old}_bg.wasm" "retex-${old}.wasm"; do
+          curl -fsS -o "public/$f" "$CI_PAGES_URL/$f" || { echo "could not keep $f"; rm -f "public/$f"; }
+        done
+      fi
   artifacts:
     paths:
       - public
