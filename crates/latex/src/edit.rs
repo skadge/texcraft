@@ -446,7 +446,7 @@ fn emptied(text: &str, ranges: Vec<Range<usize>>, sel: Option<Range<usize>>) -> 
     let Some(first) = ranges.first().map(|r| r.start) else { return ranges };
     let mut out = merge(ranges);
     let tree = tree::parse(text);
-    whole_calls(text, &tree, &view::macros(text), &mut out);
+    whole_calls(text, &tree, &view::known_macros(text), &mut out);
     walk(text, &tree, (first, &sel), &mut out);
     out
 }
@@ -765,7 +765,7 @@ pub fn into_arguments(text: &str, at: usize) -> Option<usize> {
     if name == "bibitem" && n.range.start == at {
         return Some(n.range.end);
     }
-    if let Some(m) = view::macros(text).into_iter().find(|m| &m.name == name && m.shown()) {
+    if let Some(m) = view::known_macros(text).into_iter().find(|m| &m.name == name && m.shown()) {
         let call = view::macro_call(text, nodes, i, &m)?;
         let first = call.args.first().filter(|_| call.name.end == at)?;
         return Some(first.inner.start);
@@ -1956,17 +1956,7 @@ pub fn here(text: &str, at: usize) -> Here {
 /// file is `main`: `\chapter`, `\section`, `\subsection` in a class with chapters (book, report and
 /// their kin), else `\section`, `\subsection`, `\subsubsection`.
 pub fn heading_commands(main: &str) -> [&'static str; 3] {
-    const WITH_CHAPTERS: &[&str] = &["book", "report", "memoir", "scrbook", "scrreprt", "ctexbook", "ctexrep", "thesis"];
-    let tree = tree::parse(main);
-    let class = tree.iter().find_map(|n| match &n.kind {
-        Kind::Command { name, args, .. } if name == "documentclass" => args.iter().find(|a| !a.optional).and_then(|a| main.get(a.inner.clone())),
-        _ => None,
-    });
-    if class.is_some_and(|c| WITH_CHAPTERS.contains(&c.trim())) {
-        ["chapter", "section", "subsection"]
-    } else {
-        ["section", "subsection", "subsubsection"]
-    }
+    if crate::names::has_chapters(main) { ["chapter", "section", "subsection"] } else { ["section", "subsection", "subsubsection"] }
 }
 
 /// A heading at source offset `at` made a paragraph again: its command and braces removed. `None`

@@ -21,8 +21,11 @@ use texcraft_engine::project::{Contents, Project, ProjectPath};
 use texcraft_engine::{FormulaBox, FormulaState};
 use texcraft_latex::auxfile::{Aux, CiteStyle, Missing};
 use texcraft_latex::edit::{self, Line, Part};
+use texcraft_latex::names::Names;
 use texcraft_latex::numbers::Number;
-use texcraft_latex::view::{Block, BlockKind, ChipKind, Field, FrontMatter, Inline, InlineKind, Item, ListKind, NoteKind, Style, TheoremKind};
+use texcraft_latex::view::{
+    Block, BlockKind, ChipKind, Declared, Field, FrontMatter, Inline, InlineKind, Item, ListKind, NoteKind, Style, TheoremKind,
+};
 use texcraft_preview::figure;
 
 use crate::App;
@@ -47,8 +50,8 @@ struct Cache {
     blocks: Arc<Vec<Block>>,
     /// The preamble's summary: the class and how many packages.
     summary: String,
-    /// The theorem-like environments the main file declares, which the blocks were made with.
-    theorems: Vec<TheoremKind>,
+    /// What the main file declares (theorems, macros, names), which the blocks were made with.
+    declared: Arc<Declared>,
 }
 
 /// A file `\input` or `\include` reads, shown in its place: its path, text and view, or why it
@@ -373,6 +376,12 @@ fn line_of(pieces: &[Piece], empty_at: usize) -> Line {
 }
 
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
+    // The main file's macros and names hold in the file shown, for the view and its edits.
+    let declared = Arc::clone(&app.session.numbered().declared);
+    texcraft_latex::view::within(declared, || show_file(app, ui, path));
+}
+
+fn show_file(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     // An editor left open on another file: its edit goes in now.
     if app.editor.formatted.in_place.as_ref().is_some_and(|ip| &ip.path != path) {
         in_place::close(app);
@@ -380,17 +389,17 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     // The view is made from the editor's buffer, which it edits: its text is the file's.
     let version = app.editor.source.doc.buffer.version();
     let numbered = app.session.numbered();
-    let fresh = app.editor.formatted.cache.as_ref().is_some_and(|c| &c.path == path && c.revision == version && c.theorems == numbered.theorems);
+    let fresh = app.editor.formatted.cache.as_ref().is_some_and(|c| &c.path == path && c.revision == version && c.declared == numbered.declared);
     if !fresh {
         let text: Arc<str> = Arc::from(app.editor.source.doc.buffer.text());
         // The whole file again: files are small, incremental parsing is still to come.
-        let blocks = Arc::new(texcraft_latex::view::view_with(&text, &numbered.theorems));
+        let blocks = Arc::new(texcraft_latex::view::view(&text));
         let summary = match blocks.first() {
             Some(Block { kind: BlockKind::Preamble, range }) => summary(text.get(range.clone()).unwrap_or_default()),
             _ => String::new(),
         };
-        let theorems = numbered.theorems.clone();
-        app.editor.formatted.cache = Some(Cache { path: path.clone(), revision: version, text, blocks, summary, theorems });
+        let declared = Arc::clone(&numbered.declared);
+        app.editor.formatted.cache = Some(Cache { path: path.clone(), revision: version, text, blocks, summary, declared });
     }
     let Some(cache) = app.editor.formatted.cache.as_ref() else { return };
     let (text, blocks, summary) = (Arc::clone(&cache.text), Arc::clone(&cache.blocks), cache.summary.clone());
@@ -611,7 +620,7 @@ fn includes(app: &mut App, path: &ProjectPath, blocks: &[Block], version: u64) -
     if let Some(found) = app.editor.formatted.includes.as_ref().filter(|i| i.of == of) {
         return Arc::clone(&found.files);
     }
-    let theorems = app.session.numbered().theorems.clone();
+    let declared = Arc::clone(&app.session.numbered().declared);
     let mut files: HashMap<String, Included> = HashMap::new();
     let mut seen: HashSet<ProjectPath> = HashSet::from([path.clone()]);
     let mut todo: Vec<String> = Vec::new();
@@ -633,7 +642,7 @@ fn includes(app: &mut App, path: &ProjectPath, blocks: &[Block], version: u64) -
             Some(file) => match app.session.project().text(&file) {
                 Ok(text) => {
                     let text: Arc<str> = Arc::from(text);
-                    let blocks = Arc::new(texcraft_latex::view::view_with(&text, &theorems));
+                    let blocks = Arc::new(texcraft_latex::view::within(Arc::clone(&declared), || texcraft_latex::view::view(&text)));
                     if seen.insert(file.clone()) {
                         names(&blocks, &mut todo);
                     }
@@ -1342,29 +1351,67 @@ fn chip_icon(kind: ChipKind) -> &'static str {
     }
 }
 
-/// Today's date as LaTeX's `\today` prints it (in English, as the PDF does without babel).
+/// The names the document prints (its class's and language's, [`texcraft_latex::names`]): the
+/// main file's, which the view is shown with.
+fn names() -> Names {
+    texcraft_latex::view::around().map(|d| d.names.clone()).unwrap_or_default()
+}
+
+/// Today's date as the document's `\today` prints it, in its language.
 fn today() -> String {
-    chrono::Local::now().date_naive().format("%B %-d, %Y").to_string()
+    use chrono::Datelike;
+    let date = chrono::Local::now().date_naive();
+    texcraft_latex::names::today(names().language, date.year(), date.month(), date.day())
 }
 
 /// What a placeholder, an overlay, a macro's or an entry's chip shows.
 fn tag_words(kind: ChipKind, command: &str, key: &str) -> String {
     match (kind, command) {
         (ChipKind::Placeholder, "today") => today(),
-        (ChipKind::Placeholder, "tableofcontents") => tl!("Table of contents").to_owned(),
-        (ChipKind::Placeholder, "listoffigures") => tl!("List of figures").to_owned(),
-        (ChipKind::Placeholder, "listoftables") => tl!("List of tables").to_owned(),
-        (ChipKind::Placeholder, "printbibliography" | "bibliography") => tl!("Bibliography").to_owned(),
-        (ChipKind::Placeholder, "printindex") => tl!("Index").to_owned(),
+        // As the document prints them, in its language.
+        (ChipKind::Placeholder, "tableofcontents") => names().contents,
+        (ChipKind::Placeholder, "listoffigures") => names().figures,
+        (ChipKind::Placeholder, "listoftables") => names().tables,
+        (ChipKind::Placeholder, "printbibliography" | "bibliography") => names().bibliography,
+        (ChipKind::Placeholder, "printindex") => names().index,
         (ChipKind::Placeholder, "newpage" | "clearpage" | "cleardoublepage" | "pagebreak") => tl!("Page break").to_owned(),
         (ChipKind::Placeholder, "appendix") => tl!("Appendices").to_owned(),
         (ChipKind::Placeholder, "titlepage") => tl!("Title page").to_owned(),
         (ChipKind::Placeholder, "maketitle") => tl!("Title").to_owned(),
         (ChipKind::Overlay, "pause") => tl!("Pause").to_owned(),
-        (ChipKind::Overlay, _) => tl!("Slides {spec}").replace("{spec}", key),
+        (ChipKind::Overlay, _) => overlay_words(key),
         (ChipKind::Entry, _) => key.to_owned(),
         _ => command.to_owned(),
     }
+}
+
+/// An overlay specification (without its angle brackets) as words: "From slide 3", "Slides 2
+/// to 4", "Slide 3: alert"; one the view does not read, as written.
+fn overlay_words(spec: &str) -> String {
+    use texcraft_latex::view::Slides;
+    let Some(parts) = texcraft_latex::view::overlay_parts(spec) else { return tl!("Slides {spec}").replace("{spec}", spec) };
+    let slides = |s: &Slides| match *s {
+        Slides::One(n) => tl!("Slide {n}").replace("{n}", &n.to_string()),
+        Slides::From(n) => tl!("From slide {n}").replace("{n}", &n.to_string()),
+        Slides::UpTo(n) => tl!("Up to slide {n}").replace("{n}", &n.to_string()),
+        Slides::Between(a, b) => tl!("Slides {a} to {b}").replace("{a}", &a.to_string()).replace("{b}", &b.to_string()),
+        Slides::FromNext => tl!("In turn").to_owned(),
+        Slides::Next => tl!("On its step only").to_owned(),
+    };
+    let words: Vec<String> = parts
+        .iter()
+        .map(|p| {
+            let when = p.slides.iter().map(slides).collect::<Vec<_>>().join(", ");
+            match p.action.as_deref() {
+                None => when,
+                Some("alert") => tl!("{slides}: alert").replace("{slides}", &when),
+                Some("uncover" | "visible" | "only") => tl!("{slides}: shown").replace("{slides}", &when),
+                Some("invisible") => tl!("{slides}: hidden").replace("{slides}", &when),
+                Some(other) => format!("{when}: {other}"),
+            }
+        })
+        .collect();
+    words.join(" · ")
 }
 
 /// What hovering a piece explains.
@@ -2160,9 +2207,12 @@ fn list(ui: &mut egui::Ui, cx: &mut Cx<'_>, (kind, label): (ListKind, Option<&st
     // A bibliography under its heading, as the PDF prints it.
     if kind == ListKind::Bibliography {
         let size = t.heading_sizes.get(2).copied().unwrap_or(t.reading_size);
-        let r = ui.label(egui::RichText::new(tl!("References")).font(t.reading(size, true, false)).color(t.text));
+        // As the document prints it: `\refname`, or `\bibname` in a class with chapters.
+        let heading = names().bibliography;
+        let r = ui.label(egui::RichText::new(&heading).font(t.reading(size, true, false)).color(t.text));
         let _ = ui.ctx().accesskit_node_builder(r.id, |node| {
             node.set_role(egui::accesskit::Role::Heading);
+            node.set_label(heading);
             node.set_level(2);
         });
         ui.add_space(t.reading_size * 0.5);

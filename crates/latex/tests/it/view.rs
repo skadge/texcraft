@@ -223,3 +223,57 @@ fn every_author_of_the_title_shows() {
         "{retitled:?}"
     );
 }
+
+#[test]
+fn overlay_specifications_are_read_part_by_part() {
+    use texcraft_latex::view::{OverlayPart, Slides, overlay_parts};
+    assert_eq!(overlay_parts("3-"), Some(vec![OverlayPart { action: None, slides: vec![Slides::From(3)] }]));
+    let both = overlay_parts("3-| alert@3").unwrap_or_default();
+    assert_eq!(both.len(), 2);
+    assert_eq!(both.get(1).and_then(|p| p.action.as_deref()), Some("alert"));
+    assert_eq!(overlay_parts("1,3-4,-2").map(|p| p.iter().map(|p| p.slides.len()).sum::<usize>()), Some(3));
+    assert_eq!(overlay_parts("+-").map(|p| p[0].slides.clone()), Some(vec![Slides::FromNext]));
+    assert_eq!(overlay_parts("beamer:2"), None, "a mode is not read");
+}
+
+#[test]
+fn a_letters_enclosures_and_copies_show_the_name_the_page_prints_before_them() {
+    let text = "\\documentclass{letter}\\begin{document}\\begin{letter}{X}\\opening{Dear X,}\n\nText.\n\n\\encl{A plan}\n\\cc{Sam}\\end{letter}\\end{document}";
+    let shown = everything(text, &view(text));
+    assert!(shown.contains("encl: A plan"), "{shown}");
+    assert!(shown.contains("cc: Sam"), "{shown}");
+}
+
+#[test]
+fn the_main_files_macros_show_as_text_in_a_file_it_includes() {
+    use std::sync::Arc;
+    use texcraft_latex::view::{Declared, within};
+    let main = "\\documentclass{article}\\newcommand{\\term}[1]{\\textbf{#1}}\\begin{document}\\input{part}\\end{document}";
+    let part = "A \\term{kiln} fires clay.";
+    let alone = view(part);
+    assert!(everything(part, &alone).contains("\\term{"), "without the main file the call is its source");
+    let declared = Arc::new(Declared::of(main));
+    let blocks = within(Arc::clone(&declared), || view(part));
+    let words = everything(part, &blocks);
+    assert!(words.contains("kiln") && !words.contains("\\term"), "{words}");
+    // Typed right after the macro's chip, text goes in its argument, as in the main file.
+    let after_name = part.find("{kiln").unwrap_or_default();
+    let at = within(declared, || texcraft_latex::edit::typing_point(part, after_name));
+    assert_eq!(at, after_name + 1);
+}
+
+/// What every block shows, nested ones too: its text, and the source of what is shown as source.
+fn everything(text: &str, blocks: &[Block]) -> String {
+    let mut out = String::new();
+    texcraft_latex::view::walk(blocks, &mut |b| {
+        for i in texcraft_latex::view::inlines_of(b) {
+            match &i.kind {
+                InlineKind::Text { text, .. } => out.push_str(text),
+                InlineKind::Source => out.push_str(text.get(i.range.clone()).unwrap_or_default()),
+                _ => {}
+            }
+        }
+        out.push('\n');
+    });
+    out
+}

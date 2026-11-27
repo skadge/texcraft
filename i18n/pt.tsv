@@ -2587,3 +2587,12 @@ unit	{n} MB	{n} MB
 	Shown on slides {spec} only (\\{command}).	Mostrado apenas nos diapositivos {spec} (\\{command}).
 	\\{command}, a command this document defines: its arguments are edited here as text.	\\{command}, um comando que este documento define: os seus argumentos editam-se aqui como texto.
 	A bibliography entry: cite it with \\cite{key}.	Uma entrada da bibliografia: cite-a com \\cite{key}.
+	Slide {n}	Diapositivo {n}
+	From slide {n}	A partir do diapositivo {n}
+	Up to slide {n}	Até ao diapositivo {n}
+	Slides {a} to {b}	Diapositivos {a} a {b}
+	In turn	Um a um
+	On its step only	Só no seu passo
+	{slides}: alert	{slides}: em destaque
+	{slides}: shown	{slides}: visível
+	{slides}: hidden	{slides}: oculto
