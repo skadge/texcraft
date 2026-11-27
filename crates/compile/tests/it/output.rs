@@ -65,7 +65,8 @@ fn build(name: &str, options: Options) -> Result<Outcome, String> {
     let main = ProjectPath::new("main.tex").map_err(|e| e.to_string())?;
     let image = ProjectPath::new("low.png").map_err(|e| e.to_string())?;
     let files = vec![(main.clone(), Arc::from(DOCUMENT.as_bytes())), (image, Arc::from(small_png().as_slice()))];
-    let outcome = backend.compile(&Job { files, main, id: 1, options, project: None, packages: Default::default() });
+    let outcome =
+        backend.compile(&Job { files, main, id: 1, options, project: None, packages: Default::default(), missing_packages: Default::default() });
     let _ = std::fs::remove_dir_all(&dir);
     if outcome.status != Status::Built {
         return Err(format!("not built: {:?} {:?}", outcome.status, outcome.diagnostics));

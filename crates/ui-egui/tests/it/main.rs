@@ -43,6 +43,7 @@ mod keyboard_paths;
 mod languages;
 mod log_copy;
 mod menu_bar;
+mod missing_packages;
 mod narrow;
 mod outline;
 mod output_log;

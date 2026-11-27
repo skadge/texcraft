@@ -68,6 +68,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: true,
         },
         CommandSpec {
+            id: "build.missing_packages",
+            label: "Missing Packages",
+            menu: &[],
+            shortcut: None,
+            params: missing_packages_schema,
+            enabled: desktop_engine,
+            run: missing_packages,
+            changes: true,
+        },
+        CommandSpec {
             id: "build.clean",
             label: "Delete Build Files",
             menu: &["Build"],
@@ -241,6 +251,31 @@ fn package_server(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let server = &s.settings.package_server;
     Ok(json!({"server": String::from(server.clone()), "url": server.base()}))
+}
+
+fn missing_packages_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "value": {"type": "string", "enum": ["ask", "auto", "manual", "off"], "description": "What the desktop build does when a document needs a TeX Live package that is not installed: `auto` downloads it from TeX Live's repository of the installed year, `manual` and `off` do not download (`manual`'s message says how to install it), `ask` (until chosen) has the window ask the first time; the CLI and agents never ask, and do not download."}
+    }, "additionalProperties": false})
+}
+
+/// Only the desktop's engine follows the setting: the browser's downloads from its package server.
+fn desktop_engine(_: &Session) -> Result<()> {
+    if cfg!(target_arch = "wasm32") {
+        return Err("In the browser, missing packages come from the package server (build.package_server).".to_owned());
+    }
+    Ok(())
+}
+
+/// Sets what the desktop build does about missing packages when given, and returns it.
+fn missing_packages(s: &mut Session, p: &Value) -> Result<Value> {
+    desktop_engine(s)?;
+    if let Some(v) = p.get("value") {
+        let text = v.as_str().ok_or("`value` must be a string: ask, auto, manual or off")?;
+        s.set_missing_packages(texcraft_compile::missing::MissingPackages::parse(text)?);
+    }
+    let m = s.settings.missing_packages;
+    Ok(json!({"value": m.name(), "downloads": m.downloads()}))
 }
 
 fn can_clean(s: &Session) -> Result<()> {
@@ -508,6 +543,20 @@ fn engine_of(s: &Session) -> Value {
     }
 }
 
+/// What the last build lacked, what the setting is and how to change it; `null` when it lacked
+/// nothing.
+fn missing_of(s: &Session, o: &crate::Outcome) -> Value {
+    if o.missing.is_empty() {
+        return Value::Null;
+    }
+    let m = s.settings.missing_packages;
+    let how = match m {
+        texcraft_compile::missing::MissingPackages::Auto => "The download did not succeed; build again later, or install the packages yourself.",
+        _ => "Nothing was downloaded. Missing packages in Settings › Building, or the command build.missing_packages with auto, downloads them.",
+    };
+    json!({"lacked": o.missing, "setting": m.name(), "downloads": m.downloads(), "how": how})
+}
+
 fn result(s: &mut Session, _: &Value) -> Result<Value> {
     s.refresh_hidden();
     // The running build's draft PDF, while its later passes run.
@@ -530,6 +579,7 @@ fn result(s: &mut Session, _: &Value) -> Result<Value> {
         "output": o.output,
         "engine": engine_of(s),
         "accessibility": o.accessibility().collect::<Vec<_>>(),
+        "missingPackages": missing_of(s, o),
         "print": o.preflight.as_ref().map(|p| json!({
             "standard": p.standard.name(),
             "pdfxBytes": p.pdfx.as_ref().map(|x| x.len()),

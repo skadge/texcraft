@@ -717,12 +717,48 @@ fn building(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         Some(r)
     });
     output(app, ui, t, options);
-    // Only the browser's engine downloads packages through TeXCraft; the desktop's retex has its
-    // own settings.
+    // The browser's engine downloads from TeXCraft's package server; the desktop's retex from
+    // TeX Live's repository, when this setting lets it.
     if cfg!(target_arch = "wasm32") {
         package_server(app, ui, t);
+    } else {
+        missing_packages(app, ui, t);
     }
     hidden_messages(app, ui, t);
+}
+
+/// What the desktop build does when a document needs a TeX Live package the installed TeX Live
+/// lacks (`build.missing_packages`): asked the first time until chosen here or in that question.
+fn missing_packages(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    use texcraft_engine::missing::MissingPackages;
+    let now = app.session.settings.missing_packages;
+    let choices = [
+        (MissingPackages::Ask, tl!("Ask the first time")),
+        (MissingPackages::Auto, tl!("Download automatically")),
+        (MissingPackages::Manual, tl!("Install them myself")),
+        (MissingPackages::Off, tl!("Don't download")),
+    ];
+    let help = tl!(
+        "When a document needs a LaTeX package your TeX Live lacks. Download automatically: during the build, from TeX Live's own repository for the year of your TeX Live, so it matches the rest (needs the network). Install them myself: the build's message names the package and how to install it. Don't download: the build stops at the missing package."
+    );
+    let label = tl!("Missing packages");
+    let shown = choices.iter().find(|(m, _)| *m == now).map_or("", |(_, n)| *n);
+    let mut chosen = None;
+    setting(ui, t, label, help, |ui| {
+        let combo = craft_ui::ComboBox::from_id_salt("settings-missing-packages").width(200.0).selected_text(shown).show_ui(ui, |ui| {
+            for (m, name) in choices {
+                if ui.selectable_label(m == now, name).clicked() {
+                    chosen = Some(m);
+                }
+            }
+        });
+        let _ = combo.response.accessible_name(label);
+        None
+    });
+    if let Some(m) = chosen {
+        app.run("build.missing_packages", json!({"value": m.name()}));
+        app.prefs_changed = true;
+    }
 }
 
 /// Where the browser build downloads the TeX Live packages its own TeX files lack: TeXCraft's

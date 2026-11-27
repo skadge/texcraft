@@ -47,6 +47,7 @@ fn the_worker_passes_a_running_builds_progress_on() {
         options: Default::default(),
         project: None,
         packages: Default::default(),
+        missing_packages: Default::default(),
     };
     worker.submit(job);
     let mut seen = None;
@@ -95,6 +96,7 @@ fn cancelling_stops_the_running_build() {
         options: Default::default(),
         project: None,
         packages: Default::default(),
+        missing_packages: Default::default(),
     });
     assert!(worker.cancel(), "the running build could not be stopped");
     let outcome = worker.wait().unwrap();

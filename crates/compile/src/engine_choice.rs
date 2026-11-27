@@ -520,6 +520,7 @@ mod tests {
             id: 0,
             project: None,
             packages: Default::default(),
+            missing_packages: Default::default(),
         };
         assert_eq!(job.choose_engine(), None);
         assert_eq!(job.options.engine, Engine::LuaLatex);

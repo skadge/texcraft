@@ -27,6 +27,7 @@ mod image;
 mod import;
 mod language;
 mod library;
+mod missing_packages;
 mod numbers;
 mod rename;
 mod review;

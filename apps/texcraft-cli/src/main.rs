@@ -88,6 +88,12 @@ fn compile(args: &[String]) -> Result<(), String> {
             eprintln!("{place}{}: {}", d["severity"].as_str().unwrap_or("note"), d["message"].as_str().unwrap_or_default());
         }
     }
+    // Without a window nothing asks about missing packages: the setting says what was done.
+    if let Some(lacked) = result["missingPackages"]["lacked"].as_array() {
+        let names: Vec<&str> = lacked.iter().map(|l| l["package"].as_str().or(l["file"].as_str()).unwrap_or("TeX Live")).collect();
+        eprintln!("missing TeX Live packages: {}", names.join(", "));
+        eprintln!("{}", result["missingPackages"]["how"].as_str().unwrap_or_default());
+    }
     let status = result["result"]["status"].as_str().unwrap_or("none");
     if status == "unavailable" {
         return Err(result["result"]["reason"].as_str().unwrap_or("no engine").to_owned());
