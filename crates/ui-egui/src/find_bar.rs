@@ -31,6 +31,9 @@ pub(crate) struct FindBar {
     pub within: Option<(usize, usize)>,
     /// The matches, chars, and which one is current.
     pub matches: Vec<(usize, usize)>,
+    /// In the formatted view, the source runs of each match (bytes): more than one when it goes
+    /// over a style's boundary (`\textbf{bold} text`), whose markup a replacement keeps.
+    pieces: Vec<Vec<std::ops::Range<usize>>>,
     pub current: Option<usize>,
     pub error: Option<String>,
     /// What `matches` was computed for.
@@ -88,17 +91,49 @@ impl FindBar {
         };
         self.computed = Some(key);
         self.matches.clear();
+        self.pieces.clear();
         self.error = None;
         if self.query.pattern.is_empty() {
             self.current = None;
             return true;
         }
         let text = b.text();
+        if let Some(doc) = doc {
+            // What the view shows, line by line: a match may go over a style's boundary.
+            for (shown, sources) in doc.shown_text(&text) {
+                let ranges = match self.query.matches(&shown) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        self.error = Some(e);
+                        break;
+                    }
+                };
+                for r in ranges {
+                    let (first, last) = (shown[..r.start].chars().count(), shown[..r.end].chars().count());
+                    let runs: Vec<std::ops::Range<usize>> = sources.get(first..last).unwrap_or_default().to_vec();
+                    let (Some(start), Some(end)) = (runs.first().map(|r| r.start), runs.last().map(|r| r.end)) else { continue };
+                    let (s, e) = (b.byte_to_char(start), b.byte_to_char(end));
+                    if self.within.is_some_and(|(ws, we)| s < ws || e > we) || self.matches.len() >= MAX_MATCHES {
+                        continue;
+                    }
+                    let mut pieces: Vec<std::ops::Range<usize>> = Vec::new();
+                    for run in runs {
+                        match pieces.last_mut() {
+                            Some(p) if p.end == run.start => p.end = run.end,
+                            _ => pieces.push(run),
+                        }
+                    }
+                    self.matches.push((s, e));
+                    self.pieces.push(pieces);
+                }
+            }
+            self.current = self.current.filter(|i| *i < self.matches.len());
+            return true;
+        }
         match self.query.matches(&text) {
             Ok(ranges) => {
                 self.matches = ranges
                     .into_iter()
-                    .filter(|r| doc.is_none_or(|d| shown(d, &text, r)))
                     .map(|r| (b.byte_to_char(r.start), b.byte_to_char(r.end)))
                     .filter(|(s, e)| self.within.is_none_or(|(ws, we)| *s >= ws && *e <= we))
                     .collect();
@@ -143,15 +178,6 @@ impl FindBar {
     }
 }
 
-/// Whether the view `doc` shows source `r` of `text` as one run of its text.
-fn shown(doc: &texcraft_latex::edit::Doc, text: &str, r: &std::ops::Range<usize>) -> bool {
-    let Some(a) = doc.locate(text, r.start, None) else { return false };
-    let Some(b) = doc.locate(text, r.end, Some(a.line)) else { return false };
-    // (Where two runs meet, the view's place stands for the end of the first: what is between the
-    // places is the match itself.)
-    a.line == b.line && doc.pieces(text, a, b) == [r.clone()]
-}
-
 /// The replacement as source: in the formatted view (and not a regular expression's, which may
 /// name its groups), the text escaped as typing escapes it.
 fn replacement(bar: &FindBar) -> String {
@@ -164,6 +190,23 @@ fn show_match(source: &mut SourceEditor, (s, e): (usize, usize)) {
         source.select(s, s);
     } else {
         source.select(s, e);
+    }
+}
+
+/// The changes replacing a match (chars `s..e`) with `with`: in the formatted view, a match over a
+/// style's boundary has its first run replaced and the others deleted, the markup between kept.
+fn match_changes(b: &texcraft_buffer::Buffer, pieces: Option<&Vec<std::ops::Range<usize>>>, (s, e): (usize, usize), with: String) -> Vec<Change> {
+    match pieces.filter(|p| p.len() > 1) {
+        Some(pieces) => pieces
+            .iter()
+            .enumerate()
+            .map(|(k, r)| Change {
+                start: b.byte_to_char(r.start),
+                end: b.byte_to_char(r.end),
+                text: if k == 0 { with.clone() } else { String::new() },
+            })
+            .collect(),
+        None => vec![Change { start: s, end: e, text: with }],
     }
 }
 
@@ -186,8 +229,11 @@ fn replace_one(bar: &mut FindBar, source: &mut SourceEditor) {
         }
     };
     let before = source.doc.selection.clone();
-    let end = s + with.chars().count();
-    if source.doc.buffer.edit(Transaction::replace(s, e, &with), &before, &Selection::point(end), EditKind::Other).is_ok() {
+    let i = bar.current.unwrap_or(0);
+    let changes = match_changes(b, bar.pieces.get(i), (s, e), with.clone());
+    let end = changes.first().map_or(s, |c| c.start) + with.chars().count();
+    let Ok(tx) = Transaction::new(changes) else { return };
+    if source.doc.buffer.edit(tx, &before, &Selection::point(end), EditKind::Other).is_ok() {
         source.doc.buffer.seal();
         source.doc.selection = Selection::point(end);
         bar.refresh(source);
@@ -204,9 +250,9 @@ fn replace_all(bar: &mut FindBar, source: &mut SourceEditor) -> usize {
     let b = &source.doc.buffer;
     let text = b.text();
     let mut changes = Vec::with_capacity(bar.matches.len());
-    for (s, e) in &bar.matches {
+    for (i, (s, e)) in bar.matches.iter().enumerate() {
         match bar.query.replacement_for(&text, b.char_to_byte(*s)..b.char_to_byte(*e), &replacement(bar)) {
-            Ok(with) => changes.push(Change { start: *s, end: *e, text: with }),
+            Ok(with) => changes.extend(match_changes(b, bar.pieces.get(i), (*s, *e), with)),
             Err(err) => {
                 bar.error = Some(err);
                 return 0;

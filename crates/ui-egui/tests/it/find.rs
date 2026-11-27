@@ -73,3 +73,23 @@ fn find_and_replace_in_the_formatted_view_see_its_text_and_replace_with_text() {
     h.run();
     assert_eq!(text(&mut h), "A \\textbf{50\\%} and a 50\\%.\n", "the replacement is not text as typed");
 }
+
+#[test]
+fn find_in_the_formatted_view_finds_words_over_a_styles_boundary_and_replace_keeps_the_style() {
+    let mut h = formatted_replace("Some \\textbf{bold} text here.\n");
+    h.get_by_label("Find").type_text("bold text");
+    h.run();
+    h.run();
+    assert!(
+        h.query_by_label_contains("of 1").is_some() || h.query_by_label_contains("1 result").is_some(),
+        "the words over the style's end are not found"
+    );
+    h.get_by_label("Replace with").click();
+    h.run();
+    h.get_by_label("Replace with").type_text("new words");
+    h.run();
+    h.get_by_label("Replace All").click();
+    h.run();
+    let after = text(&mut h);
+    assert!(after.contains("\\textbf{new words}") && after.contains("} here."), "the replacement lost the style's braces: {after:?}");
+}
