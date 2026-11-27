@@ -1517,6 +1517,130 @@ pub fn toggle_style(text: &str, pieces: &[Range<usize>], name: &str) -> Vec<Chan
     out
 }
 
+/// A style pressed with nothing selected (Bold, then typing): it waits in the view for the text
+/// typed next, and the source holds no empty `\textbf{}` meanwhile.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PendingStyle {
+    /// `textbf`, `textit`, `texttt`, or `emph` (Italic in emphasised text).
+    pub command: String,
+    /// Whether the text typed gets it (or loses it, typed in text that has it).
+    pub on: bool,
+}
+
+/// The styles pending after a style button is pressed with nothing selected: `command` added, as
+/// the opposite of what the text at the caret has (`styled_here`), or taken back when it was
+/// pending already (pressed twice).
+pub fn press_pending(pending: &mut Vec<PendingStyle>, command: &str, styled_here: bool) {
+    if let Some(i) = pending.iter().position(|p| p.command == command) {
+        pending.remove(i);
+    } else {
+        pending.push(PendingStyle { command: command.to_owned(), on: !styled_here });
+    }
+}
+
+/// Whether the button of `commands` (`["textit", "emph"]` for Italic) shows pressed with
+/// `pending`: what is pending for it, else `here` (the text at the caret).
+pub fn pending_shows(pending: &[PendingStyle], commands: &[&str], here: bool) -> bool {
+    pending.iter().find(|p| commands.contains(&p.command.as_str())).map_or(here, |p| p.on)
+}
+
+/// `typed` (source, escaped) typed at source offset `at` with the styles `pending`: in the
+/// commands of those turned on (`\textbf{typed}`, the caret in it after the text), and out of
+/// those turned off: after the command when the caret is at the end of its text, before it at
+/// its start, else in a gap made in it (`\textbf{ab}typed\textbf{cd}`). The styles inside the
+/// one left that are not turned off go on around the text. `None` when a style turned off is
+/// not one around the caret (it comes from a declaration, or something else is in between).
+pub fn styled_typing(text: &str, at: usize, typed: &str, pending: &[PendingStyle]) -> Option<SourceEdit> {
+    let point = typing_point(text, at);
+    let ons: Vec<&str> = pending.iter().filter(|p| p.on).map(|p| p.command.as_str()).collect();
+    let offs: Vec<&str> = pending.iter().filter(|p| !p.on).map(|p| p.command.as_str()).collect();
+    // Spaces typed first stay out of the styles (a style holds words).
+    let words = typed.trim_start_matches(' ');
+    let lead = typed.get(..typed.len() - words.len()).unwrap_or_default();
+    let wrap = |names: &[&str]| {
+        let open: String = names.iter().map(|n| format!("\\{n}{{")).collect();
+        (format!("{lead}{open}{words}{}", "}".repeat(names.len())), lead.len() + open.len() + words.len())
+    };
+    let made = |range: Range<usize>, source: String, caret: usize| {
+        let source_joined = joined(text, range.start, &source);
+        let caret = range.start + caret + (source_joined.len() - source.len());
+        Some(SourceEdit { changes: vec![change(range, source_joined)], caret })
+    };
+    if offs.is_empty() {
+        let (source, caret) = wrap(&ons);
+        return made(point..point, source, caret);
+    }
+    let tree = tree::parse(text);
+    let mut frames = Vec::new();
+    path(&tree, point, &mut frames);
+    // The styles around the caret, outermost first, up to the first frame that is not one.
+    let mut styles: Vec<(&Node, &str, &Arg)> = frames
+        .iter()
+        .rev()
+        .map_while(|f| match f {
+            Frame::Command { node, name, arg } if view::styled(name, Style::default()).is_some() => Some((*node, *name, *arg)),
+            _ => None,
+        })
+        .collect();
+    styles.reverse();
+    let o = styles.iter().position(|(_, name, _)| offs.contains(name))?;
+    let left = styles.get(o..).unwrap_or_default();
+    if !offs.iter().all(|off| left.iter().any(|(_, name, _)| name == off)) {
+        return None;
+    }
+    let keep: Vec<&str> = left.iter().skip(1).map(|(_, name, _)| *name).filter(|n| !offs.contains(n)).chain(ons.iter().copied()).collect();
+    let (source, caret) = wrap(&keep);
+    let (target, name, _) = *left.first()?;
+    // Only white space between each style's brace and the next one's command, or the caret.
+    let at_end = left.iter().enumerate().all(|(k, (_, _, a))| {
+        let from = left.get(k + 1).map_or(point, |(n, ..)| n.range.end);
+        text.get(from..a.inner.end).is_some_and(|s| s.trim().is_empty())
+    });
+    let at_start = left.iter().enumerate().all(|(k, (_, _, a))| {
+        let to = left.get(k + 1).map_or(point, |(n, ..)| n.range.start);
+        text.get(a.inner.start..to).is_some_and(|s| s.trim().is_empty())
+    });
+    if at_end {
+        made(target.range.end..target.range.end, source, caret)
+    } else if at_start {
+        made(target.range.start..target.range.start, source, caret)
+    } else if left.len() == 1 {
+        made(point..point, format!("}}{source}\\{name}{{"), caret + 1)
+    } else {
+        None
+    }
+}
+
+/// The empty styles an edit leaves the caret at source offset `at` in (`\textbf{|}`: the last
+/// letter of a bold word deleted), nested ones whole, and the styles they set, outermost first.
+pub fn emptied_styles(text: &str, at: usize) -> Option<(Range<usize>, Vec<PendingStyle>)> {
+    let r = empty_styles_at(text, at)?;
+    let tree = tree::parse(text);
+    let mut frames = Vec::new();
+    path(&tree, at, &mut frames);
+    let styles = frames
+        .iter()
+        .filter_map(|f| match f {
+            Frame::Command { node, name, .. } if r.start <= node.range.start && node.range.end <= r.end => {
+                Some(PendingStyle { command: (*name).to_owned(), on: true })
+            }
+            _ => None,
+        })
+        .collect();
+    Some((r, styles))
+}
+
+/// `changes` of `text`, the caret then at byte `caret` of the text after them, with the empty
+/// styles they leave the caret in taken out ([`emptied_styles`]): the changes, the caret, and the
+/// styles that wait for the text typed next instead (none when there were none).
+pub fn without_emptied(text: &str, changes: Vec<Change>, caret: usize) -> (Vec<Change>, usize, Vec<PendingStyle>) {
+    let new = apply(text, &changes);
+    let Some((r, styles)) = emptied_styles(&new, caret) else { return (changes, caret, Vec::new()) };
+    let mut without = new;
+    without.replace_range(r.clone(), "");
+    (minimal_change(0, text, &without).into_iter().collect(), r.start, styles)
+}
+
 /// A heading command (`section`) at source offset `at`: a heading there takes that command's
 /// name (or becomes a paragraph again when it has it already); a paragraph there becomes such a
 /// heading. `None` elsewhere.

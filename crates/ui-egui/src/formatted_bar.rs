@@ -92,7 +92,12 @@ const GROUPS: [(u8, &[(&str, &str)]); 5] = [
 /// The toolbar's buttons after the mode switch; the command chosen goes in `chosen`.
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, chosen: &mut Option<&'static str>) {
     let t = app.tokens;
-    let here = here(app);
+    let mut here = here(app);
+    // A style pressed with nothing selected shows pressed (or not) until text is typed.
+    let pending = crate::formatted_edit::pending_styles(app);
+    here.bold = texcraft_latex::edit::pending_shows(pending, &["textbf"], here.bold);
+    here.italic = texcraft_latex::edit::pending_shows(pending, &["textit", "emph"], here.italic);
+    here.code = texcraft_latex::edit::pending_shows(pending, &["texttt"], here.code);
     let names = heading_commands(app);
     let tip = |app: &App, label: &str, id: &str| match app.keys.shortcut_text(id) {
         Some(keys) => format!("{label} ({keys})"),

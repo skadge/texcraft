@@ -2,7 +2,7 @@
 //! window: the selection is a pair of source bytes found in the lines of the view each step, and
 //! each key or toolbar button makes the source edit the window makes.
 
-use texcraft_latex::edit::{self, Change, Doc, Pos, StyledBy};
+use texcraft_latex::edit::{self, Change, Doc, PendingStyle, Pos, StyledBy};
 use texcraft_latex::table::{self, Align, Borders};
 use texcraft_latex::view::{self, ListKind};
 
@@ -84,11 +84,15 @@ pub struct Editor {
     pub anchor: usize,
     pub head: usize,
     pub hint: Option<usize>,
+    /// The styles pressed with nothing selected, for the text typed next, and the caret and text
+    /// they were pressed at (moving the caret or another edit drops them, as in the window).
+    pub pending: Vec<PendingStyle>,
+    pending_at: Option<(usize, String)>,
 }
 
 impl Editor {
     pub fn new(text: &str) -> Self {
-        let mut e = Editor { text: text.to_owned(), anchor: 0, head: 0, hint: None };
+        let mut e = Editor { text: text.to_owned(), anchor: 0, head: 0, hint: None, pending: Vec::new(), pending_at: None };
         // The caret starts where the window puts it: the first stop of the first line.
         let v = e.shown();
         if let Some(b) = v.lines.first().and_then(|l| l.line.first_stop().and_then(|s| l.line.source_at(s))) {
@@ -115,6 +119,13 @@ impl Editor {
         check_changes(&self.text, changes)?;
         let (changes, after) =
             if self.anchor == self.head { edit::leaving_empty_markup(&self.text, self.head, changes, after) } else { (changes.to_vec(), after) };
+        // An empty style the edit leaves the caret in goes; its style waits for the text typed.
+        let (changes, after, emptied) = if after.0 == after.1 {
+            let (changes, caret, styles) = edit::without_emptied(&self.text, changes, after.0);
+            (changes, (caret, caret), styles)
+        } else {
+            (changes, after, Vec::new())
+        };
         let (changes, added) = edit::kept_apart(&self.text, &changes);
         let after = (edit::kept_apart_offset(&added, after.0), edit::kept_apart_offset(&added, after.1));
         let changes = changes.as_slice();
@@ -131,11 +142,24 @@ impl Editor {
         done.steps += 1;
         self.text = new;
         (self.anchor, self.head, self.hint) = (after.0, after.1, None);
+        if !emptied.is_empty() {
+            self.pending = emptied;
+            self.arm();
+        }
         Ok(())
+    }
+
+    /// The pending styles kept for the caret and text as they are now.
+    fn arm(&mut self) {
+        self.pending_at = Some((self.head, self.text.clone()));
     }
 
     /// Runs `op` on the view `v` of the text.
     pub fn run(&mut self, op: &Op) -> Result<Done, Broken> {
+        // The caret moved or the text changed since a style was pressed: it is no longer pending.
+        if self.anchor != self.head || self.pending_at.as_ref().is_none_or(|(at, text)| *at != self.head || *text != self.text) {
+            self.pending.clear();
+        }
         let v = self.shown();
         let doc = v.doc();
         let mut done = Done::default();
@@ -360,6 +384,23 @@ impl Editor {
             done.typed = more.typed;
             return Ok(());
         }
+        if a == h && !self.pending.is_empty() {
+            // A space is not styled (it would show nothing): the style waits for the next word.
+            if s.chars().all(|c| c == ' ') {
+                let pending = std::mem::take(&mut self.pending);
+                let source = edit::joined(&self.text, self.insertion(&v.doc(), (a, h)), s);
+                done.typed = Some(s.to_owned());
+                self.replace(v, (a, h), &source, done)?;
+                self.pending = pending;
+                self.arm();
+                return Ok(());
+            }
+            if let Some(e) = edit::styled_typing(&self.text, self.head, &edit::escape(s), &self.pending) {
+                done.typed = Some(s.to_owned());
+                self.pending.clear();
+                return self.commit(&e.changes, (e.caret, e.caret), done);
+            }
+        }
         let at = self.head;
         let source = edit::joined(&self.text, self.insertion(&v.doc(), (a, h)), &edit::escape(s));
         done.typed = Some(s.to_owned());
@@ -514,14 +555,23 @@ impl Editor {
         {
             return self.commit(&[Change { range: r.clone(), text: String::new() }], (r.start, r.start), done);
         }
-        let empty = empty.is_some();
-        let (a, h) = if a == h && !empty { word_at(v, h).unwrap_or((a, h)) } else { (a.min(h), a.max(h)) };
+        let (a, h) = if a == h { word_inside(v, h).unwrap_or((a, h)) } else { (a.min(h), a.max(h)) };
         if a == h {
-            // Where typing goes (in a heading or a caption, not after its label).
-            let at = edit::typing_point(&self.text, self.head);
-            let inserted = format!("\\{name}{{}}");
-            let caret = at + inserted.len() - 1;
-            return self.commit(&[Change { range: at..at, text: inserted }], (caret, caret), done);
+            // Nothing to wrap: the style waits for the text typed next.
+            let here = edit::here(&self.text, self.head);
+            let styled = match name {
+                "textbf" => here.bold,
+                "texttt" => here.code,
+                _ => here.italic,
+            };
+            let mut pending = self.pending.clone();
+            edit::press_pending(&mut pending, name, styled);
+            // A style it cannot take off here (a declaration's) is not pending.
+            if pending.is_empty() || edit::styled_typing(&self.text, self.head, "x", &pending).is_some() {
+                self.pending = pending;
+                self.arm();
+            }
+            return Ok(());
         }
         let mut pieces = Vec::new();
         for i in a.line..=h.line {
@@ -544,6 +594,14 @@ impl Editor {
         let end = edit::typing_point(&self.text, if a == h { self.head } else { doc.source(a.max(h)).unwrap_or(self.head) });
         let after_word = self.text.get(..end).and_then(|s| s.chars().next_back()).is_some_and(char::is_alphanumeric);
         let inserted = if after_word { format!("~{source}") } else { source.to_owned() };
+        // In the styles pressed before it.
+        if a == h
+            && !self.pending.is_empty()
+            && let Some(e) = edit::styled_typing(&self.text, self.head, &inserted, &self.pending)
+        {
+            self.pending.clear();
+            return self.commit(&e.changes, (e.caret, e.caret), done);
+        }
         let caret = end + inserted.len();
         self.commit(&[Change { range: end..end, text: inserted }], (caret, caret), done)
     }
@@ -707,6 +765,16 @@ fn word_at(v: &Shown, h: Pos) -> Option<(Pos, Pos)> {
     let s = if line.is_stop(s) { s } else { line.next_stop(s)? };
     let e = if line.is_stop(e) { e } else { line.prev_stop(e)? };
     (s < e).then_some((Pos { line: h.line, at: s }, Pos { line: h.line, at: e }))
+}
+
+/// The word around `h` when `h` is inside it (letters on both sides), as a style button takes it.
+fn word_inside(v: &Shown, h: Pos) -> Option<(Pos, Pos)> {
+    let ViewLine { chars, .. } = v.lines.get(h.line)?;
+    let is_word = |i: usize| chars.get(i).is_some_and(|c| c.is_alphanumeric());
+    if h.at == 0 || !is_word(h.at) || !is_word(h.at - 1) {
+        return None;
+    }
+    word_at(v, h)
 }
 
 fn word_stop(v: &Shown, h: Pos, left: bool) -> Option<usize> {

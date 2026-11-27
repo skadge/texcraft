@@ -206,11 +206,13 @@ fn leftovers(text: &str, caret: usize) -> Leftovers {
                 Kind::Command { name, args, .. } => {
                     let empty =
                         args.iter().rev().find(|a| !a.optional).filter(|a| text.get(a.inner.clone()).is_some_and(|s| s.trim_ascii().is_empty()));
-                    if let Some(a) = empty
-                        && !(a.inner.start <= caret && caret <= a.inner.end)
-                    {
+                    // An empty heading is a line the caret may stand in (Heading 1 pressed on
+                    // an empty line); a style pressed with nothing selected waits in the view, so
+                    // an empty one is a leftover even where the caret is.
+                    if let Some(a) = empty {
+                        let holds_caret = a.inner.start <= caret && caret <= a.inner.end;
                         if view::heading_level(name).is_some() {
-                            out.headings += 1;
+                            out.headings += usize::from(!holds_caret);
                         } else if STYLES.contains(&name.as_str()) && !followed_by_letter(text, nodes, i) {
                             out.styles += 1;
                         }
@@ -419,10 +421,11 @@ fn expected_view(before: &Before<'_>, op: &Op, done: &Done, after: &Shown) -> Re
         return Ok(());
     }
     // A paste made after a deletion of structure reads where that deletion left the caret (a
-    // heading, where lines that start with a bullet or a number stay text).
+    // heading, where lines that start with a bullet or a number stay text; the body, where they
+    // make a list).
     if let (Op::Paste(s), Some((lo, hi))) = (op, done.selection_deleted)
         && done.steps > 1
-        && words(&edited(before.shown, (lo.line, lo.at), (hi.line, hi.at), s)).to_lowercase() == g
+        && [s.clone(), pasted(s)].iter().any(|s| words(&edited(before.shown, (lo.line, lo.at), (hi.line, hi.at), s)).to_lowercase() == g)
     {
         return Ok(());
     }
