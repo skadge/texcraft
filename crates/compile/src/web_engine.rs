@@ -297,6 +297,14 @@ impl Platform for Web {
     }
 }
 
+/// The error for a run that crashed: `why`, then the last lines the engine wrote that are not
+/// its records (its panic message, if it panicked), which say what happened.
+fn crashed(why: &str, output: &str) -> String {
+    let last: Vec<&str> = output.lines().filter(|l| !l.starts_with('{') && !l.trim().is_empty()).collect();
+    let tail = last[last.len().saturating_sub(5)..].join("\n");
+    if tail.is_empty() { format!("the typesetting engine stopped: {why}") } else { format!("the typesetting engine stopped: {why}\n{tail}") }
+}
+
 /// A 64-bit FNV-1a hash, to name the caches after what they depend on.
 fn fnv(bytes: &[u8]) -> u64 {
     bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x100_0000_01b3))
@@ -491,6 +499,9 @@ struct Engine {
     written: HashSet<String>,
     /// The memory image of the last build's preamble, for the arguments it was taken with.
     snapshot: Option<(String, Image)>,
+    /// A run resumed from a snapshot crashed in this visit (#56): builds start from the start,
+    /// without snapshots, until the page is reloaded.
+    no_resume: bool,
     /// The site's files of the tree by folder (site paths and sizes), for fetching a file's
     /// neighbours with it.
     folders: HashMap<String, Vec<(String, u64)>>,
@@ -578,6 +589,7 @@ impl Engine {
             web,
             written: HashSet::new(),
             snapshot: None,
+            no_resume: false,
             folders: HashMap::new(),
             kept: Kept::default(),
             lists: HashMap::new(),
@@ -764,8 +776,8 @@ impl Engine {
             *self.web.out.borrow_mut() = Out { job: id, pdf: pdf.clone(), reported: std::mem::take(&mut reported), ..Out::default() };
             self.web.fetched.borrow_mut().run_started = js_sys::Date::now();
             let wasi = Wasi::new(self.fs.clone(), self.web.clone(), args.clone(), env.clone());
-            let instance = Instance::new(&module, wasi, true).map_err(|e| format!("instantiating retex: {e:?}"))?;
-            let resumed = export.is_none() && matches!(&self.snapshot, Some((k, _)) if *k == key);
+            let instance = Instance::new(&module, wasi, !self.no_resume).map_err(|e| format!("instantiating retex: {e:?}"))?;
+            let resumed = export.is_none() && !self.no_resume && matches!(&self.snapshot, Some((k, _)) if *k == key);
             let (ended, instance) = match (&self.snapshot, resumed) {
                 (Some((_, image)), true) => instance.resume(image),
                 _ => instance.start(),
@@ -792,7 +804,14 @@ impl Engine {
                     log::info!("build {id}: run {stops} stopped to fetch {source}");
                     self.fetch_for(id, &source).await?;
                 }
-                Ended::Crashed(why) => return Err(format!("the typesetting engine stopped: {why}")),
+                Ended::Crashed(why) if resumed => {
+                    // Resuming from the preamble's snapshot failed (#56): from the start, as a
+                    // reload would, and without snapshots for the rest of the visit.
+                    log::warn!("build {id}: the run resumed from the preamble's snapshot stopped ({why}); running from the start");
+                    self.snapshot = None;
+                    self.no_resume = true;
+                }
+                Ended::Crashed(why) => return Err(crashed(&why, &std::mem::take(&mut self.web.out.borrow_mut().text))),
             }
         };
         self.fs.remove("/.retex-resume");
