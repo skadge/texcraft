@@ -976,6 +976,7 @@ pub(crate) fn parent_chosen(app: &mut App, parent: &Path) {
     if let Some(Dialog::Import(form)) = app.view.dialog.as_mut() {
         form.into.edited = false;
     }
+    crate::where_step::parent_chosen(app);
 }
 
 /// The Zip File card's file was chosen (the desktop): it is unzipped into a new folder in the
@@ -1304,7 +1305,7 @@ fn unavailable(ui: &mut egui::Ui, t: &Tokens, source: Source, acts: &mut Vec<Act
 
 /// A row of the form: its label beside the field (under it on a phone); the label's id names the
 /// field.
-fn row<R>(ui: &mut egui::Ui, t: &Tokens, narrow: bool, label: &str, add: impl FnOnce(&mut egui::Ui, egui::Id) -> R) -> R {
+pub(crate) fn row<R>(ui: &mut egui::Ui, t: &Tokens, narrow: bool, label: &str, add: impl FnOnce(&mut egui::Ui, egui::Id) -> R) -> R {
     if narrow {
         let l = ui.label(RichText::new(label).color(t.text_muted));
         let out = add(ui, l.id);
@@ -1482,13 +1483,40 @@ fn progress(ui: &mut egui::Ui, t: &Tokens, phase: ClonePhase) {
 
 /// The Into row: the folder's path and Change…, checked in place. Whether it can be used.
 fn into_row(ui: &mut egui::Ui, t: &Tokens, into: &mut Into, info: &Info, acts: &mut Vec<Act>) -> bool {
-    let narrow = info.narrow;
-    row(ui, t, narrow, tl!("Into"), |ui, label| {
-        let edit = egui::TextEdit::singleline(&mut into.path).desired_width(f32::INFINITY).margin(vec2(8.0, 6.0));
+    let mut change = false;
+    let shown = FolderRow { label: tl!("Into"), narrow: info.narrow, has_parent: info.parent.is_some() };
+    let (ok, _) = folder_field(ui, t, &shown, &mut into.path, &mut into.edited, &mut change);
+    if change {
+        acts.push(Act::ChangeFolder);
+    }
+    ok
+}
+
+/// How a new folder's row is shown: its label, on a phone or not, and whether a parent folder is
+/// known for the default.
+pub(crate) struct FolderRow<'a> {
+    pub label: &'a str,
+    pub narrow: bool,
+    pub has_parent: bool,
+}
+
+/// A new folder's row: its full path and Change…, checked in place (a folder that is there and
+/// not empty is said, with the next free name). Whether it can be used, and the path's field.
+pub(crate) fn folder_field(
+    ui: &mut egui::Ui,
+    t: &Tokens,
+    shown: &FolderRow<'_>,
+    path: &mut String,
+    edited: &mut bool,
+    change: &mut bool,
+) -> (bool, Option<egui::Response>) {
+    let (narrow, has_parent) = (shown.narrow, shown.has_parent);
+    row(ui, t, narrow, shown.label, |ui, label| {
+        let edit = egui::TextEdit::singleline(path).desired_width(f32::INFINITY).margin(vec2(8.0, 6.0));
         let field = if narrow {
             let field = ui.add(edit).labelled_by(label);
             if ui.button(tl!("Change…")).clicked() {
-                acts.push(Act::ChangeFolder);
+                *change = true;
             }
             field
         } else {
@@ -1496,42 +1524,42 @@ fn into_row(ui: &mut egui::Ui, t: &Tokens, into: &mut Into, info: &Info, acts: &
                 let room = ui.available_width() - 96.0;
                 let field = ui.add_sized(vec2(room.max(120.0), 30.0), edit).labelled_by(label);
                 if ui.add(egui::Button::new(tl!("Change…")).min_size(vec2(88.0, 30.0))).clicked() {
-                    acts.push(Act::ChangeFolder);
+                    *change = true;
                 }
                 field
             })
             .inner
         };
         if field.changed() {
-            into.edited = true;
+            *edited = true;
         }
-        let path = PathBuf::from(into.path.trim());
-        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        if into.path.trim().is_empty() || info.parent.is_none() && !into.edited {
+        let typed = PathBuf::from(path.trim());
+        let name = typed.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        if path.trim().is_empty() || !has_parent && !*edited {
             hint(ui, t, tl!("Choose where to put the project: Change…"), Tone::Plain);
-            return false;
+            return (false, Some(field));
         }
-        if into.path.trim_end().ends_with(['/', '\\']) {
+        if path.trim_end().ends_with(['/', '\\']) {
             // No project chosen yet: its name comes with it.
             hint(ui, t, tl!("The new folder takes the project's name."), Tone::Plain);
-            return false;
+            return (false, Some(field));
         }
-        if name.is_empty() || !path.is_absolute() {
+        if name.is_empty() || !typed.is_absolute() {
             hint(ui, t, tl!("Give the whole path of the new folder."), Tone::Bad);
-            return false;
+            return (false, Some(field));
         }
-        if !texcraft_engine::folder_free(&path) {
-            let parent = path.parent().unwrap_or(&path);
+        if !texcraft_engine::folder_free(&typed) {
+            let parent = typed.parent().unwrap_or(&typed);
             let free = texcraft_engine::free_folder(parent, &name);
             let free_name = free.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             hint(ui, t, &tl!("A folder named {name} is there already.").replace("{name}", &name), Tone::Bad);
             if ui.button(tl!("Use {name}").replace("{name}", &free_name)).clicked() {
-                into.path = free.display().to_string();
-                into.edited = true;
+                *path = free.display().to_string();
+                *edited = true;
             }
-            return false;
+            return (false, Some(field));
         }
-        true
+        (true, Some(field))
     })
 }
 

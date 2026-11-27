@@ -2668,3 +2668,45 @@ unit	{n} MB	{n} MB
 	{host} · token	{host} · token
 	Token for {username}	Token de {username}
 	Token kept	Token guardado
+	A folder of your choice	Uma pasta à sua escolha
+	Asking where you can make repositories…	A consultar onde pode criar repositórios…
+	Back to templates	Voltar aos modelos
+	Create Project	Criar projeto
+	Created {project} on GitHub, and the project is in {folder}, but sending it did not work: {why}	{project} foi criado no GitHub e o projeto está em {folder}, mas o envio não funcionou: {why}
+	Created {project} on GitHub.	{project} criado no GitHub.
+	Created {project} on GitLab, and the project is in {folder}, but sending it did not work: {why}	{project} foi criado no GitLab e o projeto está em {folder}, mas o envio não funcionou: {why}
+	Created {project} on GitLab.	{project} criado no GitLab.
+	Everyone signed in to this server can see it.	Qualquer pessoa com sessão iniciada neste servidor o pode ver.
+	GitLab, GitHub or your server	GitLab, GitHub ou o seu servidor
+	Kept in this browser	Guardado neste navegador
+	Making the new project…	A criar o novo projeto…
+	Making {name} on GitHub…	A criar {name} no GitHub…
+	Making {name} on GitLab…	A criar {name} no GitLab…
+	New project from the template {template}	Novo projeto a partir do modelo {template}
+	Not signed in to {host}.	Sem sessão iniciada em {host}.
+	Nothing is lost: Try Again sends it now, and Sync sends it later.	Nada se perde: Tentar novamente envia-o agora e Sincronizar envia-o mais tarde.
+	Repository	Repositório
+	Send Later	Enviar mais tarde
+	Sending it did not work: {why}	O envio não funcionou: {why}
+	Sending the project to GitHub…	A enviar o projeto para o GitHub…
+	Sending the project to GitLab…	A enviar o projeto para o GitLab…
+	Sign In	Iniciar sessão
+	Sign in again	Inicie sessão novamente
+	The project is kept in this browser, under this name.	O projeto fica guardado neste navegador, com este nome.
+	This Browser	Este navegador
+	This Computer	Este computador
+	To start on Overleaf, create the project there, then Import it.	Para começar no Overleaf, crie lá o projeto e depois importe-o.
+	Where to Keep It	Onde guardar
+	Where to keep it	Onde guardar
+	{project} exists already: choose another name.	{project} já existe: escolha outro nome.
+	{project} is free.	{project} está livre.
+@id	forge.name_available	Se um nome de repositório está livre
+@msg	GitHub keeps internal repositories for an enterprise's organisations: choose private or public.	O GitHub reserva os repositórios internos às organizações de uma empresa: escolha privado ou público.
+@msg	New project from the template {title}	Novo projeto a partir do modelo {title}
+@msg	The new project has nothing to push.	O novo projeto não tem nada para enviar.
+@msg	visibility: say private, internal or public, not {id}.	visibility: indique private, internal ou public, não {id}.
+@msg	{project} was made on {forge} with the template as its first commit, but the project could not be made in this browser: {e}	{project} foi criado no {forge} com o modelo como primeiro commit, mas não foi possível criar o projeto neste navegador: {e}
+@msg	{project} was made on {forge}, but the template could not be written into {folder}: {e} The repository is empty.	{project} foi criado no {forge}, mas não foi possível escrever o modelo em {folder}: {e} O repositório está vazio.
+	Owner	Proprietário
+	You, or a group in which you can make projects.	Você, ou um grupo onde pode criar projetos.
+	You, or an organisation in which you can make repositories.	Você, ou uma organização onde pode criar repositórios.

@@ -31,8 +31,8 @@ const CATEGORIES: &[(&str, &str, &str)] = &[
 /// A download running on its own thread: one template, or every one.
 pub(crate) struct Job {
     rx: Receiver<Result<String, String>>,
-    /// What to do when it has finished: create a project in this folder, or nothing.
-    then: Option<(String, String)>,
+    /// What to do when it has finished: `project.from_template` with these parameters, or nothing.
+    then: Option<serde_json::Value>,
     pub label: String,
 }
 
@@ -42,7 +42,13 @@ pub(crate) struct Gallery {
     pub open: bool,
     category: usize,
     search: String,
-    selected: Option<String>,
+    pub selected: Option<String>,
+    /// The second step, where the project is kept, once a template was chosen.
+    pub place_step: Option<Box<crate::where_step::WhereStep>>,
+    /// The second step as Back left it: Create Project… on the same template returns to it.
+    pub left_step: Option<Box<crate::where_step::WhereStep>>,
+    /// Create Project… gets the keyboard next frame (back from the second step).
+    pub focus_create: bool,
     pub job: Option<Job>,
     pub error: Option<String>,
     /// The template a folder is being picked for.
@@ -62,6 +68,8 @@ impl App {
     /// Opens the gallery (File › New Project from Template, the start page's New Project).
     pub(crate) fn open_gallery(&mut self) {
         self.gallery.open = true;
+        self.gallery.place_step = None;
+        self.gallery.left_step = None;
         self.gallery.error = None;
         self.gallery.focus_search = true;
     }
@@ -89,7 +97,7 @@ impl App {
     }
 
     /// Starts downloading `ids` on a thread; `then` creates a project from the first when done.
-    pub(crate) fn start_download(&mut self, ids: Vec<String>, then: Option<(String, String)>, label: String) {
+    pub(crate) fn start_download(&mut self, ids: Vec<String>, then: Option<serde_json::Value>, label: String) {
         if self.session.library().is_some() {
             // The browser: the shell fetches them.
             let (tx, rx) = channel();
@@ -122,13 +130,34 @@ impl App {
         }
     }
 
-    /// Starts a project from template `id`: asks for a new or empty folder, then downloads the
-    /// template if it is not kept yet (that one only) and opens the project made from it.
+    /// Starts a project from template `id`: the second step asks where it is kept.
     pub(crate) fn create_from_template(&mut self, id: String) {
         if self.gallery.job.is_some() {
             return;
         }
+        crate::where_step::open(self, id);
+    }
+
+    /// Makes the project with `project.from_template`'s `params`: the second step's, or the
+    /// example's folder or name.
+    pub(crate) fn make_from_template(&mut self, params: serde_json::Value) {
+        if self.gallery.place_step.is_some() {
+            crate::where_step::run(self, params);
+        } else if self.run("project.from_template", params).is_some() {
+            self.template_project_opened();
+        } else {
+            self.gallery.error = self.view.status.take().map(|(m, _)| m);
+        }
+    }
+
+    /// The example project: asks for a new or empty folder (or, in the browser, a name), then
+    /// downloads it if it is not kept yet and opens the project made from it.
+    fn create_example(&mut self, id: String) {
+        if self.gallery.job.is_some() {
+            return;
+        }
         self.gallery.error = None;
+        self.gallery.place_step = None;
         if self.session.library().is_some() {
             // The browser: fetched first if it is not yet, then named.
             let kept = Catalog::builtin().ok().and_then(|c| c.find(&id).ok().map(|t| self.template_kept(t))).unwrap_or(false);
@@ -145,7 +174,7 @@ impl App {
             // Without pickers the folder is typed, and the template is copied (and downloaded
             // where downloads exist) by the command itself.
             let prompt = crate::dialogs::Prompt {
-                title: tl!("New Project from Template"),
+                title: tl!("Open the Example Project"),
                 label: tl!("A new or empty folder for the project"),
                 value: String::new(),
                 action: tl!("Create"),
@@ -163,7 +192,7 @@ impl App {
     pub(crate) fn open_example(&mut self) {
         let example = Catalog::builtin().ok().and_then(|c| c.templates().iter().find(|t| t.is_example()).map(|t| t.id.clone()));
         match example {
-            Some(id) => self.create_from_template(id),
+            Some(id) => self.create_example(id),
             None => self.view.status = Some((tl!("This build has no example project.").to_owned(), true)),
         }
     }
@@ -188,6 +217,8 @@ impl App {
     /// A project made from a template was opened: the editor shows it.
     pub(crate) fn template_project_opened(&mut self) {
         self.gallery.open = false;
+        self.gallery.place_step = None;
+        self.gallery.left_step = None;
         self.start = false;
         self.remember_project();
         self.pdf = crate::pdf_view::PdfView::default();
@@ -198,7 +229,7 @@ impl App {
     pub(crate) fn template_folder_chosen(&mut self, folder: String) {
         let Some(id) = self.gallery.pending.take() else { return };
         let label = tl!("Downloading the template from TeX Live…").to_owned();
-        self.start_download(vec![id.clone()], Some((id, folder)), label);
+        self.start_download(vec![id.clone()], Some(json!({"template": id, "folder": folder})), label);
     }
 
     /// Checks the running download, each frame.
@@ -216,13 +247,7 @@ impl App {
                 self.view.status = Some((e.clone(), true));
                 self.gallery.error = Some(e);
             }
-            (Ok(_), Some((template, folder))) => {
-                if self.run("project.from_template", json!({"template": template, "folder": folder})).is_some() {
-                    self.template_project_opened();
-                } else {
-                    self.gallery.error = self.view.status.take().map(|(m, _)| m);
-                }
-            }
+            (Ok(_), Some(params)) => self.make_from_template(params),
             (Ok(_), None) => {
                 // The browser: the fetched template is named next.
                 if self.session.library().is_some()
@@ -237,6 +262,10 @@ impl App {
 
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     if !app.gallery.open {
+        return;
+    }
+    if app.gallery.place_step.is_some() {
+        crate::where_step::show(app, ctx);
         return;
     }
     let t = app.tokens;
@@ -439,7 +468,7 @@ fn details(app: &mut App, ui: &mut egui::Ui, t: &Tokens, listing: &Listing<'_>, 
 }
 
 /// Create, or the download's progress while one runs.
-fn create_button(app: &App, ui: &mut egui::Ui, t: &Tokens, selected: Option<&Template>, create: &mut Option<String>) {
+fn create_button(app: &mut App, ui: &mut egui::Ui, t: &Tokens, selected: Option<&Template>, create: &mut Option<String>) {
     if let Some(job) = &app.gallery.job {
         ui.label(RichText::new(&job.label).color(t.text_muted));
         let (rect, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
@@ -448,7 +477,12 @@ fn create_button(app: &App, ui: &mut egui::Ui, t: &Tokens, selected: Option<&Tem
     }
     let label = RichText::new(tl!("Create Project…")).color(t.on_accent).font(t.strong());
     let button = egui::Button::new(label).fill(t.accent).stroke(egui::Stroke::NONE).min_size(vec2(140.0, 32.0));
-    if ui.add_enabled(selected.is_some(), button).clicked() {
+    let r = ui.add_enabled(selected.is_some(), button);
+    if app.gallery.focus_create && selected.is_some() {
+        app.gallery.focus_create = false;
+        r.request_focus();
+    }
+    if r.clicked() {
         *create = selected.map(|t| t.id.clone());
     }
 }

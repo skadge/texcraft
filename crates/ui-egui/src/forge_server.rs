@@ -19,6 +19,8 @@ pub(crate) enum Back {
     Settings,
     /// Import a Project, as it was (its GitLab Server page).
     Import(Box<crate::import::ImportForm>),
+    /// New Project's "Where to Keep It".
+    NewProject,
     /// Nowhere.
     Close,
 }
@@ -210,6 +212,12 @@ fn go_back(app: &mut App, back: Back) {
         Back::Settings => Some(Dialog::Settings),
         Back::Import(form) => {
             crate::import::back_from_server(app, form);
+            return;
+        }
+        Back::NewProject => {
+            if !crate::where_step::resume(app) {
+                app.view.dialog = None;
+            }
             return;
         }
         Back::Close => None,

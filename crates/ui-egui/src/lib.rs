@@ -69,6 +69,7 @@ mod top_bar;
 mod touch;
 pub mod ui_cmd;
 mod updates;
+mod where_step;
 pub mod widgets;
 mod window;
 

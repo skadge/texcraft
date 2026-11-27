@@ -2668,3 +2668,45 @@ unit	{n} MB	{n} MB
 	{host} · token	{host} · Token
 	Token for {username}	Token für {username}
 	Token kept	Token gespeichert
+	A folder of your choice	Ein Ordner Ihrer Wahl
+	Asking where you can make repositories…	Es wird abgefragt, wo Sie Repositorys anlegen können …
+	Back to templates	Zurück zu den Vorlagen
+	Create Project	Projekt erstellen
+	Created {project} on GitHub, and the project is in {folder}, but sending it did not work: {why}	{project} wurde auf GitHub erstellt und das Projekt liegt in {folder}, aber das Senden hat nicht geklappt: {why}
+	Created {project} on GitHub.	{project} auf GitHub erstellt.
+	Created {project} on GitLab, and the project is in {folder}, but sending it did not work: {why}	{project} wurde auf GitLab erstellt und das Projekt liegt in {folder}, aber das Senden hat nicht geklappt: {why}
+	Created {project} on GitLab.	{project} auf GitLab erstellt.
+	Everyone signed in to this server can see it.	Alle, die auf diesem Server angemeldet sind, können es sehen.
+	GitLab, GitHub or your server	GitLab, GitHub oder Ihr Server
+	Kept in this browser	In diesem Browser gespeichert
+	Making the new project…	Das neue Projekt wird erstellt …
+	Making {name} on GitHub…	{name} wird auf GitHub erstellt …
+	Making {name} on GitLab…	{name} wird auf GitLab erstellt …
+	New project from the template {template}	Neues Projekt aus der Vorlage {template}
+	Not signed in to {host}.	Nicht bei {host} angemeldet.
+	Nothing is lost: Try Again sends it now, and Sync sends it later.	Nichts geht verloren: „Erneut versuchen“ sendet es jetzt, „Synchronisieren“ später.
+	Repository	Repository
+	Send Later	Später senden
+	Sending it did not work: {why}	Das Senden hat nicht geklappt: {why}
+	Sending the project to GitHub…	Das Projekt wird an GitHub gesendet …
+	Sending the project to GitLab…	Das Projekt wird an GitLab gesendet …
+	Sign In	Anmelden
+	Sign in again	Erneut anmelden
+	The project is kept in this browser, under this name.	Das Projekt wird unter diesem Namen in diesem Browser gespeichert.
+	This Browser	Dieser Browser
+	This Computer	Dieser Computer
+	To start on Overleaf, create the project there, then Import it.	Um auf Overleaf zu beginnen, erstellen Sie das Projekt dort und importieren Sie es dann.
+	Where to Keep It	Wo es liegen soll
+	Where to keep it	Wo es liegen soll
+	{project} exists already: choose another name.	{project} gibt es schon: Wählen Sie einen anderen Namen.
+	{project} is free.	{project} ist frei.
+@id	forge.name_available	Ist ein Repository-Name frei
+@msg	GitHub keeps internal repositories for an enterprise's organisations: choose private or public.	GitHub sieht interne Repositorys nur für Organisationen eines Unternehmens vor: Wählen Sie privat oder öffentlich.
+@msg	New project from the template {title}	Neues Projekt aus der Vorlage {title}
+@msg	The new project has nothing to push.	Das neue Projekt hat nichts zu senden.
+@msg	visibility: say private, internal or public, not {id}.	visibility: private, internal oder public angeben, nicht {id}.
+@msg	{project} was made on {forge} with the template as its first commit, but the project could not be made in this browser: {e}	{project} wurde auf {forge} mit der Vorlage als erstem Commit erstellt, aber das Projekt konnte in diesem Browser nicht angelegt werden: {e}
+@msg	{project} was made on {forge}, but the template could not be written into {folder}: {e} The repository is empty.	{project} wurde auf {forge} erstellt, aber die Vorlage konnte nicht in {folder} geschrieben werden: {e} Das Repository ist leer.
+	Owner	Eigentümer
+	You, or a group in which you can make projects.	Sie oder eine Gruppe, in der Sie Projekte anlegen können.
+	You, or an organisation in which you can make repositories.	Sie oder eine Organisation, in der Sie Repositorys anlegen können.

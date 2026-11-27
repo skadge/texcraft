@@ -832,8 +832,16 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
                 Some("open") => opened(app, &done),
                 Some("pull") => pulled(app, &done),
                 Some("create_repository") => crate::forge_save::saved(app, &done),
-                Some("owners") => crate::forge_save::owners_listed(app, &done),
-                Some("git_push") => crate::history::pushed(app, &done),
+                Some("owners") => {
+                    crate::forge_save::owners_listed(app, &done);
+                    crate::where_step::owners_listed(app, &done);
+                }
+                Some("name_available") => crate::where_step::name_checked(app, Ok(&done)),
+                Some("new_project") => crate::where_step::created(app, &done),
+                Some("git_push") => {
+                    crate::history::pushed(app, &done);
+                    crate::where_step::resent(app, &done);
+                }
                 Some("git_pull") => crate::history::git_pulled(app, &done),
                 Some("sync") => crate::sync::synced(app, &done),
                 Some("clone") => crate::import::cloned(app, &done),
@@ -896,7 +904,7 @@ fn failed(app: &mut App, was: Option<&str>, e: String) {
     if crate::import::failed(app, was, &e) {
         return;
     }
-    if crate::forge_save::failed(app, was, &e) || crate::sync::failed(app, was, &e) {
+    if crate::forge_save::failed(app, was, &e) || crate::where_step::failed(app, was, &e) || crate::sync::failed(app, was, &e) {
         return;
     }
     if std::mem::take(&mut app.forge_check.quiet) {

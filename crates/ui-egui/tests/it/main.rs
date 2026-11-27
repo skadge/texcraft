@@ -45,6 +45,7 @@ mod languages;
 mod log_copy;
 mod menu_bar;
 mod narrow;
+mod new_project;
 mod outline;
 mod output_log;
 mod paste;
