@@ -117,7 +117,7 @@ convention) before starting a released AppImage: it is then offered the latest r
   `ln -s TeXCraft-X.Y.Z-x86_64.AppImage texcraft-cli; ./texcraft-cli mcp --automation-read-root DIR --automation-write-root DIR`.
 - The build worker is the app started again from `std::env::current_exe()`, which is
   `usr/bin/texcraft` inside the mounted image; the mount lasts while the app runs.
-- TeX Live: an installed TeX Live, or retex's own tree in `~/.cache/retex/`, as for a source build.
+- TeX Live: the binaries carry retex's bundle of TeX Live 2026 packages (retex's feature `bundled`, about 9.7 MB), unpacked once into `~/.cache/retex/bundle/`; an installed TeX Live of the same year comes first, and other packages are downloaded into `~/.cache/retex/texlive/`, as for a source build.
 
 ### Flatpak
 
@@ -125,9 +125,10 @@ convention) before starting a released AppImage: it is then offered the latest r
 - Permissions (the manifest explains each): Wayland with X11 as a fallback, the GPU, the network
   (TeX Live downloads, templates, the control channel on the loopback) and the home folder
   (projects as folders, opened by path, with files written beside them).
-- TeX Live inside the sandbox: the host's TeX Live is not visible, so retex makes its own tree in
-  `~/.var/app/io.gitlab.severin_lemaignan.TeXCraft/cache/retex/texlive/` and the first build downloads its
-  bootstrap packages. TeXCraft's settings and kept templates are under
+- TeX Live inside the sandbox: the host's TeX Live is not visible; retex builds with its bundle of
+  TeX Live packages (compiled in, unpacked into
+  `~/.var/app/io.gitlab.severin_lemaignan.TeXCraft/cache/retex/bundle/` at the first build) and
+  downloads other packages into `cache/retex/texlive/` there. TeXCraft's settings and kept templates are under
   `~/.var/app/io.gitlab.severin_lemaignan.TeXCraft/` too.
 - Building it by hand (with org.flatpak.Builder from Flathub):
 
@@ -147,11 +148,11 @@ With the packages from step 8 (or from the release):
 - **AppImage**: `chmod +x TeXCraft-*.AppImage && ./TeXCraft-*.AppImage examples/article`. The window
   has its icon and the Inter interface face; the article builds and its PDF shows; edit a line and
   the rebuild is quick (the worker); double-click in the PDF opens the line. Try it on a Wayland
-  and an X11 session if you can, and on a machine without a TeX Live (retex's own tree).
+  and an X11 session if you can, and on a machine without a TeX Live and offline (the built-in packages: the article builds).
   `./TeXCraft-*.AppImage --version` and the `texcraft-cli` link: `texcraft-cli compile examples/article`.
 - **Flatpak**: `flatpak install --user TeXCraft-*.flatpak` (it fetches the runtime from Flathub),
   then `flatpak run io.gitlab.severin_lemaignan.TeXCraft ~/path/to/texcraft/examples/article`: same checks,
-  plus the first build's TeX Live download into `~/.var/app/io.gitlab.severin_lemaignan.TeXCraft/cache/retex/`,
+  plus the article built offline from the built-in packages (`cache/retex/bundle/` in `~/.var/app/io.gitlab.severin_lemaignan.TeXCraft/`),
   Open Folder through the portal, and a template from New Project.
 - **Browser**: `tar xzf texcraft-web-*.tar.gz && cd web && python3 -m http.server` (any static
   server), open it in a browser: the loading screen shows progress, the editor draws, files can be

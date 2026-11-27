@@ -15,6 +15,9 @@ default = ["retex"]
 # The in-process retex engine (desktop and CLI). The web build leaves it out until the WASI engine
 # host lands (docs/ROADMAP.md).
 retex = ["dep:retex"]
+# retex's bundle of TeX Live packages built in (retex's feature `bundled`, the crate retex-data,
+# about 9.7 MB): common documents build with no TeX Live installed and no network (ROADMAP W14).
+bundled = ["retex", "retex/bundled"]
 
 [dependencies]
 serde_json = { workspace = true }

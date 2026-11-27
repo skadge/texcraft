@@ -28,6 +28,16 @@
 //!    `release-texlive.txt`, which the browser gives the module as the tree's own, and whose
 //!    mirror it downloads missing packages from.
 //!
+//! **From retex's bundle** (`--bundle`, docs/ROADMAP.md W14): the tree's base is the archive of
+//! retex-data (the TeX Live packages the desktop has built in, `retex-core-YEAR.tar.xz`), whole,
+//! with its `texmf.cnf` and generated files, and its year in `version.txt`. The packages of
+//! `tree.txt` the bundle lacks are taken from the installation as above, which must be of the
+//! bundle's year; a package folder the bundle has comes from the bundle alone. With
+//! `--no-installation`, no TeX installation is used at all: `tree.txt`'s documents are typeset
+//! over the bundle (for the seed's read lists), and what the bundle lacks is left to the
+//! browser's downloads. The bundle's `MANIFEST.toml`, licences and GPL sources go to
+//! `OUT/tree/retex-core-YEAR/`, beside the files. Extracting the archive needs `tar` with xz.
+//!
 //! The native retex is `$RETEX` when set, else built with `cargo install` into
 //! `target/retex-native`.
 
@@ -81,7 +91,192 @@ fn io(path: &Path) -> impl Fn(std::io::Error) -> String + '_ {
     move |e| format!("{}: {e}", path.display())
 }
 
-pub fn run(root: &Path, out: &Path) -> Result<()> {
+/// Where the tree's files come from.
+pub enum Source {
+    /// The TeX installation kpathsea finds.
+    Installation,
+    /// retex's bundle `archive` (`retex-core-YEAR.tar.xz`), then, with `installation`, the TeX
+    /// installation for what the bundle lacks.
+    Bundle { archive: PathBuf, installation: bool },
+}
+
+impl Source {
+    /// The source of `tree-site`'s arguments after OUT: none (the installation), `--bundle`
+    /// (retex-data's archive, found through `cargo metadata`), `--bundle=ARCHIVE`, and
+    /// `--no-installation` with either.
+    pub fn from_args(root: &Path, args: &[String]) -> Result<Source> {
+        let mut archive = None;
+        let mut installation = true;
+        for arg in args {
+            match arg.as_str() {
+                "--bundle" => archive = Some(crate_archive(root)?),
+                "--no-installation" => installation = false,
+                _ => match arg.strip_prefix("--bundle=") {
+                    Some(path) => archive = Some(PathBuf::from(path)),
+                    None => return Err(format!("tree-site: unknown argument `{arg}`")),
+                },
+            }
+        }
+        match archive {
+            Some(archive) => Ok(Source::Bundle { archive, installation }),
+            None if installation => Ok(Source::Installation),
+            None => Err("tree-site: --no-installation needs --bundle".into()),
+        }
+    }
+}
+
+/// The archive of the crate retex-data that the workspace depends on (through retex's feature
+/// `bundled`), in cargo's copy of the crate.
+fn crate_archive(root: &Path) -> Result<PathBuf> {
+    let out = Command::new(env!("CARGO"))
+        .args(["metadata", "--format-version", "1"])
+        .current_dir(root)
+        .output()
+        .map_err(|e| format!("cargo metadata: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("cargo metadata failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
+    }
+    let meta: serde_json::Value = serde_json::from_slice(&out.stdout).map_err(|e| format!("cargo metadata: {e}"))?;
+    let manifest = meta["packages"]
+        .as_array()
+        .and_then(|ps| ps.iter().find(|p| p["name"] == "retex-data"))
+        .and_then(|p| p["manifest_path"].as_str())
+        .ok_or("the workspace does not depend on retex-data (retex's feature `bundled`)")?;
+    let dir = Path::new(manifest).parent().ok_or("retex-data's manifest is in a folder")?;
+    let entries = fs::read_dir(dir).map_err(io(dir))?;
+    entries
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .find(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("retex-") && n.ends_with(".tar.xz")))
+        .ok_or_else(|| format!("{}: retex-data without its archive (a build from retex's Git repository; pass --bundle=ARCHIVE)", dir.display()))
+}
+
+/// The TeX trees a tree is taken from, in the order their files win.
+struct Trees {
+    /// The bundle's trees (`texmf-var`, then `texmf-dist`), when there is a bundle.
+    bundle: Vec<PathBuf>,
+    /// The bundle's folder (`MANIFEST.toml`, `LICENSES/`, `sources/`).
+    bundle_root: Option<PathBuf>,
+    /// The installation's trees, when one is used.
+    installation: Vec<PathBuf>,
+    /// The TeX Live year of the tree.
+    year: u16,
+    /// The `texmf.cnf` text after the tree's own definitions ([`CNF`]).
+    cnf: String,
+    /// The environment of the recordings, when they run over the bundle alone.
+    record_env: Vec<(String, PathBuf)>,
+}
+
+impl Trees {
+    fn open(source: &Source, work: &Path) -> Result<Trees> {
+        let installation = |trees: &mut Trees| -> Result<()> {
+            trees.installation = installation_trees()?;
+            if trees.installation.is_empty() {
+                return Err("no TeX installation found (kpsewhich --expand-path='$TEXMF')".into());
+            }
+            Ok(())
+        };
+        match source {
+            Source::Installation => {
+                let mut trees = Trees {
+                    bundle: Vec::new(),
+                    bundle_root: None,
+                    installation: Vec::new(),
+                    year: installation_year()?,
+                    cnf: installation_cnf()?,
+                    record_env: Vec::new(),
+                };
+                installation(&mut trees)?;
+                Ok(trees)
+            }
+            Source::Bundle { archive, installation: with_installation } => {
+                let root = extract(archive, &work.join("bundle"))?;
+                let manifest = root.join("MANIFEST.toml");
+                let text = fs::read_to_string(&manifest).map_err(io(&manifest))?;
+                let year = manifest_year(&text).ok_or_else(|| format!("{}: no year", manifest.display()))?;
+                let cnf_file = root.join("texmf-dist/web2c/texmf.cnf");
+                let cnf = format!("\n% the texmf.cnf of the bundle {}\n{}", archive.display(), fs::read_to_string(&cnf_file).map_err(io(&cnf_file))?);
+                let mut trees = Trees {
+                    bundle: vec![root.join("texmf-var"), root.join("texmf-dist")],
+                    bundle_root: Some(root.clone()),
+                    installation: Vec::new(),
+                    year,
+                    cnf,
+                    record_env: Vec::new(),
+                };
+                if *with_installation {
+                    installation(&mut trees)?;
+                    let installed = installation_year()?;
+                    if installed != year {
+                        return Err(format!("the bundle is of TeX Live {year}, the installation of {installed}: one year per tree"));
+                    }
+                } else {
+                    // retex over the bundle alone: no installed TeX Live (an empty `TEXMFCNF`
+                    // folder), no home tree, a cache of the work's.
+                    let empty = work.join("no-texmf-cnf");
+                    let home = work.join("home");
+                    for dir in [&empty, &home] {
+                        fs::create_dir_all(dir).map_err(io(dir))?;
+                    }
+                    trees.record_env = vec![
+                        ("RETEX_BUNDLE".into(), root),
+                        ("TEXMFCNF".into(), empty),
+                        ("HOME".into(), home),
+                        ("RETEX_CACHE".into(), work.join("record-cache")),
+                    ];
+                }
+                Ok(trees)
+            }
+        }
+    }
+
+    /// Every tree, the bundle's first.
+    fn all(&self) -> impl Iterator<Item = &PathBuf> {
+        self.bundle.iter().chain(&self.installation)
+    }
+
+    /// Copies the bundle's manifest, licences and GPL sources to `dir/retex-NAME-YEAR/`: they go
+    /// with its files.
+    fn copy_notices(&self, dir: &Path) -> Result<()> {
+        let Some(root) = &self.bundle_root else { return Ok(()) };
+        let name = root.file_name().ok_or("the bundle's folder has a name")?;
+        let to = dir.join(name);
+        fs::create_dir_all(&to).map_err(io(&to))?;
+        fs::copy(root.join("MANIFEST.toml"), to.join("MANIFEST.toml")).map_err(io(&root.join("MANIFEST.toml")))?;
+        for sub in ["LICENSES", "sources"] {
+            copy_dir(&root.join(sub), &to.join(sub))?;
+        }
+        Ok(())
+    }
+}
+
+/// Extracts `archive` into `dir` with `tar` and returns the bundle's folder in it (the one with
+/// `MANIFEST.toml`, `retex-core-2026/`).
+fn extract(archive: &Path, dir: &Path) -> Result<PathBuf> {
+    fs::create_dir_all(dir).map_err(io(dir))?;
+    let status = Command::new("tar")
+        .arg("-xJf")
+        .arg(archive)
+        .arg("-C")
+        .arg(dir)
+        .status()
+        .map_err(|e| format!("cannot run tar to extract {}: {e}", archive.display()))?;
+    if !status.success() {
+        return Err(format!("{}: tar could not extract it (xz needed)", archive.display()));
+    }
+    let entries = fs::read_dir(dir).map_err(io(dir))?;
+    entries
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .find(|p| p.join("MANIFEST.toml").is_file())
+        .ok_or_else(|| format!("{}: no bundle in it (no MANIFEST.toml)", archive.display()))
+}
+
+/// The TeX Live year of a bundle's `MANIFEST.toml` (`year = 2026`, before its packages).
+fn manifest_year(text: &str) -> Option<u16> {
+    let year: u16 = text.lines().take_while(|l| !l.starts_with('[')).find_map(|l| l.strip_prefix("year = "))?.trim().parse().ok()?;
+    (1996..3000).contains(&year).then_some(year)
+}
+
+pub fn run(root: &Path, out: &Path, source: &Source) -> Result<()> {
     // Absolute: paths under it are handed to retex runs in other folders (`RETEX_CACHE`).
     fs::create_dir_all(out).map_err(io(out))?;
     let out = &out.canonicalize().map_err(io(out))?;
@@ -91,11 +286,13 @@ pub fn run(root: &Path, out: &Path) -> Result<()> {
         fs::remove_dir_all(&work).map_err(io(&work))?;
     }
     fs::create_dir_all(&work).map_err(io(&work))?;
+    let trees = Trees::open(source, &work)?;
     eprintln!("the TeX tree of apps/texcraft-web/tree.txt:");
-    let tree = select(&root.join("apps/texcraft-web/tree.txt"), &retex, out, &work)?;
-    let contents = contents(&tree)?;
+    let tree = select(&root.join("apps/texcraft-web/tree.txt"), &retex, out, &work, &trees)?;
+    let contents = contents(&tree, &trees)?;
     let index = write(&contents, &out.join("tree"))?;
-    let year = installation_year()?;
+    trees.copy_notices(&out.join("tree"))?;
+    let year = trees.year;
     seed(&contents, &index, &tree, &retex, year, out, &work)?;
     // Which retex and TeX Live year the seed is of: the browser's worker downloads missing
     // packages from the mirror of that year (retex's `seed/version.txt`, R17).
@@ -242,8 +439,8 @@ fn inputs(fls: &Path, dir: &Path) -> Result<Vec<PathBuf>> {
 }
 
 /// The files the document `main` (in its folder) reads, typeset with `retex` in a copy of the
-/// folder under `work`.
-fn recorded(retex: &Path, main: &Path, work: &Path) -> Result<Vec<PathBuf>> {
+/// folder under `work`, in the environment `env` added.
+fn recorded(retex: &Path, main: &Path, work: &Path, env: &[(String, PathBuf)]) -> Result<Vec<PathBuf>> {
     let folder = main.parent().ok_or("a document is in a folder")?;
     let name = main.file_name().ok_or("a document has a name")?;
     let copy = work.join(format!("doc-{:016x}", crate::fnv(main.to_string_lossy().as_bytes())));
@@ -252,6 +449,7 @@ fn recorded(retex: &Path, main: &Path, work: &Path) -> Result<Vec<PathBuf>> {
         .args(["--offline", "-recorder", "-interaction=nonstopmode"])
         .arg(name)
         .current_dir(&copy)
+        .envs(env.iter().map(|(k, v)| (k, v)))
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -265,12 +463,13 @@ fn recorded(retex: &Path, main: &Path, work: &Path) -> Result<Vec<PathBuf>> {
 
 /// The files the LaTeX format reads (the documents' recordings leave them out: the format is
 /// made before their runs).
-fn format_recorded(retex: &Path, work: &Path) -> Result<Vec<PathBuf>> {
+fn format_recorded(retex: &Path, work: &Path, env: &[(String, PathBuf)]) -> Result<Vec<PathBuf>> {
     let dir = work.join("format");
     fs::create_dir_all(&dir).map_err(io(&dir))?;
     let status = Command::new(retex)
         .args(["--offline", "-ini", "-recorder", "-interaction=nonstopmode", "-jobname=lualatex", "lualatex.ini"])
         .current_dir(&dir)
+        .envs(env.iter().map(|(k, v)| (k, v)))
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -326,12 +525,9 @@ struct Tree {
     loads: BTreeMap<String, BTreeSet<String>>,
 }
 
-/// The tree that `spec` describes, `retex` typesetting its documents in `work`.
-fn select(spec: &Path, retex: &Path, out: &Path, work: &Path) -> Result<Tree> {
-    let trees = installation_trees()?;
-    if trees.is_empty() {
-        return Err("no TeX installation found (kpsewhich --expand-path='$TEXMF')".into());
-    }
+/// The tree that `spec` describes over `trees`, `retex` typesetting its documents in `work`.
+fn select(spec: &Path, retex: &Path, out: &Path, work: &Path, trees: &Trees) -> Result<Tree> {
+    let env = &trees.record_env;
     let text = fs::read_to_string(spec).map_err(io(spec))?;
     let mut packages = BTreeSet::new();
     let mut read = Vec::new();
@@ -378,14 +574,14 @@ fn select(spec: &Path, retex: &Path, out: &Path, work: &Path) -> Result<Tree> {
                     loop {
                         let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         let Some(doc) = docs.get(i) else { break found };
-                        found.push((Some(i), recorded(retex, doc, &runs)));
+                        found.push((Some(i), recorded(retex, doc, &runs, env)));
                     }
                 })
             })
             .collect();
         workers.into_iter().flat_map(|w| w.join().unwrap_or_default()).collect()
     });
-    recordings.push((None, format_recorded(retex, work)));
+    recordings.push((None, format_recorded(retex, work, env)));
     let mut outside = BTreeSet::new();
     let mut loads: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for (doc, files) in recordings {
@@ -395,7 +591,7 @@ fn select(spec: &Path, retex: &Path, out: &Path, work: &Path) -> Result<Tree> {
         });
         let name = doc.and_then(|i| named.get(&i));
         for file in files {
-            match trees.iter().find_map(|t| file.strip_prefix(t).ok()) {
+            match trees.all().find_map(|t| file.strip_prefix(t).ok()) {
                 Some(rel) => {
                     let rel = rel.to_string_lossy();
                     packages.insert(package_of(&rel));
@@ -415,8 +611,24 @@ fn select(spec: &Path, retex: &Path, out: &Path, work: &Path) -> Result<Tree> {
         eprintln!("warning: read outside the TeX trees, left out: {}", p.display());
     }
     let mut files = BTreeMap::new();
+    // The bundle whole, its generated files (`texmf-var`) first.
+    for tree in &trees.bundle {
+        let mut found = Vec::new();
+        walk(tree, tree, &mut found)?;
+        for (rel, source) in found {
+            files.entry(rel).or_insert(source);
+        }
+    }
+    let mut lacking = 0;
     for package in &packages {
-        for tree in &trees {
+        // A folder the bundle has is the bundle's alone: no files of another revision beside it.
+        if trees.bundle.iter().any(|t| t.join(package).exists()) {
+            continue;
+        }
+        if trees.installation.is_empty() {
+            lacking += 1;
+        }
+        for tree in &trees.installation {
             let mut found = Vec::new();
             let path = tree.join(package);
             if path.is_file() {
@@ -429,6 +641,9 @@ fn select(spec: &Path, retex: &Path, out: &Path, work: &Path) -> Result<Tree> {
             }
         }
     }
+    if lacking > 0 {
+        eprintln!("  {lacking} folders of tree.txt and its documents are not in the bundle: the browser downloads their packages");
+    }
     // Made here.
     files.remove("ls-R");
     files.remove("web2c/texmf.cnf");
@@ -436,12 +651,12 @@ fn select(spec: &Path, retex: &Path, out: &Path, work: &Path) -> Result<Tree> {
 }
 
 /// The tree's files with their bytes, its `texmf.cnf` and `ls-R` among them.
-fn contents(tree: &Tree) -> Result<BTreeMap<String, Vec<u8>>> {
+fn contents(tree: &Tree, trees: &Trees) -> Result<BTreeMap<String, Vec<u8>>> {
     let mut contents = BTreeMap::new();
     for (rel, source) in &tree.files {
         contents.insert(rel.clone(), fs::read(source).map_err(io(source))?);
     }
-    contents.insert("web2c/texmf.cnf".to_owned(), format!("{CNF}{}", installation_cnf()?).into_bytes());
+    contents.insert("web2c/texmf.cnf".to_owned(), format!("{CNF}{}", trees.cnf).into_bytes());
     for variant in FONT_MAP_VARIANTS {
         contents.remove(*variant);
     }
@@ -593,7 +808,8 @@ fn seed(contents: &BTreeMap<String, Vec<u8>>, index: &Index, tree: &Tree, retex:
     let in_tree = |dir: &Path, args: &[&str]| -> Result<bool> {
         let mut cmd = if root {
             let mut c = Command::new(retex);
-            c.current_dir(dir).env_clear().envs(ENV).env("RETEX_CACHE", &cache);
+            // No bundle of the native retex's own (built in, beside it, installed): the tree alone.
+            c.current_dir(dir).env_clear().envs(ENV).env("RETEX_CACHE", &cache).env("RETEX_BUNDLE", "none");
             c
         } else {
             let mut c = Command::new("bwrap");
@@ -608,6 +824,7 @@ fn seed(contents: &BTreeMap<String, Vec<u8>>, index: &Index, tree: &Tree, retex:
             for (k, v) in ENV {
                 c.args(["--setenv", k, v]);
             }
+            c.args(["--setenv", "RETEX_BUNDLE", "none"]);
             c.arg("/retex");
             c
         };
@@ -724,6 +941,13 @@ mod tests {
         assert_eq!(release_year(&release_text(2026)), Some(2026));
         assert_eq!(release_year("TeX Live (https://tug.org/texlive) version 2025\n\nThis file is public domain."), Some(2025));
         assert_eq!(release_year("no year here"), None);
+    }
+
+    #[test]
+    fn the_year_of_a_bundle_is_its_manifests() {
+        let manifest = "format = 1\nname = \"core\"\nyear = 2026\n\n[[package]]\nname = \"latex\"\nyear = 1999\n";
+        assert_eq!(manifest_year(manifest), Some(2026));
+        assert_eq!(manifest_year("[[package]]\nyear = 2026\n"), None, "a package's line is not the bundle's year");
     }
 
     #[test]
