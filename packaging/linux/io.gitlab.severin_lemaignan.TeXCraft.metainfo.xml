@@ -41,6 +41,12 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.24.1" date="2026-11-28" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.24.1</url>
+      <description>
+        <p>The same as 0.24.0, built by a faster release pipeline.</p>
+      </description>
+    </release>
     <release version="0.24.0" date="2026-11-27" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.24.0</url>
       <description>

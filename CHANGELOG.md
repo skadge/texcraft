@@ -5,6 +5,12 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.24.1 (2026-11-28)
+
+The same TeXCraft as 0.24.0, built by a faster release pipeline: the build caches stay on the
+runner, the Flatpak packages the AppImage's binaries instead of building them again, and the
+packages build while the checks run.
+
 ## 0.24.0 (2026-11-27)
 
 A new project can start on GitLab or GitHub.
@@ -23,7 +29,7 @@ A new project can start on GitLab or GitHub.
 
 - The browser's TeX tree is built on retex's bundle, with the other packages it had on top.
 
-## 0.23.0 (2026-11-27)
+## 0.23.0 (2026-11-27, web and AppImage only: its Flatpak build was stopped for 0.24.0)
 
 TeX Live's common packages built in, and one place for your accounts.
 
@@ -44,7 +50,7 @@ TeX Live's common packages built in, and one place for your accounts.
 - Import a Project opens on your default connection; Save Project to GitLab or GitHub lists your
   connections, the default first. Sign-ins kept by earlier versions are listed as they are.
 
-## 0.22.0 (2026-11-27)
+## 0.22.0 (2026-11-27, not published: its packages were stopped for 0.23.0)
 
 Missing packages on the desktop asked about once, and more of the formatted view.
 
