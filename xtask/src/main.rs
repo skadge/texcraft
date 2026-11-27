@@ -14,8 +14,9 @@
 //! - `templates [ID]`: fetches every template of the catalogue (or one) from its source, with its
 //!   checks, into a scratch store, and builds each with `texcraft-cli compile`. Needs the network.
 //! - `templates-site OUT`: the templates for the browser build, in `OUT/templates/`.
-//! - `tree-site OUT`: the TeX tree of the browser build and its seed, in `OUT/tree/` and
-//!   `OUT/seed/` (needs a TeX installation; see `tree_site.rs`).
+//! - `tree-site OUT [--bundle[=ARCHIVE] [--no-installation]]`: the TeX tree of the browser build
+//!   and its seed, in `OUT/tree/` and `OUT/seed/`, from a TeX installation, or from retex's bundle
+//!   with the installation's additions or alone (see `tree_site.rs`).
 //! - `version-worker [DIR]`: names the browser build's engine files after their contents (Trunk's
 //!   post-build hook, on its staging folder; see `web_version.rs`).
 
@@ -72,8 +73,13 @@ fn main() -> ExitCode {
             .and_then(retex_wasm::run),
         "templates" => templates(std::env::args().nth(2).as_deref()),
         "tree-site" => match std::env::args().nth(2) {
-            Some(out) => tree_site::run(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".."), std::path::Path::new(&out)),
-            None => Err("usage: cargo xtask tree-site OUT (the web build's folder, its templates written first)".to_owned()),
+            Some(out) => {
+                let rest: Vec<String> = std::env::args().skip(3).collect();
+                tree_site::Source::from_args(&root(), &rest).and_then(|source| tree_site::run(&root(), std::path::Path::new(&out), &source))
+            }
+            None => Err(
+                "usage: cargo xtask tree-site OUT [--bundle[=ARCHIVE] [--no-installation]] (the web build's folder, its templates written first)".to_owned(),
+            ),
         },
         "templates-site" => match std::env::args().nth(2) {
             Some(out) => templates_site(std::path::Path::new(&out)),
@@ -84,7 +90,7 @@ fn main() -> ExitCode {
             None => Err("usage: cargo xtask version-worker DIR (a Trunk build's folder; Trunk's hooks set TRUNK_STAGING_DIR)".to_owned()),
         },
         _ => Err(
-            "usage: cargo xtask layers | wasm | ci | guide-check | icons | i18n-report [OUT] | i18n-lint | retex-wasm | templates [ID] | templates-site OUT | tree-site OUT | version-worker [DIR]"
+            "usage: cargo xtask layers | wasm | ci | guide-check | icons | i18n-report [OUT] | i18n-lint | retex-wasm | templates [ID] | templates-site OUT | tree-site OUT [--bundle[=ARCHIVE] [--no-installation]] | version-worker [DIR]"
                 .to_owned(),
         ),
     };
