@@ -5,6 +5,27 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.23.0 (2026-11-27)
+
+TeX Live's common packages built in, and one place for your accounts.
+
+### Packages built in
+
+- The desktop app carries 64 packages of TeX Live 2026 (retex 2.6's bundle: the article class
+  with the AMS packages, graphics, hyperref, babel's English, TikZ, fontspec and unicode-math
+  with Latin Modern): common documents typeset with no TeX Live installed and no network. A
+  package the bundle lacks is downloaded as Settings › Building › Missing packages says.
+- The browser's TeX tree is built on the same bundle.
+
+### Accounts
+
+- Settings › Accounts lists every connection: GitLab and GitHub, your own GitLab and GitHub
+  Enterprise servers, Overleaf and other git servers, each with who is signed in, where the
+  sign-in is kept, and Sign In Again, Allow Commits, Set as Default, Replace…, Disconnect… and
+  Remove Server…. Add a Connection… offers the same cards as Import a Project.
+- Import a Project opens on your default connection; Save Project to GitLab or GitHub lists your
+  connections, the default first. Sign-ins kept by earlier versions are listed as they are.
+
 ## 0.22.0 (2026-11-27)
 
 Missing packages on the desktop asked about once, and more of the formatted view.

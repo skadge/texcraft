@@ -41,6 +41,16 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.23.0" date="2026-11-27" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.23.0</url>
+      <description>
+        <p>TeX Live's common packages built in, and one place for your accounts.</p>
+        <ul>
+          <li>Common documents typeset with no TeX Live installed</li>
+          <li>Settings › Accounts: every connection, its sign-in, and a default</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.22.0" date="2026-11-27" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.22.0</url>
       <description>
