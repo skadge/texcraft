@@ -13,18 +13,26 @@ look for what goes wrong:
   them, edited by random sequences of what a user does in the view (clicks, selections, arrows,
   typing with LaTeX's special characters and other scripts, Backspace and Delete at every kind of
   edge, Enter, Tab and Shift+Tab, pastes of lines and lists, the toolbar's buttons, the table
-  toolbar's operations), made as the window makes them. After every step it checks that nothing
-  panicked; that the changes are sound (in order, on the text, near the selection); that nothing
-  balanced became unbalanced; that no empty item, list, style or heading is left where the caret
-  is not; that nothing became shown as source; that the caret stands where the view shows it (a key
-  typed next goes there); and that the view shows what the edit meant (the typed text where it was
-  typed, the deleted character gone, the words kept by a change of structure). A failure is shrunk
-  to the fewest lines and characters of its document and the fewest steps, and printed.
+  toolbar's operations, citations, references, footnotes, links, formulas, and a figure inserted
+  for an image picked or dropped), made as the window makes them. The corpus holds the templates,
+  the examples and documents written for the runs: lists, tables, figures, theorems of several
+  styles, front matter, `\newcommand` macros, comments everywhere, lists four deep, `\multicolumn`
+  and `\multirow`, verbatim and `lstlisting`, `\input` and `\include`, a bibliography, a beamer
+  talk. After every step it checks that nothing panicked; that the changes are sound (in order, on
+  the text, near the selection); that nothing balanced became unbalanced; that no empty item,
+  list, style or heading is left where the caret is not; that nothing became shown as source; that
+  the caret stands where the view shows it (a key typed next goes there); that a style button
+  pressed on a selection keeps that text selected; and that the view shows what the edit meant
+  (the typed text where it was typed, the deleted character gone, the words kept by a change of
+  structure). A failure is shrunk to the fewest lines and characters of its document and the
+  fewest steps, and printed.
 - **The window** (`crates/ui-egui/tests/it/formatted_fuzz.rs`): the real view with the build's
-  fonts, driven by random keys, typed text, clicks, drags, double and triple clicks, toolbar buttons,
-  undo and redo. After every action: no panic, the frames settle, the keyboard stays in the text,
-  the caret is in a line of the view inside the window, a typed letter shows before the caret
-  without its line jumping, and undo then redo give the texts before and after the edit back.
+  fonts, driven by random keys, typed text, words typed letter by letter, text composed with an
+  input method (marked text, then committed), clicks, drags, double and triple clicks, toolbar
+  buttons, undo and redo. After every action: no panic, the frames settle, the keyboard stays in
+  the text, the caret is in a line of the view inside the window, a typed or composed word shows
+  before the caret without its line jumping, one undo takes a word typed letter by letter back
+  whole (not its last letter), and undo then redo give the texts before and after the edit back.
 
 The default run is short (a few hundred model cases, a few window cases). For a long run:
 
