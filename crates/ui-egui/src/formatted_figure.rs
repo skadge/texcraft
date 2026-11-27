@@ -147,11 +147,12 @@ pub(super) fn card(
     );
 }
 
-/// Inside the braces of an empty `\caption{}` of the figure at `range`.
+/// Inside the braces of the `\caption{}` of the figure at `range` (where the caret stands in one
+/// that shows nothing: empty, or an empty style just made in it).
 pub(super) fn caption_slot(cx: &Cx<'_>, range: &Range<usize>) -> Option<usize> {
     let src = cx.text.get(range.clone())?;
     let at = src.find("\\caption{")? + "\\caption{".len();
-    src[at..].starts_with('}').then_some(range.start + at)
+    Some(range.start + at)
 }
 
 /// "Figure 2." as the document numbers it (the last build's number when it has one), or "Figure."

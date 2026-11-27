@@ -2566,3 +2566,24 @@ unit	{n} MB	{n} MB
 @msg	The TeX package server has no TeX Live {year}.	El servidor de paquetes TeX no tiene TeX Live {year}.
 @msg	The TeX package server is busy; the build continues without the missing package, and asks again later.	El servidor de paquetes TeX está ocupado; la compilación continúa sin el paquete que falta y lo volverá a pedir más tarde.
 @msg	The TeX package server is not available right now; the build continues without the missing package.	El servidor de paquetes TeX no está disponible ahora; la compilación continúa sin el paquete que falta.
+	A displayed formula cannot go in a heading, a caption or a footnote: put the caret in a paragraph.	Una fórmula destacada no puede ir en un título, un pie de figura o una nota al pie: ponga el cursor en un párrafo.
+	Slide	Diapositiva
+	Table of contents	Índice
+	List of figures	Índice de figuras
+	List of tables	Índice de tablas
+	Bibliography	Bibliografía
+	Index	Índice alfabético
+	Page break	Salto de página
+	Appendices	Apéndices
+	Title page	Portada
+	Title	Título
+	Pause	Pausa
+	Slides {spec}	Diapositivas {spec}
+	Today's date (\\today): the PDF shows the date it is built on.	La fecha de hoy (\\today): el PDF muestra la fecha en que se compila.
+	A new page starts here (\\{command}).	Aquí empieza una página nueva (\\{command}).
+	The chapters or sections after this are appendices (\\appendix).	Los capítulos o secciones que siguen son apéndices (\\appendix).
+	The PDF prints this here (\\{command}): it is made when the document is built.	El PDF lo imprime aquí (\\{command}): se genera al compilar el documento.
+	A pause (\\pause): what follows shows on the next slide.	Una pausa (\\pause): lo que sigue aparece en la diapositiva siguiente.
+	Shown on slides {spec} only (\\{command}).	Solo se muestra en las diapositivas {spec} (\\{command}).
+	\\{command}, a command this document defines: its arguments are edited here as text.	\\{command}, una orden que define este documento: sus argumentos se editan aquí como texto.
+	A bibliography entry: cite it with \\cite{key}.	Una entrada de la bibliografía: cítela con \\cite{key}.

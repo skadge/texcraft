@@ -2566,3 +2566,24 @@ unit	{n} MB	{n} Mo
 @msg	The TeX package server has no TeX Live {year}.	Le serveur de paquets TeX n'a pas TeX Live {year}.
 @msg	The TeX package server is busy; the build continues without the missing package, and asks again later.	Le serveur de paquets TeX est occupé ; la compilation continue sans le paquet manquant et le redemandera plus tard.
 @msg	The TeX package server is not available right now; the build continues without the missing package.	Le serveur de paquets TeX n'est pas disponible pour le moment ; la compilation continue sans le paquet manquant.
+	A displayed formula cannot go in a heading, a caption or a footnote: put the caret in a paragraph.	Une formule centrée ne peut pas aller dans un titre, une légende ou une note de bas de page : placez le curseur dans un paragraphe.
+	Slide	Diapositive
+	Table of contents	Table des matières
+	List of figures	Table des figures
+	List of tables	Liste des tableaux
+	Bibliography	Bibliographie
+	Index	Index
+	Page break	Saut de page
+	Appendices	Annexes
+	Title page	Page de titre
+	Title	Titre
+	Pause	Pause
+	Slides {spec}	Diapositives {spec}
+	Today's date (\\today): the PDF shows the date it is built on.	La date du jour (\\today) : le PDF affiche la date de sa compilation.
+	A new page starts here (\\{command}).	Une nouvelle page commence ici (\\{command}).
+	The chapters or sections after this are appendices (\\appendix).	Les chapitres ou sections qui suivent sont des annexes (\\appendix).
+	The PDF prints this here (\\{command}): it is made when the document is built.	Le PDF l’imprime ici (\\{command}) : il est produit à la compilation du document.
+	A pause (\\pause): what follows shows on the next slide.	Une pause (\\pause) : la suite apparaît sur la diapositive suivante.
+	Shown on slides {spec} only (\\{command}).	Affiché seulement sur les diapositives {spec} (\\{command}).
+	\\{command}, a command this document defines: its arguments are edited here as text.	\\{command}, une commande que ce document définit : ses arguments se modifient ici comme du texte.
+	A bibliography entry: cite it with \\cite{key}.	Une entrée de la bibliographie : citez-la avec \\cite{key}.

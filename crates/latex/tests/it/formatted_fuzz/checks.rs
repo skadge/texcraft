@@ -27,7 +27,7 @@ pub struct Before<'a> {
 pub fn after_step(before: &Before<'_>, op: &Op, done: &Done, after: &Editor) -> Result<(), Failure> {
     // Enter makes an empty item on purpose (before the caret at an item's start).
     // Tab and Shift+Tab move items, empty ones too (Shift+Tab gives back what Tab nested).
-    let enter = matches!(op, Op::Enter | Op::Tab | Op::ShiftTab);
+    let enter = matches!(op, Op::Enter | Op::Tab | Op::ShiftTab | Op::Bar("itemize" | "enumerate"));
     let nodes = tree::parse(&after.text);
     if !tree::tiles(&nodes, 0..after.text.len()) {
         return fail("tree-tiles", "the tree does not tile the text".to_owned());
@@ -41,7 +41,43 @@ pub fn after_step(before: &Before<'_>, op: &Op, done: &Done, after: &Editor) -> 
     balanced_stays(before.editor, after)?;
     no_leftovers(before.editor, after, enter)?;
     no_new_source(before.shown, &shown, op)?;
+    selection_kept(before, op, &shown, after)?;
     expected_view(before, op, done, &shown)
+}
+
+/// The view's text from the selection's start to its end (a line end between lines).
+fn selected(shown: &Shown, e: &Editor) -> Option<String> {
+    let doc = shown.doc();
+    let (a, h) = e.selection(&doc)?;
+    let (lo, hi) = (a.min(h), a.max(h));
+    let mut out = String::new();
+    for i in lo.line..=hi.line {
+        let line = shown.lines.get(i)?;
+        let chars = &line.chars;
+        let keep = sourced(line);
+        let from = if i == lo.line { lo.at } else { 0 };
+        let to = if i == hi.line { hi.at } else { chars.len() };
+        // What the view adds ("Figure.", a label's gap) is not the selection's text.
+        out.extend((from..to.max(from)).filter(|k| keep.get(*k).copied().unwrap_or(true)).filter_map(|k| chars.get(k)));
+        if i < hi.line {
+            out.push('\n');
+        }
+    }
+    Some(out)
+}
+
+/// A style button pressed on a selection keeps that text selected (for the next button).
+fn selection_kept(before: &Before<'_>, op: &Op, shown: &Shown, after: &Editor) -> Result<(), Failure> {
+    let e = before.editor;
+    if !matches!(op, Op::Bar("bold" | "italic" | "code")) || e.anchor == e.head {
+        return Ok(());
+    }
+    // A selection the view shows as nothing (from an empty line to the start of the next) is a caret.
+    let (Some(was), Some(now)) = (selected(before.shown, e).filter(|w| !w.trim().is_empty()), selected(shown, after)) else { return Ok(()) };
+    if words(&was) != words(&now) {
+        return fail("selection-lost", format!("{:?} was selected, {:?} is after the button", was, now));
+    }
+    Ok(())
 }
 
 /// The caret stands where the view shows it: a key typed next shows where the view shows the
@@ -55,13 +91,10 @@ fn caret_shown(shown: &Shown, e: &Editor) -> Result<(), Failure> {
     if at == e.head {
         return Ok(());
     }
-    // Known, not fixed: inside a run of dashes or quotes the view shows as one character (`--|-`
-    // after typing in it), the caret shows at the run's start.
-    let lig = |c: char| matches!(c, '-' | '`' | '\'');
-    if e.text.get(..e.head).is_some_and(|s| s.ends_with(lig)) && e.text.get(e.head..).is_some_and(|s| s.starts_with(lig)) {
-        return Ok(());
-    }
+    // (Typing goes where the window types: [`edit::typing_point`], into a macro's argument after
+    // its chip.)
     let typed = |b: usize| {
+        let b = edit::typing_point(&e.text, b);
         let mut t = e.text.clone();
         // A digit: it lengthens no command's name.
         t.insert(b, '0');
@@ -93,20 +126,30 @@ pub fn context(text: &str, at: usize) -> String {
 
 /// The changes stay in the blocks the selection touches and the space around them.
 fn local(before: &Before<'_>, op: &Op, done: &Done) -> Result<(), Failure> {
-    if matches!(op, Op::Bar("table") | Op::Math("equation", _)) {
+    if matches!(op, Op::Bar("table") | Op::Math("equation", _) | Op::Figure) {
         return Ok(());
     }
     let e = before.editor;
     let (lo, hi) = (e.anchor.min(e.head), e.anchor.max(e.head));
-    let blocks = &before.shown.blocks;
-    let touched: Vec<&Block> = blocks.iter().filter(|b| b.range.start <= hi && lo <= b.range.end).collect();
-    let (first, last) = match (touched.first(), touched.last()) {
-        (Some(f), Some(l)) => (f.range.start, l.range.end),
+    // A title block stands for its `\maketitle` and the arguments of the `\title`, `\author` and
+    // `\date` it shows, wherever they are.
+    let extent = |b: &Block| match &b.kind {
+        BlockKind::Title { slots, .. } => {
+            let starts = slots.iter().flatten().map(|s| s.start).chain([b.range.start]);
+            let ends = slots.iter().flatten().map(|s| s.end).chain([b.range.end]);
+            starts.min().unwrap_or(b.range.start)..ends.max().unwrap_or(b.range.end)
+        }
+        _ => b.range.clone(),
+    };
+    let blocks: Vec<std::ops::Range<usize>> = before.shown.blocks.iter().map(extent).collect();
+    let touched: Vec<&std::ops::Range<usize>> = blocks.iter().filter(|b| b.start <= hi && lo <= b.end).collect();
+    let (first, last) = match (touched.iter().map(|b| b.start).min(), touched.iter().map(|b| b.end).max()) {
+        (Some(f), Some(l)) => (f, l),
         _ => (lo, hi),
     };
     // And the blocks next to them (the caret may stand in empty markup just after a block).
-    let start = blocks.iter().filter(|b| b.range.end <= first).map(|b| b.range.start).max().unwrap_or(0);
-    let end = blocks.iter().filter(|b| b.range.start >= last).map(|b| b.range.end).min().unwrap_or(e.text.len());
+    let start = blocks.iter().filter(|b| b.end <= first).map(|b| b.start).max().unwrap_or(0);
+    let end = blocks.iter().filter(|b| b.start >= last).map(|b| b.end).min().unwrap_or(e.text.len());
     // The white space around them too.
     let start = e.text.get(..start).map_or(start, |s| s.trim_end().len());
     let end = e.text.get(end..).map_or(end, |s| end + s.len() - s.trim_start().len());
@@ -226,6 +269,8 @@ fn no_leftovers(before: &Editor, after: &Editor, enter: bool) -> Result<(), Fail
         return Ok(());
     }
     let (b, a) = (leftovers(&before.text, before.head), leftovers(&after.text, after.head));
+    // An empty item made on purpose (Enter at an item's start) and left as it was is not new.
+    let b = Leftovers { items: b.items.max(leftovers(&before.text, usize::MAX).items), ..b };
     let more = |x: usize, y: usize| y > x;
     // Enter on an empty heading, as in a word processor, leaves it.
     if (more(b.items, a.items) && !enter) || more(b.lists, a.lists) || more(b.styles, a.styles) || (more(b.headings, a.headings) && !enter) {
@@ -343,15 +388,17 @@ fn expected_view(before: &Before<'_>, op: &Op, done: &Done, after: &Shown) -> Re
     let Some((_, h)) = before.editor.selection(&doc) else { return Ok(()) };
     let got = after.plain();
     let changes_typography = |s: &str| s.contains(['-', '`', '\'', '.', '\n', '\t', '\r']) || s.contains("  ");
-    let expected = if let Some(p) = done.char_deleted {
-        Some((edited(before.shown, (p.line, p.at), (p.line, p.at + 1), ""), true))
+    let expected = if let Some((p, width)) = done.char_deleted {
+        Some((edited(before.shown, (p.line, p.at), (p.line, p.at + width), ""), true))
     } else if let Some(s) = &done.typed {
         // Typed after a heading's label, it goes in the heading ([`edit::typing_point`]).
         let e = before.editor;
         let typed_at = doc.locate(&e.text, edit::typing_point(&e.text, e.head), e.hint).unwrap_or(h);
         let (lo, hi) = done.selection_deleted.unwrap_or((typed_at, typed_at));
         let strict = lo.line == hi.line && !changes_typography(s) && matches!(op, Op::Type(_)) && done.steps == 1;
-        let at = edit::insertion(&before.editor.text, &doc, (lo, hi)).filter(|_| lo != hi).unwrap_or(before.editor.head);
+        let at = edit::insertion(&before.editor.text, &doc, (lo, hi))
+            .filter(|_| lo != hi)
+            .unwrap_or_else(|| edit::typing_point(&before.editor.text, before.editor.head));
         let listed = edit::paste(&before.editor.text, at, s).contains("\\item ");
         let s = if matches!(op, Op::Paste(_)) && listed { pasted(s) } else { s.clone() };
         Some((edited(before.shown, (lo.line, lo.at), (hi.line, hi.at), &s), strict))
@@ -366,7 +413,17 @@ fn expected_view(before: &Before<'_>, op: &Op, done: &Done, after: &Shown) -> Re
     // Strict: the same lines with the same words; else the same words.
     let lines = |s: &str| normal(s).lines().map(words).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n");
     let (w, g) = if strict { (lines(&want), lines(&got)) } else { (words(&want), words(&got)) };
+    // Small capitals show typed letters as capitals.
+    let (w, g) = (w.to_lowercase(), g.to_lowercase());
     if w == g {
+        return Ok(());
+    }
+    // A paste made after a deletion of structure reads where that deletion left the caret (a
+    // heading, where lines that start with a bullet or a number stay text).
+    if let (Op::Paste(s), Some((lo, hi))) = (op, done.selection_deleted)
+        && done.steps > 1
+        && words(&edited(before.shown, (lo.line, lo.at), (hi.line, hi.at), s)).to_lowercase() == g
+    {
         return Ok(());
     }
     let at = w.chars().zip(g.chars()).take_while(|(x, y)| x == y).count();

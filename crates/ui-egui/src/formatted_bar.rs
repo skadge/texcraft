@@ -106,21 +106,32 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, chosen: &mut Option<&'stati
     let mut room = ui.max_rect().right() - ui.cursor().left() - (button + 2.0 * t.unit);
     let style_width = style_width(ui, &t);
     let mut hidden: Vec<usize> = Vec::new();
+    // On a phone, Bold, Italic and Code stay when the paragraph style's drop-down does not fit:
+    // it goes to the More menu alone.
+    let mut style_hidden = false;
     for (i, (buttons, _)) in GROUPS.iter().enumerate() {
         // The divider before it: a line between two margins.
         let mut width = 2.0 * t.unit + 1.0 + spacing + f32::from(*buttons) * button;
         if i == 0 {
-            width += style_width + spacing;
+            if width + style_width + spacing <= room {
+                width += style_width + spacing;
+            } else {
+                style_hidden = true;
+            }
         }
         if !(hidden.is_empty() && width <= room) {
             hidden.push(i);
+            // The whole group goes to the menu.
+            style_hidden &= i != 0;
             continue;
         }
         room -= width;
         divider(ui, &t);
         match i {
             0 => {
-                paragraph_style(app, ui, (&here, &names, style_width), chosen);
+                if !style_hidden {
+                    paragraph_style(app, ui, (&here, &names, style_width), chosen);
+                }
                 let bold = tl!("Bold");
                 if glyph_toggle(ui, &t, "B", &tip(app, bold, "edit.bold"), bold, here.bold).clicked() {
                     *chosen = Some("edit.bold");
@@ -187,7 +198,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, chosen: &mut Option<&'stati
             }
         }
     }
-    if hidden.is_empty() {
+    if hidden.is_empty() && !style_hidden {
         return;
     }
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -196,8 +207,17 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui, chosen: &mut Option<&'stati
         widgets::keyboard_menu(ui, &more);
         egui::Popup::menu(&more).show(|ui| {
             ui.set_min_width(200.0);
+            // The paragraph styles, when only they went to the menu.
+            let styles = GROUPS[0].1.get(..4).unwrap_or_default();
+            if style_hidden {
+                for (label, id) in styles {
+                    if menu_entry(app, ui, crate::i18n::t(label), id) {
+                        *chosen = Some(id);
+                    }
+                }
+            }
             for (n, i) in hidden.iter().enumerate() {
-                if n > 0 {
+                if n > 0 || style_hidden {
                     ui.separator();
                 }
                 for (label, id) in GROUPS[*i].1 {

@@ -22,7 +22,7 @@ use texcraft_engine::{FormulaBox, FormulaState};
 use texcraft_latex::auxfile::{Aux, CiteStyle, Missing};
 use texcraft_latex::edit::{self, Line, Part};
 use texcraft_latex::numbers::Number;
-use texcraft_latex::view::{Block, BlockKind, ChipKind, FrontMatter, Inline, InlineKind, Item, ListKind, NoteKind, Style, TheoremKind};
+use texcraft_latex::view::{Block, BlockKind, ChipKind, Field, FrontMatter, Inline, InlineKind, Item, ListKind, NoteKind, Style, TheoremKind};
 use texcraft_preview::figure;
 
 use crate::App;
@@ -82,6 +82,9 @@ enum Chip {
     Label,
     /// An `\input` in a sentence: its icon and the file's name.
     File,
+    /// What the view names: a placeholder ("Table of contents", today's date), an overlay, a
+    /// macro's name, a bibliography entry's key; small, in a quiet pill.
+    Tag(String),
 }
 
 /// The misspelled words' bytes, in order.
@@ -359,6 +362,9 @@ fn line_of(pieces: &[Piece], empty_at: usize) -> Line {
             match (&p.kind, &p.offsets) {
                 (PieceKind::Text, Some(o)) => Part::Text(o.clone()),
                 (PieceKind::Text, None) if p.range.is_empty() => Part::Decoration(chars),
+                // A bibliography entry's key stands for its `\bibitem`, which the view does not
+                // edit (as a list's `\item`): the caret skips it.
+                (PieceKind::Chip(ChipKind::Entry, ..), _) => Part::Decoration(chars),
                 _ => Part::Atom { chars, range: p.range.clone() },
             }
         })
@@ -932,7 +938,7 @@ fn draw_blocks(ui: &mut egui::Ui, cx: &mut Cx<'_>, blocks: &[Block], depth: usiz
     // the next `\item`, the end of the text).
     if let Some(last) = blocks.last() {
         let end = block_end(cx.text, last);
-        let next = end + edit::invisible_len(cx.text.get(end..).unwrap_or_default());
+        let next = end + edit::declared_len(cx.text.get(end..).unwrap_or_default());
         phantom(ui, cx, edit::Between { prev: end, next, prev_paragraph: para(last), next_paragraph: false }, true);
     }
 }
@@ -972,8 +978,11 @@ fn draw_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, block: &Block, depth: usize) {
                 &Para { size, bold: false, color: cx.t.text, role: egui::Role::Paragraph, empty_at: None, cell: None },
             );
         }
-        BlockKind::List { kind, items } => list(ui, cx, *kind, items, depth),
-        BlockKind::Container { name, blocks } => container(ui, cx, name, &or_empty(cx.text, range, blocks), depth),
+        BlockKind::List { kind, items } => {
+            let label = list_label(cx.text, range);
+            list(ui, cx, (*kind, label.as_deref()), items, depth);
+        }
+        BlockKind::Container { name, titles, blocks } => container(ui, cx, range, (name, titles), &or_empty(cx.text, range, blocks), depth),
         BlockKind::FrontMatter(fm) => front_matter(ui, cx, fm, depth),
         BlockKind::Theorem { kind, title, blocks, .. } => theorem(ui, cx, range, kind, title, &or_empty(cx.text, range, blocks), depth),
         BlockKind::Include { name, .. } => include(ui, cx, range, name, depth),
@@ -1068,11 +1077,24 @@ impl Builder<'_> {
 
     fn format(&self, style: Style, color: Color32) -> TextFormat {
         let bold = style.bold || self.bold;
+        // A declared size (`\Large`), as LaTeX's steps scale it.
+        let declared = match style.size {
+            ..=-4 => 0.5,
+            -3 => 0.7,
+            -2 => 0.8,
+            -1 => 0.9,
+            0 => 1.0,
+            1 => 1.2,
+            2 => 1.44,
+            3 => 1.73,
+            4 => 2.07,
+            5.. => 2.49,
+        };
         let size = match (style.sup, style.small_caps) {
             (true, _) => self.size * 0.65,
             (false, true) => self.size * 0.82,
             (false, false) => self.size,
-        };
+        } * declared;
         let font = if style.mono {
             FontId::new(size * 0.88, FontFamily::Monospace)
         } else if style.sans {
@@ -1083,7 +1105,7 @@ impl Builder<'_> {
         TextFormat {
             font_id: font,
             color,
-            line_height: Some(self.line_height()),
+            line_height: Some(self.line_height().max((size * self.t.reading_leading).round())),
             italics: style.italic && bold,
             underline: if style.underline { Stroke::new(1.0, color) } else { Stroke::NONE },
             valign: if style.sup { Align::TOP } else { Align::Center },
@@ -1187,6 +1209,7 @@ impl Builder<'_> {
                     Chip::Missing(_) => format!("{}\u{a0}?", key.replace(' ', "\u{a0}")),
                     Chip::Label => String::new(),
                     Chip::File => key.replace(' ', "\u{a0}"),
+                    Chip::Tag(ref words) => words.replace(' ', "\u{a0}"),
                 };
                 self.plain.push_str(&words);
                 let shown = format!("\u{a0}{icon}{shown}\u{a0}");
@@ -1232,6 +1255,7 @@ fn merge(outer: Style, inner: Style) -> Style {
         sans: outer.sans || inner.sans,
         small_caps: outer.small_caps || inner.small_caps,
         sup: outer.sup || inner.sup,
+        size: if inner.size != 0 { inner.size } else { outer.size },
     }
 }
 
@@ -1244,6 +1268,9 @@ fn plain(text: &str, inlines: &[Inline]) -> String {
             InlineKind::LineBreak => out.push(' '),
             InlineKind::Formula { source, .. } => out.push_str(&collapse(text.get(source.clone()).unwrap_or_default())),
             InlineKind::Chip { kind: ChipKind::Label, .. } => {}
+            InlineKind::Chip { kind: kind @ (ChipKind::Placeholder | ChipKind::Overlay | ChipKind::Macro), command, key } => {
+                out.push_str(&tag_words(*kind, command, key));
+            }
             InlineKind::Chip { key, .. } => out.push_str(key),
             InlineKind::Footnote(_) => {}
             InlineKind::Link { text: inner, .. } => out.push_str(&plain(text, inner)),
@@ -1284,6 +1311,10 @@ fn chip(refs: &Refs, kind: ChipKind, command: &str, key: &str) -> (Chip, String)
     let resolved = match kind {
         ChipKind::Label => return (Chip::Label, String::new()),
         ChipKind::File => return (Chip::File, key.to_owned()),
+        ChipKind::Placeholder | ChipKind::Overlay | ChipKind::Macro | ChipKind::Entry => {
+            let words = tag_words(kind, command, key);
+            return (Chip::Tag(words.clone()), words);
+        }
         ChipKind::Reference => Aux::reference(refs.aux.as_deref(), command, key),
         ChipKind::Citation => Aux::citation(refs.aux.as_deref(), refs.numbered.cite_style.unwrap_or(CiteStyle::Plain), command, key),
     };
@@ -1306,8 +1337,33 @@ fn chip_icon(kind: ChipKind) -> &'static str {
     match kind {
         ChipKind::Label => "tag",
         ChipKind::Reference => "link",
-        ChipKind::Citation => "book-open",
-        ChipKind::File => "file-text",
+        ChipKind::Citation | ChipKind::Entry => "book-open",
+        ChipKind::File | ChipKind::Placeholder | ChipKind::Overlay | ChipKind::Macro => "file-text",
+    }
+}
+
+/// Today's date as LaTeX's `\today` prints it (in English, as the PDF does without babel).
+fn today() -> String {
+    chrono::Local::now().date_naive().format("%B %-d, %Y").to_string()
+}
+
+/// What a placeholder, an overlay, a macro's or an entry's chip shows.
+fn tag_words(kind: ChipKind, command: &str, key: &str) -> String {
+    match (kind, command) {
+        (ChipKind::Placeholder, "today") => today(),
+        (ChipKind::Placeholder, "tableofcontents") => tl!("Table of contents").to_owned(),
+        (ChipKind::Placeholder, "listoffigures") => tl!("List of figures").to_owned(),
+        (ChipKind::Placeholder, "listoftables") => tl!("List of tables").to_owned(),
+        (ChipKind::Placeholder, "printbibliography" | "bibliography") => tl!("Bibliography").to_owned(),
+        (ChipKind::Placeholder, "printindex") => tl!("Index").to_owned(),
+        (ChipKind::Placeholder, "newpage" | "clearpage" | "cleardoublepage" | "pagebreak") => tl!("Page break").to_owned(),
+        (ChipKind::Placeholder, "appendix") => tl!("Appendices").to_owned(),
+        (ChipKind::Placeholder, "titlepage") => tl!("Title page").to_owned(),
+        (ChipKind::Placeholder, "maketitle") => tl!("Title").to_owned(),
+        (ChipKind::Overlay, "pause") => tl!("Pause").to_owned(),
+        (ChipKind::Overlay, _) => tl!("Slides {spec}").replace("{spec}", key),
+        (ChipKind::Entry, _) => key.to_owned(),
+        _ => command.to_owned(),
     }
 }
 
@@ -1344,6 +1400,24 @@ fn piece_tip(kind: &PieceKind, text: &str, range: &Range<usize>, cited: &HashMap
         PieceKind::Chip(ChipKind::File, command, _) => {
             tl!("File read with \\{command}: {key}").replace("{command}", command).replace("{key}", &key())
         }
+        PieceKind::Chip(ChipKind::Placeholder, command, _) => match command.as_str() {
+            "today" => tl!("Today's date (\\today): the PDF shows the date it is built on.").to_owned(),
+            "newpage" | "clearpage" | "cleardoublepage" | "pagebreak" => tl!("A new page starts here (\\{command}).").replace("{command}", command),
+            "appendix" => tl!("The chapters or sections after this are appendices (\\appendix).").to_owned(),
+            _ => tl!("The PDF prints this here (\\{command}): it is made when the document is built.").replace("{command}", command),
+        },
+        PieceKind::Chip(ChipKind::Overlay, command, _) if command == "pause" => {
+            tl!("A pause (\\pause): what follows shows on the next slide.").to_owned()
+        }
+        PieceKind::Chip(ChipKind::Overlay, command, _) => {
+            let spec = text.get(range.clone()).unwrap_or_default();
+            let spec = spec.split_once('<').and_then(|(_, r)| r.split_once('>')).map_or(spec, |(s, _)| s);
+            tl!("Shown on slides {spec} only (\\{command}).").replace("{spec}", spec).replace("{command}", command)
+        }
+        PieceKind::Chip(ChipKind::Macro, command, _) => {
+            tl!("\\{command}, a command this document defines: its arguments are edited here as text.").replace("{command}", command)
+        }
+        PieceKind::Chip(ChipKind::Entry, ..) => tl!("A bibliography entry: cite it with \\cite{key}.").replace("{key}", &key()),
         PieceKind::Formula(true) => tl!("The formula's source, while it is typeset. Click to edit it here.").to_owned(),
         PieceKind::Formula(false) => {
             tl!("The formula's source: this version typesets formulas in the desktop app only. Click to edit it here.").to_owned()
@@ -1755,7 +1829,10 @@ fn title_block(
     let date_at = caret_in(&slots[2]).filter(|_| date.is_empty());
     let (title_here, author_here) = (title_at.is_some(), author_at.is_some());
     if title.is_empty() && author.is_empty() && !title_here && !author_here {
-        let tip = [Inline { kind: InlineKind::Source, range: range.clone() }];
+        let tip = [Inline {
+            kind: InlineKind::Chip { kind: ChipKind::Placeholder, command: "maketitle".into(), key: String::new() },
+            range: range.clone(),
+        }];
         let _ = paragraph(
             ui,
             cx,
@@ -1838,19 +1915,27 @@ fn front_matter(ui: &mut egui::Ui, cx: &mut Cx<'_>, fm: &FrontMatter, depth: usi
     let para =
         |size: f32, color: Color32, role: egui::Role| Para { size, bold: role == egui::Role::Heading, color, role, empty_at: None, cell: None };
     ui.add_space(t.reading_size);
-    if !fm.title.is_empty() {
-        let range = span_of(&fm.title, 0);
+    // An empty field shows while the caret is in it (its text just deleted).
+    let caret = cx.caret;
+    let here = move |text: &[Inline], slot: &Range<usize>| caret.filter(|c| text.is_empty() && slot.start <= *c && *c <= slot.end);
+    let title_at = fm.title_slot.as_ref().and_then(|s| here(&fm.title, s));
+    if !fm.title.is_empty() || title_at.is_some() {
+        let range = span_of(&fm.title, title_at.unwrap_or(0));
         let mut inlines = fm.title.clone();
         let signs = note_signs(fm, &fm.title_notes);
         if !signs.is_empty() {
             inlines.push(mark(signs.join(","), range.end));
         }
-        let r = paragraph(ui, cx, &inlines, &range, &para(t.heading_sizes[0], t.text, egui::Role::Heading));
+        let r = paragraph(ui, cx, &inlines, &range, &Para { empty_at: title_at, ..para(t.heading_sizes[0], t.text, egui::Role::Heading) });
         ui.ctx().accesskit_node_builder(r.id, |node| node.set_level(1));
         ui.add_space(t.reading_size * 0.75);
     }
     for author in &fm.authors {
-        let range = span_of(&author.name, 0);
+        let at = here(&author.name, &author.slot);
+        if author.name.is_empty() && author.emails.is_empty() && at.is_none() {
+            continue;
+        }
+        let range = span_of(&author.name, at.unwrap_or(author.slot.start));
         let mut inlines = author.name.clone();
         let numbers =
             author.affiliations.iter().map(|k| fm.affiliations.iter().position(|a| &a.key == k).map_or_else(|| k.clone(), |i| (i + 1).to_string()));
@@ -1868,7 +1953,7 @@ fn front_matter(ui: &mut egui::Ui, cx: &mut Cx<'_>, fm: &FrontMatter, depth: usi
                 i
             }));
         }
-        let _ = paragraph(ui, cx, &inlines, &range, &para(t.reading_size * 1.1, t.text, egui::Role::Paragraph));
+        let _ = paragraph(ui, cx, &inlines, &range, &Para { empty_at: at, ..para(t.reading_size * 1.1, t.text, egui::Role::Paragraph) });
         ui.add_space(t.reading_size * 0.2);
     }
     if !fm.affiliations.is_empty() {
@@ -1876,23 +1961,31 @@ fn front_matter(ui: &mut egui::Ui, cx: &mut Cx<'_>, fm: &FrontMatter, depth: usi
     }
     let numbered = fm.affiliations.len() > 1 || fm.affiliations.iter().any(|a| !a.key.is_empty());
     for (i, a) in fm.affiliations.iter().enumerate() {
-        let range = span_of(&a.text, 0);
+        let at = here(&a.text, &a.slot);
+        if a.text.is_empty() && at.is_none() {
+            continue;
+        }
+        let range = span_of(&a.text, at.unwrap_or(a.slot.start));
         let mut inlines = Vec::new();
         if numbered {
             inlines.push(mark(format!("{}\u{2009}", i + 1), range.start));
         }
         inlines.extend(a.text.iter().cloned());
-        let _ = paragraph(ui, cx, &inlines, &range, &para(t.reading_size * 0.85, t.text_muted, egui::Role::Paragraph));
+        let _ = paragraph(ui, cx, &inlines, &range, &Para { empty_at: at, ..para(t.reading_size * 0.85, t.text_muted, egui::Role::Paragraph) });
     }
     if !fm.notes.is_empty() {
         ui.add_space(t.reading_size * 0.5);
     }
     for note in &fm.notes {
-        let range = span_of(&note.text, 0);
+        let at = here(&note.text, &note.slot);
+        if note.text.is_empty() && at.is_none() {
+            continue;
+        }
+        let range = span_of(&note.text, at.unwrap_or(note.slot.start));
         let sign = note_signs(fm, std::slice::from_ref(&note.key)).concat();
         let mut inlines = vec![mark(format!("{sign}\u{2009}"), range.start)];
         inlines.extend(note.text.iter().cloned());
-        let _ = paragraph(ui, cx, &inlines, &range, &para(t.reading_size * 0.85, t.text_muted, egui::Role::Paragraph));
+        let _ = paragraph(ui, cx, &inlines, &range, &Para { empty_at: at, ..para(t.reading_size * 0.85, t.text_muted, egui::Role::Paragraph) });
     }
     cx.align = align;
     if !fm.blocks.is_empty() {
@@ -1919,7 +2012,13 @@ fn heading(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, level: u8, 
         inlines.push(label.clone());
     }
     // An empty heading's caret stands inside its braces.
-    let empty_at = if content.is_empty() { texcraft_latex::view::heading_slot(cx.text, range) } else { None };
+    // (In its braces, where the caret is when they hold what shows nothing: `{\bfseries }`.)
+    let empty_at = if content.is_empty() {
+        let inner = texcraft_latex::view::heading_text(cx.text, range);
+        inner.map(|r| cx.caret.filter(|c| r.start <= *c && *c <= r.end).unwrap_or(r.start))
+    } else {
+        None
+    };
     let r = paragraph(ui, cx, &inlines, range, &Para { size, bold: true, color: t.text, role: egui::Role::Heading, empty_at, cell: None });
     // Part and chapter are the first level, section the second, and so on.
     let aria = usize::from(level.max(1));
@@ -1928,7 +2027,59 @@ fn heading(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, level: u8, 
 }
 
 /// A list's marker at `depth` for item `n` (from 0).
-fn marker(kind: ListKind, depth: usize, n: usize) -> String {
+/// The `label=` of a list's options (enumitem's `\begin{enumerate}[label=(\alph*)]`), its braces
+/// taken off.
+fn list_label(text: &str, range: &Range<usize>) -> Option<String> {
+    let src = text.get(range.clone())?;
+    let after = src.get(src.find('}')? + 1..)?.trim_start();
+    let options = after.strip_prefix('[')?;
+    let mut depth = 0usize;
+    let end = options.char_indices().find(|(_, c)| {
+        match c {
+            '{' => depth += 1,
+            '}' => depth = depth.saturating_sub(1),
+            ']' if depth == 0 => return true,
+            _ => {}
+        }
+        false
+    })?;
+    let options = options.get(..end.0)?;
+    let mut depth = 0usize;
+    let mut start = 0;
+    let mut parts = Vec::new();
+    for (i, c) in options.char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.push(options.get(start..i).unwrap_or_default());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(options.get(start..).unwrap_or_default());
+    let value = parts.iter().find_map(|p| p.trim().strip_prefix("label")?.trim_start().strip_prefix('='))?.trim();
+    let value = value.strip_prefix('{').and_then(|v| v.strip_suffix('}')).unwrap_or(value);
+    Some(value.to_owned())
+}
+
+/// An item's marker as a list's `label=` makes it (`(\alph*)` as "(a)"), when it is only text and
+/// counters the view knows.
+fn labelled(label: &str, n: usize) -> Option<String> {
+    let shown = label
+        .replace("\\alph*", &letters(n))
+        .replace("\\Alph*", &letters(n).to_uppercase())
+        .replace("\\roman*", &roman(n + 1))
+        .replace("\\Roman*", &roman(n + 1).to_uppercase())
+        .replace("\\arabic*", &(n + 1).to_string());
+    (!shown.is_empty() && !shown.contains(['\\', '{', '}', '$'])).then_some(shown)
+}
+
+fn marker((kind, label): (ListKind, Option<&str>), depth: usize, n: usize) -> String {
+    if let Some(shown) = label.and_then(|l| labelled(l, n)).filter(|_| kind != ListKind::Descriptions) {
+        return shown;
+    }
     match kind {
         ListKind::Bullets => ["•", "◦", "▪", "·"][depth % 4].to_owned(),
         ListKind::Numbers => match depth % 4 {
@@ -1937,8 +2088,15 @@ fn marker(kind: ListKind, depth: usize, n: usize) -> String {
             2 => format!("{}.", roman(n + 1)),
             _ => format!("{}.", letters(n).to_uppercase()),
         },
-        ListKind::Descriptions => String::new(),
+        ListKind::Descriptions | ListKind::Bibliography => String::new(),
     }
+}
+
+/// The label of the `\bibitem[label]{key}` that starts `text[range]`.
+fn bibitem_label(text: &str, range: &Range<usize>) -> Option<String> {
+    let src = text.get(range.clone())?.strip_prefix("\\bibitem")?.trim_start().strip_prefix('[')?;
+    let label = src.get(..src.find(']')?)?.trim();
+    (!label.is_empty()).then(|| label.to_owned())
 }
 
 /// `a`, `b`, … `z`, `aa`, …
@@ -1981,21 +2139,52 @@ fn roman(n: usize) -> String {
     out
 }
 
-fn list(ui: &mut egui::Ui, cx: &mut Cx<'_>, kind: ListKind, items: &[Item], depth: usize) {
+fn list(ui: &mut egui::Ui, cx: &mut Cx<'_>, (kind, label): (ListKind, Option<&str>), items: &[Item], depth: usize) {
     let t = cx.t;
-    let indent = if kind == ListKind::Descriptions { t.reading_size * 1.25 } else { t.reading_size * 1.75 };
+    let indent = match kind {
+        ListKind::Descriptions => t.reading_size * 1.25,
+        // As wide as its widest mark (`[Sam19]`).
+        ListKind::Bibliography => {
+            let widest = (0..items.len())
+                .map(|n| {
+                    let mark = format!("[{}]", items.get(n).and_then(|i| bibitem_label(cx.text, &i.range)).unwrap_or_else(|| (n + 1).to_string()));
+                    ui.painter().layout_no_wrap(mark, t.reading(t.reading_size, false, false), t.text).size().x
+                })
+                .fold(0.0, f32::max);
+            (widest + t.reading_size * 1.0).max(t.reading_size * 2.0)
+        }
+        _ => t.reading_size * 1.75,
+    };
+
     let line = (t.reading_size * t.reading_leading).round();
+    // A bibliography under its heading, as the PDF prints it.
+    if kind == ListKind::Bibliography {
+        let size = t.heading_sizes.get(2).copied().unwrap_or(t.reading_size);
+        let r = ui.label(egui::RichText::new(tl!("References")).font(t.reading(size, true, false)).color(t.text));
+        let _ = ui.ctx().accesskit_node_builder(r.id, |node| {
+            node.set_role(egui::accesskit::Role::Heading);
+            node.set_level(2);
+        });
+        ui.add_space(t.reading_size * 0.5);
+    }
     for (n, item) in items.iter().enumerate() {
         if n > 0 {
             ui.add_space(t.reading_size * 0.35);
         }
         let top = ui.cursor().top();
         let left = ui.cursor().left();
-        let mark = marker(kind, depth, n);
+        let mark = match kind {
+            // `[1]`, or the label of `\bibitem[Sam19]{…}`.
+            ListKind::Bibliography => format!("[{}]", bibitem_label(cx.text, &item.range).unwrap_or_else(|| (n + 1).to_string())),
+            _ => marker((kind, label), depth, n),
+        };
         if !mark.is_empty() {
             let at = pos2(left + indent - t.reading_size * 0.55, top + line / 2.0);
-            let font =
-                if kind == ListKind::Numbers { t.reading(t.reading_size, false, false) } else { t.reading(t.reading_size * 1.05, true, false) };
+            let font = if matches!(kind, ListKind::Numbers | ListKind::Bibliography) {
+                t.reading(t.reading_size, false, false)
+            } else {
+                t.reading(t.reading_size * 1.05, true, false)
+            };
             ui.painter().text(at, Align2::RIGHT_CENTER, mark, font, t.text_muted);
         }
         let mut blocks = item.blocks.clone();
@@ -2022,8 +2211,9 @@ fn list(ui: &mut egui::Ui, cx: &mut Cx<'_>, kind: ListKind, items: &[Item], dept
         }
         if blocks.is_empty() {
             // Its caret stands after `\item `.
-            let start = item.range.start + "\\item".len();
-            let at = if cx.text.get(start..start + 1) == Some(" ") { start + 1 } else { start };
+            let at = texcraft_latex::view::item_text_start(cx.text, &item.range);
+            // An item that shows nothing (`\item {\ }`): the caret stands where it is in it.
+            let at = cx.caret.filter(|c| at <= *c && *c <= item.range.end).unwrap_or(at);
             blocks.push(Block { kind: BlockKind::Paragraph(Vec::new()), range: at..at.max(item.range.end) });
         }
         ui.horizontal_top(|ui| {
@@ -2036,9 +2226,99 @@ fn list(ui: &mut egui::Ui, cx: &mut Cx<'_>, kind: ListKind, items: &[Item], dept
     }
 }
 
-fn container(ui: &mut egui::Ui, cx: &mut Cx<'_>, name: &str, blocks: &[Block], depth: usize) {
+/// A text argument's line ([`Field`]): its text, or an empty line while the caret is in its
+/// braces; `None` (nothing drawn) when it is empty and the caret is elsewhere.
+fn field(ui: &mut egui::Ui, cx: &mut Cx<'_>, f: &Field, (size, bold, color, role): (f32, bool, Color32, egui::Role)) -> Option<egui::Response> {
+    let at = cx.caret.filter(|c| f.text.is_empty() && f.slot.start <= *c && *c <= f.slot.end);
+    if f.text.is_empty() && at.is_none() {
+        return None;
+    }
+    let range = span_of(&f.text, at.unwrap_or(f.slot.start));
+    Some(paragraph(ui, cx, &f.text, &range, &Para { size, bold, color, role, empty_at: at, cell: None }))
+}
+
+/// Blocks drawn with `align`.
+fn aligned(ui: &mut egui::Ui, cx: &mut Cx<'_>, blocks: &[Block], depth: usize, align: Align) {
+    let outer = std::mem::replace(&mut cx.align, align);
+    draw_blocks(ui, cx, blocks, depth);
+    cx.align = outer;
+}
+
+/// A beamer frame as a slide: a card with its title as a heading (its subtitle under it), or
+/// "Slide" when it has none, and its content as text.
+fn frame(ui: &mut egui::Ui, cx: &mut Cx<'_>, titles: &[Field], blocks: &[Block], (depth, align): (usize, Align)) {
     let t = cx.t;
+    let card = egui::Frame::new().stroke(Stroke::new(1.0, t.control_border)).corner_radius(t.corner_large()).inner_margin(egui::Margin::same(16));
+    card.show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        let size = t.heading_sizes.get(3).copied().unwrap_or(t.reading_size);
+        let title = titles.first().and_then(|f| field(ui, cx, f, (size, true, t.text, egui::Role::Heading)));
+        match title {
+            Some(r) => {
+                let _ = ui.ctx().accesskit_node_builder(r.id, |node| node.set_level(3));
+            }
+            None => {
+                let word = egui::RichText::new(tl!("Slide").to_uppercase())
+                    .font(FontId::new(t.small_size, crate::fonts::semibold()))
+                    .extra_letter_spacing(1.2)
+                    .color(t.text_muted);
+                ui.label(word);
+            }
+        }
+        if let Some(sub) = titles.get(1) {
+            let _ = field(ui, cx, sub, (t.reading_size, false, t.text_muted, egui::Role::Paragraph));
+        }
+        ui.add_space(t.reading_size * 0.5);
+        aligned(ui, cx, blocks, depth, align);
+    });
+}
+
+/// A beamer block: its title in bold over its content, in a tinted box (an alert block's
+/// outlined in the error colour, an example block's in the success colour).
+fn slide_block(ui: &mut egui::Ui, cx: &mut Cx<'_>, name: &str, titles: &[Field], blocks: &[Block], depth: usize) {
+    let t = cx.t;
+    let edge = match name {
+        "alertblock" => t.error,
+        "exampleblock" => t.success,
+        _ => t.accent,
+    };
+    let card = egui::Frame::new()
+        .fill(blend(t.surface, t.accent_soft))
+        .stroke(Stroke::new(1.0, edge.gamma_multiply(0.6)))
+        .corner_radius(t.corner())
+        .inner_margin(egui::Margin::same(10));
+    card.show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        if let Some(title) = titles.first() {
+            let _ = field(ui, cx, title, (t.reading_size, true, t.text, egui::Role::Paragraph));
+            ui.add_space(t.reading_size * 0.25);
+        }
+        draw_blocks(ui, cx, blocks, depth);
+    });
+}
+
+fn container(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, (name, titles): (&str, &[Field]), blocks: &[Block], depth: usize) {
+    let t = cx.t;
+    let align = if texcraft_latex::view::centred(cx.text, range) { Align::Center } else { Align::Min };
     match name {
+        "frame" => frame(ui, cx, titles, blocks, (depth, align)),
+        "block" | "alertblock" | "exampleblock" => slide_block(ui, cx, name, titles, blocks, depth),
+        // A slide's columns, one after the other in reading order.
+        "columns" | "column" => draw_blocks(ui, cx, blocks, depth),
+        "titlepage" => {
+            ui.add_space(t.reading_size);
+            aligned(ui, cx, blocks, depth, align);
+            ui.add_space(t.reading_size);
+        }
+        // The recipient's address, then the letter.
+        "letter" => {
+            if let Some(address) = titles.first()
+                && field(ui, cx, address, (t.reading_size, false, t.text, egui::Role::Paragraph)).is_some()
+            {
+                ui.add_space(t.reading_size);
+            }
+            draw_blocks(ui, cx, blocks, depth);
+        }
         "abstract" | "keyword" => {
             let name = if name == "abstract" { tl!("Abstract") } else { tl!("Keywords") };
             let title = egui::RichText::new(name.to_uppercase())

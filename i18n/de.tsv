@@ -2566,3 +2566,24 @@ unit	{n} MB	{n} MB
 @msg	The TeX package server has no TeX Live {year}.	Der TeX-Paketserver hat kein TeX Live {year}.
 @msg	The TeX package server is busy; the build continues without the missing package, and asks again later.	Der TeX-Paketserver ist ausgelastet; die Kompilierung läuft ohne das fehlende Paket weiter und fragt später erneut.
 @msg	The TeX package server is not available right now; the build continues without the missing package.	Der TeX-Paketserver ist gerade nicht verfügbar; die Kompilierung läuft ohne das fehlende Paket weiter.
+	A displayed formula cannot go in a heading, a caption or a footnote: put the caret in a paragraph.	Eine abgesetzte Formel kann nicht in einer Überschrift, einer Beschriftung oder einer Fußnote stehen: Setzen Sie den Cursor in einen Absatz.
+	Slide	Folie
+	Table of contents	Inhaltsverzeichnis
+	List of figures	Abbildungsverzeichnis
+	List of tables	Tabellenverzeichnis
+	Bibliography	Literaturverzeichnis
+	Index	Index
+	Page break	Seitenumbruch
+	Appendices	Anhänge
+	Title page	Titelseite
+	Title	Titel
+	Pause	Pause
+	Slides {spec}	Folien {spec}
+	Today's date (\\today): the PDF shows the date it is built on.	Das heutige Datum (\\today): die PDF zeigt das Datum, an dem sie erstellt wird.
+	A new page starts here (\\{command}).	Hier beginnt eine neue Seite (\\{command}).
+	The chapters or sections after this are appendices (\\appendix).	Die Kapitel oder Abschnitte danach sind Anhänge (\\appendix).
+	The PDF prints this here (\\{command}): it is made when the document is built.	Die PDF setzt dies hier ein (\\{command}): es entsteht beim Erstellen des Dokuments.
+	A pause (\\pause): what follows shows on the next slide.	Eine Pause (\\pause): was folgt, erscheint auf der nächsten Folie.
+	Shown on slides {spec} only (\\{command}).	Nur auf den Folien {spec} gezeigt (\\{command}).
+	\\{command}, a command this document defines: its arguments are edited here as text.	\\{command}, ein Befehl, den dieses Dokument definiert: seine Argumente werden hier als Text bearbeitet.
+	A bibliography entry: cite it with \\cite{key}.	Ein Literatureintrag: zitieren Sie ihn mit \\cite{key}.

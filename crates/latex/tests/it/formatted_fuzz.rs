@@ -22,6 +22,7 @@ mod corpus;
 mod found;
 mod lines;
 mod sim;
+mod templates;
 
 use std::cell::Cell;
 use std::collections::BTreeMap;
@@ -151,6 +152,7 @@ fn op(rng: &mut Rng) -> Op {
         93 => Op::Footnote("A note".to_owned()),
         94 => Op::Link("https://example.org".to_owned(), if rng.flip() { String::new() } else { "site".to_owned() }),
         95 => Op::Math(rng.pick(&["inline", "display", "equation"]), "x^2".to_owned()),
+        96 => Op::Figure,
         _ => Op::Table(rng.pick(TABLE_OPS), rng.u32()),
     }
 }

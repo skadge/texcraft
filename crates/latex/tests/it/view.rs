@@ -181,7 +181,7 @@ fn an_elsarticle_front_matter_is_a_title_block_with_its_abstract_and_keywords() 
     assert_eq!(containers, ["abstract", "keyword"]);
     assert!(!fm.blocks.iter().any(|b| matches!(b.kind, BlockKind::Source)), "something in it is still shown as source");
     let keywords = fm.blocks.iter().find_map(|b| match &b.kind {
-        BlockKind::Container { name, blocks } if name == "keyword" => Some(shown_blocks(blocks)),
+        BlockKind::Container { name, blocks, .. } if name == "keyword" => Some(shown_blocks(blocks)),
         _ => None,
     });
     assert_eq!(keywords.as_deref(), Some("lighthouses · tides · scheduling"));

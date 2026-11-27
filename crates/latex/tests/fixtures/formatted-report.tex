@@ -1,0 +1,64 @@
+\documentclass[11pt]{report}
+\usepackage{graphicx}
+\usepackage{xparse}
+
+% A section of the summary: its title, ruled.
+\newcommand{\summarysection}[1]{\vspace{1em}{\large\bfseries #1}\par\hrule\vspace{0.5em}}
+% A line of the record: when, what, where.
+\newcommand{\entry}[3]{\noindent\textbf{#1}\quad \emph{#2}\par #3\par}
+% A task with optional points.
+\newcommand{\task}[1][]{\par\medskip\noindent\textbf{Task}\ifx\relax#1\relax\else\ (#1)\fi.\ }
+% Not shown as text: its argument is a width.
+\newcommand{\gap}[1]{\vspace{#1}}
+% Not shown as text: its argument is a file.
+\newcommand{\picture}[1]{\includegraphics[width=3cm]{#1}}
+\NewDocumentCommand{\pair}{m m}{#1 and #2}
+\NewDocumentCommand{\note}{o m}{\textit{#2}}
+\NewDocumentCommand{\verbatimish}{v}{#1}
+\def\old#1{#1}
+
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \vspace*{2cm}
+  {\Huge\bfseries A Report on Invented Tides\par}
+  \vspace{1cm}
+  {\Large Ada Example\par}
+  \vfill
+  Institute of Invented Places\\ Department of Small Harbours\\[0.5cm]
+  \today
+\end{titlepage}
+
+\tableofcontents
+\listoffigures
+\listoftables
+
+\chapter{Summary}
+
+\summarysection{Record}
+\entry{2020 -- 2024}{Gauge keeper}{North harbour, read twice a day.}
+\entry{2018 -- 2020}{Assistant}{South harbour.}
+
+\task[2 points]
+Explain the drift.
+
+\task
+Compare both harbours. \pair{North}{South} differ; \note[aside]{see the appendix}.
+
+\gap{2cm}
+\picture{gauge}
+\old{an old definition}
+
+\newpage
+\appendix
+\chapter{Data}
+Tables would go here.
+
+\begin{thebibliography}{9}
+\bibitem{tide2020} A. Example, \emph{Tides in harbours}, Invented Press, 2020.
+\bibitem[Sam19]{sample2019} B. Sample, Gauges and their drift, 2019.
+\bibitem{empty}
+\end{thebibliography}
+
+\end{document}

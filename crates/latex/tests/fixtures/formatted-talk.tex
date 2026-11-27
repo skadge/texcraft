@@ -1,0 +1,79 @@
+\documentclass{beamer}
+\usetheme{default}
+
+\title{Tides in Small Harbours}
+\subtitle{What the gauges say}
+\author{Ada Example \and Ben Sample}
+\institute{Institute of Invented Places}
+\date{\today}
+
+\newcommand{\term}[1]{\alert{#1}}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents[hideallsubsections]
+\end{frame}
+
+\section{Gauges}
+\begin{frame}
+  \frametitle{Three gauges}
+  \framesubtitle{and what each one measures}
+  \begin{itemize}
+    \item<1-> A float in a well, read by hand.
+    \item<2-> A pressure sensor on the sea bed.
+    \item<3-| alert@3> A radar above the quay.
+  \end{itemize}
+  \pause
+  Each has its own \term{drift}, and \only<3>{the radar's is the smallest}.
+\end{frame}
+
+\begin{frame}[fragile]{A reading}
+  \begin{verbatim}
+time  level
+06:00 1.20
+\end{verbatim}
+\end{frame}
+
+\section{Results}
+\begin{frame}{Side by side}{two harbours}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      The north harbour fills in two hours:
+      \[ h(t) = h_0 \sin(\omega t) \]
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Remember}
+        The south one takes \textbf{three}.
+      \end{block}
+      \begin{alertblock}{Careful}
+        Storms shift both.
+      \end{alertblock}
+      \begin{exampleblock}{An example}
+        A spring tide in March.
+      \end{exampleblock}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Steps}
+  \begin{enumerate}[<+->]
+    \item Read the gauge.
+    \item Correct for the drift.
+    \item Compare the harbours.
+  \end{enumerate}
+  \uncover<4->{And then publish.}
+  \visible<4>{Only on the fourth slide.}
+\end{frame}
+
+\begin{frame}
+  \centering
+  \Large Thank you.\\[1em]
+  \normalsize Questions?
+\end{frame}
+
+\end{document}
