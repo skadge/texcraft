@@ -41,6 +41,15 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.24.0" date="2026-11-27" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.24.0</url>
+      <description>
+        <p>A new project can start on GitLab or GitHub.</p>
+        <ul>
+          <li>New Project asks where to keep it: here, or on a forge you are connected to</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.23.0" date="2026-11-27" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.23.0</url>
       <description>

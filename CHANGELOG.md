@@ -5,6 +5,24 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.24.0 (2026-11-27)
+
+A new project can start on GitLab or GitHub.
+
+### New project
+
+- After choosing a template, Where to Keep It: this computer (a folder) or this browser, or
+  GitLab, GitHub, or your own server among your connections (Settings › Accounts), your default
+  chosen first. On a forge, TeXCraft makes the repository (the name checked as you type, the
+  owner, private by default), then the project with the template as its first commit, sent and
+  ready to Sync; on the desktop, in a folder of your choice. A taken name is said before
+  anything is made; a send that fails keeps the project and offers to try again.
+- Add a Connection… right from that step.
+
+### Web
+
+- The browser's TeX tree is built on retex's bundle, with the other packages it had on top.
+
 ## 0.23.0 (2026-11-27)
 
 TeX Live's common packages built in, and one place for your accounts.

@@ -1,6 +1,6 @@
 # TeXCraft roadmap
 
-**Last updated:** 2026-11-26 · **Current release:** 0.23.0
+**Last updated:** 2026-11-26 · **Current release:** 0.24.0
 
 TeXCraft is a LaTeX editor for the desktop and the browser: a project of files, a source editor and
 the PDF side by side, rebuilt as you type by [retex](https://gitlab.com/severin-lemaignan/retex).
@@ -107,7 +107,7 @@ Each feature has a code (P3, W5…) to refer to it by: in issues, commits and di
 | W11 | ⬜ | Cloud storage and embedding | Opening and saving to cloud storage; TeXCraft embedded in another page. |
 | W12 | ⬜ | Waiting for a file | A build that needs a file not fetched yet waits for it instead of stopping and starting again (JavaScript Promise Integration). |
 | W13 | 🚧 | Projects kept for good | ✅ 0.14.0: the first save asks the browser for persistent storage, and the start page says whether it was granted ("Kept until you delete them" or "may remove them when space runs low") and the room used and available; a write the browser refuses leaves the project unsaved and says why (for lack of room, what to do); File › Download Project as Zip (`project.download_zip`). Still to do: Download All Projects as one zip; a version whose write failed is not stored again with the next save (UX review, finding 10). |
-| W14 | ✅ 0.23.0 | TeX packages built in | The desktop apps carry retex's bundle `core` (the crate `retex-data`, 64 TeX Live 2026 packages in 9.7 MB: the article, report, book and letter classes with the AMS packages, graphics, hyperref, geometry, babel's English, TikZ, fontspec and unicode-math with Latin Modern), searched after an installed TeX Live of the same year: such documents build with no TeX Live installed and no network; what the bundle lacks is downloaded as before. `cargo xtask tree-site --bundle` builds the browser's TeX tree on the same files (the web job uses it from 0.23.1), with `tree.txt`'s classes and packages from a TeX Live installation added. |
+| W14 | ✅ 0.23.0 | TeX packages built in | The desktop apps carry retex's bundle `core` (the crate `retex-data`, 64 TeX Live 2026 packages in 9.7 MB: the article, report, book and letter classes with the AMS packages, graphics, hyperref, geometry, babel's English, TikZ, fontspec and unicode-math with Latin Modern), searched after an installed TeX Live of the same year: such documents build with no TeX Live installed and no network; what the bundle lacks is downloaded as before. `cargo xtask tree-site --bundle` builds the browser's TeX tree on the same files (the web job uses it from 0.24.0), with `tree.txt`'s classes and packages from a TeX Live installation added. |
 
 ## Output formats and print
 
