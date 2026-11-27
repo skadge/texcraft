@@ -91,7 +91,10 @@ fn caret_shown(shown: &Shown, e: &Editor) -> Result<(), Failure> {
     if at == e.head {
         return Ok(());
     }
+    // (Typing goes where the window types: [`edit::typing_point`], into a macro's argument after
+    // its chip.)
     let typed = |b: usize| {
+        let b = edit::typing_point(&e.text, b);
         let mut t = e.text.clone();
         // A digit: it lengthens no command's name.
         t.insert(b, '0');

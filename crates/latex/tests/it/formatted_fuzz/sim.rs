@@ -322,13 +322,18 @@ impl Editor {
         let pieces: Vec<_> = if source.is_empty() { pieces.into_iter().map(|r| edit::alone_on_line(&self.text, r)).collect() } else { pieces };
         let mut changes: Vec<Change> = pieces.iter().map(|r| Change { range: r.clone(), text: String::new() }).collect();
         let at = self.insertion(&doc, (a, h));
+        let mut shift = 0;
         match changes.first_mut() {
-            Some(first) if first.range.start <= at => first.text = source.to_owned(),
+            // Kept apart from a control word just before it (`\item`, after an overlay replaced).
+            Some(first) if first.range.start <= at => {
+                first.text = edit::joined(&self.text, first.range.start, source);
+                shift = first.text.len() - source.len();
+            }
             _ if source.is_empty() => {}
             _ => changes.insert(0, Change { range: at..at, text: source.to_owned() }),
         }
         let at = changes.first().map_or(at, |c| c.range.start.min(at));
-        let caret = at + caret.min(source.len());
+        let caret = at + shift + caret.min(source.len());
         let caret = if source.is_empty() && a != h {
             let caret = edit::deleted_caret(&self.text, &doc, (a, h), &changes).unwrap_or(caret);
             let after = edit::apply(&self.text, &changes);

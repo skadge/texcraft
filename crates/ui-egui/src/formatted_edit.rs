@@ -752,14 +752,19 @@ fn replace_at(app: &mut App, f: &Frame<'_>, (source, caret): (&str, usize), kind
     // The text goes where the selection starts: in its first run, or before them (in an empty
     // heading the selection starts in).
     let at = insertion(app, f);
+    let mut shift = 0;
     match changes.first_mut() {
-        Some(first) if first.range.start <= at => first.text = source.to_owned(),
+        // Kept apart from a control word just before it (`\item`, after an overlay replaced).
+        Some(first) if first.range.start <= at => {
+            first.text = edit::joined(f.text, first.range.start, source);
+            shift = first.text.len() - source.len();
+        }
         _ if source.is_empty() => {}
         _ => changes.insert(0, Change { range: at..at, text: source.to_owned() }),
     }
     // Nothing changes before it.
     let at = changes.first().map_or(at, |c| c.range.start.min(at));
-    let caret = at + caret.min(source.len());
+    let caret = at + shift + caret.min(source.len());
     // A deletion holding its first line whole leaves the caret where what is left of its last line
     // starts; one of whole items, in the item after them, not before its `\item`.
     let caret = if source.is_empty() && a != h {

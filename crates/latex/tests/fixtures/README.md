@@ -17,3 +17,10 @@
   `\multirow`, verbatim and `lstlisting`, `\input` and `\include`, a bibliography environment,
   and a beamer talk's frames, columns and blocks. Our own work, under the repository's licence;
   the names are invented.
+- `formatted-talk.tex`, `formatted-report.tex`: documents written for the same runs and for the
+  view's tests, of what the templates hold that the others do not: a beamer talk with a title
+  page, overlays (`\item<2->`, `\pause`, `\only<3>{…}`), frames titled by argument and by
+  `\frametitle`, columns and the three kinds of block; and a report with a `titlepage`, the
+  generated lists (`\tableofcontents`), user macros (`\newcommand`, `\NewDocumentCommand`,
+  `\def`) whose arguments are text or not, and a `thebibliography`. Our own work, under the
+  repository's licence; the names, places and titles are invented.

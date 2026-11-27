@@ -2567,3 +2567,23 @@ unit	{n} MB	{n} MB
 @msg	The TeX package server is busy; the build continues without the missing package, and asks again later.	De TeX-pakketserver is bezet; het compileren gaat verder zonder het ontbrekende pakket en vraagt het later opnieuw.
 @msg	The TeX package server is not available right now; the build continues without the missing package.	De TeX-pakketserver is nu niet beschikbaar; het compileren gaat verder zonder het ontbrekende pakket.
 	A displayed formula cannot go in a heading, a caption or a footnote: put the caret in a paragraph.	Een losstaande formule kan niet in een kop, een bijschrift of een voetnoot staan: zet de cursor in een alinea.
+	Slide	Dia
+	Table of contents	Inhoudsopgave
+	List of figures	Lijst van figuren
+	List of tables	Lijst van tabellen
+	Bibliography	Bibliografie
+	Index	Register
+	Page break	Pagina-einde
+	Appendices	Bijlagen
+	Title page	Titelpagina
+	Title	Titel
+	Pause	Pauze
+	Slides {spec}	Dia's {spec}
+	Today's date (\\today): the PDF shows the date it is built on.	De datum van vandaag (\\today): de pdf toont de datum waarop hij gemaakt wordt.
+	A new page starts here (\\{command}).	Hier begint een nieuwe pagina (\\{command}).
+	The chapters or sections after this are appendices (\\appendix).	De hoofdstukken of secties hierna zijn bijlagen (\\appendix).
+	The PDF prints this here (\\{command}): it is made when the document is built.	De pdf drukt dit hier af (\\{command}): het ontstaat wanneer het document gemaakt wordt.
+	A pause (\\pause): what follows shows on the next slide.	Een pauze (\\pause): wat volgt, verschijnt op de volgende dia.
+	Shown on slides {spec} only (\\{command}).	Alleen getoond op dia's {spec} (\\{command}).
+	\\{command}, a command this document defines: its arguments are edited here as text.	\\{command}, een opdracht die dit document definieert: de argumenten worden hier als tekst bewerkt.
+	A bibliography entry: cite it with \\cite{key}.	Een bibliografie-item: citeer het met \\cite{key}.

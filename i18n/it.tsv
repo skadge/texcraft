@@ -2567,3 +2567,23 @@ unit	{n} MB	{n} MB
 @msg	The TeX package server is busy; the build continues without the missing package, and asks again later.	Il server dei pacchetti TeX è occupato; la compilazione prosegue senza il pacchetto mancante e lo richiederà più tardi.
 @msg	The TeX package server is not available right now; the build continues without the missing package.	Il server dei pacchetti TeX non è disponibile al momento; la compilazione prosegue senza il pacchetto mancante.
 	A displayed formula cannot go in a heading, a caption or a footnote: put the caret in a paragraph.	Una formula in display non può stare in un titolo, in una didascalia o in una nota a piè di pagina: porta il cursore in un paragrafo.
+	Slide	Diapositiva
+	Table of contents	Indice
+	List of figures	Elenco delle figure
+	List of tables	Elenco delle tabelle
+	Bibliography	Bibliografia
+	Index	Indice analitico
+	Page break	Interruzione di pagina
+	Appendices	Appendici
+	Title page	Frontespizio
+	Title	Titolo
+	Pause	Pausa
+	Slides {spec}	Diapositive {spec}
+	Today's date (\\today): the PDF shows the date it is built on.	La data di oggi (\\today): il PDF mostra la data in cui viene compilato.
+	A new page starts here (\\{command}).	Qui inizia una nuova pagina (\\{command}).
+	The chapters or sections after this are appendices (\\appendix).	I capitoli o le sezioni che seguono sono appendici (\\appendix).
+	The PDF prints this here (\\{command}): it is made when the document is built.	Il PDF lo stampa qui (\\{command}): viene generato quando il documento è compilato.
+	A pause (\\pause): what follows shows on the next slide.	Una pausa (\\pause): ciò che segue appare nella diapositiva successiva.
+	Shown on slides {spec} only (\\{command}).	Mostrato solo nelle diapositive {spec} (\\{command}).
+	\\{command}, a command this document defines: its arguments are edited here as text.	\\{command}, un comando definito da questo documento: i suoi argomenti si modificano qui come testo.
+	A bibliography entry: cite it with \\cite{key}.	Una voce della bibliografia: citala con \\cite{key}.

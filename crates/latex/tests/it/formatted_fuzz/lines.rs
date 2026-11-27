@@ -114,7 +114,7 @@ impl Builder<'_> {
         }
         if let Some(last) = blocks.last() {
             let end = block_end(text, last);
-            let next = end + edit::invisible_len(text.get(end..).unwrap_or_default());
+            let next = end + edit::declared_len(text.get(end..).unwrap_or_default());
             self.phantom(Between { prev: end, next, prev_paragraph: para(last), next_paragraph: false });
         }
     }
@@ -137,7 +137,8 @@ impl Builder<'_> {
                 };
                 let (title_at, author_at) = (here(title, &slots[0]), here(author, &slots[1]));
                 if title.is_empty() && author.is_empty() && title_at.is_none() && author_at.is_none() {
-                    self.paragraph(&[Inline { kind: InlineKind::Source, range: range.clone() }], range, None, None);
+                    let chip = InlineKind::Chip { kind: ChipKind::Placeholder, command: "maketitle".to_owned(), key: String::new() };
+                    self.paragraph(&[Inline { kind: chip, range: range.clone() }], range, None, None);
                 }
                 let date_at = here(date, &slots[2]);
                 for (part, at) in [(title, title_at), (author, author_at), (date, date_at)] {
@@ -152,17 +153,35 @@ impl Builder<'_> {
                     inlines.push(decoration("\u{2002}", label.range.start));
                     inlines.push(label.clone());
                 }
-                let empty_at = if content.is_empty() { view::heading_slot(self.text, range) } else { None };
+                let empty_at = if content.is_empty() {
+                    view::heading_text(self.text, range).map(|r| self.caret.filter(|c| r.start <= *c && *c <= r.end).unwrap_or(r.start))
+                } else {
+                    None
+                };
                 self.paragraph(&inlines, range, empty_at, None);
             }
             BlockKind::Paragraph(inlines) => self.paragraph(inlines, range, None, None),
             BlockKind::List { items, .. } => items.iter().for_each(|item| self.item(item)),
-            BlockKind::Container { blocks, .. } | BlockKind::Theorem { blocks, .. } => {
+            BlockKind::Container { titles, blocks, .. } => {
+                // Its title and subtitle (a frame's, a block's), or a letter's recipient.
+                for f in titles {
+                    let at = self.caret.filter(|c| f.text.is_empty() && f.slot.start <= *c && *c <= f.slot.end);
+                    if f.text.is_empty() && at.is_none() {
+                        continue;
+                    }
+                    let start = f.text.iter().map(|i| i.range.start).min().unwrap_or(at.unwrap_or(f.slot.start));
+                    let end = f.text.iter().map(|i| i.range.end).max().unwrap_or(start).max(start);
+                    self.paragraph(&f.text, &(start..end), at, None);
+                }
                 match view::body_start(self.text, range).filter(|_| blocks.is_empty()) {
                     Some(at) => self.blocks(&[Block { kind: BlockKind::Paragraph(Vec::new()), range: at..at }]),
                     None => self.blocks(blocks),
                 }
             }
+            BlockKind::Theorem { blocks, .. } => match view::body_start(self.text, range).filter(|_| blocks.is_empty()) {
+                Some(at) => self.blocks(&[Block { kind: BlockKind::Paragraph(Vec::new()), range: at..at }]),
+                None => self.blocks(blocks),
+            },
             BlockKind::FrontMatter(fm) => self.front_matter(fm),
             BlockKind::Figure { caption, label, .. } => {
                 self.caption(range, "Figure. ", caption, label.as_ref());
@@ -226,8 +245,9 @@ impl Builder<'_> {
             }
         }
         if blocks.is_empty() {
-            let start = item.range.start + "\\item".len();
-            let at = if self.text.get(start..start + 1) == Some(" ") { start + 1 } else { start };
+            let at = view::item_text_start(self.text, &item.range);
+            // An item that shows nothing (`\item {\ }`): the caret stands where it is in it.
+            let at = self.caret.filter(|c| at <= *c && *c <= item.range.end).unwrap_or(at);
             blocks.push(Block { kind: BlockKind::Paragraph(Vec::new()), range: at..at.max(item.range.end) });
         }
         self.blocks(&blocks);
@@ -313,11 +333,21 @@ impl Builder<'_> {
             }
             InlineKind::LineBreak => atom("\n".to_owned()),
             InlineKind::Formula { source, .. } => atom(format!("\u{a0}{}\u{a0}", collapse(self.text.get(source.clone()).unwrap_or_default()))),
-            InlineKind::Chip { kind, key, .. } => {
+            InlineKind::Chip { kind: ChipKind::Entry, key, .. } => {
+                let shown = format!("\u{a0}{key}\u{a0}");
+                let chars = shown.chars().count();
+                Piece { shown, part: Part::Decoration(chars) }
+            }
+            InlineKind::Chip { kind, command, key } => {
                 let shown = match kind {
                     ChipKind::Label => "\u{a0}".repeat(5),
                     ChipKind::File => format!("{}{}", "\u{a0}".repeat(5), key.replace(' ', "\u{a0}")),
                     ChipKind::Reference | ChipKind::Citation => format!("{}\u{a0}?", key.replace(' ', "\u{a0}")),
+                    // An overlay's words are not the text's (an item made a paragraph leaves it).
+                    ChipKind::Overlay => "\u{a0}".repeat(key.chars().count() + 1),
+                    // A macro's name, as its source shows it when its call is not whole.
+                    ChipKind::Macro => format!("\\{command}"),
+                    ChipKind::Placeholder | ChipKind::Entry => format!("{command}{key}"),
                 };
                 atom(format!("\u{a0}{shown}\u{a0}"))
             }

@@ -22,6 +22,7 @@ mod corpus;
 mod found;
 mod lines;
 mod sim;
+mod templates;
 
 use std::cell::Cell;
 use std::collections::BTreeMap;

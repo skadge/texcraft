@@ -2567,3 +2567,23 @@ unit	{n} MB	{n} MB
 @msg	The TeX package server is busy; the build continues without the missing package, and asks again later.	O servidor de pacotes TeX está ocupado; a compilação continua sem o pacote em falta e voltará a pedi-lo mais tarde.
 @msg	The TeX package server is not available right now; the build continues without the missing package.	O servidor de pacotes TeX não está disponível de momento; a compilação continua sem o pacote em falta.
 	A displayed formula cannot go in a heading, a caption or a footnote: put the caret in a paragraph.	Uma fórmula destacada não pode ficar num título, numa legenda ou numa nota de rodapé: coloque o cursor num parágrafo.
+	Slide	Diapositivo
+	Table of contents	Índice
+	List of figures	Lista de figuras
+	List of tables	Lista de tabelas
+	Bibliography	Bibliografia
+	Index	Índice remissivo
+	Page break	Quebra de página
+	Appendices	Apêndices
+	Title page	Página de título
+	Title	Título
+	Pause	Pausa
+	Slides {spec}	Diapositivos {spec}
+	Today's date (\\today): the PDF shows the date it is built on.	A data de hoje (\\today): o PDF mostra a data em que é compilado.
+	A new page starts here (\\{command}).	Aqui começa uma página nova (\\{command}).
+	The chapters or sections after this are appendices (\\appendix).	Os capítulos ou secções a seguir são apêndices (\\appendix).
+	The PDF prints this here (\\{command}): it is made when the document is built.	O PDF imprime isto aqui (\\{command}): é gerado quando o documento é compilado.
+	A pause (\\pause): what follows shows on the next slide.	Uma pausa (\\pause): o que se segue aparece no diapositivo seguinte.
+	Shown on slides {spec} only (\\{command}).	Mostrado apenas nos diapositivos {spec} (\\{command}).
+	\\{command}, a command this document defines: its arguments are edited here as text.	\\{command}, um comando que este documento define: os seus argumentos editam-se aqui como texto.
+	A bibliography entry: cite it with \\cite{key}.	Uma entrada da bibliografia: cite-a com \\cite{key}.

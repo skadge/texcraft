@@ -120,11 +120,83 @@ pub fn signature(name: &str) -> &'static [Spec] {
         // The letter class: its recipient, and the parts of a letter.
         "letter" | "opening" | "closing" | "ps" | "encl" | "cc" => &[R],
         "thebibliography" => &[R],
+        "bibitem" => &[O, R],
+        "tableofcontents" => &[O],
+        // Beamer: a frame's options, title and subtitle; its blocks' titles; a column's width.
+        "frame" => &[O, R, R],
+        "frametitle" => &[O, R],
+        "framesubtitle" => &[R],
+        "block" | "alertblock" | "exampleblock" => &[R],
+        "columns" => &[O],
+        "column" => &[O, R],
         // Theorem-like environments: `\begin{theorem}[Pythagoras]`.
         "theorem" | "lemma" | "proposition" | "corollary" | "definition" | "example" | "remark" | "conjecture" | "claim" | "exercise" | "problem"
         | "assumption" | "observation" | "notation" | "hypothesis" | "fact" | "question" | "proof" => &[O],
         _ => &[],
     }
+}
+
+/// Beamer's commands and environments that take an overlay specification (`\item<2->`,
+/// `\only<3>{…}`, `\begin{block}<2>{…}`) right after their name.
+const OVERLAID: &[&str] = &[
+    "item",
+    "only",
+    "uncover",
+    "visible",
+    "invisible",
+    "onslide",
+    "alert",
+    "structure",
+    "alt",
+    "temporal",
+    "action",
+    "pause",
+    "textbf",
+    "textit",
+    "emph",
+    "includegraphics",
+    "frame",
+    "block",
+    "alertblock",
+    "exampleblock",
+    "itemize",
+    "enumerate",
+    "description",
+    "onlyenv",
+    "uncoverenv",
+    "visibleenv",
+    "invisibleenv",
+    "altenv",
+    "actionenv",
+];
+
+/// The overlay specification (`<2->`, with its angle brackets) that starts at `at`, on one line,
+/// for a command or an environment `name` that takes one: where it ends.
+fn overlay_end(text: &str, at: usize, name: &str) -> Option<usize> {
+    if !OVERLAID.contains(&name) {
+        return None;
+    }
+    let rest = text.get(at..)?.strip_prefix('<')?;
+    let close = rest.find('>')?;
+    let spec = rest.get(..close)?;
+    let ok = !spec.trim().is_empty() && spec.len() <= 40 && spec.chars().all(|c| c.is_ascii_alphanumeric() || " +-,|@.()*".contains(c));
+    ok.then_some(at + 1 + close + 1)
+}
+
+/// The overlay specification of a beamer command or environment (`\item<2->`), with its angle
+/// brackets: from right after its name.
+pub fn overlay(text: &str, node: &Node) -> Option<Range<usize>> {
+    let (name, at) = match &node.kind {
+        Kind::Command { name, star, .. } => (name.as_str(), node.range.start + 1 + name.len() + usize::from(*star)),
+        Kind::Environment { name, .. } => {
+            let src = text.get(node.range.clone())?;
+            let close = src.find('}')?;
+            (name.as_str(), node.range.start + close + 1)
+        }
+        _ => return None,
+    };
+    let end = overlay_end(text, at, name)?;
+    (end <= node.range.end).then_some(at..end)
 }
 
 /// The tree of `text`: nodes that cover it in order, with no gap.
@@ -358,6 +430,9 @@ impl Parser<'_> {
             "begin" => self.environment(start, depth),
             "verb" => self.verb(start),
             _ => {
+                if let Some(end) = overlay_end(self.text, self.i, name) {
+                    self.i = end;
+                }
                 let args = self.args(signature(name), depth);
                 Node { kind: Kind::Command { name: name.to_owned(), star, args }, range: start..self.i }
             }
@@ -453,6 +528,9 @@ impl Parser<'_> {
         }
         if depth >= MAX_DEPTH {
             return Node { kind: Kind::Text, range: start..self.i };
+        }
+        if let Some(end) = overlay_end(self.text, self.i, &name) {
+            self.i = end;
         }
         let args = self.args(signature(&name), depth);
         let begin = start..self.i;

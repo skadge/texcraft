@@ -436,7 +436,9 @@ fn a_letter_shows_its_opening_paragraphs_and_closing_as_text() {
     for words in ["Dear you,", "Body.", "Yours,"] {
         assert!(shown.contains(words), "{words:?} is not shown: {shown:?}");
     }
-    let mut e = after(text, &[Op::End { shift: false }]);
+    // Its recipient first, the opening under it.
+    assert!(shown.starts_with("Them") && shown.contains("There"), "the recipient is not shown first: {shown:?}");
+    let mut e = after(text, &[Op::Down { shift: false }, Op::End { shift: false }]);
     typed(&mut e, " friend");
     assert!(e.text.contains("\\opening{Dear you, friend}"), "{:?}", e.text);
     // Not a heading or a list: it is the opening's text.
