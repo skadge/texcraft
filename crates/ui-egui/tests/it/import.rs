@@ -538,8 +538,13 @@ fn an_import_finished_after_another_project_was_opened_joins_the_recent_projects
     type_into(&mut h, "Address", NOTES);
     settle(&mut h);
     h.get_by_role_and_label(Role::Button, "Import").click();
-    for _ in 0..4 {
+    // The import's card shows once its thread has started (the server is slow, so it is still busy).
+    for _ in 0..400 {
         h.step();
+        if h.query_by_role_and_label(Role::Group, "notes, Importing…").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
     }
     assert!(h.query_by_role_and_label(Role::Group, "notes, Importing…").is_some(), "no card for the import");
     // Meanwhile the user opens another project: the import does not take its place.

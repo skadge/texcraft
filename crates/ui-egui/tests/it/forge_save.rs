@@ -90,7 +90,8 @@ fn saving_to_github_through_the_dialog_pushes_the_history_and_offers_the_page() 
         "private is not the default"
     );
     h.get_by_role_and_label(Role::Button, "Save to GitHub").click();
-    h.run();
+    // One frame: the save runs in the background, and its spinner repaints until `settle` sees it end.
+    h.step();
     assert!(settle(&mut h), "the save did not end");
     assert!(h.query_by_label_contains("The project is in ada/My-Paper").is_some(), "the dialog does not say where the project is");
     assert!(h.query_by_role_and_label(Role::Button, "Open in Browser").is_some());
@@ -113,7 +114,8 @@ fn a_name_taken_is_said_in_the_dialog_which_stays_open() {
     let mut h = harness(&dir, &fake, &server).unwrap();
     open_with_token(&mut h);
     h.get_by_role_and_label(Role::Button, "Save to GitHub").click();
-    h.run();
+    // One frame: the save runs in the background, and its spinner repaints until `settle` sees it end.
+    h.step();
     assert!(settle(&mut h), "the save did not end");
     assert!(h.query_by_label_contains("choose another name").is_some(), "the dialog does not say the name is taken");
     assert!(h.query_by_label("Name").is_some(), "the dialog closed");
@@ -123,7 +125,8 @@ fn a_name_taken_is_said_in_the_dialog_which_stays_open() {
     h.get_by_label("Name").type_text("-2");
     h.run();
     h.get_by_role_and_label(Role::Button, "Save to GitHub").click();
-    h.run();
+    // One frame: the save runs in the background, and its spinner repaints until `settle` sees it end.
+    h.step();
     assert!(settle(&mut h), "the save did not end");
     assert!(h.query_by_label_contains("The project is in ada/My-Paper-2").is_some());
     let _ = std::fs::remove_dir_all(&dir);
