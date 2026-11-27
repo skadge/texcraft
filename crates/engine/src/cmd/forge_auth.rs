@@ -114,6 +114,15 @@ pub(crate) struct State {
     git_hosts: Vec<String>,
     /// Goes up when `git_hosts` changes.
     git_revision: u64,
+    /// The default connection's instance (Settings › Accounts › Set as Default), kept in the
+    /// preferences by the shell.
+    pub(super) default: Option<String>,
+    /// Goes up when `default` changes.
+    pub(super) default_revision: u64,
+    /// Who the personal access tokens checked in this session are for, by host (no secret).
+    pub(super) token_users: BTreeMap<String, oauth::User>,
+    /// A token being checked before it is kept (`accounts.add`).
+    pub(super) adding: Option<super::accounts::Adding>,
 }
 
 impl Default for State {
@@ -135,12 +144,16 @@ impl Default for State {
             checking: None,
             git_hosts: Vec::new(),
             git_revision: 0,
+            default: None,
+            default_revision: 0,
+            token_users: BTreeMap::new(),
+            adding: None,
         }
     }
 }
 
 /// Whether `host` reads as a server's name: letters, digits, `.`, `-` and a port.
-fn is_host(host: &str) -> bool {
+pub(super) fn is_host(host: &str) -> bool {
     !host.is_empty() && host.len() <= 253 && host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':'))
 }
 
@@ -315,11 +328,11 @@ pub(super) fn instance_of(p: &Value, service: Service) -> Result<String> {
 }
 
 /// `why` signing in to `service` is not offered, in words.
-fn unavailable(service: Service, why: Unavailable) -> String {
+pub(super) fn unavailable(service: Service, why: Unavailable) -> String {
     match why {
         Unavailable::UnknownServer => match service {
-            Service::GitLab => "TeXCraft has no application on this server: add it first (Settings › Accounts › Add a GitLab Server…, or forge.add_server), or use a personal access token.".to_owned(),
-            Service::GitHub => "TeXCraft has no application on this server: add it first (Settings › Accounts › Add a GitHub Enterprise Server…, or forge.add_server), or use a personal access token.".to_owned(),
+            Service::GitLab => "TeXCraft has no application on this server: add it first (Settings › Accounts › Add a Connection… › GitLab Server, or forge.add_server), or use a personal access token.".to_owned(),
+            Service::GitHub => "TeXCraft has no application on this server: add it first (Settings › Accounts › Add a Connection… › GitHub Enterprise Server, or forge.add_server), or use a personal access token.".to_owned(),
         },
         Unavailable::NoApplication => {
             format!("This build has no {} application yet, so it cannot sign in: use a personal access token instead.", service.name())
@@ -342,7 +355,7 @@ where
     Ok(progress)
 }
 
-fn stop_sign_in(s: &mut Session) {
+pub(super) fn stop_sign_in(s: &mut Session) {
     if let Some(task) = s.forge_auth.task.take() {
         task.stop.store(true, Ordering::Relaxed);
     }
@@ -486,7 +499,7 @@ fn sign_out(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Forgets `grant` here and in the store, and revokes it on its forge (GitLab) in the background.
-fn forget(s: &mut Session, grant: Grant) -> Value {
+pub(super) fn forget(s: &mut Session, grant: Grant) -> Value {
     let (service, instance) = (grant.service, grant.instance.clone());
     s.forge_auth.grants.remove(&instance);
     let removed = s.forge_auth.secrets.remove(&handle(&instance));
@@ -591,6 +604,18 @@ fn remove_server(s: &mut Session, p: &Value) -> Result<Value> {
     let mut result = json!({"operation": "remove_server", "instance": instance});
     if let Some(grant) = s.forge_auth.grants.get(&instance).cloned() {
         result["signed_out"] = forget(s, grant);
+    }
+    // Nothing of the server stays: the token kept for it, the session's, the default.
+    let host = servers::host_of(&instance).to_owned();
+    match s.forget_git_token(&host) {
+        Ok(forgot) => result["forgot_token"] = json!(forgot),
+        Err(e) => result["warning"] = json!(format!("The token kept for {host} could not be removed from where it is kept: {e}")),
+    }
+    s.forge_tokens.remove(&instance);
+    s.forge_auth.token_users.remove(&host);
+    if s.forge_auth.default.as_deref() == Some(instance.as_str()) {
+        s.forge_auth.default = None;
+        s.forge_auth.default_revision += 1;
     }
     Ok(result)
 }
@@ -826,6 +851,21 @@ impl Session {
         self.forge_sign_in_kept()
     }
 
+    /// The sign-ins kept, by instance.
+    pub(super) fn forge_grants(&self) -> &BTreeMap<String, Grant> {
+        &self.forge_auth.grants
+    }
+
+    /// Why the store could not be read, when it could not.
+    pub(super) fn forge_store_error(&self) -> Option<&str> {
+        self.forge_auth.store_error.as_deref()
+    }
+
+    /// Whether this window is the browser's.
+    pub(super) fn accounts_in_browser(&self) -> bool {
+        self.forge_in_browser() || self.library.is_some()
+    }
+
     /// Whether a server is being checked.
     pub fn forge_checking(&self) -> bool {
         self.forge_auth.checking.is_some()
@@ -940,6 +980,9 @@ impl Session {
                 Err(e) => Err(e.to_string()),
             });
         }
+        if let Some(done) = super::accounts::poll(self) {
+            return Some(done);
+        }
         if let Some(pending) = self.forge_auth.checking.as_mut()
             && let Some(outcome) = pending.poll()
         {
@@ -961,6 +1004,9 @@ impl Session {
 
     /// Whether a sign-in or a sign-out is running.
     pub fn forge_auth_busy(&self) -> bool {
-        self.forge_auth.task.is_some() || self.forge_auth.signing_out.is_some() || self.forge_auth.checking.is_some()
+        self.forge_auth.task.is_some()
+            || self.forge_auth.signing_out.is_some()
+            || self.forge_auth.checking.is_some()
+            || self.forge_auth.adding.is_some()
     }
 }
