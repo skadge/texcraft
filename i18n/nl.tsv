@@ -2621,3 +2621,7 @@ unit	{n} MB	{n} MB
 	TeXCraft will not download packages; a build that needs {name} stops at it. {kept}	TeXCraft downloadt geen pakketten; compileren dat {name} nodig heeft, stopt daar. {kept}
 	TeXCraft did not download {name}. It asks again the next time it starts; Settings › Building › Missing packages decides for good.	TeXCraft heeft {name} niet gedownload. Bij de volgende start vraagt het opnieuw; Instellingen › Bezig met bouwen › Ontbrekende pakketten beslist voorgoed.
 @id	build.missing_packages	Ontbrekende pakketten
+@msg	Failed: no TeX Live is installed	Mislukt: er is geen TeX Live geïnstalleerd
+@msg	Failed: {package} is not installed	Mislukt: {package} is niet geïnstalleerd
+@msg	Failed: {file} was not found	Mislukt: {file} is niet gevonden
+@msg	Failed: see the build log	Mislukt: zie het bouwlogboek

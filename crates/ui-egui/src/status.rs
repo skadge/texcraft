@@ -107,7 +107,7 @@ fn state(app: &App) -> (Option<&'static str>, egui::Color32, String) {
     match &o.status {
         Status::Unavailable(reason) => (Some("circle-exclamation-point"), t.error, crate::i18n::msg(reason)),
         Status::Cancelled => (Some("info"), t.text_muted, tl!("Compiling stopped").to_owned()),
-        Status::Failed => (Some("circle-exclamation-point"), t.error, trn(o.errors(), "Failed with {n} error", "Failed with {n} errors")),
+        Status::Failed => (Some("circle-exclamation-point"), t.error, failed(o)),
         Status::Built if o.errors() > 0 => {
             (Some("circle-exclamation-point"), t.error, trn(o.errors(), "Compiled with {n} error", "Compiled with {n} errors"))
         }
@@ -222,4 +222,19 @@ pub(crate) fn announce(ui: &egui::Ui, label: &egui::Response, text: &str) {
         node.set_live(egui::accesskit::Live::Polite);
         node.set_label(text);
     });
+}
+
+/// A failed build's words: its errors counted, or, when no error was counted, what stopped it
+/// (a missing package, named when one is known) rather than "0 errors".
+fn failed(o: &texcraft_engine::Outcome) -> String {
+    use texcraft_engine::missing::Lack;
+    if o.errors() > 0 {
+        return trn(o.errors(), "Failed with {n} error", "Failed with {n} errors");
+    }
+    match o.missing.first() {
+        Some(Lack::TexLive) => tl!("Failed: no TeX Live is installed").to_owned(),
+        Some(Lack::File { package: Some(package), .. }) => tf!("Failed: {package} is not installed", package = package),
+        Some(Lack::File { file, package: None }) => tf!("Failed: {file} was not found", file = file),
+        None => tl!("Failed: see the build log").to_owned(),
+    }
 }

@@ -2621,3 +2621,7 @@ unit	{n} MB	{n} MB
 	TeXCraft will not download packages; a build that needs {name} stops at it. {kept}	TeXCraft lädt keine Pakete herunter; ein Kompilieren, das {name} braucht, hält dort an. {kept}
 	TeXCraft did not download {name}. It asks again the next time it starts; Settings › Building › Missing packages decides for good.	TeXCraft hat {name} nicht heruntergeladen. Beim nächsten Start fragt es erneut; Einstellungen › Build läuft › Fehlende Pakete entscheidet dauerhaft.
 @id	build.missing_packages	Fehlende Pakete
+@msg	Failed: no TeX Live is installed	Fehlgeschlagen: kein TeX Live installiert
+@msg	Failed: {package} is not installed	Fehlgeschlagen: {package} ist nicht installiert
+@msg	Failed: {file} was not found	Fehlgeschlagen: {file} wurde nicht gefunden
+@msg	Failed: see the build log	Fehlgeschlagen: siehe das Build-Protokoll
