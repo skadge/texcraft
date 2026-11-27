@@ -1041,12 +1041,12 @@ fn vertical(app: &mut App, f: &Frame<'_>, up: bool, shift: bool) {
     let Some(d) = f.lines.get(h.line) else { return };
     let caret = d.galley.pos_from_cursor(CCursor::new(h.at)).translate(d.origin.to_vec2());
     let x = *app.editor.formatted.editing.want_x.get_or_insert(caret.center().x);
-    let y = if up { caret.top() - 2.0 } else { caret.bottom() + 2.0 };
-    let inside = |d: &DrawnLine| {
-        let (Some(first), Some(last)) = (d.galley.rows.first(), d.galley.rows.last()) else { return false };
-        d.origin.y + first.min_y() <= y && y <= d.origin.y + last.max_y()
-    };
-    let to = if inside(d) {
+    // The row above or below in the same line (a wrapped paragraph, a long title), by its index:
+    // a row taller than the caret (a heading's) is left by one press too.
+    let row = row_index(&d.galley, h.at);
+    let other_row = if up { row.checked_sub(1) } else { Some(row + 1).filter(|r| *r < d.galley.rows.len()) };
+    let to = if let Some(r) = other_row.and_then(|r| d.galley.rows.get(r)) {
+        let y = d.origin.y + (r.min_y() + r.max_y()) / 2.0;
         Pos { line: h.line, at: stop_at(d, egui::pos2(x, y)) }
     } else {
         let other = match d.cell {
@@ -1122,6 +1122,19 @@ fn line_edge(app: &mut App, f: &Frame<'_>, home: bool, shift: bool, whole: bool)
         Pos { line: h.line, at: at.unwrap_or(h.at) }
     };
     set_selection(app, f, if shift { a } else { to }, to);
+}
+
+/// The index of the galley row holding position `at`.
+fn row_index(galley: &egui::Galley, at: usize) -> usize {
+    let mut start = 0;
+    for (i, row) in galley.rows.iter().enumerate() {
+        let with_break = row.char_count_including_newline().0;
+        if at < start + with_break || i + 1 == galley.rows.len() {
+            return i;
+        }
+        start += with_break;
+    }
+    0
 }
 
 /// The first and last character positions of the galley row holding position `at`.

@@ -21,7 +21,8 @@ look for what goes wrong:
   talk, a talk with overlays, columns and blocks, a report with a title page and the document's own
   macros. After every step it checks that nothing panicked; that the changes are sound (in order, on
   the text, near the selection); that nothing balanced became unbalanced; that no empty item,
-  list, style or heading is left where the caret is not; that nothing became shown as source; that
+  list or heading is left where the caret is not, and no empty style anywhere (a style pressed
+  with nothing selected waits in the view, not in the source); that nothing became shown as source; that
   the caret stands where the view shows it (a key typed next goes there); that a style button
   pressed on a selection keeps that text selected; and that the view shows what the edit meant
   (the typed text where it was typed, the deleted character gone, the words kept by a change of
@@ -34,6 +35,13 @@ look for what goes wrong:
   the text, the caret is in a line of the view inside the window, a typed or composed word shows
   before the caret without its line jumping, one undo takes a word typed letter by letter back
   whole (not its last letter), and undo then redo give the texts before and after the edit back.
+- **A writer's session** (`crates/ui-egui/tests/it/formatted_session.rs`): on each template, in a
+  window of a laptop's size (1280×860), a scripted session: a paragraph with a word typed after
+  Bold and a citation, a list nested once and left, a heading, a figure with its caption, a table
+  with two cells filled, an equation, a footnote, undo and redo, Find and Replace. After each step
+  the window harness's checks hold, and the source is still sound: nothing unclosed, no empty
+  style, item or heading other than the one the caret stands in. The default run takes the
+  article; `TEXCRAFT_SESSION_TEMPLATES=all` (or names with commas) takes the others too.
 
 The default run is short (a few hundred model cases, a few window cases). For a long run:
 

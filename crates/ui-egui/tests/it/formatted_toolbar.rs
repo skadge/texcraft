@@ -371,3 +371,19 @@ fn a_style_pressed_with_nothing_selected_shows_pressed_and_waits_for_the_text_ty
     key(&mut h, egui::Modifiers::NONE, egui::Key::ArrowLeft);
     assert!(!pressed(&h, "Italic"), "a style pressed stays pending after the caret moved");
 }
+
+#[test]
+fn down_goes_through_a_wrapped_title_to_the_lines_after_it() {
+    let title = "How Many Times Can You Fold a Sheet of Paper in Half Before It Refuses to Bend Again, and Why Does It Stop";
+    let original = format!("\\title{{{title}}}\n\\author{{Ann}}\n\\begin{{document}}\n\\maketitle\n\nBody.\n\\end{{document}}\n");
+    let mut h = formatted(&original, &[]);
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::Home);
+    for _ in 0..6 {
+        key(&mut h, egui::Modifiers::NONE, egui::Key::ArrowDown);
+    }
+    h.event(egui::Event::Text("x".to_owned()));
+    h.run();
+    h.run();
+    let after = text(&mut h);
+    assert!(after.contains(&format!("\\title{{{title}}}")), "Down stayed in the title: {after:?}");
+}
