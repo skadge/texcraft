@@ -57,8 +57,21 @@ modules:
         CRAFT_FONTS_REQUIRED: '1'
     build-commands:
       - cargo --offline fetch --manifest-path Cargo.toml --verbose
-      - cargo --offline build --release --locked -p texcraft -p texcraft-cli
-      - install -Dm755 -t /app/bin target/release/texcraft target/release/texcraft-cli
+      # CI's release pipeline puts the AppImage job's binaries in prebuilt/: they link only glibc
+      # (an older one than the runtime's), so the same build serves both packages. Otherwise (a
+      # build from source, Flathub's) cargo builds them; with flatpak-builder --ccache its target
+      # folder is kept between builds in the ccache folder.
+      - |
+        if [ -x prebuilt/texcraft ] && [ -x prebuilt/texcraft-cli ]; then
+          echo "the binaries from prebuilt/"
+          install -Dm755 -t /app/bin prebuilt/texcraft prebuilt/texcraft-cli
+        else
+          target="${CCACHE_DIR:+$CCACHE_DIR/cargo-target}"
+          target="${target:-target}"
+          echo "cargo's target folder: $target"
+          cargo --offline build --release --locked --target-dir "$target" -p texcraft -p texcraft-cli
+          install -Dm755 -t /app/bin "$target/release/texcraft" "$target/release/texcraft-cli"
+        fi
       - install -Dm644 -t /app/share/applications packaging/linux/io.gitlab.severin_lemaignan.TeXCraft.desktop
       - install -Dm644 -t /app/share/metainfo packaging/linux/io.gitlab.severin_lemaignan.TeXCraft.metainfo.xml
       # The sized PNGs only: appstreamcli compose cannot read the scalable master (a drawing

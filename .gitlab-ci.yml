@@ -63,6 +63,26 @@ variables:
   - apt-get install -y -qq --no-install-recommends libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libfontconfig1-dev libgtk-3-dev
 
 # craft-fonts at CRAFT_FONTS_REV, for builds that embed the interface faces.
+# The runner keeps a folder of its own across jobs (/ci-cache, a volume of its config.toml): each
+# job's target/, cargo's downloads and the toolchains stay there, warm, instead of GitLab's cache
+# zipping several GB after every job and unzipping them before the next. The paths the builds use
+# (target/, .cargo-home, .rustup-home) are links into it, so nothing else changes. A target folder
+# over 60 GB is started again (cargo never removes what it no longer needs). Without the volume,
+# the jobs build from nothing.
+.persist: &persist
+  - |
+    if [ -d /ci-cache ]; then
+      for d in "target-$CI_JOB_NAME" "cargo-home-$CI_JOB_NAME" "rustup-$CI_JOB_NAME"; do mkdir -p "/ci-cache/$d"; done
+      if [ "$(du -s --block-size=1G "/ci-cache/target-$CI_JOB_NAME" | cut -f1)" -gt 60 ]; then rm -rf "/ci-cache/target-$CI_JOB_NAME"/*; fi
+      rm -rf target .cargo-home .rustup-home
+      ln -s "/ci-cache/target-$CI_JOB_NAME" target
+      ln -s "/ci-cache/cargo-home-$CI_JOB_NAME" .cargo-home
+      ln -s "/ci-cache/rustup-$CI_JOB_NAME" .rustup-home
+      du -sh "/ci-cache/target-$CI_JOB_NAME" || true
+    else
+      echo "No /ci-cache volume: building without a cache."
+    fi
+
 .fetch-fonts: &fetch-fonts
   - git init -q craft-fonts
   - git -C craft-fonts fetch -q --depth 1 https://github.com/storytold/craft-fonts "$CRAFT_FONTS_REV"
@@ -89,6 +109,7 @@ check:
   variables:
     RUSTUP_HOME: "$CI_PROJECT_DIR/.rustup-home"
   before_script:
+    - *persist
     - *desktop-deps
     - apt-get install -y -qq --no-install-recommends mesa-vulkan-drivers curl ca-certificates gcc libc6-dev git
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
@@ -98,13 +119,6 @@ check:
     - rustup target add wasm32-unknown-unknown
   script:
     - cargo xtask ci
-  cache:
-    key: check
-    paths:
-      - .cargo-home/registry
-      - .cargo-home/git
-      - .rustup-home
-      - target/
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE !~ /^(web|api)$/
@@ -161,6 +175,7 @@ appimage:
     CRAFT_FONTS_DIR: "$CI_PROJECT_DIR/craft-fonts"
     CRAFT_FONTS_REQUIRED: "1"
   before_script:
+    - *persist
     - *desktop-deps
     - apt-get install -y -qq --no-install-recommends desktop-file-utils binutils
     - *fetch-fonts
@@ -175,17 +190,14 @@ appimage:
     - VERSION="${CI_COMMIT_TAG#v}"
     - APPIMAGETOOL="$CI_PROJECT_DIR/tools/squashfs-root/AppRun" RUNTIME_FILE="$CI_PROJECT_DIR/tools/runtime-x86_64" VERSION="${VERSION:-$(git describe --tags --always)}" packaging/appimage/build-appimage.sh "$CI_PROJECT_DIR/out"
     - (cd out && sha256sum *.AppImage | tee SHA256SUMS-appimage)
+    # The same binaries go into the Flatpak (its job's prebuilt/), instead of a second build.
+    - mkdir -p out/bin && cp target/release/texcraft target/release/texcraft-cli out/bin/
   artifacts:
     paths:
       - out/*.AppImage
       - out/SHA256SUMS-appimage
+      - out/bin/
     expire_in: 30 days
-  cache:
-    key: release-build
-    paths:
-      - .cargo-home/registry
-      - .cargo-home/git
-      - target/
 
 # The Flatpak bundle. flatpak-builder needs user namespaces for bubblewrap, which a Docker
 # container has only when the runner runs it privileged: GitLab.com's hosted Linux runners do
@@ -198,6 +210,11 @@ flatpak:
   stage: package
   image: debian:trixie
   extends: .package-rules
+  # Packages the AppImage job's binaries (prebuilt/, see the manifest) rather than building them
+  # again in the Flatpak SDK.
+  needs:
+    - job: appimage
+      artifacts: true
   variables:
     FLATPAK_ID: io.gitlab.severin_lemaignan.TeXCraft
     # Only the Mesa GL extension: the runner's host has an NVIDIA GPU, and with its driver's
@@ -206,15 +223,28 @@ flatpak:
     FLATPAK_GL_DRIVERS: default
     MANIFEST: packaging/flatpak/io.gitlab.severin_lemaignan.TeXCraft.yml
   before_script:
+    # The runtime, the SDK and the Builder stay installed in /ci-cache (several GB, downloaded
+    # once), with flatpak-builder's state and cargo's target folder (through --ccache, see the
+    # manifest), and apt's downloads.
+    - |
+      if [ -d /ci-cache ]; then
+        mkdir -p /ci-cache/flatpak-user /ci-cache/flatpak-builder /ci-cache/apt-trixie
+        export FLATPAK_USER_DIR=/ci-cache/flatpak-user
+        rm -rf .flatpak-builder && ln -s /ci-cache/flatpak-builder .flatpak-builder
+        echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/10keep
+        rm -rf /var/cache/apt/archives && ln -s /ci-cache/apt-trixie /var/cache/apt/archives
+        mkdir -p /ci-cache/apt-trixie/partial
+      fi
     - apt-get update -qq
     - apt-get install -y -qq --no-install-recommends flatpak flatpak-builder git ca-certificates elfutils debugedit appstream
     - flatpak --user remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-    - flatpak --user install -y --noninteractive flathub org.flatpak.Builder
+    - flatpak --user install -y --noninteractive --or-update flathub org.flatpak.Builder
     - flatpak --user info org.flatpak.Builder | sed -n 's/^ *\(Version\|Commit\):/\1:/p'
   script:
     - VERSION="${CI_COMMIT_TAG#v}"; VERSION="${VERSION:-$(git describe --tags --always)}"
+    - mkdir -p prebuilt && cp out/bin/texcraft out/bin/texcraft-cli prebuilt/
     - flatpak run --command=flatpak-cargo-generator --filesystem="$CI_PROJECT_DIR" org.flatpak.Builder "$CI_PROJECT_DIR/Cargo.lock" -o "$CI_PROJECT_DIR/packaging/flatpak/cargo-sources.json"
-    - flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean --repo=flatpak-repo flatpak-build "$MANIFEST"
+    - flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean --ccache --repo=flatpak-repo flatpak-build "$MANIFEST"
     # Lint findings are shown, not fatal: some (the app id's domain, the home folder) are decisions
     # for the operator (docs/releasing.md).
     - flatpak run --command=flatpak-builder-lint --filesystem="$CI_PROJECT_DIR" org.flatpak.Builder manifest "$CI_PROJECT_DIR/$MANIFEST" || true
@@ -229,10 +259,6 @@ flatpak:
       # The generated sources, for a Flathub submission or to rebuild by hand.
       - packaging/flatpak/cargo-sources.json
     expire_in: 30 days
-  cache:
-    key: flatpak-builder
-    paths:
-      - .flatpak-builder/
 
 # The browser build (apps/texcraft-web) with Trunk, in the size-optimised `web` profile. Its
 # public_url is "./", so the files work from any folder, a Pages subpath included. The site
@@ -250,6 +276,7 @@ web:
     CRAFT_FONTS_REQUIRED: "1"
     RUSTUP_HOME: "$CI_PROJECT_DIR/.rustup-home"
   before_script:
+    - *persist
     - apt-get update -qq
     - apt-get install -y -qq --no-install-recommends curl ca-certificates gcc libc6-dev git xz-utils
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
@@ -288,14 +315,6 @@ web:
       - out/*.tar.gz
       - out/SHA256SUMS-web
     expire_in: 30 days
-  cache:
-    key: web
-    paths:
-      - .cargo-home/registry
-      - .cargo-home/git
-      - .cargo-home/bin
-      - .rustup-home
-      - target/
 
 # Uploads the packages and their checksums to the generic package registry, under the tag's
 # version. Only on a release tag.
