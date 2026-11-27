@@ -557,6 +557,22 @@ than git would; a pull's merge is per file, by line then by word, as in step 2, 
 file that does not merge is settled with git or by keeping one side); in the browser the history
 goes as one commit.
 
+### New Project on a forge (done)
+
+New Project's second step, "Where to Keep It" (docs/design/new-project.md), offers each forge
+connection that can make repositories beside This Computer / This Browser. On a forge the
+repository is made first with Save Project to…'s code (`Creator::create`; a taken name or a
+missing permission ends it there, nothing written), then on the desktop the template is written
+into the folder, committed with a `.gitignore` (`prepare_push`), `origin` set and the branch
+pushed with `git.push`'s path, the upstream set once it is; in the browser the template's files
+are the repository's first commit (`Creator::first_commit`) and the library's project is linked
+to it. A push that fails keeps the project and the repository and says why (`push_error`); the
+repository is never removed. Commands: `project.from_template {template, folder, forge: {service,
+instance?, owner?, name, visibility?, token?}, background?}` (operation `new_project`), and
+`forge.name_available {service, instance?, owner?, name}` (GitLab `GET /projects/:path`, GitHub
+`GET /repos/:owner/:name`: found means taken). Visibility: private (default), internal (GitLab
+only), public. Overleaf has no API to make projects: the step says to make it there, then import.
+
 ## Step 6: more
 
 - Files over the limits fetched when the engine reads them; a diff of the changes before
