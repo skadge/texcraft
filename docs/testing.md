@@ -18,7 +18,8 @@ look for what goes wrong:
   the examples and documents written for the runs: lists, tables, figures, theorems of several
   styles, front matter, `\newcommand` macros, comments everywhere, lists four deep, `\multicolumn`
   and `\multirow`, verbatim and `lstlisting`, `\input` and `\include`, a bibliography, a beamer
-  talk. After every step it checks that nothing panicked; that the changes are sound (in order, on
+  talk, a talk with overlays, columns and blocks, a report with a title page and the document's own
+  macros. After every step it checks that nothing panicked; that the changes are sound (in order, on
   the text, near the selection); that nothing balanced became unbalanced; that no empty item,
   list, style or heading is left where the caret is not; that nothing became shown as source; that
   the caret stands where the view shows it (a key typed next goes there); that a style button
