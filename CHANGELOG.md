@@ -15,7 +15,7 @@ TeX Live's common packages built in, and one place for your accounts.
   with the AMS packages, graphics, hyperref, babel's English, TikZ, fontspec and unicode-math
   with Latin Modern): common documents typeset with no TeX Live installed and no network. A
   package the bundle lacks is downloaded as Settings › Building › Missing packages says.
-- The browser's TeX tree is built on the same bundle.
+- The browser's TeX tree can be built on the same bundle (`cargo xtask tree-site --bundle`).
 
 ### Accounts
 
