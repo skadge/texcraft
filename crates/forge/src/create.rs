@@ -27,13 +27,40 @@ pub struct Owner {
     pub namespace_id: Option<u64>,
 }
 
+/// Who can see a repository.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Visibility {
+    /// Only those given access (the default).
+    #[default]
+    Private,
+    /// Everyone signed in to the server (GitLab; GitHub only in an enterprise's organisations).
+    Internal,
+    /// Anyone.
+    Public,
+}
+
+impl Visibility {
+    /// Its id, as the forges' APIs and the commands say it.
+    pub fn id(self) -> &'static str {
+        match self {
+            Visibility::Private => "private",
+            Visibility::Internal => "internal",
+            Visibility::Public => "public",
+        }
+    }
+
+    pub fn parse(id: &str) -> Option<Self> {
+        [Visibility::Private, Visibility::Internal, Visibility::Public].into_iter().find(|v| v.id() == id)
+    }
+}
+
 /// A repository to make.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewRepository {
     /// Where: an organisation or group's path; none for the account itself.
     pub owner: Option<Owner>,
     pub name: String,
-    pub private: bool,
+    pub visibility: Visibility,
     pub description: Option<String>,
     /// GitHub only: start it with a first commit (a README) so that its API can commit to it,
     /// which it cannot do in an empty repository (the browser's first commit replaces it).
@@ -178,6 +205,37 @@ impl Creator {
         Ok(out)
     }
 
+    /// Whether `owner/name` exists already (`owner`: a group or organisation's path, or none for
+    /// the account itself), as this account sees it; and its path. A repository the account
+    /// cannot see is not found: the forge's refusal when it is made is what counts.
+    pub async fn exists(&self, owner: Option<&str>, name: &str) -> Result<(bool, String)> {
+        check_name(name)?;
+        let api = self.api();
+        let owner = match owner.map(str::trim).filter(|o| !o.is_empty()) {
+            Some(o) => o.to_owned(),
+            None => {
+                let user = self.send("GET", format!("{api}/user"), None, "the signed-in account").await?;
+                let login = match self.service {
+                    Service::GitHub => user["login"].as_str(),
+                    Service::GitLab => user["username"].as_str(),
+                };
+                login.ok_or_else(|| Error::Invalid("the account has no name".to_owned()))?.to_owned()
+            }
+        };
+        let path = format!("{owner}/{name}");
+        let url = match self.service {
+            Service::GitHub => format!("{api}/repos/{}/{}", encode(&owner), encode(name)),
+            Service::GitLab => format!("{api}/projects/{}", encode(&path)),
+        };
+        let response = self.send_raw("GET", url, None).await?;
+        if response.status == 404 {
+            return Ok((false, path));
+        }
+        let what = format!("whether {path} exists");
+        check(self.service, response, &what)?;
+        Ok((true, path))
+    }
+
     /// Makes repository `new`. A name the owner has already is [`Error::NameTaken`].
     pub async fn create(&self, new: &NewRepository) -> Result<Created> {
         check_name(&new.name)?;
@@ -190,7 +248,10 @@ impl Creator {
                     Some(o) => format!("{api}/orgs/{}/repos", encode(&o.path)),
                     None => format!("{api}/user/repos"),
                 };
-                let mut body = json!({"name": new.name, "private": new.private, "auto_init": new.initialize});
+                let mut body = json!({"name": new.name, "private": new.visibility != Visibility::Public, "auto_init": new.initialize});
+                if new.visibility == Visibility::Internal {
+                    body["visibility"] = json!("internal");
+                }
                 if let Some(d) = new.description.as_deref().filter(|d| !d.trim().is_empty()) {
                     body["description"] = json!(d.trim());
                 }
@@ -200,7 +261,7 @@ impl Creator {
                 let mut body = json!({
                     "name": new.name,
                     "path": new.name,
-                    "visibility": if new.private { "private" } else { "public" },
+                    "visibility": new.visibility.id(),
                     "initialize_with_readme": false,
                 });
                 if let Some(id) = owner.and_then(|o| o.namespace_id) {

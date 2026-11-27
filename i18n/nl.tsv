@@ -2697,3 +2697,45 @@ unit	{n} MB	{n} MB
 	{host} · token	{host} · token
 	Token for {username}	Token voor {username}
 	Token kept	Token bewaard
+	A folder of your choice	Een map naar keuze
+	Asking where you can make repositories…	Opvragen waar je repository's kunt maken…
+	Back to templates	Terug naar de sjablonen
+	Create Project	Project maken
+	Created {project} on GitHub, and the project is in {folder}, but sending it did not work: {why}	{project} is op GitHub gemaakt en het project staat in {folder}, maar versturen is niet gelukt: {why}
+	Created {project} on GitHub.	{project} gemaakt op GitHub.
+	Created {project} on GitLab, and the project is in {folder}, but sending it did not work: {why}	{project} is op GitLab gemaakt en het project staat in {folder}, maar versturen is niet gelukt: {why}
+	Created {project} on GitLab.	{project} gemaakt op GitLab.
+	Everyone signed in to this server can see it.	Iedereen die op deze server is aangemeld, kan het zien.
+	GitLab, GitHub or your server	GitLab, GitHub of je eigen server
+	Kept in this browser	Bewaard in deze browser
+	Making the new project…	Het nieuwe project wordt gemaakt…
+	Making {name} on GitHub…	{name} wordt op GitHub gemaakt…
+	Making {name} on GitLab…	{name} wordt op GitLab gemaakt…
+	New project from the template {template}	Nieuw project op basis van het sjabloon {template}
+	Not signed in to {host}.	Niet aangemeld bij {host}.
+	Nothing is lost: Try Again sends it now, and Sync sends it later.	Er gaat niets verloren: Opnieuw proberen verstuurt het nu, en Synchroniseren later.
+	Repository	Repository
+	Send Later	Later versturen
+	Sending it did not work: {why}	Versturen is niet gelukt: {why}
+	Sending the project to GitHub…	Het project wordt naar GitHub verstuurd…
+	Sending the project to GitLab…	Het project wordt naar GitLab verstuurd…
+	Sign In	Aanmelden
+	Sign in again	Opnieuw aanmelden
+	The project is kept in this browser, under this name.	Het project wordt onder deze naam in deze browser bewaard.
+	This Browser	Deze browser
+	This Computer	Deze computer
+	To start on Overleaf, create the project there, then Import it.	Om op Overleaf te beginnen, maak je het project daar en importeer je het daarna.
+	Where to Keep It	Waar bewaren
+	Where to keep it	Waar bewaren
+	{project} exists already: choose another name.	{project} bestaat al: kies een andere naam.
+	{project} is free.	{project} is vrij.
+@id	forge.name_available	Of een repositorynaam vrij is
+@msg	GitHub keeps internal repositories for an enterprise's organisations: choose private or public.	GitHub houdt interne repository's voor de organisaties van een onderneming: kies privé of openbaar.
+@msg	New project from the template {title}	Nieuw project op basis van het sjabloon {title}
+@msg	The new project has nothing to push.	Het nieuwe project heeft niets om te versturen.
+@msg	visibility: say private, internal or public, not {id}.	visibility: geef private, internal of public op, niet {id}.
+@msg	{project} was made on {forge} with the template as its first commit, but the project could not be made in this browser: {e}	{project} is op {forge} gemaakt met het sjabloon als eerste commit, maar het project kon niet in deze browser worden gemaakt: {e}
+@msg	{project} was made on {forge}, but the template could not be written into {folder}: {e} The repository is empty.	{project} is op {forge} gemaakt, maar het sjabloon kon niet in {folder} worden geschreven: {e} De repository is leeg.
+	Owner	Eigenaar
+	You, or a group in which you can make projects.	Jij, of een groep waarin je projecten kunt maken.
+	You, or an organisation in which you can make repositories.	Jij, of een organisatie waarin je repository's kunt maken.

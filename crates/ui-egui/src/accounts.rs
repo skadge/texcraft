@@ -658,6 +658,10 @@ pub(crate) fn failed(app: &mut App, e: &str) {
 
 /// Back to Settings › Accounts, the keyboard on Add a Connection… unless another button was asked.
 fn back_to_settings(app: &mut App) {
+    // Opened from New Project's "Where to Keep It": back there.
+    if crate::where_step::resume(app) {
+        return;
+    }
     if app.ctx.data(|d| d.get_temp::<String>(focus_key())).is_none() {
         focus_next(app, tl!("Add a Connection…"));
     }
@@ -707,8 +711,13 @@ fn choose(app: &mut App, mut form: Form, kind: Kind) {
         }
         Kind::GitLabServer | Kind::GitHubServer => {
             let service = if kind == Kind::GitLabServer { Service::GitLab } else { Service::GitHub };
-            focus_next(app, tl!("Add a Connection…"));
-            crate::forge_server::ask_add(app, service, "", crate::forge_server::Back::Settings);
+            let back = if crate::where_step::adding(app) {
+                crate::forge_server::Back::NewProject
+            } else {
+                focus_next(app, tl!("Add a Connection…"));
+                crate::forge_server::Back::Settings
+            };
+            crate::forge_server::ask_add(app, service, "", back);
             return;
         }
         Kind::Overleaf | Kind::Git => form.page = Page::Token(kind),

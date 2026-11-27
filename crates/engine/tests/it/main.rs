@@ -29,6 +29,7 @@ mod import;
 mod language;
 mod library;
 mod missing_packages;
+mod new_project;
 mod numbers;
 mod rename;
 mod review;

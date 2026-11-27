@@ -12,7 +12,13 @@ fn creator(fake: &Fake, service: Service, instance: &str) -> texcraft_forge::Res
 }
 
 fn new(name: &str, owner: Option<Owner>) -> NewRepository {
-    NewRepository { owner, name: name.to_owned(), private: true, description: Some("A paper".into()), initialize: false }
+    NewRepository {
+        owner,
+        name: name.to_owned(),
+        visibility: texcraft_forge::create::Visibility::Private,
+        description: Some("A paper".into()),
+        initialize: false,
+    }
 }
 
 #[test]
@@ -119,5 +125,21 @@ fn in_the_browser_the_files_are_the_first_commit_and_the_project_is_linked_to_it
         assert_eq!(on_branch.keys().collect::<Vec<_>>(), ["figures/a.txt", "main.tex"], "{service:?}: the README is gone");
         assert_eq!(link.files.len(), 2);
         assert_eq!(texcraft_forge::changes(&link, &files).unwrap(), Vec::new(), "nothing is changed after it");
+    }
+}
+
+#[test]
+fn a_name_is_free_until_the_owner_has_a_repository_of_that_name() {
+    for (service, instance) in [(Service::GitHub, GITHUB_COM), (Service::GitLab, "https://gitlab.example")] {
+        let fake = Fake::account(service, instance, "ada", TOKEN);
+        fake.add_group(12, "lab");
+        fake.take("ada/paper");
+        let creator = creator(&fake, service, instance).unwrap();
+        let (taken, path) = block_on(creator.exists(None, "paper")).unwrap();
+        assert!(taken, "{service:?}: ada/paper exists");
+        assert_eq!(path, "ada/paper");
+        assert!(!block_on(creator.exists(None, "thesis")).unwrap().0, "{service:?}: another name is free");
+        assert!(!block_on(creator.exists(Some("lab"), "paper")).unwrap().0, "{service:?}: the same name is free in a group");
+        assert!(block_on(creator.exists(None, "my paper")).is_err(), "a name of the wrong form is not looked up");
     }
 }

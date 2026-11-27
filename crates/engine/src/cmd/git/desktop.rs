@@ -303,12 +303,40 @@ pub(super) fn settle<T>(s: &mut Session, kept: Kept, done: std::result::Result<T
 }
 
 pub(super) fn push(s: &mut Session, p: &Value) -> Result<Value> {
-    start_push(s, p, None).map(|done| done.unwrap_or_else(|| json!({"operation": "git_push", "started": true})))
+    start_push(s, p, None, None).map(|done| done.unwrap_or_else(|| json!({"operation": "git_push", "started": true})))
+}
+
+/// The push of a new project's first commit (`made`: its outcome so far), which ends it.
+pub(super) fn push_made(s: &mut Session, p: &Value, made: Value) -> Result<Option<Value>> {
+    start_push(s, p, None, Some(Box::new(made)))
+}
+
+/// A new project's push ended: its outcome, the push's said in it. A push that did not work
+/// leaves the project made, in its folder and with its remote, and says why (Sync sends it).
+pub(super) fn pushed_made(
+    s: &mut Session,
+    remote: &str,
+    branch: &str,
+    done: std::result::Result<texcraft_gitwire::Pushed, String>,
+    mut made: Value,
+) -> Result<Value> {
+    match pushed(s, remote, branch, done) {
+        Ok(pushed) => {
+            made["pushed"] = json!(true);
+            made["commit"] = pushed["commit"].clone();
+            made["objects"] = pushed["objects"].clone();
+        }
+        Err(e) => {
+            made["pushed"] = json!(false);
+            made["push_error"] = json!(e);
+        }
+    }
+    Ok(made)
 }
 
 /// Starts a push: `Ok(None)` while it runs in the background, else its outcome (a Sync's, with
 /// `sync`).
-fn start_push(s: &mut Session, p: &Value, sync: Option<Box<Syncing>>) -> Result<Option<Value>> {
+fn start_push(s: &mut Session, p: &Value, sync: Option<Box<Syncing>>, made: Option<Box<Value>>) -> Result<Option<Value>> {
     let h = history(s)?;
     allowed(s, h, Access::Read)?;
     let target = target(s, p, true)?;
@@ -334,11 +362,14 @@ fn start_push(s: &mut Session, p: &Value, sync: Option<Box<Syncing>>) -> Result<
     let kept = Kept { instance, url, key: Some(key) };
     match started.map_err(|e| s.forge_failed(e))? {
         Ok(pending) => {
-            s.git_task = Some(Task::Push { pending, remote, branch, renewed: slot, kept, sync });
+            s.git_task = Some(Task::Push { pending, remote, branch, renewed: slot, kept, sync, made });
             Ok(None)
         }
         Err(done) => {
             let done = settle(s, kept, done);
+            if let Some(made) = made {
+                return pushed_made(s, &remote, &branch, done, *made).map(Some);
+            }
             let pushed = pushed(s, &remote, &branch, done)?;
             Ok(Some(match sync {
                 Some(sync) => synced(*sync, pushed),
@@ -437,7 +468,7 @@ pub(super) fn push_for_sync(s: &mut Session, sync: Box<Syncing>) -> Result<Optio
         return Ok(Some(synced(*sync, json!({"operation": "git_push", "up_to_date": true}))));
     }
     let params = sync.params.clone();
-    start_push(s, &params, Some(sync))
+    start_push(s, &params, Some(sync), None)
 }
 
 /// A Sync's outcome: the version it made, what the pull took in and what the push sent.

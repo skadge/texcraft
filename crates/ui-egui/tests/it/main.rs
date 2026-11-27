@@ -46,6 +46,7 @@ mod log_copy;
 mod menu_bar;
 mod missing_packages;
 mod narrow;
+mod new_project;
 mod outline;
 mod output_log;
 mod paste;

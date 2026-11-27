@@ -94,6 +94,8 @@ pub struct Prefs {
     /// The default connection (Settings › Accounts › Set as Default): a forge's address, such as
     /// `https://gitlab.com`. Import a Project and Save Project to… start from it.
     pub default_connection: Option<String>,
+    /// The place New Project's "Where to Keep It" chose last: `local`, or a connection's address.
+    pub new_project_place: Option<String>,
     /// The daily update check, and when it last answered.
     pub updates: texcraft_engine::update::Saved,
 }
@@ -163,6 +165,7 @@ impl Default for Prefs {
             clone_folder: None,
             git_hosts: Vec::new(),
             default_connection: None,
+            new_project_place: None,
             updates: texcraft_engine::update::Saved::default(),
         }
     }

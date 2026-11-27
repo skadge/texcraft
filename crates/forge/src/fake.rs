@@ -457,6 +457,10 @@ impl State {
         if request.url.starts_with(&format!("{}/api/v4/projects?", self.instance)) {
             return self.gitlab_projects(request);
         }
+        // A repository that exists already, looked up by its path.
+        if request.method == "GET" && self.taken.iter().any(|p| request.url == format!("{api}/projects/{}", crate::encode(p))) {
+            return json_response(200, &json!({"id": 43, "path_with_namespace": decode(&request.url[api.len() + "/projects/".len()..])}));
+        }
         let prefix = format!("{}/api/v4/projects/{}", self.instance, crate::encode(&self.path));
         let Some(rest) = request.url.strip_prefix(&prefix) else { return message(404, "404 Project Not Found") };
         let route = rest.split('?').next().unwrap_or_default();
@@ -644,6 +648,9 @@ impl State {
         if request.method == "POST" && (request.url == "https://api.github.com/user/repos" || request.url.starts_with("https://api.github.com/orgs/"))
         {
             return self.github_create(request);
+        }
+        if request.method == "GET" && self.taken.iter().any(|p| request.url.eq_ignore_ascii_case(&format!("https://api.github.com/repos/{p}"))) {
+            return json_response(200, &json!({"id": 4343, "full_name": &request.url["https://api.github.com/repos/".len()..]}));
         }
         let prefix = format!("https://api.github.com/repos/{}", self.path);
         let Some(rest) = request.url.strip_prefix(&prefix) else { return message(404, "Not Found") };
