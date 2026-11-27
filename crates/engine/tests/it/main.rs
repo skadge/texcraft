@@ -28,6 +28,7 @@ mod image;
 mod import;
 mod language;
 mod library;
+mod new_project;
 mod numbers;
 mod rename;
 mod review;

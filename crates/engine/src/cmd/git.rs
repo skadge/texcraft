@@ -11,7 +11,7 @@
 //! the git requests' basic authentication only.
 
 use serde_json::{Value, json};
-use texcraft_forge::create::{Created, Creator, NewRepository, Owner};
+use texcraft_forge::create::{Created, Creator, NewRepository, Owner, Visibility};
 use texcraft_forge::task::Pending;
 use texcraft_forge::{Link, Service};
 
@@ -33,6 +33,8 @@ pub(crate) enum Task {
         kept: desktop::Kept,
         /// The Sync this push ends, with what it did before.
         sync: Option<Box<Syncing>>,
+        /// The new project this push ends (`project.from_template` on a forge): its outcome so far.
+        made: Option<Box<Value>>,
     },
     #[cfg(not(target_arch = "wasm32"))]
     Pull {
@@ -46,10 +48,13 @@ pub(crate) enum Task {
         /// The Sync this pull starts: a push follows it.
         sync: Option<Box<Syncing>>,
     },
-    /// A repository made (and, on the desktop, the history pushed to it).
-    Create { pending: Pending<Made>, renewed: Renewed, key: Key },
+    /// A repository made (and, on the desktop, the history pushed to it); `project`: for a new
+    /// project from a template.
+    Create { pending: Pending<Made>, renewed: Renewed, key: Key, project: bool },
     /// Where the account can make repositories.
     Owners { pending: Pending<Vec<Owner>>, renewed: Renewed, key: Key, instance: String },
+    /// Whether a repository's name is free.
+    Available { pending: Pending<(bool, String)>, renewed: Renewed, key: Key, instance: String, name: String },
 }
 
 /// A Sync under way (`project.sync`): its parameters, the version it made, and once pulled what
@@ -113,9 +118,27 @@ pub fn hosting(url: &str) -> Option<Hosting> {
     }
 }
 
+/// A new project from a template that goes into the repository being made (`project.from_template`
+/// with `forge`): written once the repository is made.
+pub(crate) struct FromTemplate {
+    /// The template's id.
+    pub template: String,
+    /// The folder (the desktop) or the library's name (the browser) of the project.
+    pub folder: String,
+    /// The browser: the template's files, which are the repository's first commit.
+    pub files: Vec<(String, Vec<u8>)>,
+    /// The commit's message.
+    pub message: String,
+    /// The desktop: the push runs in the background.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub background: bool,
+}
+
 /// What making a repository did.
 pub(crate) struct Made {
     created: Created,
+    /// The new project to make in it.
+    template: Option<FromTemplate>,
     /// The desktop: the push of the history, or why it failed.
     #[cfg(not(target_arch = "wasm32"))]
     pushed: Option<std::result::Result<texcraft_gitwire::Pushed, String>>,
@@ -187,6 +210,16 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             changes: false,
         },
         CommandSpec {
+            id: "forge.name_available",
+            label: "Whether a Repository Name Is Free",
+            menu: &[],
+            shortcut: None,
+            params: available_schema,
+            enabled: idle,
+            run: available,
+            changes: false,
+        },
+        CommandSpec {
             id: "forge.create_repository",
             label: "Save Project to GitLab or GitHub",
             menu: &[],
@@ -255,19 +288,39 @@ fn owners_schema() -> Value {
     }, "required": ["service"], "additionalProperties": false})
 }
 
-fn create_schema() -> Value {
+fn available_schema() -> Value {
     json!({"type": "object", "properties": {
+        "service": {"enum": ["gitlab", "github"]},
+        "instance": {"type": "string", "description": "The server: https://gitlab.com or https://github.com by default, or a server added."},
+        "owner": {"type": "string", "description": "A GitHub organisation or a GitLab group (its path, from forge.owners); the account itself when left out."},
+        "name": {"type": "string", "description": "The repository's name."},
+        "token": {"type": "string", "description": TOKEN},
+        "background": {"type": "boolean", "description": BACKGROUND}
+    }, "required": ["service", "name"], "additionalProperties": false})
+}
+
+/// The parameters of a repository to make, shared by forge.create_repository and
+/// project.from_template's `forge`.
+pub(super) fn repository_properties() -> Value {
+    json!({
         "service": {"enum": ["gitlab", "github"]},
         "instance": {"type": "string", "description": "The server: https://gitlab.com or https://github.com by default, or a server added."},
         "owner": {"type": "string", "description": "A GitHub organisation or a GitLab group (its path) to make it in, from forge.owners; the account itself when left out."},
         "name": {"type": "string", "description": "The repository's name: letters, digits, '.', '-' and '_'."},
-        "private": {"type": "boolean", "description": "Only those given access see it (the default)."},
+        "visibility": {"enum": ["private", "internal", "public"], "description": "Who sees it: only those given access (private, the default), everyone signed in to the server (internal, GitLab), or anyone (public)."},
+        "private": {"type": "boolean", "description": "Only those given access see it (the default); visibility says more."},
         "description": {"type": "string"},
-        "push": {"type": "boolean", "description": "Desktop: set it as the folder's origin and push the whole history (the default; changes not committed are committed first). In the browser the files are always its first commit."},
-        "message": {"type": "string", "description": "The message of the commit of changes not committed yet (\"Saved from TeXCraft\" by default)."},
-        "token": {"type": "string", "description": "A personal access token that can make repositories (GitLab: api; GitHub: a classic token with repo, or a fine-grained one with Administration read and write)."},
-        "background": {"type": "boolean", "description": BACKGROUND}
-    }, "required": ["service", "name"], "additionalProperties": false})
+        "token": {"type": "string", "description": "A personal access token that can make repositories (GitLab: api; GitHub: a classic token with repo, or a fine-grained one with Administration read and write)."}
+    })
+}
+
+fn create_schema() -> Value {
+    let mut properties = repository_properties();
+    properties["push"] = json!({"type": "boolean", "description": "Desktop: set it as the folder's origin and push the whole history (the default; changes not committed are committed first). In the browser the files are always its first commit."});
+    properties["message"] =
+        json!({"type": "string", "description": "The message of the commit of changes not committed yet (\"Saved from TeXCraft\" by default)."});
+    properties["background"] = json!({"type": "boolean", "description": BACKGROUND});
+    json!({"type": "object", "properties": properties, "required": ["service", "name"], "additionalProperties": false})
 }
 
 /// forge.create_repository's parameters for one service: the same, without `service`.
@@ -440,21 +493,93 @@ fn listed_owners(s: &mut Session, owners: Vec<Owner>, key: Key, instance: &str) 
     Ok(json!({"operation": "owners", "instance": instance, "owners": list}))
 }
 
-fn create(s: &mut Session, p: &Value) -> Result<Value> {
+fn available(s: &mut Session, p: &Value) -> Result<Value> {
     let service = service(p)?;
     let instance = instance(p, service)?;
     let name = string(p, "name")?.trim().to_owned();
     texcraft_forge::create::check_name(&name).map_err(|e| e.to_string())?;
     let owner = p.get("owner").and_then(Value::as_str).map(str::trim).filter(|o| !o.is_empty()).map(str::to_owned);
-    let private = p.get("private").and_then(Value::as_bool).unwrap_or(true);
+    let key = key_at(s, p, &instance, service)?;
+    let (connect, sent, clients, slot) = (s.forge_transport.clone(), key.clone(), s.forge_auth_clients(), Renewed::default());
+    let (filled, at, asked) = (slot.clone(), instance.clone(), name.clone());
+    let make = move || async move {
+        let token = sent.token(&*connect(), &clients, &filled).await?;
+        Creator::new(connect(), service, &at, token).exists(owner.as_deref(), &asked).await
+    };
+    let started = start(p, make);
+    s.keep_renewed(&slot);
+    match started.map_err(|e| e.to_string())? {
+        Ok(pending) => {
+            s.git_task = Some(Task::Available { pending, renewed: slot, key, instance, name });
+            Ok(json!({"operation": "name_available", "started": true}))
+        }
+        Err(found) => Ok(answered(s, found, key, &instance, &name)),
+    }
+}
+
+fn answered(s: &mut Session, (taken, project): (bool, String), key: Key, instance: &str, name: &str) -> Value {
+    s.keep_key(instance, key);
+    json!({"operation": "name_available", "instance": instance, "name": name, "project": project, "available": !taken})
+}
+
+/// The `visibility` parameter (or the older `private`): private unless said otherwise.
+fn visibility(p: &Value, service: Service) -> Result<Visibility> {
+    let v = match p.get("visibility").and_then(Value::as_str) {
+        Some(id) => Visibility::parse(id).ok_or_else(|| format!("visibility: say private, internal or public, not {id:?}."))?,
+        None if p.get("private").and_then(Value::as_bool) == Some(false) => Visibility::Public,
+        None => Visibility::Private,
+    };
+    if v == Visibility::Internal && service == Service::GitHub {
+        return Err("GitHub keeps internal repositories for an enterprise's organisations: choose private or public.".to_owned());
+    }
+    Ok(v)
+}
+
+fn create(s: &mut Session, p: &Value) -> Result<Value> {
+    start_create(s, p, None).map(|done| done.unwrap_or_else(|| json!({"operation": "create_repository", "started": true})))
+}
+
+/// Checks what a repository to make needs from the session, before anything is made: the name's
+/// form, the visibility, a key that can write. For project.from_template's `forge`.
+pub(super) fn check_repository(s: &mut Session, p: &Value) -> Result<()> {
+    idle(s)?;
+    let service = service(p)?;
+    let instance = instance(p, service)?;
+    texcraft_forge::create::check_name(string(p, "name")?.trim()).map_err(|e| e.to_string())?;
+    visibility(p, service)?;
+    write_key(s, p, &instance, service).map(|_| ())
+}
+
+/// Makes the repository `p` describes; then pushes the folder's history to it (the desktop), or
+/// commits the files to it (the browser); or, with `template`, makes the new project in it.
+/// `Ok(None)` while it runs in the background.
+pub(super) fn start_create(s: &mut Session, p: &Value, template: Option<FromTemplate>) -> Result<Option<Value>> {
+    let service = service(p)?;
+    let instance = instance(p, service)?;
+    let name = string(p, "name")?.trim().to_owned();
+    texcraft_forge::create::check_name(&name).map_err(|e| e.to_string())?;
+    let owner = p.get("owner").and_then(Value::as_str).map(str::trim).filter(|o| !o.is_empty()).map(str::to_owned);
+    let visibility = visibility(p, service)?;
     let description = p.get("description").and_then(Value::as_str).map(str::to_owned);
     let key = write_key(s, p, &instance, service)?;
     let browser = s.library.is_some();
-    let new = NewRepository { owner: None, name, private, description, initialize: browser && service == Service::GitHub };
+    let new = NewRepository { owner: None, name, visibility, description, initialize: browser && service == Service::GitHub };
     let (connect, sent, clients, slot) = (s.forge_transport.clone(), key.clone(), s.forge_auth_clients(), Renewed::default());
     let filled = slot.clone();
-    let task = if browser { Prepared::Browser(s.forge_files(true)?) } else { prepare_push(s, p, service)? };
-    let message = p.get("message").and_then(Value::as_str).map(str::trim).filter(|m| !m.is_empty()).unwrap_or(SAVE_MESSAGE).to_owned();
+    let task = match &template {
+        Some(t) if browser => Prepared::Browser(t.files.clone()),
+        #[cfg(not(target_arch = "wasm32"))]
+        Some(_) => Prepared::Later,
+        #[cfg(target_arch = "wasm32")]
+        Some(_) => return Err("Projects in the browser are not stored in folders.".to_owned()),
+        None if browser => Prepared::Browser(s.forge_files(true)?),
+        None => prepare_push(s, p, service)?,
+    };
+    let template_made = template.is_some();
+    let message = match &template {
+        Some(t) => t.message.clone(),
+        None => p.get("message").and_then(Value::as_str).map(str::trim).filter(|m| !m.is_empty()).unwrap_or(SAVE_MESSAGE).to_owned(),
+    };
     #[cfg(not(target_arch = "wasm32"))]
     let http = s.git_http.clone();
     let make = move || async move {
@@ -474,9 +599,15 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
                 let branch = created.default_branch.clone();
                 let link = Creator::new(connect(), service, &instance, token).first_commit(&created, &files, &message).await?;
                 #[cfg(not(target_arch = "wasm32"))]
-                return Ok(Made { created, pushed: None, linked: Some(link), branch });
+                return Ok(Made { created, template, pushed: None, linked: Some(link), branch });
                 #[cfg(target_arch = "wasm32")]
-                Ok(Made { created, linked: Some(link), branch })
+                Ok(Made { created, template, linked: Some(link), branch })
+            }
+            // The project is written once the repository is made, then pushed.
+            #[cfg(not(target_arch = "wasm32"))]
+            Prepared::Later => {
+                let branch = created.default_branch.clone();
+                Ok(Made { created, template, pushed: None, linked: None, branch })
             }
             #[cfg(not(target_arch = "wasm32"))]
             Prepared::Push { git_dir, head, branch } => {
@@ -488,18 +619,18 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                     None => None,
                 };
-                Ok(Made { created, pushed, linked: None, branch })
+                Ok(Made { created, template, pushed, linked: None, branch })
             }
             #[cfg(not(target_arch = "wasm32"))]
-            Prepared::NoPush { branch } => Ok(Made { created, pushed: None, linked: None, branch }),
+            Prepared::NoPush { branch } => Ok(Made { created, template, pushed: None, linked: None, branch }),
         }
     };
     let started = start(p, make);
     s.keep_renewed(&slot);
     match started.map_err(|e| s.forge_failed(e))? {
         Ok(pending) => {
-            s.git_task = Some(Task::Create { pending, renewed: slot, key });
-            Ok(json!({"operation": "create_repository", "started": true}))
+            s.git_task = Some(Task::Create { pending, renewed: slot, key, project: template_made });
+            Ok(None)
         }
         Err(made) => created(s, made, key),
     }
@@ -514,6 +645,9 @@ enum Prepared {
     Push { git_dir: std::path::PathBuf, head: Option<String>, branch: String },
     #[cfg(not(target_arch = "wasm32"))]
     NoPush { branch: String },
+    /// The desktop's new project: nothing to push until the repository is made.
+    #[cfg(not(target_arch = "wasm32"))]
+    Later,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -527,10 +661,14 @@ fn prepare_push(s: &mut Session, p: &Value, _service: Service) -> Result<Prepare
 }
 
 /// The new repository's outcome: on the desktop set as `origin`, the branch following it once
-/// pushed; in the browser the project linked to it.
-fn created(s: &mut Session, made: Made, key: Key) -> Result<Value> {
+/// pushed; in the browser the project linked to it. For a new project, the project made in it
+/// first; `Ok(None)` while its push runs in the background.
+fn created(s: &mut Session, mut made: Made, key: Key) -> Result<Option<Value>> {
+    s.keep_key(&made.created.address.instance, key);
+    if let Some(template) = made.template.take() {
+        return super::template::made_on_forge(s, &made, template);
+    }
     let Made { created, linked, branch, .. } = &made;
-    s.keep_key(&created.address.instance, key);
     let mut result = json!({
         "operation": "create_repository",
         "service": created.address.service.id(),
@@ -544,15 +682,50 @@ fn created(s: &mut Session, made: Made, key: Key) -> Result<Value> {
         result["linked"] = json!(true);
         result["commit"] = json!(link.base);
         result["note"] = json!("The files went as one commit: the project's history stays in this browser.");
-        s.set_forge(Some(link));
-        if let Some(dir) = s.dir.clone() {
-            super::project::save_to(s, &dir)?;
-        }
-        return Ok(result);
+        link_project(s, link)?;
+        return Ok(Some(result));
     }
     #[cfg(not(target_arch = "wasm32"))]
     desktop::created(s, &made, &mut result)?;
-    Ok(result)
+    Ok(Some(result))
+}
+
+/// A repository's outcome, for a new project: where it is, as a result says it.
+pub(super) fn made_json(made: &Made) -> Value {
+    let created = &made.created;
+    json!({
+        "service": created.address.service.id(),
+        "instance": created.address.instance,
+        "project": created.address.path,
+        "web_url": created.web_url,
+        "clone_url": created.clone_url,
+        "branch": made.branch,
+    })
+}
+
+/// The browser: the open project linked to the repository's first commit, and saved so.
+pub(super) fn link_project(s: &mut Session, link: Link) -> Result<()> {
+    s.set_forge(Some(link));
+    if let Some(dir) = s.dir.clone() {
+        super::project::save_to(s, &dir)?;
+    }
+    Ok(())
+}
+
+/// The browser's link to a new repository's first commit.
+pub(super) fn made_link(made: &Made) -> Option<Link> {
+    made.linked.clone()
+}
+
+/// The desktop: a new project's folder, written once its repository was made, set to push to it
+/// (`origin`), its first commit pushed. `Ok(None)` while the push runs in the background.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn push_new_project(s: &mut Session, made: &Made, message: &str, background: bool, mut result: Value) -> Result<Option<Value>> {
+    let Prepared::Push { branch, .. } = desktop::prepare_push(s, &json!({"message": message}))? else {
+        return Err("The new project has nothing to push.".to_owned());
+    };
+    desktop::created(s, made, &mut result)?;
+    desktop::push_made(s, &json!({"remote": "origin", "branch": branch, "background": background}), result)
 }
 
 /// The credentials git over HTTPS takes for a forge's token: GitLab's `oauth2` user (any name
@@ -629,12 +802,27 @@ impl Session {
             #[cfg(not(target_arch = "wasm32"))]
             Task::Push { sync: Some(_), .. } | Task::Pull { sync: Some(_), .. } => "sync",
             #[cfg(not(target_arch = "wasm32"))]
+            Task::Push { made: Some(_), .. } => "new_project",
+            #[cfg(not(target_arch = "wasm32"))]
             Task::Push { .. } => "git_push",
             #[cfg(not(target_arch = "wasm32"))]
             Task::Pull { .. } => "git_pull",
+            Task::Create { project: true, .. } => "new_project",
             Task::Create { .. } => "create_repository",
             Task::Owners { .. } => "owners",
+            Task::Available { .. } => "name_available",
         })
+    }
+
+    /// A new project on a forge under way (`project.from_template` with `forge`): `repository`
+    /// while the repository is made, `push` while the project is sent to it.
+    pub fn new_project_phase(&self) -> Option<&'static str> {
+        match self.git_task.as_ref()? {
+            Task::Create { project: true, .. } => Some("repository"),
+            #[cfg(not(target_arch = "wasm32"))]
+            Task::Push { made: Some(_), .. } => Some("push"),
+            _ => None,
+        }
     }
 
     /// The outcome of the push, pull or new repository running in the background, once it has
@@ -647,15 +835,21 @@ impl Session {
             Task::Pull { pending, .. } => Ended::Fetched(pending.poll()?),
             Task::Create { pending, .. } => Ended::Made(pending.poll()?.map(Box::new)),
             Task::Owners { pending, .. } => Ended::Owners(pending.poll()?),
+            Task::Available { pending, .. } => Ended::Available(pending.poll()?),
         };
         let task = self.git_task.take()?;
         let renewed = match &task {
             #[cfg(not(target_arch = "wasm32"))]
             Task::Push { renewed, .. } | Task::Pull { renewed, .. } => renewed.clone(),
-            Task::Create { renewed, .. } | Task::Owners { renewed, .. } => renewed.clone(),
+            Task::Create { renewed, .. } | Task::Owners { renewed, .. } | Task::Available { renewed, .. } => renewed.clone(),
         };
         self.keep_renewed(&renewed);
         Some(match (ended, task) {
+            #[cfg(not(target_arch = "wasm32"))]
+            (Ended::Pushed(done), Task::Push { remote, branch, kept, made: Some(made), .. }) => {
+                let done = done.map_err(|e| e.to_string()).and_then(|d| desktop::settle(self, kept, d));
+                desktop::pushed_made(self, &remote, &branch, done, *made)
+            }
             #[cfg(not(target_arch = "wasm32"))]
             (Ended::Pushed(done), Task::Push { remote, branch, sync, kept, .. }) => {
                 let done = done.map(|d| desktop::settle(self, kept, d));
@@ -684,7 +878,17 @@ impl Session {
                     (fetched, _) => fetched,
                 }
             }
-            (Ended::Made(done), Task::Create { key, .. }) => done.map_err(|e| self.forge_failed(e)).and_then(|made| created(self, *made, key)),
+            (Ended::Made(done), Task::Create { key, .. }) => {
+                match done.map_err(|e| self.forge_failed(e)).and_then(|made| created(self, *made, key)) {
+                    // The new project's push runs: its end is the outcome.
+                    Ok(None) => return None,
+                    Ok(Some(done)) => Ok(done),
+                    Err(e) => Err(e),
+                }
+            }
+            (Ended::Available(done), Task::Available { key, instance, name, .. }) => {
+                done.map_err(|e| self.forge_failed(e)).map(|found| answered(self, found, key, &instance, &name))
+            }
             (Ended::Owners(done), Task::Owners { key, instance, .. }) => {
                 done.map_err(|e| self.forge_failed(e)).and_then(|owners| listed_owners(self, owners, key, &instance))
             }
@@ -701,6 +905,7 @@ enum Ended {
     Fetched(texcraft_forge::Result<std::result::Result<texcraft_gitwire::Fetched, String>>),
     Made(texcraft_forge::Result<Box<Made>>),
     Owners(texcraft_forge::Result<Vec<Owner>>),
+    Available(texcraft_forge::Result<(bool, String)>),
 }
 
 #[cfg(not(target_arch = "wasm32"))]
