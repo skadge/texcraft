@@ -171,6 +171,9 @@ appimage:
   stage: package
   image: rust:1.95-bookworm
   extends: .package-rules
+  # Built while `check` runs, not after it: publishing waits for both (publish's and pages' needs).
+  needs:
+    - job: release-notes
   variables:
     CRAFT_FONTS_DIR: "$CI_PROJECT_DIR/craft-fonts"
     CRAFT_FONTS_REQUIRED: "1"
@@ -326,6 +329,9 @@ publish:
     - job: appimage
     - job: flatpak
     - job: web
+    - job: check
+      artifacts: false
+      optional: true
   script:
     # The image runs as an unprivileged user, so the joined list is written outside the checkout.
     - cat out/SHA256SUMS-* > /tmp/SHA256SUMS
@@ -417,6 +423,9 @@ pages:
   image: alpine:3.22
   needs:
     - job: web
+    - job: check
+      artifacts: false
+      optional: true
   script:
     - rm -rf public
     - cp -r dist/web public
