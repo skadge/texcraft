@@ -212,13 +212,18 @@ pub fn find(text: &str, at: usize) -> Option<Result<Table, Unsupported>> {
 
 /// Source offset `at` moved into the text of the grid cell holding it when it stands in the cell's
 /// markup (before a `\multicolumn` a merge made, or its spaces): what is typed next goes in the
-/// cell, not beside its `\multicolumn`, which the grid cannot show.
+/// cell, not beside its `\multicolumn`, which the grid cannot show; when it stands between rows
+/// (where Delete Row left it), into the first cell of the row after.
 pub fn cell_caret(text: &str, at: usize) -> usize {
     let Some(Ok(table)) = find(text, at) else { return at };
-    let cell = table.rows.iter().flat_map(|r| r.cells.iter()).find(|c| c.range.start <= at && at <= c.range.end.max(c.end()));
+    let cells: Vec<&Cell> = table.rows.iter().flat_map(|r| r.cells.iter()).collect();
+    let cell = cells.iter().find(|c| c.range.start <= at && at <= c.range.end.max(c.end()));
     match cell {
         Some(c) if !(c.content.start <= at && at <= c.content.end) => c.content.start,
-        _ => at,
+        Some(_) => at,
+        // Between rows (where a deleted row was): in the first cell of the row after, or of the
+        // last row.
+        None => cells.iter().find(|c| c.range.start >= at).or(cells.last()).map_or(at, |c| c.content.start),
     }
 }
 

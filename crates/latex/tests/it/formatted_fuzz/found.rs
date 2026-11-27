@@ -505,3 +505,19 @@ fn a_selection_of_a_label_chip_and_the_gap_before_it_is_not_made_a_link() {
     );
     assert!(!e.text.contains("\\href"), "{:?}", e.text);
 }
+
+#[test]
+fn delete_row_leaves_the_caret_in_a_cell_of_the_row_after() {
+    let mut e = after("", &[Op::Bar("table")]);
+    assert!(e.run(&Op::Table("delete_row", 0)).is_ok());
+    typed(&mut e, "x");
+    assert!(e.text.contains("xText & Text"), "what is typed after Delete Row is not in the next row's cell: {:?}", e.text);
+}
+
+#[test]
+fn an_empty_author_or_date_with_maketitle_and_the_title_block_deleted_show_no_source() {
+    let text = "\\begin{document}\\author{}\\date{}\\maketitle\n\nText.\\end{document}";
+    assert!(!shows_source(text), "an empty title block or its empty fields show as source");
+    let e = after(text, &[Op::SelectAll, Op::Backspace]);
+    assert!(!shows_source(&e.text), "what the deletion left shows as source: {:?}", e.text);
+}
