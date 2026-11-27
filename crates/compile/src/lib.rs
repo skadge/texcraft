@@ -23,6 +23,7 @@ use texcraft_project::{Project, ProjectPath};
 pub mod engine_choice;
 #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
 pub mod formulas;
+pub mod missing;
 pub mod packages;
 pub mod places;
 pub mod prefetch;
@@ -54,6 +55,9 @@ pub struct Job {
     /// Where the browser's engine downloads the TeX Live packages its tree lacks
     /// ([`packages`]); the desktop's retex has its own settings.
     pub packages: packages::PackageServer,
+    /// Whether the desktop's retex downloads the TeX Live packages the installed tree lacks
+    /// ([`missing`]); the browser's engine follows `packages`.
+    pub missing_packages: missing::MissingPackages,
 }
 
 impl Job {
@@ -61,7 +65,15 @@ impl Job {
     pub fn from_project(project: &Project, id: u64) -> Option<Job> {
         let main = project.main()?.clone();
         let files = project.files().map(|(p, c)| (p.clone(), Arc::<[u8]>::from(c.as_bytes()))).collect();
-        Some(Job { files, main, id, options: Options::default(), project: None, packages: packages::PackageServer::Default })
+        Some(Job {
+            files,
+            main,
+            id,
+            options: Options::default(),
+            project: None,
+            packages: packages::PackageServer::Default,
+            missing_packages: missing::MissingPackages::default(),
+        })
     }
 }
 
@@ -319,6 +331,9 @@ pub struct Outcome {
     pub output: Output,
     /// A print build's PDF/X and checks.
     pub preflight: Option<Preflight>,
+    /// The TeX Live packages (or TeX Live itself) the build lacked, each once, in the order of
+    /// their errors ([`missing`]).
+    pub missing: Vec<missing::Lack>,
 }
 
 impl Outcome {
@@ -336,6 +351,7 @@ impl Outcome {
             aux: None,
             output: Output::Screen,
             preflight: None,
+            missing: Vec::new(),
         }
     }
 

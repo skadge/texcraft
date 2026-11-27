@@ -329,8 +329,9 @@ impl Engine {
     fn through_worker(&mut self, dir: &Path, preamble: &str, fragments: &[retex::Fragment]) -> Option<Batch> {
         let program = self.program.clone()?;
         if self.worker.is_none() {
-            let mut config = retex::WorkerConfig::new();
-            config.program = Some(program);
+            // Formulas download nothing: the project's builds do, when the settings let them
+            // (`crate::missing`), and the formulas' worker finds what they downloaded.
+            let config = crate::retex_backend::worker_config(program, crate::missing::MissingPackages::Off);
             match retex::Worker::spawn(config) {
                 Ok(w) => self.worker = Some(w),
                 Err(e) => {

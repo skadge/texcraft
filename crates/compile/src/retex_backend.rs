@@ -16,11 +16,15 @@
 //! keeps the preamble snapshot between builds: a rebuild after a change in the body starts at
 //! `\begin{document}`. Elsewhere (the CLI, tests, a worker that does not start) they run in
 //! process and read the preamble every time.
+//!
+//! Only the worker's builds download missing TeX Live packages, and only when the job's
+//! [`MissingPackages`] says so ([`worker_config`], [`crate::missing`]).
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use crate::missing::{self, Lack, MissingPackages};
 use crate::{
     Backend, Canceller, Cleaner, Diagnostic, DiagnosticFix, Engine, Event, Job, Options, Outcome, Output, PdfX, PdfxRule, Preflight, PrintCheck,
     Severity, Status,
@@ -34,6 +38,9 @@ pub struct Retex {
     worker: Option<WorkerSlot>,
     /// The files of the last job written to `<cache>/src/`, to remove those that leave it.
     written: std::collections::HashSet<String>,
+    /// What the last build lacked: a build that may download them says so while it runs, and
+    /// after it, which it got.
+    lacked: Vec<Lack>,
 }
 
 /// What Stop reaches: the running build's canceller, or, before the build has one (while the
@@ -47,16 +54,27 @@ struct Running {
 /// A `retex worker` process run from this program (see [`crate::use_this_program_as_worker`]).
 struct WorkerSlot {
     program: PathBuf,
-    /// Started on the first build; it and its preamble snapshot stay across builds, a stopped one
-    /// too.
-    process: Arc<Mutex<Option<retex::Worker>>>,
+    /// Started on the first build, with whether it downloads missing packages; it and its
+    /// preamble snapshot stay across builds, a stopped one too, until a build asks for the other
+    /// kind of downloads.
+    process: Arc<Mutex<Option<(retex::Worker, bool)>>>,
+}
+
+/// How the build worker starts: running `program`, downloading missing TeX Live packages only
+/// when `missing` says so. retex's own settings (`retex config`) are not asked: TeXCraft's
+/// setting decides.
+pub fn worker_config(program: PathBuf, missing: MissingPackages) -> retex::WorkerConfig {
+    let mut config = retex::WorkerConfig::new();
+    config.program = Some(program);
+    config.downloads = if missing.downloads() { retex::Downloads::Always } else { retex::Downloads::Never };
+    config
 }
 
 impl Retex {
     /// Builds in `cache_dir`, or in a folder of the system's temporary directory.
     pub fn new(cache_dir: Option<PathBuf>) -> Self {
         let dir = cache_dir.unwrap_or_else(|| std::env::temp_dir().join(format!("texcraft-build-{}", std::process::id())));
-        Self { dir, running: Arc::default(), worker: None, written: Default::default() }
+        Self { dir, running: Arc::default(), worker: None, written: Default::default(), lacked: Vec::new() }
     }
 
     /// Builds through a worker process running `program` (this program, which called
@@ -118,17 +136,27 @@ impl Retex {
 
     /// Builds through the worker; `None` when it cannot start or build (the caller builds in
     /// process instead).
-    fn through_worker(&self, slot: &WorkerSlot, main: &Path, options: Options, report: &mut dyn FnMut(Event)) -> Option<retex::Outcome> {
+    fn through_worker(
+        &self,
+        slot: &WorkerSlot,
+        main: &Path,
+        options: Options,
+        missing: MissingPackages,
+        report: &mut dyn FnMut(Event),
+    ) -> Option<retex::Outcome> {
         // From the main document's folder, as the in-process build runs.
         let dir = main.parent()?.to_path_buf();
         let name = main.file_name()?.to_string_lossy().into_owned();
+        let downloads = missing.downloads();
         let build = {
             let mut process = slot.process.lock().ok()?;
+            // Downloads are the worker's setting: another one needs another worker.
+            if process.as_ref().is_some_and(|(_, d)| *d != downloads) {
+                *process = None;
+            }
             if process.is_none() {
-                let mut config = retex::WorkerConfig::new();
-                config.program = Some(slot.program.clone());
-                match retex::Worker::spawn(config) {
-                    Ok(w) => *process = Some(w),
+                match retex::Worker::spawn(worker_config(slot.program.clone(), missing)) {
+                    Ok(w) => *process = Some((w, downloads)),
                     Err(e) => {
                         log::warn!("the build worker did not start ({e}); building in process");
                         return None;
@@ -137,7 +165,7 @@ impl Retex {
             }
             let mut request = retex::BuildRequest::new(dir, name);
             request.options = engine_options(options);
-            match process.as_ref()?.build(request) {
+            match process.as_ref()?.0.build(request) {
                 Ok(handle) => handle,
                 Err(e) => {
                     log::warn!("the build worker refused the build ({e}); building in process");
@@ -210,14 +238,37 @@ impl Backend for Retex {
         let main_dir = job.main.as_str().rsplit_once('/').map(|(d, _)| d.to_owned());
         let src = std::fs::canonicalize(self.dir.join("src")).unwrap_or_else(|_| self.dir.join("src"));
         let place = |d: &retex::Diagnostic| convert(d, &src, main_dir.as_deref());
+        // Each error that lacked a TeX Live package: its advice is TeXCraft's, and the outcome
+        // lists the package.
+        let lacks = |diagnostics: &[retex::Diagnostic]| -> Vec<(usize, Lack)> {
+            diagnostics
+                .iter()
+                .enumerate()
+                .filter(|(_, d)| d.severity == retex::Severity::Error)
+                .filter_map(|(i, d)| Some((i, missing::lack_of(&d.message, &d.notes)?)))
+                .collect()
+        };
         // retex 2.5.0's worker takes every option but `accessible` (its `BuildRequest` options pass
         // SyncTeX, symbols, the engine, halting, draft images and PDF/X on): an accessible build
         // runs in process.
         let worker = self.worker.as_ref().filter(|_| job.options.output != Output::Accessible);
-        let via_worker = worker.and_then(|slot| self.through_worker(slot, &main, job.options, report));
+        // A build that may download what the last one lacked says so once its first pass starts:
+        // retex reports nothing while it downloads.
+        let fetching = self.lacked.iter().find_map(|l| l.name().map(str::to_owned)).filter(|_| worker.is_some() && job.missing_packages.downloads());
+        let mut said = false;
+        let mut reporting = |e: Event| {
+            let first_pass = matches!(e, Event::Pass { .. }) && !said;
+            report(e);
+            if let (true, Some(name)) = (first_pass, &fetching) {
+                said = true;
+                report(Event::Step { what: format!("downloading {name} if TeX Live has it") });
+            }
+        };
+        let via_worker = worker.and_then(|slot| self.through_worker(slot, &main, job.options, job.missing_packages, &mut reporting));
+        let in_process = via_worker.is_none();
         let outcome = match via_worker {
             Some(o) => o,
-            None => self.in_process(&main, job.options, report),
+            None => self.in_process(&main, job.options, &mut reporting),
         };
         let seconds = started.elapsed().as_secs_f64();
         let symbols = outcome.outputs.symbols().cloned();
@@ -228,22 +279,77 @@ impl Backend for Retex {
         if outcome.cancelled {
             return Outcome { status: Status::Cancelled, log: "The build was stopped.".to_owned(), ..base };
         }
+        let mut lacked = Vec::new();
+        let mut convert_all = |diagnostics: &[retex::Diagnostic]| -> Vec<Diagnostic> {
+            let mut out: Vec<Diagnostic> = diagnostics.iter().map(place).collect();
+            for (i, lack) in lacks(diagnostics) {
+                if let Some(d) = out.get_mut(i) {
+                    missing::advise(&mut d.help, &lack, job.missing_packages, in_process);
+                }
+                if !lacked.contains(&lack) {
+                    lacked.push(lack);
+                }
+            }
+            out
+        };
         let mut outcome = match outcome.result {
             Ok(doc) => Outcome {
                 status: Status::Built,
                 pdf: Some(Arc::new(doc.pdf().to_vec())),
-                diagnostics: doc.diagnostics().iter().map(place).collect(),
+                diagnostics: convert_all(doc.diagnostics()),
                 log: doc.log().to_owned(),
                 pages: doc.pages(),
                 ..base
             },
-            Err(retex::Error::Failed { diagnostics, log }) => {
-                Outcome { status: Status::Failed, diagnostics: diagnostics.iter().map(place).collect(), log, ..base }
-            }
+            Err(retex::Error::Failed { diagnostics, log }) => Outcome { status: Status::Failed, diagnostics: convert_all(&diagnostics), log, ..base },
             Err(other) => Outcome { log: other.to_string(), ..base.clone() }.with_failure(&other.to_string()),
         };
+        outcome.missing = lacked;
         crate::places::place_where_started(&mut outcome.diagnostics, &outcome.log, &job.files, &job.main, main_dir.as_deref());
+        if !outcome.missing.is_empty() || !self.lacked.is_empty() {
+            note_downloaded(&mut outcome, &self.lacked, job.missing_packages, in_process);
+        }
+        self.lacked = outcome.missing.clone();
         outcome
+    }
+}
+
+/// After a build that may download: a note for each package the build before lacked and this one
+/// read (its log names the file), which it downloaded, then.
+fn note_downloaded(outcome: &mut Outcome, before: &[Lack], setting: MissingPackages, in_process: bool) {
+    if !setting.downloads() || in_process || outcome.status == Status::Cancelled {
+        return;
+    }
+    // TeX breaks the log's lines at 79 characters, also inside a file's path.
+    let log = outcome.log.replace(['\n', '\r'], "");
+    let read = |lack: &Lack| match lack {
+        Lack::TexLive => outcome.status == Status::Built,
+        Lack::File { file, .. } => log.contains(&format!("/{file}")),
+    };
+    let got: Vec<Lack> = before.iter().filter(|l| !outcome.missing.contains(l) && read(l)).cloned().collect();
+    for lack in &got {
+        let message = match lack {
+            Lack::TexLive => "TeXCraft downloaded the TeX Live files the document needs from TeX Live's repository".to_owned(),
+            Lack::File { file, package: Some(p) } => {
+                format!("TeXCraft downloaded the TeX Live package `{p}` (for {file}) from TeX Live's repository")
+            }
+            Lack::File { file, package: None } => format!("TeXCraft downloaded the TeX Live package that has {file} from TeX Live's repository"),
+        };
+        outcome.diagnostics.insert(
+            0,
+            Diagnostic {
+                severity: Severity::Note,
+                message,
+                origin: Some("TeXCraft".to_owned()),
+                file: None,
+                line: None,
+                column: None,
+                end_column: None,
+                help: Vec::new(),
+                fixes: Vec::new(),
+                noticed: None,
+            },
+        );
     }
 }
 
@@ -451,6 +557,20 @@ fn engine_options(options: Options) -> retex::Retex {
                 PdfX::X1a => retex::PdfX::X1a,
             };
             retex.pdfx(variant).bleed_mm(options.bleed_mm.clamp(0.0, crate::MAX_BLEED_MM)).crop_marks(options.crop_marks)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_download_automatically_starts_a_worker_that_downloads() {
+        for m in MissingPackages::ALL {
+            let config = worker_config(PathBuf::from("texcraft"), m);
+            let want = if m == MissingPackages::Auto { retex::Downloads::Always } else { retex::Downloads::Never };
+            assert_eq!(config.downloads, want, "{m:?}: retex's own settings would decide");
         }
     }
 }

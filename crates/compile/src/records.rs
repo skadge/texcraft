@@ -229,6 +229,8 @@ pub fn outcome(job: u64, output: &str, main_dir: Option<&str>, options: &Options
             checks,
             rules,
         }),
+        // The browser's engine follows its package server, not the desktop's setting.
+        missing: Vec::new(),
     }
 }
 

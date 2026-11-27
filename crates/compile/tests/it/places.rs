@@ -13,7 +13,15 @@ fn build(name: &str, files: &[(&str, &str)]) -> Result<Outcome, String> {
         .iter()
         .map(|(p, t)| Ok((ProjectPath::new(p).map_err(|e| e.to_string())?, Arc::from(t.as_bytes()))))
         .collect::<Result<Vec<_>, String>>()?;
-    let outcome = backend.compile(&Job { files, main, id: 1, options: Options::default(), project: None, packages: Default::default() });
+    let outcome = backend.compile(&Job {
+        files,
+        main,
+        id: 1,
+        options: Options::default(),
+        project: None,
+        packages: Default::default(),
+        missing_packages: Default::default(),
+    });
     let _ = std::fs::remove_dir_all(&dir);
     Ok(outcome)
 }
