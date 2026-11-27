@@ -160,3 +160,11 @@ fn a_selection_taking_a_macros_chip_and_text_deletes_the_whole_call() {
     let body = after.split("\\begin{document}").nth(1).unwrap_or_default();
     assert!(!body.contains("\\task") && !body.contains("[]"), "the call's brackets are left: {after:?}");
 }
+
+#[test]
+fn text_typed_before_a_bibliographys_first_entry_goes_in_it() {
+    let text = "\\begin{thebibliography}{9} \\bibitem{a} A.\\end{thebibliography}";
+    let at = text.find(" \\bibitem").unwrap_or(0);
+    let after = typed_at(text, at, "x");
+    assert!(after.contains("\\bibitem{a}x"), "{after:?}");
+}

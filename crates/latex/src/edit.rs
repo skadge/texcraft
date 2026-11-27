@@ -747,6 +747,11 @@ pub fn into_arguments(text: &str, at: usize) -> Option<usize> {
         }
         None
     }
+    // Before an entry's key with only spaces between: in its text.
+    let spaced = at + text.get(at..).map_or(0, |r| r.len() - r.trim_start().len());
+    if spaced > at && text.get(spaced..).is_some_and(|r| r.starts_with("\\bibitem")) {
+        return into_arguments(text, spaced);
+    }
     let tree = tree::parse(text);
     let (nodes, i) = find(&tree, at)?;
     let n = nodes.get(i)?;
