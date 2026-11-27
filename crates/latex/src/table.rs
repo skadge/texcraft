@@ -210,6 +210,18 @@ pub fn find(text: &str, at: usize) -> Option<Result<Table, Unsupported>> {
     Some(parse(text, node))
 }
 
+/// Source offset `at` moved into the text of the grid cell holding it when it stands in the cell's
+/// markup (before a `\multicolumn` a merge made, or its spaces): what is typed next goes in the
+/// cell, not beside its `\multicolumn`, which the grid cannot show.
+pub fn cell_caret(text: &str, at: usize) -> usize {
+    let Some(Ok(table)) = find(text, at) else { return at };
+    let cell = table.rows.iter().flat_map(|r| r.cells.iter()).find(|c| c.range.start <= at && at <= c.range.end.max(c.end()));
+    match cell {
+        Some(c) if !(c.content.start <= at && at <= c.content.end) => c.content.start,
+        _ => at,
+    }
+}
+
 /// Every `tabular` of `text`, in order, outermost ones only.
 pub fn all(text: &str) -> Vec<(Range<usize>, Result<Table, Unsupported>)> {
     fn walk<'a>(nodes: &'a [Node], out: &mut Vec<&'a Node>) {

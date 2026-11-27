@@ -271,7 +271,7 @@ fn find_block(file: &ProjectPath, text: &str, block: &Block, out: &mut Vec<Found
                 closed: *closed,
             });
         }
-        BlockKind::Title { title, author, date } => [title, author, date].into_iter().for_each(|i| find_inlines(file, text, i, out)),
+        BlockKind::Title { title, author, date, .. } => [title, author, date].into_iter().for_each(|i| find_inlines(file, text, i, out)),
         BlockKind::Heading { content, .. } => find_inlines(file, text, content, out),
         BlockKind::Paragraph(inlines) => find_inlines(file, text, inlines, out),
         BlockKind::List { items, .. } => {

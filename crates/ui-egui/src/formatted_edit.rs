@@ -278,8 +278,8 @@ fn selection(app: &App, f: &Frame<'_>) -> Option<(Pos, Pos)> {
     let d = &app.editor.source.doc;
     let r = d.selection.primary();
     let hint = app.editor.formatted.editing.caret_line;
-    let a = f.doc.locate(d.buffer.char_to_byte(r.anchor), hint)?;
-    let h = f.doc.locate(d.buffer.char_to_byte(r.head), hint)?;
+    let a = f.doc.locate(f.text, d.buffer.char_to_byte(r.anchor), hint)?;
+    let h = f.doc.locate(f.text, d.buffer.char_to_byte(r.head), hint)?;
     Some((a, h))
 }
 
@@ -303,6 +303,10 @@ fn commit(app: &mut App, f: &Frame<'_>, changes: &[Change], after: (usize, usize
     if !editable(app) {
         return false;
     }
+    // Nothing joins a control word to the letters after it (`\item` and an unbolded word).
+    let (changes, added) = edit::kept_apart(f.text, changes);
+    let after = (edit::kept_apart_offset(&added, after.0), edit::kept_apart_offset(&added, after.1));
+    let changes = changes.as_slice();
     let d = &mut app.editor.source.doc;
     let list = changes
         .iter()
@@ -416,9 +420,11 @@ fn input(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, edit: Edit) {
             app.editor.formatted.editing.pending.insert(0, Edit::Paste(s));
         }
         Edit::Paste(s) => {
-            let at = caret_byte(app);
+            // As it reads where it goes.
+            let at = insertion(app, f);
             let source = edit::paste(f.text, at, &s);
-            replace(app, f, &source, EditKind::Other);
+            let source = edit::joined(f.text, at, &source);
+            replace_at(app, f, (&source, edit::paste_caret(&source)), EditKind::Other);
         }
         Edit::Copy => copy(app, ctx, f, false),
         Edit::Cut => copy(app, ctx, f, true),
@@ -447,7 +453,7 @@ fn run_command(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, id: &str, para
         }
         match edit::set_heading(f.text, at, name) {
             Some(changes) => {
-                let at = edit::map_offset(&changes, at);
+                let at = edit::map_inside(&changes, at);
                 commit(app, f, &changes, (at, at), EditKind::Other);
             }
             None => say(app, tl!("Put the caret in a paragraph or a heading to make it a heading.")),
@@ -532,7 +538,7 @@ fn structure(app: &mut App, f: &Frame<'_>, e: Option<edit::SourceEdit>, why: &st
 /// with a no-break space before it, as LaTeX writes them.
 fn insert_atom(app: &mut App, f: &Frame<'_>, source: &str) {
     let Some((a, h)) = selection(app, f) else { return };
-    let end = f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app));
+    let end = edit::typing_point(f.text, f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app)));
     let after_word = f.text.get(..end).and_then(|s| s.chars().next_back()).is_some_and(char::is_alphanumeric);
     let inserted = if after_word { format!("~{source}") } else { source.to_owned() };
     let caret = end + inserted.len();
@@ -542,7 +548,7 @@ fn insert_atom(app: &mut App, f: &Frame<'_>, source: &str) {
 /// `source` after the selection (or at the caret), the caret after it.
 fn insert_after_selection(app: &mut App, f: &Frame<'_>, source: &str) {
     let Some((a, h)) = selection(app, f) else { return };
-    let end = f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app));
+    let end = edit::typing_point(f.text, f.doc.source(a.max(h)).unwrap_or_else(|| caret_byte(app)));
     let caret = end + source.len();
     commit(app, f, &[Change { range: end..end, text: source.to_owned() }], (caret, caret), EditKind::Other);
 }
@@ -571,7 +577,11 @@ fn link(app: &mut App, f: &Frame<'_>, url: &str, text: &str) {
 fn new_block(app: &mut App, f: &Frame<'_>, source: &str, select: Option<&str>) {
     let caret = caret_byte(app);
     let blocks = texcraft_latex::view::view(f.text);
-    let at = blocks.iter().find(|b| b.range.end >= caret).map_or(f.text.len(), |b| b.range.end);
+    // Not in the preamble (the caret in the title's text is there): after the title block.
+    let shown = |b: &&texcraft_latex::view::Block| !matches!(b.kind, texcraft_latex::view::BlockKind::Preamble);
+    // In a list item, in that item; else after the block.
+    let after = blocks.iter().filter(shown).find(|b| b.range.end >= caret).map_or_else(|| edit::empty_view_caret(f.text, caret), |b| b.range.end);
+    let at = edit::item_end(f.text, caret).unwrap_or(after);
     let before = f.text.get(..at).unwrap_or_default();
     let lead = if before.is_empty() || before.ends_with("\n\n") {
         ""
@@ -607,13 +617,10 @@ fn type_text(app: &mut App, f: &Frame<'_>, s: &str) {
         return;
     }
     let kind = if a == h { EditKind::Typing { at: f.now } } else { EditKind::Other };
-    let mut source = edit::escape(s);
     let at = caret_byte(app);
     // After a command shown as text (`\dots`), a letter would lengthen its name and TeX would
-    // skip a space: an empty group ends it.
-    if a == h && s.starts_with(|c: char| c.is_alphabetic() || c.is_whitespace()) && edit::after_control_word(f.text, at) {
-        source.insert_str(0, "{}");
-    }
+    // skip a space: an empty group ends it (a space, after `\item`).
+    let source = edit::joined(f.text, insertion(app, f), &edit::escape(s));
     let version = app.editor.source.doc.buffer.version();
     replace(app, f, &source, kind);
     if a == h && s.ends_with('.') && app.editor.source.doc.buffer.version() != version {
@@ -625,7 +632,10 @@ fn type_text(app: &mut App, f: &Frame<'_>, s: &str) {
 /// Undo brings the dots back.
 fn typographic(app: &mut App, at: usize) {
     let d = &mut app.editor.source.doc;
-    let Some(c) = edit::ellipsis(&d.buffer.text(), at) else { return };
+    let text = d.buffer.text();
+    let Some(c) = edit::ellipsis(&text, at) else { return };
+    // Before a word, `\dots{}`.
+    let c = edit::kept_apart(&text, std::slice::from_ref(&c)).0.into_iter().next().unwrap_or(c);
     let (start, end) = (d.buffer.byte_to_char(c.range.start), d.buffer.byte_to_char(c.range.end));
     let caret = start + c.text.chars().count();
     let before = d.selection.clone();
@@ -642,24 +652,51 @@ fn takes_structure(app: &App, f: &Frame<'_>) -> bool {
     selection(app, f).is_some_and(|(a, h)| a != h && f.doc.deleted(f.text, a, h) != f.doc.pieces(f.text, a, h))
 }
 
+/// Where text replacing the selection goes: where its first run starts, or the caret (in the
+/// heading, after a heading's label: [`edit::typing_point`]).
+fn insertion(app: &App, f: &Frame<'_>) -> usize {
+    let at = caret_byte(app);
+    match selection(app, f) {
+        Some((a, h)) if a != h => edit::insertion(f.text, &f.doc, (a, h)).unwrap_or(at),
+        _ => edit::typing_point(f.text, at),
+    }
+}
+
 /// Replaces the selection (or inserts at the caret) with `source`. Deleting (`source` empty)
 /// removes the list items the selection holds whole ([`Doc::deleted`]).
 fn replace(app: &mut App, f: &Frame<'_>, source: &str, kind: EditKind) {
+    replace_at(app, f, (source, source.len()), kind);
+}
+
+/// [`replace`], the caret then at byte `caret` of `source`.
+fn replace_at(app: &mut App, f: &Frame<'_>, (source, caret): (&str, usize), kind: EditKind) {
     let Some((a, h)) = selection(app, f) else { return };
+    if !source.is_empty() && takes_structure(app, f) {
+        // The whole items go first, then the text goes where the caret is left: one change.
+        if let Some(e) = edit::replace_structure(f.text, &f.doc, (a, h), (source, caret)) {
+            commit(app, f, &e.changes, (e.caret, e.caret), kind);
+        }
+        return;
+    }
     let pieces = match (a == h, source.is_empty()) {
         (true, _) => Vec::new(),
         (false, true) => f.doc.deleted(f.text, a, h),
         (false, false) => f.doc.pieces(f.text, a, h),
     };
     let mut changes: Vec<Change> = pieces.iter().map(|r| Change { range: r.clone(), text: String::new() }).collect();
+    // The text goes where the selection starts: in its first run, or before them (in an empty
+    // heading the selection starts in).
+    let at = insertion(app, f);
     match changes.first_mut() {
-        Some(first) => first.text = source.to_owned(),
-        None => {
-            let at = caret_byte(app);
-            changes.push(Change { range: at..at, text: source.to_owned() });
-        }
+        Some(first) if first.range.start <= at => first.text = source.to_owned(),
+        _ if source.is_empty() => {}
+        _ => changes.insert(0, Change { range: at..at, text: source.to_owned() }),
     }
-    let caret = changes.first().map_or(0, |c| c.range.start + c.text.len());
+    // Nothing changes before it.
+    let at = changes.first().map_or(at, |c| c.range.start.min(at));
+    let caret = at + caret.min(source.len());
+    // A deletion of whole items leaves the caret in the item after them, not before its `\item`.
+    let caret = if source.is_empty() && a != h { edit::into_item(&edit::apply(f.text, &changes), caret) } else { caret };
     commit(app, f, &changes, (caret, caret), kind);
 }
 
@@ -714,7 +751,18 @@ fn delete(app: &mut App, f: &Frame<'_>, back: bool) {
     }
     let ch = if back { line.char_before(h.at) } else { line.char_after(h.at) };
     if let Some(r) = ch {
-        commit(app, f, &[Change { range: r.clone(), text: String::new() }], (r.start, r.start), EditKind::Deleting { at: f.now });
+        // An empty style the caret stands in (Bold pressed, nothing typed) goes too.
+        let mut changes = vec![Change { range: r.clone(), text: String::new() }];
+        let mut caret = r.start;
+        if let Some(empty) = edit::empty_style_at(f.text, caret_byte(app)).filter(|e| e.end <= r.start || r.end <= e.start) {
+            if !back {
+                caret = empty.start;
+            }
+            changes.push(Change { range: empty, text: String::new() });
+            changes.sort_by_key(|c| c.range.start);
+        }
+        let caret = edit::map_offset(&changes, caret);
+        commit(app, f, &changes, (caret, caret), EditKind::Deleting { at: f.now });
         return;
     }
     let step = if back { line.prev_stop(h.at) } else { line.next_stop(h.at) };

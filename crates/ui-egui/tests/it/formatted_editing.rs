@@ -1,7 +1,7 @@
 //! Editing in the formatted view: keys make minimal edits of the source, shared with source mode.
 
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use serde_json::json;
 use texcraft_compile::Unavailable;
 use texcraft_engine::Session;
@@ -253,4 +253,41 @@ fn an_elsarticle_front_matter_is_a_title_block_whose_text_is_edited_in_place() {
     h.event(egui::Event::Text("Re".into()));
     h.run();
     assert!(text(&mut h).contains("\\title{ReScheduling Lighthouse Shifts by the Tides\\tnoteref{t1}}"), "{}", text(&mut h));
+}
+
+/// The view's lines, as their text runs, in order.
+fn line_texts(h: &Harness<'_, App>) -> Vec<String> {
+    h.query_all(egui_kittest::kittest::by().role(egui::accesskit::Role::TextRun)).map(|n| n.accesskit_node().value().unwrap_or_default()).collect()
+}
+
+#[test]
+fn typing_over_a_selection_of_whole_lists_keeps_the_text_and_the_keyboard() {
+    // The deletion left no line for the caret: the typed text was dropped and the keyboard left.
+    let mut h = formatted("\\begin{itemize}\n\\item a\n\\item b\n\\end{itemize}\n");
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::A);
+    h.event(egui::Event::Text("x".into()));
+    h.run();
+    assert!(text(&mut h).contains('x'), "the typed text went nowhere: {:?}", text(&mut h));
+    assert!(h.get_by_label("main.tex formatted").accesskit_node().is_focused(), "the keyboard left the text");
+}
+
+#[test]
+fn enter_at_the_end_of_a_documents_last_paragraph_shows_the_new_one() {
+    let mut h = formatted("\\documentclass{article}\n\\begin{document}\nText.\n\\end{document}\n");
+    let before = line_texts(&h).len();
+    key(&mut h, egui::Modifiers::NONE, egui::Key::End);
+    key(&mut h, egui::Modifiers::NONE, egui::Key::Enter);
+    assert!(line_texts(&h).len() > before, "no empty paragraph shows for the caret: {:?}", line_texts(&h));
+    h.get_by_label("main.tex formatted").type_text("More");
+    h.run();
+    assert!(text(&mut h).contains("Text.\n\nMore"), "{:?}", text(&mut h));
+}
+
+#[test]
+fn a_click_at_a_paragraphs_start_adds_no_empty_line_above_it() {
+    let mut h = formatted("First paragraph.\n\nSecond one.\n");
+    let before = line_texts(&h);
+    let r = h.get_by_role_and_label(egui::accesskit::Role::Paragraph, "Second one.").rect();
+    click(&mut h, egui::pos2(r.min.x + 1.0, r.center().y));
+    assert_eq!(line_texts(&h), before, "the click made a line appear");
 }

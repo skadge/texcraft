@@ -1,0 +1,83 @@
+\documentclass{article}
+\usepackage{amsthm}
+\newtheorem{theorem}{Theorem}[section]
+\title{A Small Test}
+\author{Ada Example \and Bo Sample}
+\begin{document}
+\maketitle
+
+\section{Introduction}\label{sec:intro}
+
+Some \textbf{bold}, \emph{emphasised} and \texttt{typed} words, a {\bfseries declared} run,
+a formula $a^2 + b^2 = c^2$ and \(x\), a reference to Section~\ref{sec:intro} and a
+citation~\cite{knuth84}. Dashes -- and --- and ``quotes'', 50\% of \$5 \& more\dots{} and
+caf\'e na\"ive \LaTeX\ too.% a comment
+Next line after a comment.
+
+\subsection{Lists}
+
+\begin{itemize}
+  \item First item with \textit{style}.
+  \item Second item
+  \begin{enumerate}
+    \item Nested one
+    \item Nested two
+  \end{enumerate}
+  \item
+  \item Last item\footnote{A note with \textbf{bold}.}
+\end{itemize}
+
+\begin{description}
+  \item[Term] Its description.
+  \item[Other] Another one.
+\end{description}
+
+\begin{theorem}[Pythagoras]\label{thm:p}
+In a right triangle the squares add up.
+\end{theorem}
+
+\begin{proof}
+Obvious.
+\end{proof}
+
+\begin{quote}
+A quoted paragraph.
+
+And a second one.
+\end{quote}
+
+\[ E = mc^2 \]
+
+\begin{equation}\label{eq:one}
+  f(x) = \int_0^1 g
+\end{equation}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.5\linewidth]{figure}
+  \caption{A figure caption.}
+  \label{fig:one}
+\end{figure}
+
+\begin{table}[htbp]
+  \centering
+  \caption{A table caption.}
+  \begin{tabular}{l|c|r}
+    \hline
+    One & Two & Three \\
+    \hline
+    $x$ & \textbf{y} & \\
+    Four & \multicolumn{2}{c}{Merged} \\
+    \hline
+  \end{tabular}
+  \label{tab:one}
+\end{table}
+
+See \url{https://example.org} and \href{https://example.org}{a link}.
+
+\begin{verbatim}
+raw \text
+\end{verbatim}
+
+\paragraph{Run-in} A paragraph heading.
+\end{document}

@@ -97,8 +97,13 @@ fn caption(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, f: &Float) 
         });
         inlines.push(label.clone());
     }
-    let para = Para { size: t.reading_size * 0.9, bold: false, color: t.text, role: egui::Role::Caption, empty_at: None, cell: None };
+    // An empty caption is a place to type one.
+    let empty_at = if f.caption.is_empty() { super::fig::caption_slot(cx, range) } else { None };
+    let para = Para { size: t.reading_size * 0.9, bold: false, color: t.text, role: egui::Role::Caption, empty_at, cell: None };
     let _ = paragraph(ui, cx, &inlines, range, &para);
+    if f.caption.is_empty() && empty_at.is_none() {
+        super::inert(cx);
+    }
 }
 
 /// The toolbar of the table holding the caret; `cell` is the caret's cell, `anchor` the cell of
