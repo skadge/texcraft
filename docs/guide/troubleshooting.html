@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Common LaTeX build errors in TeXCraft, packages missing in the browser, installation problems, and where TeXCraft keeps its settings, caches and logs on each system.">
+  <meta name="description" content="Common LaTeX build errors in TeXCraft, missing packages on the desktop and in the browser, installation problems, and where TeXCraft keeps its settings, caches and logs on each system.">
   <title>Troubleshooting · TeXCraft User Guide</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -37,7 +37,7 @@
     </nav>
     <main id="main" tabindex="-1">
       <h1>Troubleshooting</h1>
-      <p class="lead">What to do when a build fails, when the browser version lacks a package, and where to look when something else goes wrong.</p>
+      <p class="lead">What to do when a build fails, when a package is missing, and where to look when something else goes wrong.</p>
 
       <h2 id="build-errors">Common build errors</h2>
       <p>Open the <a href="building.html#log">build log</a>: each message says what went wrong in words, with help and a link to its line. The first error is usually the one to fix; later ones often follow from it. With a model connected, <span class="ui">Explain</span> gives a second opinion <span class="tag">Desktop only</span>.</p>
@@ -57,7 +57,17 @@
       </dl>
 
       <h2 id="packages">Packages</h2>
-      <p>On the desktop, TeXCraft uses your TeX Live (2025 or 2026) when one is installed. A package your document needs and your TeX Live lacks is downloaded from TeX Live the first time; without any TeX Live, TeXCraft keeps a TeX tree of its own and fills it as documents need it. Either way the first build of a new package needs the network.</p>
+      <p>On the desktop, TeXCraft uses your TeX Live (2025 or 2026) when one is installed. What happens when your document needs a package your TeX Live lacks is your choice: <span class="ui">Settings › Building › Missing packages</span>.</p>
+
+      <h3 id="desktop-packages">Missing packages on the desktop <span class="tag">Desktop only</span></h3>
+      <p>The first time a build lacks a package, TeXCraft asks what to do from then on, naming the package: <span class="ui">Download Automatically</span>, <span class="ui">Install Them Myself</span> or <span class="ui">Don't Download</span>. Your answer is kept in <span class="ui">Settings › Building › Missing packages</span>, where you can change it at any time (<span class="ui">Open Settings</span> in the question goes there). <span class="ui">Not Now</span>, or Escape, closes the question without an answer: nothing is downloaded, and TeXCraft asks again the next time it starts, not at every build.</p>
+      <ul>
+        <li><strong>Download automatically:</strong> the build downloads the package from TeX Live's own repository for the year of your TeX Live (the current year's from a CTAN mirror, an earlier year's from TeX Live's archive of that year), so it matches the rest of your TeX Live. It checks the package against TeX Live's signed package list, keeps it in retex's cache folder (see <a href="#files">Where TeXCraft keeps its files</a>) and uses it in later builds. While the build downloads, the status line says <span class="ui">Compiling: downloading … if TeX Live has it</span>; the build log then notes the package downloaded. The first download also fetches TeX Live's list of packages (about 3 MB). Without a network, the build fails at the package and the message says so; after a network failure TeXCraft does not try again for ten minutes. A package your TeX Live gets later (from tlmgr or your system) is used instead of the downloaded one. Without any TeX Live installed, this choice is what lets TeXCraft make a TeX tree of its own and fill it as documents need it.</li>
+        <li><strong>Install them myself:</strong> nothing is downloaded. The build stops at the package, and its message in the build log names the TeX Live package and how to install it: your system's command when TeXCraft knows it (<code>sudo apt install texlive-…</code> on Debian and Ubuntu, <code>sudo dnf install 'tex(….sty)'</code> on Fedora), or <code>tlmgr install &lt;package&gt;</code> for a TeX Live from TUG (with <code>sudo</code> for one installed for every user). When TeXCraft does not know the package yet, the message gives <code>tlmgr search --global --file &lt;file&gt;</code>, which names it. Compile again once it is installed.</li>
+        <li><strong>Don't download:</strong> nothing is downloaded; the build stops at the package with the engine's message, which says that TeXCraft does not download packages.</li>
+      </ul>
+      <p>Some builds never download, whatever the setting: accessible PDFs (<span class="ui">PDF for › Accessible</span>), exports to other formats, and <code>texcraft-cli compile</code> run the engine inside TeXCraft, where it neither downloads packages nor finds those it downloaded; their message says so. Compile for the screen first, or install the package. Agents and the command line never ask: until the setting is chosen they download nothing, and their build result lists the missing packages and how to change the setting (the command <code>build.missing_packages</code> with <code>auto</code>, <code>manual</code>, <code>off</code> or <code>ask</code>).</p>
+      <p>A file that no TeX Live package has (a typo in <code>\usepackage</code>, or your own <code>.sty</code> kept elsewhere) is not a missing package: the message says so, and adding the file to the project works.</p>
 
       <h3 id="browser-packages">Packages in the browser <span class="tag">Browser only</span></h3>
       <p>The browser version serves its own TeX tree: the common classes and packages, and those of every template. A package outside it is downloaded during the build from TeXCraft's package server, a copy of TeX Live of the same year as the tree. The status line says <span class="ui">Downloading the LaTeX package …</span> with the package's size, and the build log lists each package downloaded. A package is downloaded once: the browser keeps it for later builds and visits, also after TeXCraft is updated.</p>
