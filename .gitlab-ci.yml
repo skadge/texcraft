@@ -229,14 +229,15 @@ flatpak:
     # The runtime, the SDK and the Builder stay installed in /ci-cache (several GB, downloaded
     # once), with flatpak-builder's state and cargo's target folder (through --ccache, see the
     # manifest), and apt's downloads.
+    # bubblewrap refuses an installation on the volume itself (nosuid, nodev), so it is copied in
+    # here and what is new is copied back at the end of the job.
     - |
       if [ -d /ci-cache ]; then
-        mkdir -p /ci-cache/flatpak-user /ci-cache/flatpak-builder /ci-cache/apt-trixie
-        export FLATPAK_USER_DIR=/ci-cache/flatpak-user
-        rm -rf .flatpak-builder && ln -s /ci-cache/flatpak-builder .flatpak-builder
+        mkdir -p /ci-cache/flatpak-user /ci-cache/apt-trixie/partial "$HOME/.local/share/flatpak"
+        cp -a /ci-cache/flatpak-user/. "$HOME/.local/share/flatpak/"
+        du -sh "$HOME/.local/share/flatpak"
         echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/10keep
         rm -rf /var/cache/apt/archives && ln -s /ci-cache/apt-trixie /var/cache/apt/archives
-        mkdir -p /ci-cache/apt-trixie/partial
       fi
     - apt-get update -qq
     - apt-get install -y -qq --no-install-recommends flatpak flatpak-builder git ca-certificates elfutils debugedit appstream
@@ -254,6 +255,7 @@ flatpak:
     - flatpak run --command=flatpak-builder-lint --filesystem="$CI_PROJECT_DIR" org.flatpak.Builder repo "$CI_PROJECT_DIR/flatpak-repo" || true
     - mkdir -p out
     - flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo flatpak-repo "out/TeXCraft-$VERSION-x86_64.flatpak" "$FLATPAK_ID"
+    - if [ -d /ci-cache ]; then cp -a --update "$HOME/.local/share/flatpak/." /ci-cache/flatpak-user/; fi
     - (cd out && sha256sum *.flatpak | tee SHA256SUMS-flatpak)
   artifacts:
     paths:
