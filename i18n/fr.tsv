@@ -2737,3 +2737,14 @@ unit	{n} MB	{n} Mo
 	Owner	Propriétaire
 	You, or a group in which you can make projects.	Vous, ou un groupe dans lequel vous pouvez créer des projets.
 	You, or an organisation in which you can make repositories.	Vous, ou une organisation dans laquelle vous pouvez créer des dépôts.
+# UX review 2: consistency (docs/ux-review-2.md)
+@id	view.dim_pdf	Assombrir le PDF dans le thème sombre
+	Dim the PDF in the dark theme	Assombrir le PDF dans le thème sombre
+	The PDF's pages a little darker while the theme is dark, for long sessions; the PDF itself does not change.	Les pages du PDF un peu plus sombres tant que le thème est sombre, pour les longues séances ; le PDF lui-même ne change pas.
+	Build Settings…	Paramètres de compilation…
+	Spelling Settings…	Paramètres d'orthographe…
+	spelling	orthographe
+	{sends} Not agreed to yet.	{sends} Pas encore accepté.
+	No headings yet	Pas encore de titres
+	No outline	Pas de plan
+	No history yet	Pas encore d'historique

@@ -2737,3 +2737,14 @@ unit	{n} MB	{n} MB
 	Owner	Proprietário
 	You, or a group in which you can make projects.	Você, ou um grupo onde pode criar projetos.
 	You, or an organisation in which you can make repositories.	Você, ou uma organização onde pode criar repositórios.
+# UX review 2: consistency (docs/ux-review-2.md)
+@id	view.dim_pdf	Escurecer o PDF no tema escuro
+	Dim the PDF in the dark theme	Escurecer o PDF no tema escuro
+	The PDF's pages a little darker while the theme is dark, for long sessions; the PDF itself does not change.	As páginas do PDF um pouco mais escuras enquanto o tema é escuro, para sessões longas; o PDF em si não muda.
+	Build Settings…	Definições de compilação…
+	Spelling Settings…	Definições de ortografia…
+	spelling	ortografia
+	{sends} Not agreed to yet.	{sends} Ainda não aceite.
+	No headings yet	Ainda sem títulos
+	No outline	Sem estrutura
+	No history yet	Ainda sem histórico

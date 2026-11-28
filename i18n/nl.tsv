@@ -2737,3 +2737,14 @@ unit	{n} MB	{n} MB
 	Owner	Eigenaar
 	You, or a group in which you can make projects.	Jij, of een groep waarin je projecten kunt maken.
 	You, or an organisation in which you can make repositories.	Jij, of een organisatie waarin je repository's kunt maken.
+# UX review 2: consistency (docs/ux-review-2.md)
+@id	view.dim_pdf	PDF dimmen in het donkere thema
+	Dim the PDF in the dark theme	PDF dimmen in het donkere thema
+	The PDF's pages a little darker while the theme is dark, for long sessions; the PDF itself does not change.	De pagina's van de PDF iets donkerder zolang het thema donker is, voor lange sessies; de PDF zelf verandert niet.
+	Build Settings…	Build-instellingen…
+	Spelling Settings…	Spellingsinstellingen…
+	spelling	spelling
+	{sends} Not agreed to yet.	{sends} Nog niet mee ingestemd.
+	No headings yet	Nog geen koppen
+	No outline	Geen overzicht
+	No history yet	Nog geen geschiedenis
