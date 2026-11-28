@@ -5,6 +5,32 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.26.0 (2026-11-28)
+
+Link a project to a repository that exists, and more of the formatted view.
+
+### Link to a Repository
+
+- File › Link to a Repository… (also in the History panel and All Commands): an existing project
+  linked to a repository that already exists, on GitLab, GitHub, your own server, Overleaf or any
+  git address. Before anything changes, it says what will happen: an empty repository receives
+  the project's history; one with versions of its own is merged with it, and a file both have is
+  yours to choose, kept or taken. Never forced; a version is made first. Unlink… removes the link
+  and changes neither side. In the browser, GitLab and GitHub.
+
+### Formatted view
+
+- A click on a formula selects it; Enter or a double-click opens its editor.
+- Typing over whole list items, Enter over a selection, and a word typed over a selection are
+  each one undo step.
+- Bold pressed again on the word at the caret no longer merges it with the next word.
+- A paragraph break inside a group keeps its closing brace out of a comment; text typed before a
+  paragraph's leading comments goes where the text starts.
+
+### Web
+
+- When the engine points to its log, the build log shows the log's end instead of its path.
+
 ## 0.25.0 (2026-11-28)
 
 A consistency pass over the whole window (docs/ux-review-2.md).

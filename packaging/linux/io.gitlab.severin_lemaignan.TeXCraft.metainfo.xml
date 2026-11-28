@@ -41,6 +41,16 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.26.0" date="2026-11-28" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.26.0</url>
+      <description>
+        <p>Link a project to a repository that exists, and more of the formatted view.</p>
+        <ul>
+          <li>Link to a Repository: an existing project and an existing repository brought together</li>
+          <li>A click on a formula selects it; one typing is one undo</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.25.0" date="2026-11-28" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.25.0</url>
       <description>
