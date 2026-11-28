@@ -5,6 +5,24 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.25.0 (2026-11-28)
+
+A consistency pass over the whole window (docs/ux-review-2.md).
+
+- Every dialog has one header, with Close at the end of its title's row, and its main action on
+  the right of its footer.
+- Settings fills the window's height in every section, and says which section is shown to screen
+  readers.
+- The PDF pane's separate download button is gone: Export › Download PDF and File › Save PDF As…
+  do it. Its controls are named as their commands (Fit Width, Build Log).
+- The Compile menu ends with Build Settings…, the spelling menu with Spelling Settings…; Ask AI's
+  Open Settings opens AI.
+- Settings › AI's switches are setting rows like the others.
+- Settings › Appearance: Dim the PDF in the dark theme.
+- The side panel keeps the width it was given in every section; badges are visible in the dark
+  theme; empty panes and panels have one shape.
+- The citation, cross-reference and figure pickers fit a phone, with Close.
+
 ## 0.24.1 (2026-11-28)
 
 The same TeXCraft as 0.24.0, built by a faster release pipeline: the build caches stay on the

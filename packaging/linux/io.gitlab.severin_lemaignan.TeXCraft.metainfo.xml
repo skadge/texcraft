@@ -41,6 +41,17 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.25.0" date="2026-11-28" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.25.0</url>
+      <description>
+        <p>A consistency pass over the whole window.</p>
+        <ul>
+          <li>One header and footer for every dialog</li>
+          <li>Settings as tall as the window; quick menus lead to their settings</li>
+          <li>One way to download the PDF</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.24.1" date="2026-11-28" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.24.1</url>
       <description>
