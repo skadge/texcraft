@@ -139,6 +139,8 @@ pub struct Buffer {
     open: usize,
     /// The next edit starts a new group, even typing that would join.
     sealed: bool,
+    /// The next edit joins the group on top of `undo`, sealed or not ([`Buffer::join_next`]).
+    join: bool,
     marks: BTreeMap<MarkId, (usize, Bias)>,
     next_mark: u64,
     version: u64,
@@ -160,6 +162,7 @@ impl Buffer {
             redo: Vec::new(),
             open: 0,
             sealed: false,
+            join: false,
             marks: BTreeMap::new(),
             next_mark: 0,
             version: 0,
@@ -286,12 +289,19 @@ impl Buffer {
             GroupKind::Deleting => first_end == Some(g.end) || first_start == Some(g.end),
             GroupKind::Other => false,
         };
-        let joins = self.open > 0 || (!self.sealed && self.undo.last().is_some_and(|g| g.kind == group_kind && at - g.last < PAUSE && continues(g)));
+        let joined = std::mem::take(&mut self.join) && !self.undo.is_empty();
+        let joins = joined
+            || self.open > 0
+            || (!self.sealed && self.undo.last().is_some_and(|g| g.kind == group_kind && at - g.last < PAUSE && continues(g)));
         self.apply(&step.forward, Origin::Local);
         let end = after.primary().head;
         let after_space = typed.chars().last().is_some_and(char::is_whitespace);
         match self.undo.last_mut() {
             Some(g) if joins => {
+                if joined {
+                    // What goes on from here (typing) goes on as the joined edit would.
+                    g.kind = group_kind;
+                }
                 g.steps.push(step);
                 g.last = at;
                 g.end = end;
@@ -307,6 +317,25 @@ impl Buffer {
     /// The next edit starts a new undo group (the caret moved, the window lost focus).
     pub fn seal(&mut self) {
         self.sealed = true;
+    }
+
+    /// Whether the next edit joins the last undo group, whatever its kind and wherever it is (`on`),
+    /// or not (`false`, as when that edit did not come): an edit made in two steps, such as text
+    /// typed over whole list items (the items deleted first, then the text typed), is undone as
+    /// one.
+    pub fn join_next(&mut self, on: bool) {
+        self.join = on;
+    }
+
+    /// Typing goes on in the last undo group, made at time `at`: text typed over a selection
+    /// (the selection replaced by its first character) and the characters typed after it are
+    /// undone as one, as a word typed is.
+    pub fn continue_typing(&mut self, at: f64) {
+        if let Some(g) = self.undo.last_mut() {
+            g.kind = GroupKind::Typing;
+            g.last = at;
+            self.sealed = false;
+        }
     }
 
     /// Everything edited until the matching [`Buffer::end_group`] is undone as one.
