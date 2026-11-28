@@ -229,12 +229,14 @@ flatpak:
     # The runtime, the SDK and the Builder stay installed in /ci-cache (several GB, downloaded
     # once), with flatpak-builder's state and cargo's target folder (through --ccache, see the
     # manifest), and apt's downloads.
-    # bubblewrap refuses an installation on the volume itself (nosuid, nodev), so it is copied in
-    # here and what is new is copied back at the end of the job.
+    # bubblewrap refuses an installation on the volume itself (nosuid, nodev), so it is kept there
+    # as one tar file (read in one go: copying its tens of thousands of files took 15 minutes),
+    # unpacked here, and written again only when what is installed changed.
     - |
       if [ -d /ci-cache ]; then
-        mkdir -p /ci-cache/flatpak-user /ci-cache/apt-trixie/partial "$HOME/.local/share/flatpak"
-        cp -a /ci-cache/flatpak-user/. "$HOME/.local/share/flatpak/"
+        mkdir -p /ci-cache/apt-trixie/partial "$HOME/.local/share/flatpak"
+        rm -rf /ci-cache/flatpak-user
+        if [ -f /ci-cache/flatpak-user.tar ]; then tar -C "$HOME/.local/share/flatpak" -xf /ci-cache/flatpak-user.tar; fi
         du -sh "$HOME/.local/share/flatpak"
         echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/10keep
         rm -rf /var/cache/apt/archives && ln -s /ci-cache/apt-trixie /var/cache/apt/archives
@@ -248,14 +250,21 @@ flatpak:
     - VERSION="${CI_COMMIT_TAG#v}"; VERSION="${VERSION:-$(git describe --tags --always)}"
     - mkdir -p prebuilt && cp out/bin/texcraft out/bin/texcraft-cli prebuilt/
     - flatpak run --command=flatpak-cargo-generator --filesystem="$CI_PROJECT_DIR" org.flatpak.Builder "$CI_PROJECT_DIR/Cargo.lock" -o "$CI_PROJECT_DIR/packaging/flatpak/cargo-sources.json"
-    - flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean --ccache --repo=flatpak-repo flatpak-build "$MANIFEST"
+    - flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean --disable-cache --ccache --repo=flatpak-repo flatpak-build "$MANIFEST"
     # Lint findings are shown, not fatal: some (the app id's domain, the home folder) are decisions
     # for the operator (docs/releasing.md).
     - flatpak run --command=flatpak-builder-lint --filesystem="$CI_PROJECT_DIR" org.flatpak.Builder manifest "$CI_PROJECT_DIR/$MANIFEST" || true
     - flatpak run --command=flatpak-builder-lint --filesystem="$CI_PROJECT_DIR" org.flatpak.Builder repo "$CI_PROJECT_DIR/flatpak-repo" || true
     - mkdir -p out
     - flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo flatpak-repo "out/TeXCraft-$VERSION-x86_64.flatpak" "$FLATPAK_ID"
-    - if [ -d /ci-cache ]; then cp -a --update "$HOME/.local/share/flatpak/." /ci-cache/flatpak-user/; fi
+    - |
+      if [ -d /ci-cache ]; then
+        installed="$(flatpak --user list --columns=ref,commit | sha256sum)"
+        if [ "$installed" != "$(cat /ci-cache/flatpak-user.list 2>/dev/null)" ]; then
+          tar -C "$HOME/.local/share/flatpak" -cf /ci-cache/flatpak-user.tar.new . && mv /ci-cache/flatpak-user.tar.new /ci-cache/flatpak-user.tar
+          echo "$installed" > /ci-cache/flatpak-user.list
+        fi
+      fi
     - (cd out && sha256sum *.flatpak | tee SHA256SUMS-flatpak)
   artifacts:
     paths:
