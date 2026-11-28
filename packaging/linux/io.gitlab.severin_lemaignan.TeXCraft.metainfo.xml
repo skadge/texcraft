@@ -41,6 +41,12 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.27.0" date="2026-11-28" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.27.0</url>
+      <description>
+        <p>In the browser, sign-ins remembered across tabs and visits, and package downloads in Chrome.</p>
+      </description>
+    </release>
     <release version="0.26.3" date="2026-11-28" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.26.3</url>
       <description>

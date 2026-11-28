@@ -5,6 +5,17 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.27.0 (2026-11-28)
+
+### Web
+
+- Sign-ins are remembered in the browser: every tab of TeXCraft sees them, and they last across
+  visits (GitLab's renewing itself). Settings › Accounts › Remember sign-ins in this browser, on
+  by default; off keeps them in one tab, for a shared computer. A sign-in, a sign-out or a
+  disconnection in one tab shows in the others.
+- Package downloads in Chrome: the first request after a long build could fail at once in
+  Chrome, and the package was then taken as unreachable for ten minutes; it is tried again.
+
 ## 0.26.3 (2026-11-28)
 
 - The desktop prepares the typesetting engine while its window opens (the LaTeX format, the
