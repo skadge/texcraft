@@ -113,6 +113,8 @@ pub(crate) struct Check {
     servers_kept: u64,
     /// The revision of the default connection last put in the preferences.
     default_kept: u64,
+    /// The revision of Remember sign-ins in this browser last put in the preferences.
+    remember_kept: u64,
 }
 
 /// What the sign-in part of a dialog or of Settings shows for a service.
@@ -125,6 +127,8 @@ pub(crate) struct SignInView {
     /// Why signing in is not offered, in words.
     pub unavailable: Option<&'static str>,
     pub progress: Option<SignInProgress>,
+    /// Remember sign-ins in this browser, where it is a choice (the browser build).
+    pub remember: Option<bool>,
 }
 
 /// What the sign-in part asks for.
@@ -145,6 +149,8 @@ pub(crate) enum SignInAction {
         service: Service,
         address: String,
     },
+    /// Remember sign-ins in this browser, on or off.
+    Remember(bool),
 }
 
 /// Why signing in to `service` is not offered, in words.
@@ -167,7 +173,8 @@ pub(crate) fn sign_in_view(app: &App, service: Service, instance: &str) -> SignI
     let progress =
         app.session.forge_signing_in().filter(|(s, _)| *s == service && app.session.forge_signing_in_instance() == Some(instance)).map(|(_, p)| p);
     let unavailable = app.session.forge_sign_in_unavailable_at(service, instance).map(|why| unavailable_words(service, why));
-    SignInView { service, instance: instance.to_owned(), user, unavailable, progress }
+    let remember = app.session.remember_in_browser_saved().0;
+    SignInView { service, instance: instance.to_owned(), user, unavailable, progress, remember }
 }
 
 /// The instance a project at `address` (as typed) for `service` is on; `service`'s public one
@@ -240,6 +247,15 @@ pub(crate) fn sign_in_part(ui: &mut egui::Ui, t: &Tokens, view: &SignInView, set
             if r.clicked() {
                 action = Some(SignInAction::SignIn { service, instance: view.instance.clone(), write: false });
             }
+            // The browser: where the sign-in will be kept, the same setting as Settings › Accounts'
+            // (which shows it on its own page).
+            if let Some(mut on) = view.remember
+                && enabled
+                && !settings
+                && ui.checkbox(&mut on, tl!("Remember sign-ins in this browser")).changed()
+            {
+                action = Some(SignInAction::Remember(on));
+            }
         }
     }
     action
@@ -258,6 +274,7 @@ pub(crate) fn act(app: &mut App, action: SignInAction) {
             }
         }
         SignInAction::Open(url) => app.ctx.open_url(egui::OpenUrl::new_tab(url)),
+        SignInAction::Remember(on) => crate::accounts::set_remember(app, on),
         SignInAction::AddServer { service, address } => {
             let back = match app.view.dialog.take() {
                 Some(Dialog::Import(form)) => crate::forge_server::Back::Import(form),
@@ -873,6 +890,15 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
         app.prefs.default_connection = default.map(str::to_owned);
         app.forge_check.default_kept = revision;
         app.prefs_changed = true;
+    }
+    // Remember sign-ins in this browser, changed here or in another tab.
+    let (remember, revision) = app.session.remember_in_browser_saved();
+    if revision != app.forge_check.remember_kept {
+        if let Some(on) = remember {
+            app.prefs.remember_in_browser = on;
+            app.prefs_changed = true;
+        }
+        app.forge_check.remember_kept = revision;
     }
     // The git servers whose credential the keychain keeps, by host (no secret in them).
     let (hosts, revision) = app.session.git_hosts_saved();

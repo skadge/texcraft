@@ -1439,12 +1439,19 @@ fn page(ui: &mut egui::Ui, t: &Tokens, form: &mut ImportForm, info: &Info, acts:
 /// Remember on this computer (ticked by default), and where the token goes and how it is removed.
 fn remember_row(ui: &mut egui::Ui, t: &Tokens, remember: &mut bool, info: &Info) {
     row(ui, t, info.narrow, "", |ui, _| {
-        let label = if info.browser { tl!("Remember in this tab") } else { tl!("Remember on this computer") };
+        let label = match (info.browser, info.kept) {
+            (true, "browser") => tl!("Remember in this browser"),
+            (true, _) => tl!("Remember in this tab"),
+            _ => tl!("Remember on this computer"),
+        };
         ui.checkbox(remember, label);
         let kept = match (*remember, info.kept) {
             (true, "keychain") => tl!(
                 "Kept in the system's keychain, so that Sync, push, pull and later imports need no token. Settings › Accounts lists it, with Replace… and Disconnect…."
             ),
+            (true, "browser") => {
+                tl!("Kept in this browser's storage for this site, for every tab. Settings › Accounts lists it, with Replace… and Disconnect….")
+            }
             (true, "tab") => {
                 tl!("Kept in this tab's session storage until the tab is closed. Settings › Accounts lists it, with Replace… and Disconnect….")
             }

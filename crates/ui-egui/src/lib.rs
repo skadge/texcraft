@@ -341,6 +341,7 @@ impl App {
         session.restore_ai(prefs.ai.clone());
         session.restore_forge_servers(prefs.forge_servers.clone());
         session.restore_git_hosts(prefs.git_hosts.clone());
+        session.restore_remember_in_browser(prefs.remember_in_browser);
         session.restore_default_connection(prefs.default_connection.clone());
         session.settings.spelling = prefs.spelling.clone();
         session.settings.grammar = prefs.grammar.clone();
@@ -851,6 +852,13 @@ impl App {
     /// `state`, or `error`): it is finished in the background (`forge.sign_in_return`).
     pub fn forge_sign_in_returned(&mut self, params: Value) {
         forge::returned(self, params);
+    }
+
+    /// Another of the browser's tabs changed the sign-ins or tokens kept, or Remember sign-ins in
+    /// this browser: they are read again (`accounts.reload`), so this tab shows the same.
+    pub fn kept_sign_ins_changed(&mut self) {
+        self.run("accounts.reload", json!({}));
+        self.ctx.request_repaint();
     }
 
     /// A link's query (`gitlab=…&client_id=…`, the browser's address or the desktop's argument):

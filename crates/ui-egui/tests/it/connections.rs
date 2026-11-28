@@ -181,3 +181,69 @@ fn the_page_and_its_dialog_fit_a_phone() {
     let github = h.get_by_role_and_label(Role::Button, "GitHub, Sign in or use a token").rect();
     assert!(github.top() > gitlab.bottom() - 1.0 && gitlab.width() > 300.0, "not a list on a phone");
 }
+
+/// A storage in memory, standing for the browser's local or session storage.
+#[derive(Clone, Default)]
+struct Memory(std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, String>>>);
+
+impl Memory {
+    fn map(&self) -> std::sync::MutexGuard<'_, std::collections::BTreeMap<String, String>> {
+        self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+impl texcraft_engine::browser_secrets::KeyValue for Memory {
+    fn get(&self, key: &str) -> Result<Option<String>, String> {
+        Ok(self.map().get(key).cloned())
+    }
+    fn set(&self, key: &str, value: &str) -> Result<(), String> {
+        self.map().insert(key.to_owned(), value.to_owned());
+        Ok(())
+    }
+    fn remove(&self, key: &str) -> Result<(), String> {
+        self.map().remove(key);
+        Ok(())
+    }
+    fn keys(&self) -> Result<Vec<String>, String> {
+        Ok(self.map().keys().cloned().collect())
+    }
+}
+
+/// The browser's window, its sign-ins kept in `local` (a made-up sign-in to gitlab.com in it).
+fn browser(local: &Memory) -> Harness<'static, App> {
+    let grant = json!({"service": "gitlab", "instance": "https://gitlab.com", "access": "gl-fake-access", "refresh": "gl-fake-refresh",
+        "expires_at": 4_000_000_000_i64, "scopes": ["read_api"], "user": {"name": "Ada", "username": "ada"}, "redirect": "https://texcraft.example/"});
+    let _ = texcraft_engine::browser_secrets::KeyValue::set(local, "texcraft.forge.gitlab.com", &grant.to_string());
+    let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    s.use_library(texcraft_engine::library::Library::default());
+    s.set_forge_redirect("https://texcraft.example/");
+    s.set_forge_secrets(std::sync::Arc::new(texcraft_engine::browser_secrets::BrowserSecrets::new(local.clone(), Memory::default())));
+    let app = crate::support::app(s);
+    let mut h = Harness::builder().with_size(WIDE).with_step_dt(1.0 / 60.0).with_max_steps(60).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    h.run();
+    h
+}
+
+const REMEMBER: &str = "Remember sign-ins in this browser";
+
+#[test]
+fn the_browser_offers_remembering_sign_ins_and_says_where_they_are() {
+    let mut desktop = harness(&Script::default(), WIDE);
+    accounts(&mut desktop);
+    assert!(desktop.query_by_role_and_label(Role::CheckBox, REMEMBER).is_none(), "the desktop offers the browser's setting");
+
+    let local = Memory::default();
+    let mut h = browser(&local);
+    accounts(&mut h);
+    assert!(said(&h, "In this browser"), "the row does not say the sign-in is kept in the browser");
+    let remember = h.get_by_role_and_label(Role::CheckBox, REMEMBER);
+    assert_eq!(remember.accesskit_node().data().toggled(), Some(egui::accesskit::Toggled::True), "not on at first");
+    remember.click();
+    h.run();
+    h.run();
+    assert!(said(&h, "In this tab"), "the row still says the browser");
+    assert!(!local.map().contains_key("texcraft.forge.gitlab.com"), "the sign-in stayed where every tab reads it");
+    let prefs = h.state_mut().take_changed_prefs().expect("the preferences changed");
+    assert!(!prefs.remember_in_browser, "the setting is not kept");
+    assert!(!format!("{prefs:?}").contains("gl-fake"), "a token in the preferences");
+}

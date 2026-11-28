@@ -2791,3 +2791,11 @@ unit	{n} MB	{n} MB
 @id	git.add_remote	Collega a un repository…
 @id	git.remove_remote	Scollega dal repository…
 @id	git.check_remote	Cosa fa il collegamento a un repository
+	Remember sign-ins in this browser	Ricorda gli accessi in questo browser
+	Sign-ins and tokens are kept in this browser's storage for this site, for every tab and later visits; only the site's own page can read them. Turn this off on a shared computer: they then stay in this tab until it is closed, and other tabs and later visits forget them.	Gli accessi e i token sono conservati nella memoria di questo browser per questo sito, per tutte le schede e le visite successive; solo la pagina stessa del sito può leggerli. Disattivalo su un computer condiviso: restano allora in questa scheda finché non viene chiusa, e le altre schede e le visite successive li dimenticano.
+	Sign-ins are kept in this browser, for every tab and later visits.	Gli accessi sono conservati in questo browser, per tutte le schede e le visite successive.
+	Sign-ins are kept in this tab only: other tabs and later visits forget them.	Gli accessi sono conservati solo in questa scheda: le altre schede e le visite successive li dimenticano.
+	Checked with the service, then kept in this browser's storage for this site, for every tab.	Verificato con il servizio, poi conservato nella memoria di questo browser per questo sito, per tutte le schede.
+	Kept in this browser's storage for this site, for every tab.	Conservato nella memoria di questo browser per questo sito, per tutte le schede.
+	Remember in this browser	Ricorda in questo browser
+	Kept in this browser's storage for this site, for every tab. Settings › Accounts lists it, with Replace… and Disconnect….	Conservato nella memoria di questo browser per questo sito, per tutte le schede. Impostazioni › Account lo elenca, con Sostituisci… e Disconnetti….

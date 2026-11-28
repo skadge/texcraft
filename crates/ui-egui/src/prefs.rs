@@ -93,6 +93,10 @@ pub struct Prefs {
     /// The git servers whose credential is kept in the keychain (Remember on this computer), by
     /// host; the credentials themselves are in the keychain, never here.
     pub git_hosts: Vec<String>,
+    /// The browser keeps sign-ins and tokens for every tab and later visits (its storage for the
+    /// site), not only for the tab (Settings › Accounts › Remember sign-ins in this browser). On
+    /// by default; the desktop keeps them in the keychain whatever this says.
+    pub remember_in_browser: bool,
     /// The default connection (Settings › Accounts › Set as Default): a forge's address, such as
     /// `https://gitlab.com`. Import a Project and Save Project to… start from it.
     pub default_connection: Option<String>,
@@ -167,6 +171,7 @@ impl Default for Prefs {
             first_steps_seen: false,
             clone_folder: None,
             git_hosts: Vec::new(),
+            remember_in_browser: true,
             default_connection: None,
             new_project_place: None,
             updates: texcraft_engine::update::Saved::default(),
