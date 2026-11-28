@@ -256,7 +256,16 @@ fn results(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
 /// What the sections not made of settings are searched by, besides their names.
 fn whole_section_terms(tab: usize) -> &'static [&'static str] {
     match tab {
-        5 => &[tn!("Endpoint"), tn!("Model"), tn!("Token"), tn!("Connect"), tn!("Test Connection")],
+        5 => &[
+            tn!("Endpoint"),
+            tn!("Model"),
+            tn!("Token"),
+            tn!("Connect"),
+            tn!("Test Connection"),
+            tn!("Use AI features"),
+            tn!("Suggest the next words as I type"),
+            tn!("Use AI in this project"),
+        ],
         _ => &[
             tn!("Add a Connection…"),
             tn!("Sign In with GitLab"),
