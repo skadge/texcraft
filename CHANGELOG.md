@@ -5,6 +5,17 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.26.3 (2026-11-28)
+
+- The desktop prepares the typesetting engine while its window opens (the LaTeX format, the
+  built-in packages, the default fonts' data), so the first build is as quick as the next.
+- Web: a Print build writes its PDF/X, and the builds after it no longer stop with "the
+  typesetting engine stopped" (retex 2.6.2, #56).
+- Web: Help › Get the Desktop App, a line at the start page's end, and Import's desktop-only
+  pages lead to the desktop app.
+- Help › First Steps opens the guide's Getting started page (and shows the hint above the editor
+  again); from the start page it seemed to do nothing.
+
 ## 0.26.2 (2026-11-28)
 
 - retex 2.6.1: a pdfLaTeX document builds in the browser and from the built-in packages; its

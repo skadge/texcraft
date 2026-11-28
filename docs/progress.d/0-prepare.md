@@ -1,1 +1,0 @@
-- 2026-11-28: The desktop builds the LaTeX format while its window opens (retex 2.6.2's `Retex::prepare`, on a thread of its own, with the Missing packages setting's downloads), so the first build after starting takes the time of a later one. retex 2.6.2 also writes the PDF/X of a print build in the browser (#56).

@@ -41,6 +41,12 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.26.3" date="2026-11-28" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.26.3</url>
+      <description>
+        <p>A quick first build on the desktop, print builds in the browser, and fixes.</p>
+      </description>
+    </release>
     <release version="0.26.2" date="2026-11-28" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.26.2</url>
       <description>
