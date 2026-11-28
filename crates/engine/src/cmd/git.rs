@@ -55,6 +55,8 @@ pub(crate) enum Task {
     Owners { pending: Pending<Vec<Owner>>, renewed: Renewed, key: Key, instance: String },
     /// Whether a repository's name is free.
     Available { pending: Pending<(bool, String)>, renewed: Renewed, key: Key, instance: String, name: String },
+    /// Link to a Repository's check, or its link in the browser (`link.rs`).
+    Link(Box<super::link::Task>),
 }
 
 /// A Sync under way (`project.sync`): its parameters, the version it made, and once pulled what
@@ -64,6 +66,8 @@ pub(crate) struct Syncing {
     params: Value,
     version: Value,
     pulled: Option<Value>,
+    /// The remote this Sync brings together with the project, just linked (`git.add_remote`).
+    added: Option<Value>,
 }
 
 /// A git hosting service TeXCraft recognises by its address, to name it beside the remote: the
@@ -811,6 +815,7 @@ impl Session {
             Task::Create { .. } => "create_repository",
             Task::Owners { .. } => "owners",
             Task::Available { .. } => "name_available",
+            Task::Link(link) => link.name(),
         })
     }
 
@@ -828,6 +833,9 @@ impl Session {
     /// The outcome of the push, pull or new repository running in the background, once it has
     /// ended (as [`Session::poll_forge`] gives it).
     pub(crate) fn poll_git(&mut self) -> Option<Result<Value>> {
+        if matches!(self.git_task, Some(Task::Link(_))) {
+            return super::link::poll(self);
+        }
         let ended = match self.git_task.as_mut()? {
             #[cfg(not(target_arch = "wasm32"))]
             Task::Push { pending, .. } => Ended::Pushed(pending.poll()?),
@@ -836,12 +844,14 @@ impl Session {
             Task::Create { pending, .. } => Ended::Made(pending.poll()?.map(Box::new)),
             Task::Owners { pending, .. } => Ended::Owners(pending.poll()?),
             Task::Available { pending, .. } => Ended::Available(pending.poll()?),
+            Task::Link(_) => return None,
         };
         let task = self.git_task.take()?;
         let renewed = match &task {
             #[cfg(not(target_arch = "wasm32"))]
             Task::Push { renewed, .. } | Task::Pull { renewed, .. } => renewed.clone(),
             Task::Create { renewed, .. } | Task::Owners { renewed, .. } | Task::Available { renewed, .. } => renewed.clone(),
+            Task::Link(_) => Renewed::default(),
         };
         self.keep_renewed(&renewed);
         Some(match (ended, task) {

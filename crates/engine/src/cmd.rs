@@ -21,6 +21,8 @@ pub(crate) mod forge;
 pub(crate) mod forge_auth;
 pub(crate) mod forge_pick;
 pub(crate) mod git;
+mod link;
+pub use link::{remote_name_ok, suggested_name};
 mod grammar;
 mod history;
 mod image;
@@ -100,6 +102,7 @@ pub fn all() -> &'static [CommandSpec] {
         v.extend(forge_pick::specs());
         v.extend(git::specs());
         v.extend(clone::specs());
+        v.extend(link::specs());
         v.extend(ai::specs());
         v.extend(update::specs());
         v

@@ -455,9 +455,19 @@ fn start_pull(s: &mut Session, p: &Value, sync: Option<Box<Syncing>>) -> Result<
 
 /// Sync on the desktop: a version of the changes, then a pull, then a push.
 pub(super) fn sync(s: &mut Session, p: &Value) -> Result<Value> {
+    start_sync(s, p, None)
+}
+
+/// The Sync that brings a remote just linked together with the project (`git.add_remote`): its
+/// outcome says so (`added`).
+pub(crate) fn sync_adding(s: &mut Session, p: &Value, added: Value) -> Result<Value> {
+    start_sync(s, p, Some(added))
+}
+
+fn start_sync(s: &mut Session, p: &Value, added: Option<Value>) -> Result<Value> {
     s.forge_problem = None;
     let version = super::super::history::make_version(s, None, false)?;
-    let sync = Box::new(Syncing { params: p.clone(), version, pulled: None });
+    let sync = Box::new(Syncing { params: p.clone(), version, pulled: None, added });
     Ok(start_pull(s, p, Some(sync))?.unwrap_or_else(|| json!({"operation": "sync", "started": true})))
 }
 
@@ -473,7 +483,11 @@ pub(super) fn push_for_sync(s: &mut Session, sync: Box<Syncing>) -> Result<Optio
 
 /// A Sync's outcome: the version it made, what the pull took in and what the push sent.
 pub(super) fn synced(sync: Syncing, pushed: Value) -> Value {
-    json!({"operation": "sync", "version": sync.version, "pulled": sync.pulled, "pushed": pushed})
+    let mut out = json!({"operation": "sync", "version": sync.version, "pulled": sync.pulled, "pushed": pushed});
+    if let Some(added) = sync.added {
+        out["added"] = added;
+    }
+    out
 }
 
 /// A fetch's outcome: the remote's branch, as now known, moves, then the branch checked out

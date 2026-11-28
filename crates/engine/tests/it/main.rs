@@ -28,6 +28,7 @@ mod image;
 mod import;
 mod language;
 mod library;
+mod link;
 mod missing_packages;
 mod new_project;
 mod numbers;
