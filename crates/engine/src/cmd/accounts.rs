@@ -13,6 +13,10 @@
 //!   kept. Signing in stays `forge.sign_in`, servers stay `forge.check_server`/`forge.add_server`.
 //! - `accounts.disconnect`: signs out (revoking where the service allows) and forgets the tokens.
 //! - `accounts.set_default`: the default connection.
+//! - `accounts.remember_in_browser`: the browser's "Remember sign-ins in this browser" (every tab
+//!   and later visits, or this tab only; [`crate::browser_secrets`]).
+//! - `accounts.reload`: reads the kept sign-ins and tokens again, when another of the browser's
+//!   tabs changed them.
 
 use serde_json::{Value, json};
 use texcraft_forge::oauth::{self, User};
@@ -80,14 +84,60 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             run: set_default,
             changes: false,
         },
+        CommandSpec {
+            id: "accounts.remember_in_browser",
+            label: "Remember Sign-ins in This Browser",
+            menu: &[],
+            shortcut: None,
+            params: remember_schema,
+            enabled: remember_offered,
+            run: remember_in_browser,
+            changes: false,
+        },
+        CommandSpec {
+            id: "accounts.reload",
+            label: "Read the Kept Sign-ins Again",
+            menu: &[],
+            shortcut: None,
+            params: no_params,
+            enabled: always,
+            run: reload,
+            changes: false,
+        },
     ]
+}
+
+fn remember_schema() -> Value {
+    json!({"type": "object", "properties": {
+        "on": {"type": "boolean", "description": "On: sign-ins and tokens are kept in the browser's storage for this site, for every tab and later visits. Off: in this tab only, forgotten when it is closed (a shared computer); what was kept moves into this tab, and the other tabs forget it. The browser only."}
+    }, "required": ["on"], "additionalProperties": false})
+}
+
+/// The setting is the browser's: elsewhere sign-ins are kept as the system keeps them.
+fn remember_offered(s: &Session) -> Result<()> {
+    match s.remember_in_browser_saved().0 {
+        Some(_) => Ok(()),
+        None => Err("Only the browser keeps sign-ins either for this tab or for the whole browser.".to_owned()),
+    }
+}
+
+fn remember_in_browser(s: &mut Session, p: &Value) -> Result<Value> {
+    let on = p.get("on").and_then(Value::as_bool).ok_or("on: give true or false.")?;
+    remember_offered(s)?;
+    s.set_remember_in_browser(on).map_err(|e| format!("The sign-ins kept could not all be moved: {e}"))?;
+    Ok(json!({"operation": "remember_in_browser", "on": on, "kept": s.forge_sign_in_kept()}))
+}
+
+fn reload(s: &mut Session, _: &Value) -> Result<Value> {
+    s.reload_kept();
+    Ok(json!({"operation": "reload", "kept": s.forge_sign_in_kept(), "connections": rows(s).len()}))
 }
 
 fn add_schema() -> Value {
     json!({"type": "object", "properties": {
         "kind": {"enum": ["gitlab", "github", "server", "overleaf", "git"], "description": "gitlab.com, github.com, a server added with forge.add_server (give its host), Overleaf's git server, or another git server over HTTPS (give its host)."},
         "host": {"type": "string", "description": "The server's host (git.example.org): for server and git."},
-        "token": {"type": "string", "description": "A personal access token (GitLab, GitHub, a server) or a git token (Overleaf, another git server). A forge's is checked first (who it is for); then it is kept in the system's keychain (the browser: the tab's session storage). Never in a result, a log or the preferences."},
+        "token": {"type": "string", "description": "A personal access token (GitLab, GitHub, a server) or a git token (Overleaf, another git server). A forge's is checked first (who it is for); then it is kept in the system's keychain (the browser: its storage for this site, or this tab's when accounts.remember_in_browser is off). Never in a result, a log or the preferences."},
         "background": {"type": "boolean", "description": "Return at once; the outcome comes as the forge operation's (add_token). The browser always works so."}
     }, "required": ["kind", "token"], "additionalProperties": false})
 }
@@ -232,6 +282,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
         "connections": rows(s),
         "default": s.forge_auth.default,
         "kept": s.forge_sign_in_kept(),
+        "remember_in_browser": s.remember_in_browser_saved().0,
         "browser": browser,
         "signing_in": signing_in,
         "adding": s.forge_auth.adding.as_ref().map(|a| a.instance.clone()),

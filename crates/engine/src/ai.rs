@@ -122,8 +122,9 @@ pub struct Saved {
     pub prompts: std::collections::BTreeMap<String, String>,
 }
 
-/// Where tokens are kept. The desktop uses the system's keychain ([`Keychain`]); the browser, the
-/// command line and tests keep them for the session ([`SessionSecrets`]).
+/// Where tokens are kept. The desktop uses the system's keychain ([`Keychain`]); the browser its
+/// own storage ([`crate::browser_secrets::BrowserSecrets`]); the command line and tests keep them
+/// for the session ([`SessionSecrets`]).
 pub trait Secrets: Send + Sync {
     fn get(&self, handle: &str) -> std::result::Result<Option<SecretString>, String>;
     fn put(&self, handle: &str, value: &SecretString) -> std::result::Result<(), String>;
@@ -131,6 +132,18 @@ pub trait Secrets: Send + Sync {
     fn remove(&self, handle: &str) -> std::result::Result<(), String>;
     /// Whether a token outlives the session.
     fn lasting(&self) -> bool;
+    /// Where keeping tokens for every tab and later visits (true) or for this tab only (false) is
+    /// a choice, which one is made: the browser's "Remember sign-ins in this browser". None
+    /// elsewhere.
+    fn remembering(&self) -> Option<bool> {
+        None
+    }
+    /// Makes the choice [`Secrets::remembering`] reads, moving what is kept to match. Refused
+    /// where there is no such choice.
+    fn remember(&self, on: bool) -> std::result::Result<(), String> {
+        let _ = on;
+        Err("Only the browser keeps sign-ins either for this tab or for the whole browser.".to_owned())
+    }
 }
 
 /// Tokens kept in memory, for this session only.

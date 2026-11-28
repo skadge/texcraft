@@ -18,8 +18,9 @@
 //!   servers that cannot be removed ([`Session::set_forge_provided_servers`]).
 //!
 //! A sign-in ([`Grant`]) is kept in the store the shell gives ([`Session::set_forge_secrets`]):
-//! the system's keychain on the desktop, the tab's session storage in the browser, this session
-//! only otherwise. Never in the preferences, the library, a log or a command's result. Expired
+//! the system's keychain on the desktop; in the browser, its local storage, or the tab's session
+//! storage when "Remember sign-ins in this browser" is off ([`crate::browser_secrets`]); this
+//! session only otherwise. Never in the preferences, the library, a log or a command's result. Expired
 //! access tokens are renewed with the refresh token before an operation; `forge.sign_out`
 //! revokes the token (GitLab) and forgets it.
 
@@ -43,7 +44,7 @@ use crate::{Result, Session};
 const WAIT: Duration = Duration::from_secs(10 * 60);
 
 /// The store's entry of the GitLab sign-in waiting for the browser to come back.
-const PENDING: &str = "texcraft.forge.pending";
+pub(crate) const PENDING: &str = "texcraft.forge.pending";
 
 /// Where a sign-in stands, for the interface.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,6 +122,11 @@ pub(crate) struct State {
     pub(super) default_revision: u64,
     /// Who the personal access tokens checked in this session are for, by host (no secret).
     pub(super) token_users: BTreeMap<String, oauth::User>,
+    /// Remember sign-ins in this browser, as last seen (none where the store has no such choice),
+    /// kept in the preferences by the shell.
+    remembered: Option<bool>,
+    /// Goes up when `remembered` changes.
+    remember_revision: u64,
     /// A token being checked before it is kept (`accounts.add`).
     pub(super) adding: Option<super::accounts::Adding>,
 }
@@ -148,8 +154,16 @@ impl Default for State {
             default_revision: 0,
             token_users: BTreeMap::new(),
             adding: None,
+            remembered: None,
+            remember_revision: 0,
         }
     }
+}
+
+/// The sign-in to `instance` `secrets` holds, if it holds one that can be read.
+pub(super) fn stored_grant(secrets: &dyn Secrets, instance: &str) -> Option<Grant> {
+    let kept = secrets.get(&handle(instance)).ok()??;
+    Grant::from_stored(kept.expose()).ok().filter(|g| g.instance == instance)
 }
 
 /// Whether `host` reads as a server's name: letters, digits, `.`, `-` and a port.
@@ -164,7 +178,7 @@ fn git_handle(host: &str) -> String {
 }
 
 /// The store's entry of the sign-in to `instance`.
-fn handle(instance: &str) -> String {
+pub(super) fn handle(instance: &str) -> String {
     let host = instance.split_once("://").map_or(instance, |(_, h)| h);
     format!("texcraft.forge.{host}")
 }
@@ -678,6 +692,7 @@ impl Session {
     /// Keeps sign-ins in `secrets` (the system's keychain on the desktop, the tab's storage in the
     /// browser), and reads those it already holds.
     pub fn set_forge_secrets(&mut self, secrets: Arc<dyn Secrets>) {
+        self.forge_auth.remembered = secrets.remembering();
         self.forge_auth.secrets = secrets;
         self.forge_auth.grants.clear();
         self.forge_auth.store_error = None;
@@ -690,6 +705,93 @@ impl Session {
             self.load_grant(&instance);
         }
         self.prune_git_hosts();
+    }
+
+    /// Remember sign-ins in this browser, as the shell kept it (the preferences): what the store
+    /// keeps is moved to match. Nothing where the store has no such choice (the desktop).
+    pub fn restore_remember_in_browser(&mut self, on: bool) {
+        let Some(now) = self.forge_auth.secrets.remembering() else { return };
+        if now != on
+            && let Err(e) = self.forge_auth.secrets.remember(on)
+        {
+            log::warn!("the sign-ins kept could not be moved: {e}");
+        }
+        self.forge_auth.remembered = self.forge_auth.secrets.remembering();
+    }
+
+    /// Remember sign-ins in this browser (none where it is not a choice), to keep in the
+    /// preferences, and a number that goes up when it changes.
+    pub fn remember_in_browser_saved(&self) -> (Option<bool>, u64) {
+        (self.forge_auth.remembered, self.forge_auth.remember_revision)
+    }
+
+    /// Turns Remember sign-ins in this browser on or off (`accounts.remember_in_browser`).
+    pub(super) fn set_remember_in_browser(&mut self, on: bool) -> std::result::Result<(), String> {
+        let moved = self.forge_auth.secrets.remember(on);
+        self.note_remembering();
+        moved
+    }
+
+    /// Takes in the store's choice, when it changed.
+    fn note_remembering(&mut self) {
+        let now = self.forge_auth.secrets.remembering();
+        if now != self.forge_auth.remembered {
+            self.forge_auth.remembered = now;
+            self.forge_auth.remember_revision += 1;
+        }
+    }
+
+    /// Reads again what the store keeps (`accounts.reload`): another of the browser's tabs signed
+    /// in, renewed a sign-in, disconnected, kept a token or changed Remember sign-ins in this
+    /// browser. A sign-in the store no longer has is forgotten; one it cannot be read for stays.
+    pub(super) fn reload_kept(&mut self) {
+        self.note_remembering();
+        let secrets = self.forge_auth.secrets.clone();
+        let instances: Vec<String> = [Service::GitLab, Service::GitHub]
+            .into_iter()
+            .map(|service| oauth::instance(service).to_owned())
+            .chain(self.forge_servers().into_iter().map(|s| s.instance))
+            .collect();
+        for instance in &instances {
+            match secrets.get(&handle(instance)) {
+                Ok(Some(kept)) => match Grant::from_stored(kept.expose()) {
+                    Ok(grant) if grant.instance == *instance => {
+                        self.forge_auth.grants.insert(instance.clone(), grant);
+                    }
+                    _ => log::warn!("the sign-in kept for {instance} cannot be read"),
+                },
+                Ok(None) => {
+                    self.forge_auth.grants.remove(instance);
+                }
+                Err(e) => log::warn!("the sign-ins kept cannot be read: {e}"),
+            }
+        }
+        // Tokens kept for the forges' hosts by another tab: the browser reaches no other server.
+        let before = self.forge_auth.git_hosts.clone();
+        let mut hosts = before.clone();
+        for instance in &instances {
+            let host = servers::host_of(instance).to_ascii_lowercase();
+            if !hosts.contains(&host) && matches!(secrets.get(&git_handle(&host)), Ok(Some(_))) {
+                hosts.push(host);
+            }
+        }
+        hosts.retain(|h| !matches!(secrets.get(&git_handle(h)), Ok(None)));
+        hosts.sort();
+        if hosts != before {
+            self.forge_auth.git_hosts = hosts;
+            self.forge_auth.git_revision += 1;
+        }
+    }
+
+    /// The sign-in to `instance` for `service` the store holds now, if it holds one: another tab
+    /// may have renewed it since this one read it.
+    pub(super) fn stored_grant(&self, instance: &str, service: Service) -> Option<Grant> {
+        stored_grant(&*self.forge_auth.secrets, instance).filter(|g| g.service == service)
+    }
+
+    /// The store, for an operation that re-reads a sign-in before and after renewing it.
+    pub(super) fn forge_secrets(&self) -> Arc<dyn Secrets> {
+        self.forge_auth.secrets.clone()
     }
 
     /// Drops the hosts listed as kept whose token the store no longer has (the browser tab that
@@ -943,9 +1045,14 @@ impl Session {
         (service == Service::GitHub && self.forge_in_browser()).then_some(Unavailable::Browser)
     }
 
-    /// Where sign-ins are kept: `keychain` (the desktop), `tab` (the browser's session storage),
-    /// or `session` (in memory only).
+    /// Where sign-ins are kept: `keychain` (the desktop), `browser` (the browser's local storage,
+    /// every tab's), `tab` (this tab's session storage), or `session` (in memory only).
     pub fn forge_sign_in_kept(&self) -> &'static str {
+        match self.forge_auth.secrets.remembering() {
+            Some(true) => return "browser",
+            Some(false) => return "tab",
+            None => {}
+        }
         match (self.forge_auth.secrets.lasting(), cfg!(target_arch = "wasm32")) {
             (true, false) => "keychain",
             (true, true) => "tab",
