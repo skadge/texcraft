@@ -177,6 +177,42 @@ fn print_check(v: &Value, main_dir: Option<&str>) -> Option<PrintCheck> {
     })
 }
 
+/// How many of a log's last lines the output shows in place of its path.
+const LOG_LINES: usize = 30;
+
+/// retex's lines that send the reader to a log name a path of the engine's file system, which
+/// in the browser is the worker's own and nobody can open (`retex: building the pdflatex format
+/// failed; see /cache/pdflatex.log`). Returns `output` with each such line saying what it says
+/// without the path, followed by the log's last lines as `read` gives them; `None` when there is
+/// no such line.
+pub fn with_logs(output: &str, read: impl Fn(&str) -> Option<Vec<u8>>) -> Option<String> {
+    const SEE: &str = "; see /";
+    let mut found = false;
+    let mut text = String::with_capacity(output.len());
+    for line in output.split_inclusive('\n') {
+        let bare = line.trim_end_matches(['\n', '\r']);
+        let Some((head, path)) = bare.rsplit_once(SEE).filter(|(h, _)| h.starts_with("retex: ")) else {
+            text.push_str(line);
+            continue;
+        };
+        found = true;
+        let log = read(&format!("/{}", path.trim())).map(|b| String::from_utf8_lossy(&b).into_owned()).filter(|l| !l.trim().is_empty());
+        match log {
+            Some(log) => {
+                let lines: Vec<&str> = log.lines().collect();
+                text.push_str(&format!("{head}; the end of its log:\n"));
+                for l in &lines[lines.len().saturating_sub(LOG_LINES)..] {
+                    text.push_str("    ");
+                    text.push_str(l);
+                    text.push('\n');
+                }
+            }
+            None => text.push_str(&format!("{head} (it left no log)\n")),
+        }
+    }
+    found.then_some(text)
+}
+
 /// The files a run of retex's command line wrote.
 #[derive(Debug, Default)]
 pub struct Written {
@@ -339,5 +375,19 @@ mod tests {
         assert!(matches!(&events[0], Record::Event(Event::File { name }) if name.ends_with("article.cls")));
         assert_eq!(events[1], Record::Event(Event::Pages { shipped: 1, expected: Some(2) }));
         assert_eq!(events[2], Record::Pass { n: 2, reason: Some("doc.aux changed".into()) });
+    }
+
+    #[test]
+    fn a_log_s_end_is_shown_instead_of_its_path() {
+        let log: String = (1..=40).map(|i| format!("log line {i}\n")).collect();
+        let output = "This is retex\nretex: building the pdflatex format failed; see /cache/pdflatex.log\n{\"type\":\"finished\"}\n";
+        let read = |p: &str| (p == "/cache/pdflatex.log").then(|| log.clone().into_bytes());
+        let text = with_logs(output, read).expect("the line is found");
+        assert!(!text.contains("/cache/pdflatex.log"), "no path the user cannot open: {text}");
+        assert!(text.contains("log line 40") && !text.contains("log line 1\n"), "the log's end, not all of it: {text}");
+        assert!(text.starts_with("This is retex\n") && text.ends_with("{\"type\":\"finished\"}\n"), "the other lines kept: {text}");
+        let gone = with_logs(output, |_| None).expect("the line is found");
+        assert!(!gone.contains("/cache/") && gone.contains("pdflatex format failed"));
+        assert_eq!(with_logs("retex: format built in 1.0 s\nretex: x; see the manual\n", read), None);
     }
 }
