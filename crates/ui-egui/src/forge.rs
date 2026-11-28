@@ -843,7 +843,9 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
                     crate::where_step::resent(app, &done);
                 }
                 Some("git_pull") => crate::history::git_pulled(app, &done),
+                Some("sync" | "add_remote") if crate::import::link::is_link(&done) => crate::import::link::linked(app, &done),
                 Some("sync") => crate::sync::synced(app, &done),
+                Some("check_remote") => crate::import::link::checked(app, Ok(done.clone())),
                 Some("clone") => crate::import::cloned(app, &done),
                 Some("check_address") => crate::import::checked(app, Ok(done.clone())),
                 _ => committed(app, &done),
@@ -901,7 +903,7 @@ pub(crate) fn poll(app: &mut App, ctx: &egui::Context) {
 /// A forge operation failed: said, and for a commit or a pull that a choice can get through
 /// (conflicts, a branch that does not take the commit), its dialog opened again with it.
 fn failed(app: &mut App, was: Option<&str>, e: String) {
-    if crate::import::failed(app, was, &e) {
+    if crate::import::failed(app, was, &e) || crate::import::link::failed(app, was, &e) {
         return;
     }
     if crate::forge_save::failed(app, was, &e) || crate::where_step::failed(app, was, &e) || crate::sync::failed(app, was, &e) {

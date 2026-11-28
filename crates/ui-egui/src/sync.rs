@@ -22,7 +22,7 @@ use crate::theme::Tokens;
 pub(crate) struct SyncView {
     remote: Value,
     /// What the remote was read at: the project, its latest version, the transfer running.
-    key: Option<String>,
+    pub key: Option<String>,
     /// A Sync was started and has not ended: its failure opens what gets it through.
     pub running: bool,
 }

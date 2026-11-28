@@ -260,6 +260,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                     };
                     app.view.status = Some((said.to_owned(), false));
                 }
+                Some(done) if c.command == "git.remove_remote" => crate::import::link::unlinked(app, &done),
                 Some(done) if c.command == "project.replace" => {
                     let n = done["replaced"].as_u64().unwrap_or(0) as usize;
                     let files = done["files"].as_array().map_or(0, Vec::len);

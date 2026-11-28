@@ -28,6 +28,8 @@ use crate::forge::{OpenForm, SignInAction, SignInView};
 use crate::theme::{Tokens, blend};
 use crate::{App, icons, widgets};
 
+pub(crate) mod link;
+
 /// The dialog's sheet.
 const SHEET: &str = "texcraft-import";
 /// How wide the dialog is at most (docs/design.md's dialogs).
@@ -226,6 +228,8 @@ pub(crate) struct ImportForm {
     remember: bool,
     /// Why the last import did not work, and its kind.
     error: Option<(ImportProblem, String)>,
+    /// Link to a Repository (`link.rs`): the dialog links the open project instead of importing.
+    link: Option<Box<link::LinkState>>,
 }
 
 /// The GitLab, GitHub or GitLab Server page's form in `dialog`, when Import a Project shows one.
@@ -290,7 +294,8 @@ fn default_source(app: &App) -> Option<Source> {
 /// default connection's card focused.
 pub(crate) fn open_at(app: &mut App, source: Option<Source>, address: &str) {
     let first = default_source(app).unwrap_or(Source::GitLab);
-    let mut form = ImportForm { page: Page::Grid, focus_card: Some(first), focus_field: false, into: Into::default(), remember: true, error: None };
+    let mut form =
+        ImportForm { page: Page::Grid, focus_card: Some(first), focus_field: false, into: Into::default(), remember: true, error: None, link: None };
     app.view.dialog = None;
     match source {
         Some(source) => {
@@ -466,6 +471,9 @@ struct Info {
     limit: String,
     /// The window's clock.
     now: f64,
+    /// Link to a Repository, and whether its link runs.
+    link: bool,
+    linking: bool,
 }
 
 fn info(app: &App, ctx: &egui::Context) -> Info {
@@ -531,11 +539,16 @@ fn info(app: &App, ctx: &egui::Context) -> Info {
         }
         l
     };
+    let (linked, linking) = match &app.view.dialog {
+        Some(Dialog::Import(form)) => (form.link.is_some(), form.link.as_ref().is_some_and(|l| l.running())),
+        _ => (false, false),
+    };
+    let order: Vec<Source> = if linked { link::order(app) } else { Source::ALL.to_vec() };
     Info {
         browser,
         narrow: crate::sheet::narrow(ctx, &app.tokens),
         running: app.session.clone_phase(),
-        lines: Source::ALL.iter().map(|s| (*s, marked(*s))).collect(),
+        lines: order.iter().map(|s| (*s, marked(*s))).collect(),
         view,
         unknown,
         servers,
@@ -545,6 +558,8 @@ fn info(app: &App, ctx: &egui::Context) -> Info {
         kept_token,
         limit: texcraft_engine::project::size_words(texcraft_engine::forge::MAX_PROJECT),
         now: ctx.input(|i| i.time),
+        link: linked,
+        linking,
     }
 }
 
@@ -590,6 +605,7 @@ enum Act {
 pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
     crate::forge_pick::tick(app, ctx);
     send_checks(app, ctx);
+    link::send(app, ctx);
     let t = app.tokens;
     let info = info(app, ctx);
     let on_page = matches!(&app.view.dialog, Some(Dialog::Import(f)) if !matches!(f.page, Page::Grid));
@@ -600,7 +616,7 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
         follow_name(form, &info);
         acts = draw(ui, &t, form, &info);
     });
-    let running = info.running.is_some();
+    let running = info.running.is_some() || info.linking;
     if shown.back {
         acts.push(Act::Back);
     }
@@ -769,6 +785,9 @@ pub(crate) fn checked(app: &mut App, outcome: Result<Value, String>) {
 
 /// The page's Import: a clone on the desktop (a forge's project in the browser).
 fn start(app: &mut App) {
+    if matches!(&app.view.dialog, Some(Dialog::Import(f)) if f.link.is_some()) {
+        return link::start(app);
+    }
     let browser = in_browser(app);
     let Some(Dialog::Import(form)) = app.view.dialog.as_mut() else { return };
     form.error = None;
@@ -1000,7 +1019,8 @@ pub(crate) fn folder_opened(app: &mut App) {
 
 fn draw(ui: &mut egui::Ui, t: &Tokens, form: &mut ImportForm, info: &Info) -> Vec<Act> {
     let mut acts = Vec::new();
-    let title = form.page.source().map_or(tl!("Import a Project"), Source::page_title);
+    let title =
+        if form.link.is_some() { link::title(form.page.source()) } else { form.page.source().map_or(tl!("Import a Project"), Source::page_title) };
     header(ui, t, title, !matches!(form.page, Page::Grid), info, &mut acts);
     match &mut form.page {
         Page::Grid => {
@@ -1008,6 +1028,7 @@ fn draw(ui: &mut egui::Ui, t: &Tokens, form: &mut ImportForm, info: &Info) -> Ve
                 acts.push(Act::Choose(s));
             }
         }
+        Page::Unavailable(source) if form.link.is_some() => link::unavailable(ui, t, *source, &mut acts),
         Page::Unavailable(source) => unavailable(ui, t, *source, &mut acts),
         _ => page(ui, t, form, info, &mut acts),
     }
@@ -1017,7 +1038,7 @@ fn draw(ui: &mut egui::Ui, t: &Tokens, form: &mut ImportForm, info: &Info) -> Ve
 /// The title row: Back on a page, the title, Close. On a phone, the sheet's bar holds them.
 fn header(ui: &mut egui::Ui, t: &Tokens, title: &str, on_page: bool, info: &Info, acts: &mut Vec<Act>) {
     let back = on_page.then_some(tl!("Back to sources"));
-    let asked = crate::dialogs::header(ui, t, title, back, info.running.is_none(), |_| {});
+    let asked = crate::dialogs::header(ui, t, title, back, info.running.is_none() && !info.linking, |_| {});
     if asked.back {
         acts.push(Act::Back);
     }
@@ -1036,8 +1057,12 @@ fn grid(ui: &mut egui::Ui, t: &Tokens, info: &Info, focus: Option<Source>) -> Op
     // Every card, in order: its source, its response, its row and column.
     let mut cells: Vec<(Source, egui::Response, usize, usize)> = Vec::new();
     let mut row_base = 0;
-    let groups = [(tl!("Online"), true), (if info.browser { tl!("On this device") } else { tl!("On this computer") }, false)];
-    for (name, online) in groups {
+    let groups: &[(&str, bool)] = if info.link {
+        &[(tl!("Where the repository is"), true)]
+    } else {
+        &[(tl!("Online"), true), (if info.browser { tl!("On this device") } else { tl!("On this computer") }, false)]
+    };
+    for &(name, online) in groups {
         let sources: Vec<&(Source, Line)> = info.lines.iter().filter(|(s, _)| s.online() == online).collect();
         let builder = egui::UiBuilder::new().accessibility_role(egui::accesskit::Role::Group).accessibility_label(name);
         ui.scope_builder(builder, |ui| {
@@ -1358,10 +1383,10 @@ pub(crate) enum Tone {
 
 /// A source's page: its fields, Into, the error and the footer.
 fn page(ui: &mut egui::Ui, t: &Tokens, form: &mut ImportForm, info: &Info, acts: &mut Vec<Act>) {
-    let running = info.running.is_some();
+    let running = info.running.is_some() || info.linking;
     let focus = std::mem::take(&mut form.focus_field);
     let mut ready = false;
-    let mut needs_folder = !info.browser;
+    let mut needs_folder = !info.browser && !info.link;
     let mut token_typed = false;
     let mut enter = false;
     ui.add_enabled_ui(!running, |ui| match &mut form.page {
@@ -1370,7 +1395,7 @@ fn page(ui: &mut egui::Ui, t: &Tokens, form: &mut ImportForm, info: &Info, acts:
             ready = r;
             enter = e;
             token_typed = f.use_token && !f.token.trim().is_empty();
-            needs_folder = !info.browser;
+            needs_folder = !info.browser && !info.link;
         }
         Page::Overleaf(p) => {
             let (r, e) = overleaf_fields(ui, t, p, info, focus);
@@ -1403,6 +1428,10 @@ fn page(ui: &mut egui::Ui, t: &Tokens, form: &mut ImportForm, info: &Info, acts:
         if *problem == ImportProblem::Network && ui.button(tl!("Try Again")).clicked() {
             acts.push(Act::TryAgain);
         }
+    }
+    if info.link {
+        link::part(ui, t, form, info, ready, enter, acts);
+        return;
     }
     footer(ui, t, ready, running, info, enter, acts);
 }
@@ -1814,6 +1843,7 @@ fn git_fields(ui: &mut egui::Ui, t: &Tokens, p: &mut GitPage, info: &Info, focus
                 p.branch = b;
             }
         }
+        Checked::Found { branches, .. } if branches.is_empty() && info.link => hint(ui, t, tl!("None yet: the repository is empty."), Tone::Plain),
         Checked::Found { branches, .. } if branches.is_empty() => {
             hint(ui, t, tl!("This repository is empty: there is nothing to import yet."), Tone::Bad)
         }
@@ -1826,7 +1856,7 @@ fn git_fields(ui: &mut egui::Ui, t: &Tokens, p: &mut GitPage, info: &Info, focus
         }
     });
     let enter = responses.iter().any(|r| r.lost_focus()) && ui.input(|i| i.key_pressed(Key::Enter));
-    let ready = matches!(&state, Checked::Found { branches, .. } if !branches.is_empty());
+    let ready = matches!(&state, Checked::Found { branches, .. } if !branches.is_empty() || info.link);
     (ready, enter)
 }
 

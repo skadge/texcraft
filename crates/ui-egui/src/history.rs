@@ -386,7 +386,9 @@ fn remote_section(app: &mut App, ui: &mut egui::Ui, t: &Tokens, view: &mut Histo
         ui.add_space(t.unit * 2.0);
         let Some(name) = remote["remote"].as_str() else {
             let r = ui.add(egui::Label::new(muted(tl!("No remote").to_owned())).sense(egui::Sense::hover()));
-            r.on_hover_text(tl!("Save the project to GitHub or GitLab to keep it there too, and to sync it."));
+            r.on_hover_text(tl!(
+                "Save the project to GitHub or GitLab, or link it to a repository that exists, to keep it there too and to sync it."
+            ));
             return;
         };
         let place = remote["web_url"].as_str().or(remote["url"].as_str()).unwrap_or_default();
@@ -407,9 +409,17 @@ fn remote_section(app: &mut App, ui: &mut egui::Ui, t: &Tokens, view: &mut Histo
     ui.horizontal_wrapped(|ui| {
         ui.add_space(t.unit * 2.0);
         let commands: &[(&str, &str, &str)] = if remote["remote"].is_string() {
-            &[("git.push", "arrow-up", tl!("Push")), ("git.pull", "arrow-down", crate::i18n::tc("button", "Pull"))]
+            &[
+                ("git.push", "arrow-up", tl!("Push")),
+                ("git.pull", "arrow-down", crate::i18n::tc("button", "Pull")),
+                ("git.remove_remote", "x", tl!("Unlink…")),
+            ]
         } else {
-            &[("forge.save_to_github", "upload", tl!("Save to GitHub…")), ("forge.save_to_gitlab", "upload", tl!("Save to GitLab…"))]
+            &[
+                ("forge.save_to_github", "upload", tl!("Save to GitHub…")),
+                ("forge.save_to_gitlab", "upload", tl!("Save to GitLab…")),
+                ("git.add_remote", "link", tl!("Link to a Repository…")),
+            ]
         };
         for (id, icon, label) in commands {
             let can = texcraft_engine::cmd::find(id).map_or(Ok(()), |c| (c.enabled)(&app.session));
