@@ -132,9 +132,19 @@ fn formatted(main: &str) -> Harness<'static, App> {
     assert!(s.execute("file.open", &json!({"path": "main.tex"})).is_ok());
     let app = crate::support::app(s);
     // A character no font has (中 without craft-fonts, as on CI) is drawn as a box, as in the app:
-    // this test checks editing, not which fonts are installed.
-    let mut h = Harness::builder().with_size(SIZE).allow_missing_glyphs().build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    // this test checks editing, not which fonts are installed. Short frames, so that two or three
+    // clicks come quickly enough to count together (a quarter second each, they never did), and
+    // as many as make the second the frames have to settle in.
+    let mut h = Harness::builder()
+        .with_size(SIZE)
+        .with_step_dt(0.02)
+        .with_max_steps(50)
+        .allow_missing_glyphs()
+        .build_ui_state(|ui, app: &mut App| app.frame(ui), app);
     h.run();
+    // Later than a double-click's delay after the clock's start, which egui would take for an
+    // earlier click.
+    h.run_steps(30);
     h.get_by_label("Formatted").click();
     h.run();
     h.get_by_label("main.tex formatted").focus();
@@ -144,25 +154,43 @@ fn formatted(main: &str) -> Harness<'static, App> {
 
 /// The view's lines (their text runs) on screen: their rects and texts.
 fn lines(h: &Harness<'_, App>) -> Vec<(egui::accesskit::NodeId, egui::Rect, String)> {
-    h.query_all(by().role(Role::TextRun))
-        .filter(|n| n.accesskit_node().parent().is_some_and(|p| p.label().is_some_and(|l| l == "main.tex formatted")))
-        .map(|n| (n.accesskit_node().locate().0, n.rect(), n.accesskit_node().value().unwrap_or_default()))
-        .collect()
+    crate::support::view_lines(h, "main.tex formatted")
 }
 
 /// The caret: its line's rect and text, and where in it.
 fn caret(h: &Harness<'_, App>) -> Option<(egui::Rect, String, usize)> {
-    let view = h.query_by_label("main.tex formatted")?;
-    let sel = view.accesskit_node().data().text_selection()?;
-    let (_, rect, value) = lines(h).into_iter().find(|(id, ..)| *id == sel.focus.node)?;
-    Some((rect, value, sel.focus.character_index))
+    crate::support::view_caret(h, "main.tex formatted")
 }
 
-fn point(h: &Harness<'_, App>, (line, x): (usize, f32)) -> Option<egui::Pos2> {
+/// Whether text is selected in the view.
+fn selected(h: &Harness<'_, App>) -> bool {
+    h.query_by_label("main.tex formatted").and_then(|n| n.accesskit_node().data().text_selection()).is_some_and(|s| s.anchor != s.focus)
+}
+
+fn point(h: &Harness<'_, App>, at: (usize, f32)) -> Option<egui::Pos2> {
+    target(h, at).map(|(p, _)| p)
+}
+
+/// The place of a line of the view a click goes to, and that line's text.
+fn target(h: &Harness<'_, App>, (line, x): (usize, f32)) -> Option<(egui::Pos2, String)> {
     let all = lines(h);
-    let visible: Vec<_> = all.into_iter().filter(|(_, r, _)| r.max.y > 40.0 && r.min.y < SIZE.y - 10.0 && r.width() > 0.0).collect();
-    let (_, r, _) = visible.get(line % visible.len().max(1))?;
-    Some(egui::pos2(r.left() + x * r.width(), r.center().y))
+    // Lines whose middle shows in the view's part of the window: the height of its scroll bar
+    // (the toolbar is above, the status bar below).
+    let view = h.query_by_label("main.tex formatted").map(|n| n.rect());
+    let bar = view.and_then(|v| {
+        h.query_all(by().role(Role::ScrollBar))
+            .filter_map(|n| n.accesskit_node().bounding_box())
+            .find(|b| (b.x0 as f32) >= v.right() && (b.x0 as f32) < v.right() + 40.0)
+    });
+    let (top, bottom) = match (bar, view) {
+        (Some(b), _) => (b.y0 as f32, b.y1 as f32),
+        (None, Some(v)) => (v.top(), SIZE.y - 32.0),
+        (None, None) => (40.0, SIZE.y - 32.0),
+    };
+    let inside = |r: &egui::Rect| r.width() > 0.0 && r.center().y > top + 4.0 && r.center().y < bottom - 4.0;
+    let visible: Vec<_> = all.into_iter().filter(|(_, r, _)| inside(r)).collect();
+    let (_, r, value) = visible.get(line % visible.len().max(1))?;
+    Some((egui::pos2(r.left() + x * r.width(), r.center().y), value.clone()))
 }
 
 fn press(h: &mut Harness<'_, App>, at: egui::Pos2, pressed: bool, modifiers: egui::Modifiers) {
@@ -251,7 +279,16 @@ fn run(doc: &str, acts: &[Act]) -> Option<(usize, Failure)> {
 
 fn step(h: &mut Harness<'_, App>, a: &Act, history: &mut Vec<String>) -> Result<(), Failure> {
     let before = text(h);
-    let caret_before = caret(h);
+    // (Typing over a selection puts the caret where the selection started, not where its head was.)
+    let caret_before = caret(h).filter(|_| !selected(h));
+    // Where a click goes, for the report.
+    let clicked = match a {
+        Act::Click { line, x, .. } | Act::Drag { from: (line, x), .. } => {
+            target(h, (*line, *x)).map(|(p, v)| format!(" (at {p:?}, on the line {v:?})"))
+        }
+        _ => None,
+    }
+    .unwrap_or_default();
     if !perform(h, a) {
         return fail("unsettled", "the frames did not settle".to_owned());
     }
@@ -267,7 +304,8 @@ fn step(h: &mut Harness<'_, App>, a: &Act, history: &mut Vec<String>) -> Result<
             h.run();
             return Ok(());
         }
-        return fail("focus-lost", "the keyboard left the text".to_owned());
+        let holder = h.query_all_by(|n| n.is_focused()).last().and_then(|n| n.accesskit_node().label()).unwrap_or_default();
+        return fail("focus-lost", format!("the keyboard left the text for {holder:?}{clicked}"));
     }
     let Some((rect, value, at)) = caret(h) else {
         return if lines(h).is_empty() { Ok(()) } else { fail("no-caret", "the caret is in no line of the view".to_owned()) };
