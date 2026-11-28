@@ -244,6 +244,8 @@ pub(crate) fn status(app: &mut App, ui: &mut egui::Ui) {
         if ui.selectable_label(!options.on, tl!("Off")).clicked() {
             chosen = Some(json!({"on": false}));
         }
+        ui.separator();
+        crate::settings::menu_link(app, ui, tl!("Spelling Settings…"), "editor", Some(tl!("spelling")));
     });
     if let Some(params) = chosen
         && let Some(done) = app.run("language.spelling_options", params)

@@ -38,6 +38,9 @@ pub struct Tokens {
     pub on_accent: Color32,
     /// Selected rows and active toggles.
     pub accent_soft: Color32,
+    /// How strongly a tone tints what it marks ([`Tokens::tint`]: the badges of states). Darker
+    /// surfaces need more of it for the tint to be seen as the light theme's is.
+    pub tint_alpha: u8,
     /// Selected text.
     pub selection: Color32,
     pub hover: Color32,
@@ -65,6 +68,9 @@ pub struct Tokens {
     pub shadow: Color32,
     /// Behind the page in presentation mode.
     pub presentation: Color32,
+    /// A PDF page's paper, and what its drawing is multiplied by, when the PDF is dimmed
+    /// (Settings › Appearance): white in the light theme, a lower white in the dark one.
+    pub page_dim: Color32,
     // Syntax
     pub syntax_command: Color32,
     pub syntax_comment: Color32,
@@ -136,6 +142,7 @@ impl Tokens {
             accent_muted: rgb(0x4A5B8B),
             on_accent: rgb(0xFFFFFF),
             accent_soft: alpha(accent, 26),
+            tint_alpha: 56,
             selection: alpha(accent, 56),
             hover: alpha(text, 15),
             pressed: alpha(text, 26),
@@ -154,6 +161,7 @@ impl Tokens {
             caret_text: rgb(0xFFFFFF),
             shadow: Color32::from_black_alpha(36),
             presentation: Color32::BLACK,
+            page_dim: Color32::WHITE,
             syntax_command: rgb(0x2050C0),
             syntax_comment: rgb(0x5A6B4E),
             syntax_group: rgb(0x6A3FA0),
@@ -181,6 +189,7 @@ impl Tokens {
             accent_muted: rgb(0x8FA3CC),
             on_accent: rgb(0x0D1830),
             accent_soft: alpha(accent, 41),
+            tint_alpha: 92,
             selection: alpha(accent, 77),
             hover: alpha(text, 15),
             pressed: alpha(text, 26),
@@ -199,6 +208,7 @@ impl Tokens {
             caret_text: rgb(0x16181C),
             shadow: Color32::from_black_alpha(102),
             presentation: Color32::BLACK,
+            page_dim: rgb(0xC4C6CA),
             syntax_command: rgb(0x82AEFF),
             syntax_comment: rgb(0x93A38D),
             syntax_group: rgb(0xC3A6F0),
@@ -387,6 +397,18 @@ impl Tokens {
 }
 
 /// `over` drawn on `base`.
+impl Tokens {
+    /// `tone` as the background of a badge on the surface: seen as a tint in both themes, with
+    /// the text colour readable on it.
+    pub fn tint(&self, tone: Color32) -> Color32 {
+        // Mixed from the opaque colours: a `Color32` with alpha holds its channels premultiplied,
+        // which [`blend`] would take as the colour itself (the dark tint all but vanished so).
+        let a = f32::from(self.tint_alpha) / 255.0;
+        let mix = |b: u8, o: u8| (f32::from(b) * (1.0 - a) + f32::from(o) * a).round() as u8;
+        Color32::from_rgb(mix(self.surface.r(), tone.r()), mix(self.surface.g(), tone.g()), mix(self.surface.b(), tone.b()))
+    }
+}
+
 pub fn blend(base: Color32, over: Color32) -> Color32 {
     let a = f32::from(over.a()) / 255.0;
     let mix = |b: u8, o: u8| (f32::from(b) * (1.0 - a) + f32::from(o) * a).round() as u8;

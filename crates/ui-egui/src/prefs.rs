@@ -77,6 +77,8 @@ pub struct Prefs {
     pub ai_instructions: Vec<String>,
     /// The start page shows a tip of the day.
     pub show_tips: bool,
+    /// The PDF's pages are dimmed in the dark theme (Settings › Appearance).
+    pub dim_pdf: bool,
     /// The first-steps hint above the editor was dismissed (it shows with the first project).
     pub first_steps_seen: bool,
     /// The kinds of build message hidden in every project (Hide Messages Like This).
@@ -161,6 +163,7 @@ impl Default for Prefs {
             ai_complete: false,
             ai_instructions: Vec::new(),
             show_tips: true,
+            dim_pdf: false,
             first_steps_seen: false,
             clone_folder: None,
             git_hosts: Vec::new(),

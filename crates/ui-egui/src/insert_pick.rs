@@ -124,10 +124,9 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             chosen = matches.get(p.selected).map(|m| m.key.clone());
         }
     }
-    let modal = egui::Modal::new(egui::Id::unique("texcraft-insert-pick")).frame(crate::widgets::dialog_frame(ctx)).show(ctx, |ui| {
-        ui.set_width(520.0);
-        ui.label(RichText::new(title).font(t.title()));
-        ui.add_space(t.unit * 2.0);
+    // A box like the other dialogs, a sheet on a phone (`sheet.rs`).
+    let modal = crate::sheet::show(ctx, &t, "texcraft-insert-pick", 520.0, crate::sheet::Leave::Close, |ui| {
+        crate::dialogs::title(ui, &t, title);
         let label = ui.label(RichText::new(field).color(t.text_muted));
         let edit = ui
             .add(egui::TextEdit::singleline(&mut p.query).id(field_id).desired_width(f32::INFINITY).margin(egui::vec2(8.0, 6.0)))
@@ -192,7 +191,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             Kind::Image => ("edit.figure", json!({"image": key})),
         };
         crate::ui_cmd::run_with(app, id, &params);
-    } else if modal.should_close() || ctx.input(|i| i.key_pressed(Key::Escape)) {
+    } else if modal.close || ctx.input(|i| i.key_pressed(Key::Escape)) {
         app.view.dialog = None;
         // The keyboard goes back to the view the picker opened from.
         if app.session.current().is_some_and(|p| app.editor.formatted.shows(p)) {

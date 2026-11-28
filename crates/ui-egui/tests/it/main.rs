@@ -10,6 +10,7 @@ mod catalogs;
 mod closing;
 mod completion;
 mod connections;
+mod consistency;
 mod contrast;
 mod control;
 mod drop;

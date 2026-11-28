@@ -124,7 +124,7 @@
 	Branch	Branch
 	Brought in from the branch: {files}.	Overgenomen van de branch: {files}.
 	Build files deleted: the next build starts from scratch.	Buildbestanden verwijderd: de volgende build begint van voren af aan.
-	Build log	Buildlog
+	Build Log	Buildlog
 	Build the PDF when typing pauses.	De pdf bouwen wanneer het typen pauzeert.
 	Build with the open suggestions applied; the files do not change	Bouwen met de open voorstellen toegepast; de bestanden veranderen niet
 	Building	Bezig met bouwen
@@ -183,7 +183,7 @@
 	Column left	Kolom links
 	Column right	Kolom rechts
 	Comment	Opmerking
-	Comment added	Opmerking toegevoegd
+	Comment added.	Opmerking toegevoegd.
 	Comment by {name} on “{quote}”{state}	Opmerking van {name} bij “{quote}”{state}
 	Comment resolved	Opmerking opgelost
 	Comment {n} of {total}, by {name}: {text}	Opmerking {n} van {total}, door {name}: {text}
@@ -306,7 +306,7 @@
 	Export	Exporteren
 	Export As	Exporteren als
 	Export the document as PDF or another format	Het document exporteren als pdf of een ander formaat
-	Exported to {path}	Geëxporteerd naar {path}
+	Exported to {path}.	Geëxporteerd naar {path}.
 	Exporting as {format}…	Bezig met exporteren als {format}…
 	Exporting…	Bezig met exporteren…
 	Fetched from TeXCraft's site when you create the project.	Opgehaald van de site van TeXCraft wanneer u het project aanmaakt.
@@ -322,8 +322,8 @@
 	Find and replace	Zoeken en vervangen
 	Finnish	Fins
 	Fit	Passend
-	Fit page	Pagina passend
-	Fit width	Breedte passend
+	Fit Page	Pagina passend
+	Fit Width	Breedte passend
 	Back to Fit Page	Terug naar Pagina passend
 	Back to Fit Width	Terug naar Breedte passend
 	Fix Grammar and Spelling	Grammatica en spelling verbeteren
@@ -524,7 +524,7 @@
 	Move	Verplaatsen
 	Move File	Bestand verplaatsen
 	Move to…	Verplaatsen naar…
-	Moved to the trash: {files}	Naar de prullenbak verplaatst: {files}
+	Moved to the trash: {files}.	Naar de prullenbak verplaatst: {files}.
 	Name	Naam
 	Name a symbol of the palette by its command, such as \\alpha.	Noem een symbool van het palet bij zijn commando, zoals \\alpha.
 	Name the build output: pdf, pdfx, synctex or log.	Noem de builduitvoer: pdf, pdfx, synctex of log.
@@ -540,7 +540,6 @@
 	New comment	Nieuwe opmerking
 	Next Match	Volgende overeenkomst
 	Next Page	Volgende pagina
-	Next page	Volgende pagina
 	Next words	Volgende woorden
 	No PDF yet	Nog geen pdf
 	No answer: {error}	Geen antwoord: {error}
@@ -682,7 +681,6 @@
 	Present	Presenteren
 	Previous Match	Vorige overeenkomst
 	Previous Page	Vorige pagina
-	Previous page	Vorige pagina
 	Private	Privé
 	Project	Project
 	Project Files	Projectbestanden
@@ -2249,8 +2247,8 @@ unit	{n} s	{n} s
 @msg	“{w}” is not a word that can go in a word list: one word of letters, at most {MAX_WORD_CHARS}.	“{w}” is geen woord dat in een woordenlijst kan: één woord van letters, hoogstens {MAX_WORD_CHARS}.
 
 # Build log: where problems start
-@plural	Build log, {n} error|Build log, {n} errors	Buildlog, {n} fout|Buildlog, {n} fouten
-@plural	Build log, {n} warning|Build log, {n} warnings	Buildlog, {n} waarschuwing|Buildlog, {n} waarschuwingen
+@plural	Build Log, {n} error|Build Log, {n} errors	Buildlog, {n} fout|Buildlog, {n} fouten
+@plural	Build Log, {n} warning|Build Log, {n} warnings	Buildlog, {n} waarschuwing|Buildlog, {n} waarschuwingen
 	TeX noticed it at {place}	TeX merkte het op bij {place}
 	{message} (it starts at {place})	{message} (begint bij {place})
 
@@ -2739,3 +2737,14 @@ unit	{n} MB	{n} MB
 	Owner	Eigenaar
 	You, or a group in which you can make projects.	Jij, of een groep waarin je projecten kunt maken.
 	You, or an organisation in which you can make repositories.	Jij, of een organisatie waarin je repository's kunt maken.
+# UX review 2: consistency (docs/ux-review-2.md)
+@id	view.dim_pdf	PDF dimmen in het donkere thema
+	Dim the PDF in the dark theme	PDF dimmen in het donkere thema
+	The PDF's pages a little darker while the theme is dark, for long sessions; the PDF itself does not change.	De pagina's van de PDF iets donkerder zolang het thema donker is, voor lange sessies; de PDF zelf verandert niet.
+	Build Settings…	Build-instellingen…
+	Spelling Settings…	Spellingsinstellingen…
+	spelling	spelling
+	{sends} Not agreed to yet.	{sends} Nog niet mee ingestemd.
+	No headings yet	Nog geen koppen
+	No outline	Geen overzicht
+	No history yet	Nog geen geschiedenis

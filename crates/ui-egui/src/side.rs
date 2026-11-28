@@ -15,8 +15,16 @@ use crate::{App, Side, ui_cmd};
 pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     let frame = egui::Frame::new().fill(t.frame).inner_margin(egui::Margin { left: 4, right: 4, top: 0, bottom: 4 });
-    let shown =
-        egui::Panel::left("side").resizable(true).default_size(248.0).min_size(180.0).max_size(480.0).frame(frame).show(ui, |ui| content(app, ui));
+    // The panel is as wide as it was dragged to, whatever the section: a section whose content
+    // would be wider (a long empty text, a wide row) wraps or is cut at the panel's edge, so
+    // the editor beside it does not move from section to section.
+    let shown = egui::Panel::left("side").resizable(true).default_size(248.0).min_size(180.0).max_size(480.0).frame(frame).show(ui, |ui| {
+        let room = ui.available_rect_before_wrap();
+        let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(room).layout(*ui.layout()));
+        inner.set_clip_rect(room.intersect(ui.clip_rect()));
+        content(app, &mut inner);
+        ui.advance_cursor_after_rect(room);
+    });
     widgets::name_splitter(ui, "side", tl!("Resize the side panel"));
     app.region_area(crate::Region::Side, shown.response.rect);
 }
@@ -478,7 +486,7 @@ fn outline(app: &mut App, ui: &mut egui::Ui) {
     }
     let Some(path) = app.session.current().cloned() else { return };
     let Ok(text) = app.session.project().text(&path) else {
-        empty(ui, &t, tl!("This file has no outline."));
+        empty(ui, &t, tl!("No outline"), tl!("This file has no outline."));
         return;
     };
     let text = text.to_owned();
@@ -496,7 +504,7 @@ fn file_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, text: &str
     let t = app.tokens;
     let headings = texcraft_latex::outline(text);
     if headings.is_empty() {
-        empty(ui, &t, tl!("No headings in this file yet."));
+        empty(ui, &t, tl!("No headings yet"), tl!("No headings in this file yet."));
         return;
     }
     let keys: Vec<FoldKey> = headings.iter().map(|h| Some((fold_key(path.as_str(), h.level, &h.title), h.level))).collect();
@@ -554,7 +562,7 @@ fn document_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, entrie
     let levels = || entries.iter().filter_map(|e| if let EntryKind::Heading { level, .. } = e.kind { Some(level) } else { None });
     let Some(top) = levels().min() else {
         // Only includes that are not read: say so, under the words for no headings.
-        empty(ui, &t, tl!("No headings in this file yet."));
+        empty(ui, &t, tl!("No headings yet"), tl!("No headings in this file yet."));
         for e in entries {
             problem(ui, &t, e, 0);
         }
@@ -798,10 +806,6 @@ fn problem(ui: &mut egui::Ui, t: &Tokens, e: &texcraft_latex::document::Entry, d
     });
 }
 
-fn empty(ui: &mut egui::Ui, t: &Tokens, text: &str) {
-    ui.add_space(t.unit * 2.0);
-    ui.horizontal(|ui| {
-        ui.add_space(t.unit * 3.0);
-        ui.label(egui::RichText::new(text).font(t.small()).color(t.text_muted));
-    });
+fn empty(ui: &mut egui::Ui, t: &Tokens, title: &str, detail: &str) {
+    widgets::panel_empty(ui, t, title, Some(detail));
 }

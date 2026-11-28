@@ -40,3 +40,35 @@ fn text_and_controls_keep_their_contrast_in_both_themes() {
         assert!(contrast(t.on_accent, t.accent) >= 4.5, "{:?}: text on the accent", t.scheme);
     }
 }
+
+/// A tone by its name, and how to take it from the tokens.
+type Tone = (&'static str, fn(&Tokens) -> egui::Color32);
+
+/// A state's badge (Settings › Accounts) is read on its tint, and the tint is seen in the dark
+/// theme as well as in the light one (it was so faint there that only the words told it).
+#[test]
+fn badge_tints_keep_their_text_readable_and_show_in_both_themes() {
+    let (dark, light) = (Tokens::dark(), Tokens::light());
+    for t in [dark, light] {
+        for (name, tone) in [("accent", t.accent), ("success", t.success), ("warning", t.warning), ("error", t.error), ("muted", t.text_muted)] {
+            let tint = t.tint(tone);
+            assert!(contrast(t.text, tint) >= 4.5, "{:?}: text on the {name} tint is {:.2}:1", t.scheme, contrast(t.text, tint));
+        }
+    }
+    // How far the tint is from the surface, as a colour: a dark surface's tint must move as far
+    // as a white one's to be seen as one (its luminance contrast is no measure of a tint's hue).
+    let apart = |a: egui::Color32, b: egui::Color32| {
+        let d = |x: u8, y: u8| (f32::from(x) - f32::from(y)).powi(2);
+        (d(a.r(), b.r()) + d(a.g(), b.g()) + d(a.b(), b.b())).sqrt()
+    };
+    let tones: [Tone; 3] = [("accent", |t| t.accent), ("success", |t| t.success), ("warning", |t| t.warning)];
+    for (name, tone) in tones {
+        let seen = |t: &Tokens| apart(t.tint(tone(t)), t.surface);
+        assert!(
+            seen(&dark) >= seen(&light),
+            "the {name} tint is fainter in the dark theme ({:.0}) than in the light ({:.0})",
+            seen(&dark),
+            seen(&light)
+        );
+    }
+}

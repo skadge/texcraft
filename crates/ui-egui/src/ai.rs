@@ -403,11 +403,10 @@ pub(crate) fn instruct_dialog(app: &mut App, ctx: &egui::Context) {
         }
         ui.add_space(t.unit * 3.0);
         crate::dialogs::actions(ui, |ui| {
-            let primary = egui::Button::new(RichText::new(tl!("Send")).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
-            if ui.add_enabled(!form.text.trim().is_empty(), primary.min_size(egui::vec2(88.0, 30.0))).clicked() {
+            if crate::dialogs::primary(ui, &t, tl!("Send"), !form.text.trim().is_empty(), false).clicked() {
                 send = true;
             }
-            if ui.add(egui::Button::new(tl!("Cancel")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+            if crate::dialogs::secondary(ui, tl!("Cancel"), true).clicked() {
                 close = true;
             }
         });
@@ -697,8 +696,8 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
     let enter = [endpoint, token].iter().any(|r| r.lost_focus()) && ui.input(|i| i.key_pressed(egui::Key::Enter));
     ui.horizontal(|ui| {
         let ready = !app.ai.endpoint.trim().is_empty();
-        let connect_button = ui
-            .add_enabled(ready, egui::Button::new(tl!("Connect")))
+        // The section's one coloured action, as Add a Connection… is Accounts'.
+        let connect_button = crate::dialogs::primary(ui, t, tl!("Connect"), ready, false)
             .on_hover_text(tl!("Save the connection and agree to send the kinds of request switched on to it"));
         if (connect_button.clicked() || (enter && ready)) && connect(app) {
             app.run("ai.models", json!({"background": true}));
@@ -764,15 +763,20 @@ fn kinds(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
     let pending = connected && Kind::ALL.iter().any(|k| state(*k) == "not agreed");
     let mut switched = None;
     for kind in Kind::ALL {
-        let mut on = state(kind) != "off";
-        ui.horizontal_wrapped(|ui| {
-            if ui.checkbox(&mut on, kind.label()).changed() {
+        // A setting row, as in the other sections; what it sends is its help, and whether it is
+        // agreed to is said there in words.
+        let help = if connected && state(kind) == "not agreed" {
+            tl!("{sends} Not agreed to yet.").replace("{sends}", kind.sends())
+        } else {
+            kind.sends().to_owned()
+        };
+        crate::settings::setting(ui, t, kind.label(), &help, |ui| {
+            let mut on = state(kind) != "off";
+            let r = ui.add(egui::Checkbox::without_text(&mut on));
+            if r.changed() {
                 switched = Some((kind, on));
             }
-            ui.label(RichText::new(kind.sends()).font(t.small()).color(t.text_muted));
-            if connected && state(kind) == "not agreed" {
-                ui.label(RichText::new(tl!("Not agreed to yet")).font(t.small()).color(t.warning));
-            }
+            Some(r)
         });
     }
     if let Some((kind, on)) = switched {
@@ -858,32 +862,35 @@ fn prompts(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
 /// Use AI features (issue #43): off hides every AI entry point and sends nothing; the connection
 /// and the agreements are kept for when it is on again. Gives whether it is on.
 fn use_ai(app: &mut App, ui: &mut egui::Ui, t: &Tokens) -> bool {
-    let mut on = app.session.ai_enabled();
-    if ui.checkbox(&mut on, tl!("Use AI features")).changed() {
-        app.run("ai.enabled", json!({"on": on}));
-        app.ai.filled = false;
-    }
     let help = if app.session.ai_enabled() {
         tl!("Turned off, every AI feature is hidden from the menus, the panels and the build log, and nothing is sent.")
     } else {
         tl!("AI features are turned off: they are hidden everywhere, and nothing is sent. Turn this on to use them again.")
     };
-    ui.label(RichText::new(help).font(t.small()).color(t.text_muted));
+    crate::settings::setting(ui, t, tl!("Use AI features"), help, |ui| {
+        let mut on = app.session.ai_enabled();
+        let r = ui.add(egui::Checkbox::without_text(&mut on));
+        if r.changed() {
+            app.run("ai.enabled", json!({"on": on}));
+            app.ai.filled = false;
+        }
+        Some(r)
+    });
     app.session.ai_enabled()
 }
 
 fn typing_setting(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
-    let mut on = app.prefs.ai_complete;
-    if ui.checkbox(&mut on, tl!("Suggest the next words as I type")).changed() {
-        set_typing(app, on);
-    }
-    ui.label(
-        RichText::new(tl!(
-            "After a pause in typing at the end of a line, the paragraph up to the caret is sent and the model's next words are shown in grey after it: Tab takes them, typing on or Escape dismisses them."
-        ))
-        .font(t.small())
-        .color(t.text_muted),
+    let help = tl!(
+        "After a pause in typing at the end of a line, the paragraph up to the caret is sent and the model's next words are shown in grey after it: Tab takes them, typing on or Escape dismisses them."
     );
+    crate::settings::setting(ui, t, tl!("Suggest the next words as I type"), help, |ui| {
+        let mut on = app.prefs.ai_complete;
+        let r = ui.add(egui::Checkbox::without_text(&mut on));
+        if r.changed() {
+            set_typing(app, on);
+        }
+        Some(r)
+    });
 }
 
 fn field(ui: &mut egui::Ui, t: &Tokens, label: &str, value: &mut String, hint: &str, password: bool) -> egui::Response {
@@ -947,18 +954,15 @@ fn model(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value, busy: boo
 }
 
 fn project(app: &mut App, ui: &mut egui::Ui, t: &Tokens, status: &Value) {
-    let mut on = !status["project_off"].as_bool().unwrap_or(false);
-    ui.horizontal(|ui| {
-        let r = ui.checkbox(&mut on, tl!("Use AI in this project"));
+    let help = tl!("Turned off, the project's sources are never sent; the choice is kept in its .texcraft folder.");
+    crate::settings::setting(ui, t, tl!("Use AI in this project"), help, |ui| {
+        let mut on = !status["project_off"].as_bool().unwrap_or(false);
+        let r = ui.add(egui::Checkbox::without_text(&mut on));
         if r.changed() {
             app.run("ai.project", json!({"enabled": on}));
         }
+        Some(r)
     });
-    ui.label(
-        RichText::new(tl!("Turned off, the project's sources are never sent; the choice is kept in its .texcraft folder."))
-            .font(t.small())
-            .color(t.text_muted),
-    );
 }
 
 /// The request log: when, where, how much, how it ended; what was sent on demand, for the last

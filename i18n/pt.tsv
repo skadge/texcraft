@@ -124,7 +124,7 @@
 	Branch	Ramo
 	Brought in from the branch: {files}.	Trazido do ramo: {files}.
 	Build files deleted: the next build starts from scratch.	Ficheiros de compilação eliminados: a próxima compilação começa do zero.
-	Build log	Registo de compilação
+	Build Log	Registo de compilação
 	Build the PDF when typing pauses.	Gerar o PDF quando a escrita faz uma pausa.
 	Build with the open suggestions applied; the files do not change	Compilar com as sugestões abertas aplicadas; os ficheiros não mudam
 	Building	A compilar
@@ -183,7 +183,7 @@
 	Column left	Coluna à esquerda
 	Column right	Coluna à direita
 	Comment	Comentário
-	Comment added	Comentário adicionado
+	Comment added.	Comentário adicionado.
 	Comment by {name} on “{quote}”{state}	Comentário de {name} em “{quote}”{state}
 	Comment resolved	Comentário resolvido
 	Comment {n} of {total}, by {name}: {text}	Comentário {n} de {total}, de {name}: {text}
@@ -306,7 +306,7 @@
 	Export	Exportar
 	Export As	Exportar como
 	Export the document as PDF or another format	Exportar o documento como PDF ou noutro formato
-	Exported to {path}	Exportado para {path}
+	Exported to {path}.	Exportado para {path}.
 	Exporting as {format}…	A exportar como {format}…
 	Exporting…	A exportar…
 	Fetched from TeXCraft's site when you create the project.	Obtido do site do TeXCraft quando cria o projeto.
@@ -322,8 +322,8 @@
 	Find and replace	Procurar e substituir
 	Finnish	Finlandês
 	Fit	Ajustar
-	Fit page	Ajustar à página
-	Fit width	Ajustar à largura
+	Fit Page	Ajustar à página
+	Fit Width	Ajustar à largura
 	Back to Fit Page	Voltar a Ajustar à página
 	Back to Fit Width	Voltar a Ajustar à largura
 	Fix Grammar and Spelling	Corrigir gramática e ortografia
@@ -524,7 +524,7 @@
 	Move	Mover
 	Move File	Mover ficheiro
 	Move to…	Mover para…
-	Moved to the trash: {files}	Movidos para o lixo: {files}
+	Moved to the trash: {files}.	Movidos para o lixo: {files}.
 	Name	Nome
 	Name a symbol of the palette by its command, such as \\alpha.	Indique um símbolo da paleta pelo seu comando, por exemplo \\alpha.
 	Name the build output: pdf, pdfx, synctex or log.	Indique o resultado da compilação: pdf, pdfx, synctex ou log.
@@ -540,7 +540,6 @@
 	New comment	Novo comentário
 	Next Match	Correspondência seguinte
 	Next Page	Página seguinte
-	Next page	Página seguinte
 	Next words	Palavras seguintes
 	No PDF yet	Ainda sem PDF
 	No answer: {error}	Sem resposta: {error}
@@ -682,7 +681,6 @@
 	Present	Apresentar
 	Previous Match	Correspondência anterior
 	Previous Page	Página anterior
-	Previous page	Página anterior
 	Private	Privado
 	Project	Projeto
 	Project Files	Ficheiros do projeto
@@ -2249,8 +2247,8 @@ unit	{n} s	{n} s
 @msg	“{w}” is not a word that can go in a word list: one word of letters, at most {MAX_WORD_CHARS}.	“{w}” não é uma palavra que possa ir para uma lista de palavras: uma só palavra de letras, no máximo {MAX_WORD_CHARS}.
 
 # Build log: where problems start
-@plural	Build log, {n} error|Build log, {n} errors	Registo de compilação, {n} erro|Registo de compilação, {n} erros
-@plural	Build log, {n} warning|Build log, {n} warnings	Registo de compilação, {n} aviso|Registo de compilação, {n} avisos
+@plural	Build Log, {n} error|Build Log, {n} errors	Registo de compilação, {n} erro|Registo de compilação, {n} erros
+@plural	Build Log, {n} warning|Build Log, {n} warnings	Registo de compilação, {n} aviso|Registo de compilação, {n} avisos
 	TeX noticed it at {place}	O TeX detetou-o em {place}
 	{message} (it starts at {place})	{message} (começa em {place})
 
@@ -2739,3 +2737,14 @@ unit	{n} MB	{n} MB
 	Owner	Proprietário
 	You, or a group in which you can make projects.	Você, ou um grupo onde pode criar projetos.
 	You, or an organisation in which you can make repositories.	Você, ou uma organização onde pode criar repositórios.
+# UX review 2: consistency (docs/ux-review-2.md)
+@id	view.dim_pdf	Escurecer o PDF no tema escuro
+	Dim the PDF in the dark theme	Escurecer o PDF no tema escuro
+	The PDF's pages a little darker while the theme is dark, for long sessions; the PDF itself does not change.	As páginas do PDF um pouco mais escuras enquanto o tema é escuro, para sessões longas; o PDF em si não muda.
+	Build Settings…	Definições de compilação…
+	Spelling Settings…	Definições de ortografia…
+	spelling	ortografia
+	{sends} Not agreed to yet.	{sends} Ainda não aceite.
+	No headings yet	Ainda sem títulos
+	No outline	Sem estrutura
+	No history yet	Ainda sem histórico

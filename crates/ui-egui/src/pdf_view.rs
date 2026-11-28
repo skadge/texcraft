@@ -213,6 +213,9 @@ pub(crate) struct PdfView {
     /// The pages as miniatures, for the thumbnails beside them.
     thumbs: Drawings,
     sizes: Vec<[f32; 2]>,
+    /// The paper's colour, which the drawn pages are multiplied by: white, or the dark theme's
+    /// dimmed white ([`crate::theme::Tokens::page_dim`]). Slides in presentation stay white.
+    pub(crate) paper: egui::Color32,
     error: Option<String>,
     fit: Fit,
     /// The last fit chosen (width or page), which the zoom's Fit button goes back to.
@@ -273,6 +276,7 @@ pub(crate) enum Followed {
 impl Default for PdfView {
     fn default() -> Self {
         Self {
+            paper: egui::Color32::WHITE,
             source: None,
             doc: None,
             generation: 0,
@@ -529,14 +533,7 @@ impl PdfView {
             return;
         }
         if self.doc.is_none() {
-            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                ui.add_space(rect.height() * 0.38);
-                ui.add(crate::icons::image("file-text", 32.0, t.text_muted.gamma_multiply(0.6)));
-                ui.add_space(t.unit * 3.0);
-                ui.label(egui::RichText::new(tl!("No PDF yet")).font(t.strong()));
-                ui.add_space(t.unit);
-                ui.label(egui::RichText::new(tl!("Compile the project to see it here.")).color(t.text_muted));
-            });
+            crate::widgets::pane_empty(ui, t, "file-text", tl!("No PDF yet"), tl!("Compile the project to see it here."));
             return;
         }
         let widest = self.sizes.iter().map(|s| s[0]).fold(1.0_f32, f32::max);
@@ -643,11 +640,11 @@ impl PdfView {
                     first_visible = Some(i);
                 }
                 ui.painter().add(shadow.as_shape(page, 2));
-                ui.painter().rect_filled(page, 2, egui::Color32::WHITE);
+                ui.painter().rect_filled(page, 2, self.paper);
                 // Until the page is drawn: as drawn before (another zoom, the last PDF), or blank.
                 if let Some(texture) = self.pages.texture(i) {
                     let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-                    ui.painter().image(texture.id(), page, uv, egui::Color32::WHITE);
+                    ui.painter().image(texture.id(), page, uv, self.paper);
                 }
                 // Double-click or Ctrl+click: the source of that point. A drag selects text.
                 let r = ui.interact(page, ui.scope_id().with(("pdf-page", i)), egui::Sense::click_and_drag());
@@ -733,10 +730,10 @@ impl PdfView {
                     }
                     let size = egui::vec2(self.sizes[i][0], self.sizes[i][1]) * small;
                     let page = egui::Rect::from_min_size(egui::pos2(cell.center().x - size.x / 2.0, cell.top() + 2.0 * t.unit), size);
-                    ui.painter().rect_filled(page, 1.0, egui::Color32::WHITE);
+                    ui.painter().rect_filled(page, 1.0, self.paper);
                     if let Some(texture) = self.thumbs.texture(i) {
                         let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-                        ui.painter().image(texture.id(), page, uv, egui::Color32::WHITE);
+                        ui.painter().image(texture.id(), page, uv, self.paper);
                     }
                     // The page in view: framed, and its number in bold, so not by colour alone.
                     let (stroke, font, color) = if i == current {

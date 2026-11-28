@@ -50,6 +50,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         // While a build's later passes run, its draft; otherwise the last PDF a build wrote, so a
         // draft never outlives its build (finished, failed or stopped).
         sync(app);
+        app.pdf.paper = if app.prefs.dim_pdf { t.page_dim } else { egui::Color32::WHITE };
         if app.pdf.thumbnails() && app.pdf.has_pdf() {
             // The miniatures in a strip of their own on the left, the pages beside them.
             let width = t.thumbnail_width + 6.0 * t.unit + ui.spacing().scroll.bar_width;
@@ -197,9 +198,9 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
         // The count the badge draws is said in the button's name too.
         let log_label = match (app.view.logs, errors, warnings) {
             (true, _, _) => tl!("Back to PDF").to_owned(),
-            (false, 0, 0) => tl!("Build log").to_owned(),
-            (false, 0, n) => crate::i18n::trn(n, "Build log, {n} warning", "Build log, {n} warnings"),
-            (false, n, _) => crate::i18n::trn(n, "Build log, {n} error", "Build log, {n} errors"),
+            (false, 0, 0) => tl!("Build Log").to_owned(),
+            (false, 0, n) => crate::i18n::trn(n, "Build Log, {n} warning", "Build Log, {n} warnings"),
+            (false, n, _) => crate::i18n::trn(n, "Build Log, {n} error", "Build Log, {n} errors"),
         };
         let log = widgets::icon_toggle(ui, &t, "scroll-text", &log_label, app.view.logs);
         let badge = if errors > 0 { (errors, t.error) } else { (warnings, t.warning) };
@@ -208,17 +209,9 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui) {
             app.view.logs = !app.view.logs;
         }
         ui.add_space(t.unit * 2.0);
-        // The PDF a click away: downloaded in the browser, saved where the user chooses elsewhere.
+        // The PDF is the Export menu's first entry (Save PDF As…, Download PDF in the browser),
+        // so the pill is on while either the PDF or a conversion can be had.
         let save_pdf = cmd_enabled(app, "build.save_pdf");
-        let save_label = ui_cmd::menu_entry(app, "build.save_pdf").0;
-        let save = widgets::icon_button(ui, &t, "download", save_label, save_pdf.is_ok());
-        let save = match &save_pdf {
-            Err(reason) => save.on_hover_text(crate::i18n::msg(reason)),
-            Ok(()) => save.on_hover_text(save_label),
-        };
-        if save.clicked() {
-            ui_cmd::run(app, "build.save_pdf");
-        }
         let ready = save_pdf.or_else(|_| cmd_enabled(app, "build.export"));
         // While a file is exported, the pill turns and says so; the status line says when it is done.
         let exporting = app.session.exporting();
@@ -307,11 +300,11 @@ fn page_tools(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(t.unit * 2.0);
     }
     let (page, count) = (app.pdf.page, app.pdf.page_count());
-    if widgets::icon_button(ui, &t, "chevron-left", tl!("Previous page"), page > 0).clicked() {
+    if widgets::icon_button(ui, &t, "chevron-left", tl!("Previous Page"), page > 0).clicked() {
         app.pdf.go_to_page(page.saturating_sub(1));
     }
     ui.label(RichText::new(format!("{} / {count}", page + 1)).font(t.small()).color(t.text_muted));
-    if widgets::icon_button(ui, &t, "chevron-right", tl!("Next page"), page + 1 < count).clicked() {
+    if widgets::icon_button(ui, &t, "chevron-right", tl!("Next Page"), page + 1 < count).clicked() {
         app.pdf.go_to_page(page + 1);
     }
     ui.add_space(t.unit * 2.0);
@@ -401,6 +394,8 @@ fn compile_menu(app: &mut App, ui: &mut egui::Ui) {
     if top_bar::item(ui, &t, Some("x"), tl!("Stop Compiling"), None, stop) {
         app.run("build.stop", json!({}));
     }
+    ui.separator();
+    crate::settings::menu_link(app, ui, tl!("Build Settings…"), "building", None);
 }
 
 /// The formats the Export menu lists, in its order: PDF, then the presentation formats first for
@@ -433,12 +428,12 @@ fn export_menu(app: &mut App, ui: &mut egui::Ui) {
         if i == 1 || i == 5 {
             ui.separator();
         }
-        let (enabled, label) = if format == Export::Pdf {
-            (cmd_enabled(app, "build.save_pdf"), ui_cmd::menu_entry(app, "build.save_pdf").0)
+        let (enabled, label, shortcut) = if format == Export::Pdf {
+            (cmd_enabled(app, "build.save_pdf"), ui_cmd::menu_entry(app, "build.save_pdf").0, app.keys.shortcut_text("build.save_pdf"))
         } else {
-            (convert.clone(), export_label(format))
+            (convert.clone(), export_label(format), None)
         };
-        if top_bar::item(ui, &t, None, label, None, enabled) {
+        if top_bar::item(ui, &t, None, label, shortcut, enabled) {
             ui.close();
             ui_cmd::export(app, format);
         }
@@ -449,8 +444,8 @@ fn export_menu(app: &mut App, ui: &mut egui::Ui) {
 fn zoom_menu(app: &mut App, ui: &mut egui::Ui) {
     let t = app.tokens;
     let label = match app.pdf.fit() {
-        Fit::Width => tl!("Fit width").to_owned(),
-        Fit::Page => tl!("Fit page").to_owned(),
+        Fit::Width => tl!("Fit Width").to_owned(),
+        Fit::Page => tl!("Fit Page").to_owned(),
         Fit::Zoom(_) => format!("{:.0} %", app.pdf.zoom() * 100.0),
     };
     let r = widgets::text_button(ui, &t, &label, true);
@@ -468,8 +463,8 @@ fn zoom_menu(app: &mut App, ui: &mut egui::Ui) {
                 ui.close();
             }
         };
-        choose(ui, tl!("Fit width"), Fit::Width, "view.fit_width", serde_json::Value::Null);
-        choose(ui, tl!("Fit page"), Fit::Page, "view.fit_page", serde_json::Value::Null);
+        choose(ui, tl!("Fit Width"), Fit::Width, "view.fit_width", serde_json::Value::Null);
+        choose(ui, tl!("Fit Page"), Fit::Page, "view.fit_page", serde_json::Value::Null);
         ui.separator();
         for z in [50, 75, 100, 125, 150, 200, 300, 400] {
             let text = format!("{z} %");

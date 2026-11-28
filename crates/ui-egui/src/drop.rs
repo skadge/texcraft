@@ -426,10 +426,10 @@ fn ask(ui: &mut egui::Ui, t: &Tokens, form: &mut DropForm) -> Option<Choice> {
                 if primary(ui, t, tl!("Unzip into the Project"), focus).clicked() {
                     choice = Some(Choice::Unzip);
                 }
-                if ui.add(egui::Button::new(tl!("Add the Zip as a File")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+                if crate::dialogs::secondary(ui, tl!("Add the Zip as a File"), true).clicked() {
                     choice = Some(Choice::AsFile);
                 }
-                if ui.add(egui::Button::new(tl!("Cancel")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+                if crate::dialogs::secondary(ui, tl!("Cancel"), true).clicked() {
                     choice = Some(Choice::Cancel);
                 }
             });
@@ -450,13 +450,13 @@ fn ask(ui: &mut egui::Ui, t: &Tokens, form: &mut DropForm) -> Option<Choice> {
                 if primary(ui, t, tl!("Replace"), focus).clicked() {
                     choice = Some(Choice::Existing("replace"));
                 }
-                if ui.add(egui::Button::new(tl!("Keep Both")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+                if crate::dialogs::secondary(ui, tl!("Keep Both"), true).clicked() {
                     choice = Some(Choice::Existing("keep_both"));
                 }
-                if ui.add(egui::Button::new(tl!("Skip")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+                if crate::dialogs::secondary(ui, tl!("Skip"), true).clicked() {
                     choice = Some(Choice::Existing("skip"));
                 }
-                if ui.add(egui::Button::new(tl!("Cancel")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+                if crate::dialogs::secondary(ui, tl!("Cancel"), true).clicked() {
                     choice = Some(Choice::Cancel);
                 }
             });
@@ -468,8 +468,7 @@ fn ask(ui: &mut egui::Ui, t: &Tokens, form: &mut DropForm) -> Option<Choice> {
 
 /// The default answer, which takes the keyboard when the question is asked.
 fn primary(ui: &mut egui::Ui, t: &Tokens, label: &str, focus: bool) -> egui::Response {
-    let text = RichText::new(label).color(t.on_accent).font(t.strong());
-    let response = ui.add(egui::Button::new(text).fill(t.accent).stroke(egui::Stroke::NONE).min_size(egui::vec2(88.0, 30.0)));
+    let response = crate::dialogs::primary(ui, t, label, true, false);
     if focus {
         response.request_focus();
     }

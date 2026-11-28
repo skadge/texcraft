@@ -50,6 +50,7 @@
         <li>The kind of PDF: <span class="ui">PDF for the screen</span>, <span class="ui">Accessible PDF (PDF/UA)</span> or <span class="ui">PDF for print (PDF/X)</span> (below).</li>
         <li><span class="ui">Delete Build Files</span>: the next build starts from scratch.</li>
         <li><span class="ui">Stop Compiling</span>.</li>
+        <li><span class="ui">Build Settings…</span>: Settings › Building, with the engine, the pause before an automatic build and the print options.</li>
       </ul>
       <p id="engine">The engine (LuaLaTeX or pdfLaTeX, or chosen from the document) is set in <a href="settings.html#building">Settings › Building</a>. Chosen from the document, a build runs as pdfLaTeX when the main file asks for it in its first lines (<code>% !TEX program = pdflatex</code>, or <code>% !TeX TS-program = pdflatex</code>), or when the document, or a file it reads from the project, uses a pdfTeX command that LuaLaTeX lacks, such as <code>\pdfmapfile</code>, <code>\pdfglyphtounicode</code> or <code>\pdfcompresslevel</code>, outside a test for the engine; a document that also loads a package for LuaTeX only (<code>fontspec</code>) is left as it is. Otherwise it runs as LuaLaTeX. The Compile button's menu says which engine the next build runs and why (<span class="ui">pdfLaTeX: the document uses \pdfmapfile (main.tex:2)</span>), and the build log says it for the last build. An engine chosen in Settings always wins.</p>
       <p>On the desktop, the build runs in a helper that keeps the preamble ready between builds, so a rebuild after an edit usually takes under a second, even with a heavy preamble. In the browser, the first build of a visit fetches the TeX files the document reads; they are kept for the next visit.</p>
@@ -58,7 +59,7 @@
       <p>Bibliographies (BibTeX and biber) and indexes (makeindex) run inside the build, as many times as the document needs: there is nothing else to run.</p>
 
       <h2 id="log">The build log</h2>
-      <p><span class="ui">Build log</span> in the PDF pane shows the last build's messages in the PDF's place; <span class="ui">Back to PDF</span> returns. Its badge counts the errors (or, without any, the warnings), and its name says the count too: <span class="ui">Build log, 2 errors</span>.</p>
+      <p><span class="ui">Build Log</span> in the PDF pane shows the last build's messages in the PDF's place; <span class="ui">Back to PDF</span> returns. Its badge counts the errors (or, without any, the warnings), and its name says the count too: <span class="ui">Build Log, 2 errors</span>.</p>
       <figure>
         <img src="../images/log-dark.png" width="1440" height="900" alt="The build log in the dark theme, in the place of the PDF: one error and two warnings as cards, each with its message, an explanation and a link to its line; in the editor, the same lines are marked in the gutter.">
         <figcaption>Messages as cards, each linked to its line.</figcaption>
@@ -74,7 +75,7 @@
       <p>Some warnings come by the dozen and need no fixing: every overfull box, or every bibliography entry without page numbers. <span class="ui">Hide Like This</span> on a warning's or a note's card hides every message of its kind, <span class="ui">In This Project</span> or <span class="ui">In All Projects</span>. Errors are never hidden.</p>
       <ul>
         <li>A kind is the message with what varies left out: what is quoted, file names and numbers. <span class="ui">Overfull \hbox (12.0pt too wide) in paragraph at lines 3--5</span> and <span class="ui">Overfull \hbox (0.5pt too wide) in paragraph at lines 40--41</span> are one kind; a BibTeX entry without pages and one without a journal are two.</li>
-        <li>The log then says how many it hides (<span class="ui">12 hidden messages</span>); <span class="ui">Show</span> lists them again, each with <span class="ui">Show Again</span>. Hidden warnings are not counted on the <span class="ui">Build log</span> button or in the status bar, and are not marked in the editor.</li>
+        <li>The log then says how many it hides (<span class="ui">12 hidden messages</span>); <span class="ui">Show</span> lists them again, each with <span class="ui">Show Again</span>. Hidden warnings are not counted on the <span class="ui">Build Log</span> button or in the status bar, and are not marked in the editor.</li>
         <li><a href="settings.html#building">Settings › Building</a> lists the kinds hidden in this project and in all projects, each with <span class="ui">Show Again</span>.</li>
         <li>A project's choice is kept in its folder, in <code>.texcraft/hidden-messages.txt</code>; one for all projects is kept with your settings.</li>
       </ul>
@@ -98,7 +99,7 @@
 
       <h2 id="preview">The PDF preview</h2>
       <ul>
-        <li><strong>Pages and zoom:</strong> the arrows go to the previous and next page; the zoom menu has <span class="ui">Fit width</span>, <span class="ui">Fit page</span> and fixed zooms from 50 % to 400 %. After zooming, the button beside <span class="ui">Zoom In</span> (<span class="ui">Back to Fit Width</span>, or <span class="ui">Back to Fit Page</span>) goes back to the last fit chosen. <span class="ui">Zoom In</span> <kbd>Ctrl</kbd>+<kbd>=</kbd>, <span class="ui">Zoom Out</span> <kbd>Ctrl</kbd>+<kbd>-</kbd>, <span class="ui">Actual Size</span> <kbd>Ctrl</kbd>+<kbd>0</kbd>. <kbd>Ctrl</kbd> (<kbd>Cmd</kbd> on a Mac) with the mouse wheel, or a pinch on a touchpad or a touch screen, zooms around the pointer.</li>
+        <li><strong>Pages and zoom:</strong> the arrows go to the previous and next page; the zoom menu has <span class="ui">Fit Width</span>, <span class="ui">Fit Page</span> and fixed zooms from 50 % to 400 %. After zooming, the button beside <span class="ui">Zoom In</span> (<span class="ui">Back to Fit Width</span>, or <span class="ui">Back to Fit Page</span>) goes back to the last fit chosen. <span class="ui">Zoom In</span> <kbd>Ctrl</kbd>+<kbd>=</kbd>, <span class="ui">Zoom Out</span> <kbd>Ctrl</kbd>+<kbd>-</kbd>, <span class="ui">Actual Size</span> <kbd>Ctrl</kbd>+<kbd>0</kbd>. <kbd>Ctrl</kbd> (<kbd>Cmd</kbd> on a Mac) with the mouse wheel, or a pinch on a touchpad or a touch screen, zooms around the pointer.</li>
         <li><strong>Pages side by side:</strong> zoomed out, as many pages go across as fit. <span class="ui">Two Pages</span>, in the zoom menu, puts two across at least, the fits making room for both; <span class="ui">Page Thumbnails</span> shows the pages' miniatures in a strip on the left, the page in view framed: click one, or press <kbd>Enter</kbd> on it, to go there.</li>
         <li><strong>Moving around:</strong> the wheel scrolls; when the pages are wider or taller than the pane, drag with the middle mouse button to move them.</li>
         <li><strong>Links</strong> in the PDF work: to a place in the document, or to a web or mail address, which opens in your browser.</li>
@@ -117,7 +118,7 @@
       <p>The build checks the file as a printer would (image resolution, ink coverage, fonts…). The log then starts with <span class="ui">Ready for print</span> or the number of problems, lists them under the <span class="ui">Print</span> filter, and <span class="ui">Show it on the page</span> marks where each one is. The print PDF is one of the <a href="#raw-log">output files</a>, to save from the log.</p>
 
       <h2 id="save-pdf">Saving the PDF</h2>
-      <p><span class="ui">Save PDF As…</span> (<span class="ui">Download PDF</span> in the browser) keeps the last build's PDF: the download button in the PDF pane, beside <span class="ui">Export</span>, the first entry of the Export menu, or <span class="ui">File › Save PDF As…</span>. On the desktop it asks where to save; in the browser the file is downloaded. For a print build it is the PDF/X.</p>
+      <p><span class="ui">Save PDF As…</span> (<span class="ui">Download PDF</span> in the browser) keeps the last build's PDF: the first entry of the PDF pane's <span class="ui">Export</span> menu, or <span class="ui">File › Save PDF As…</span>. On the desktop it asks where to save; in the browser the file is downloaded. For a print build it is the PDF/X.</p>
 
       <h2 id="export">Exporting to other formats</h2>
       <!-- screenshot: the Export menu open over the PDF pane -->

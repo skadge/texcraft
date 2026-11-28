@@ -202,27 +202,6 @@ fn focus_if_asked(ui: &egui::Ui, r: &egui::Response, name: &str) {
     }
 }
 
-/// A small pill: an icon and words, on a tint of `tone`; the words are in the
-/// text colour, so they read whatever the tint.
-fn badge(ui: &mut egui::Ui, t: &Tokens, icon: Option<&str>, text: &str, tone: egui::Color32) {
-    let galley = ui.painter().layout_no_wrap(text.to_owned(), t.small(), t.text);
-    let icon_room = if icon.is_some() { 16.0 } else { 0.0 };
-    let size = vec2(galley.size().x + icon_room + 14.0, 20.0);
-    let (rect, r) = ui.allocate_exact_size(size, Sense::hover());
-    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, text));
-    if !ui.is_rect_visible(rect) {
-        return;
-    }
-    let fill = crate::theme::blend(t.surface, egui::Color32::from_rgba_unmultiplied(tone.r(), tone.g(), tone.b(), 56));
-    ui.painter().rect_filled(rect, egui::CornerRadius::same(10), fill);
-    let mut x = rect.left() + 7.0;
-    if let Some(i) = icon {
-        icons::paint(ui, egui::Rect::from_min_size(egui::pos2(x, rect.center().y - 6.0), vec2(12.0, 12.0)), i, 12.0, tone);
-        x += icon_room;
-    }
-    ui.painter().galley(egui::pos2(x, rect.center().y - galley.size().y / 2.0), galley, t.text);
-}
-
 /// The account's initial in a circle, standing for its picture.
 fn initial(ui: &mut egui::Ui, t: &Tokens, name: &str) {
     let (rect, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
@@ -386,7 +365,7 @@ fn row_card(app: &mut App, ui: &mut egui::Ui, t: &Tokens, row: &Row, narrow: boo
                         ui.spacing_mut().item_spacing.y = t.unit;
                         let badges = |ui: &mut egui::Ui| {
                             if row.default {
-                                badge(ui, t, Some("star"), tl!("Default"), t.accent);
+                                widgets::state_badge(ui, t, Some("star"), tl!("Default"), t.accent);
                             }
                             let (icon, tone) = match row.state.as_str() {
                                 "signed_in" | "token" => (Some("circle-check"), t.success),
@@ -394,9 +373,9 @@ fn row_card(app: &mut App, ui: &mut egui::Ui, t: &Tokens, row: &Row, narrow: boo
                                 "signing_in" => (Some("loader-circle"), t.accent),
                                 _ => (None, t.text_muted),
                             };
-                            badge(ui, t, icon, row.state_words(), tone);
+                            widgets::state_badge(ui, t, icon, row.state_words(), tone);
                             if !row.available {
-                                badge(ui, t, Some("info"), tl!("Desktop app only"), t.text_muted);
+                                widgets::state_badge(ui, t, Some("info"), tl!("Desktop app only"), t.text_muted);
                             }
                         };
                         let mut address = row.address();
@@ -816,7 +795,7 @@ fn draw(
         Page::Confirm { what: Confirm::Disconnect, host, .. } => tl!("Disconnect from {host}?").replace("{host}", host),
         Page::Confirm { what: Confirm::Remove, host, .. } => tl!("Remove {host}?").replace("{host}", host),
     };
-    header(ui, t, &title, matches!(form.page, Page::Forge(_) | Page::Token(_) | Page::Unavailable(_)), narrow, form.running, &mut did);
+    header(ui, t, &title, matches!(form.page, Page::Forge(_) | Page::Token(_) | Page::Unavailable(_)), form.running, &mut did);
     match &mut form.page {
         Page::Grid => {
             if let Some(k) = grid(ui, t, lines, form.focus_card.take(), narrow) {
@@ -838,23 +817,15 @@ fn draw(
 }
 
 /// The title row: Back on a page, the title, Close. On a phone, the sheet's bar holds them.
-fn header(ui: &mut egui::Ui, t: &Tokens, title: &str, on_page: bool, narrow: bool, running: bool, did: &mut Vec<Did>) {
-    if narrow {
-        crate::dialogs::title(ui, t, title);
-        return;
+fn header(ui: &mut egui::Ui, t: &Tokens, title: &str, on_page: bool, running: bool, did: &mut Vec<Did>) {
+    let back = on_page.then_some(tl!("Back to connections"));
+    let asked = crate::dialogs::header(ui, t, title, back, !running, |_| {});
+    if asked.back {
+        did.push(Did::Back);
     }
-    ui.allocate_ui_with_layout(vec2(ui.available_width(), 28.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-        if on_page && widgets::icon_button(ui, t, "arrow-left", tl!("Back to connections"), !running).clicked() {
-            did.push(Did::Back);
-        }
-        ui.add(egui::Label::new(RichText::new(title).font(t.title())).truncate());
-        widgets::right_aligned(ui, "connection-close", |ui| {
-            if widgets::icon_button(ui, t, "x", tl!("Close"), !running).clicked() {
-                did.push(Did::Close);
-            }
-        });
-    });
-    ui.add_space(t.unit * 3.0);
+    if asked.close {
+        did.push(Did::Close);
+    }
 }
 
 /// The cards, in two groups as on the Accounts page. Returns the card chosen.
@@ -1020,7 +991,7 @@ fn unavailable(ui: &mut egui::Ui, t: &Tokens, kind: Kind, did: &mut Vec<Did>) {
     ui.label(RichText::new(tl!("The desktop app connects to it; projects from it can be imported here as zip files.")).color(t.text_muted));
     ui.add_space(t.unit * 4.0);
     crate::dialogs::actions(ui, |ui| {
-        if ui.add(egui::Button::new(tl!("Back")).min_size(vec2(80.0, 30.0))).clicked() {
+        if crate::dialogs::secondary(ui, tl!("Back"), true).clicked() {
             did.push(Did::Back);
         }
     });

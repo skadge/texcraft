@@ -1016,22 +1016,14 @@ fn draw(ui: &mut egui::Ui, t: &Tokens, form: &mut ImportForm, info: &Info) -> Ve
 
 /// The title row: Back on a page, the title, Close. On a phone, the sheet's bar holds them.
 fn header(ui: &mut egui::Ui, t: &Tokens, title: &str, on_page: bool, info: &Info, acts: &mut Vec<Act>) {
-    if info.narrow {
-        crate::dialogs::title(ui, t, title);
-        return;
+    let back = on_page.then_some(tl!("Back to sources"));
+    let asked = crate::dialogs::header(ui, t, title, back, info.running.is_none(), |_| {});
+    if asked.back {
+        acts.push(Act::Back);
     }
-    ui.allocate_ui_with_layout(vec2(ui.available_width(), 28.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-        if on_page && widgets::icon_button(ui, t, "arrow-left", tl!("Back to sources"), info.running.is_none()).clicked() {
-            acts.push(Act::Back);
-        }
-        ui.add(egui::Label::new(RichText::new(title).font(t.title())).truncate());
-        widgets::right_aligned(ui, "import-close", |ui| {
-            if widgets::icon_button(ui, t, "x", tl!("Close"), info.running.is_none()).clicked() {
-                acts.push(Act::Close);
-            }
-        });
-    });
-    ui.add_space(t.unit * 3.0);
+    if asked.close {
+        acts.push(Act::Close);
+    }
 }
 
 /// The two groups of cards. Returns the card chosen.
@@ -1297,7 +1289,7 @@ fn unavailable(ui: &mut egui::Ui, t: &Tokens, source: Source, acts: &mut Vec<Act
     ui.label(RichText::new(hint).font(t.small()).color(t.text_muted));
     ui.add_space(t.unit * 4.0);
     actions(ui, |ui| {
-        if ui.add(egui::Button::new(tl!("Back")).min_size(vec2(80.0, 30.0))).clicked() {
+        if crate::dialogs::secondary(ui, tl!("Back"), true).clicked() {
             acts.push(Act::Back);
         }
     });
@@ -1444,12 +1436,10 @@ fn footer(ui: &mut egui::Ui, t: &Tokens, ready: bool, running: bool, info: &Info
         ui.add_space(t.unit * 2.0);
     }
     actions(ui, |ui| {
-        let label = RichText::new(tl!("Import")).color(t.on_accent).font(t.strong());
-        let primary = egui::Button::new(label).fill(t.accent).stroke(egui::Stroke::NONE).min_size(vec2(88.0, 30.0));
-        if ui.add_enabled(ready && !running, primary).clicked() || (enter && ready && !running) {
+        if crate::dialogs::primary(ui, t, tl!("Import"), ready && !running, false).clicked() || (enter && ready && !running) {
             acts.push(Act::Import);
         }
-        if ui.add(egui::Button::new(tl!("Cancel")).min_size(vec2(80.0, 30.0))).clicked() {
+        if crate::dialogs::secondary(ui, tl!("Cancel"), true).clicked() {
             acts.push(if running { Act::StopImport } else { Act::Close });
         }
         // The progress takes the footer's place, so that nothing moves.
@@ -1466,19 +1456,7 @@ fn progress(ui: &mut egui::Ui, t: &Tokens, phase: ClonePhase) {
         ClonePhase::Receiving => tl!("Receiving the history…"),
         ClonePhase::Writing => tl!("Writing the files…"),
     };
-    ui.horizontal(|ui| {
-        let (rect, _) = ui.allocate_exact_size(vec2(160.0, 4.0), Sense::hover());
-        ui.painter().rect_filled(rect, 2.0, t.separator);
-        let at = (ui.input(|i| i.time) as f32 * 0.8).fract() * 0.7;
-        let bar = egui::Rect::from_min_max(
-            egui::pos2(rect.left() + rect.width() * at, rect.top()),
-            egui::pos2(rect.left() + rect.width() * (at + 0.3), rect.bottom()),
-        );
-        ui.painter().rect_filled(bar, 2.0, t.accent);
-        let said = ui.add(egui::Label::new(RichText::new(text).font(t.small()).color(t.text_muted)).selectable(false));
-        crate::status::announce(ui, &said, text);
-    });
-    ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
+    crate::dialogs::progress(ui, t, text);
 }
 
 /// The Into row: the folder's path and Change…, checked in place. Whether it can be used.
@@ -1523,7 +1501,7 @@ pub(crate) fn folder_field(
             ui.horizontal(|ui| {
                 let room = ui.available_width() - 96.0;
                 let field = ui.add_sized(vec2(room.max(120.0), 30.0), edit).labelled_by(label);
-                if ui.add(egui::Button::new(tl!("Change…")).min_size(vec2(88.0, 30.0))).clicked() {
+                if crate::dialogs::secondary(ui, tl!("Change…"), true).clicked() {
                     *change = true;
                 }
                 field

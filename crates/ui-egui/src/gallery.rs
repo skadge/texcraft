@@ -310,16 +310,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             details(app, ui, &t, &listing, &mut create);
             return;
         }
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(tl!("New Project")).font(t.title()));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if widgets::icon_button(ui, &t, "x", tl!("Close"), true).clicked() {
-                    close = true;
-                }
-                search(app, ui, 280.0);
-            });
-        });
-        ui.add_space(t.unit * 3.0);
+        close = crate::dialogs::header(ui, &t, tl!("New Project"), None, true, |ui| search(app, ui, 280.0)).close;
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
                 ui.set_width(170.0);
@@ -475,9 +466,7 @@ fn create_button(app: &mut App, ui: &mut egui::Ui, t: &Tokens, selected: Option<
         widgets::spinner(ui, rect.center(), 6.0, t.accent);
         return;
     }
-    let label = RichText::new(tl!("Create Project…")).color(t.on_accent).font(t.strong());
-    let button = egui::Button::new(label).fill(t.accent).stroke(egui::Stroke::NONE).min_size(vec2(140.0, 32.0));
-    let r = ui.add_enabled(selected.is_some(), button);
+    let r = crate::dialogs::primary(ui, t, tl!("Create Project…"), selected.is_some(), false);
     if app.gallery.focus_create && selected.is_some() {
         app.gallery.focus_create = false;
         r.request_focus();

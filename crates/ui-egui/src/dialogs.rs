@@ -381,18 +381,17 @@ fn unsaved_buttons(ui: &mut egui::Ui, t: &Tokens, keep: &str, drop: &str, forge:
     let mut commit = false;
     ui.add_space(t.unit * 4.0);
     actions(ui, |ui| {
-        let save = egui::Button::new(RichText::new(keep).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
-        if ui.add(save.min_size(egui::vec2(88.0, 30.0))).clicked() {
+        if primary(ui, t, keep, true, false).clicked() {
             outcome = Outcome::Run;
         }
         // Only for a project opened from a forge: committing sends the changes there.
         if let Some(service) = forge {
             let label = crate::forge::say(service, tl!("Commit to GitLab…"), tl!("Commit to GitHub…"));
-            if ui.add(egui::Button::new(label).min_size(egui::vec2(88.0, 30.0))).clicked() {
+            if secondary(ui, label, true).clicked() {
                 commit = true;
             }
         }
-        if ui.add(egui::Button::new(tl!("Cancel")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+        if secondary(ui, tl!("Cancel"), true).clicked() {
             outcome = Outcome::Cancel;
         }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
@@ -421,9 +420,79 @@ fn keep_and_commit(app: &mut App) {
     app.view.status = Some((said.to_owned(), false));
 }
 
-/// The dialog's title: at the top of its box, or of a phone's sheet ([`crate::sheet::title`]).
+/// The dialog's title: at the top of its box with Close at the row's end, or in a phone's
+/// sheet's top bar ([`crate::sheet::title`]). Close there does what Escape does.
 pub(crate) fn title(ui: &mut egui::Ui, t: &Tokens, text: &str) {
     crate::sheet::title(ui, t, text);
+}
+
+/// What a dialog's [`header`] was asked this pass.
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct Header {
+    pub back: bool,
+    pub close: bool,
+}
+
+/// A dialog's header, the same in every dialog: Back (when `back` names where it goes), the
+/// title, `extra` (such as a search field) and Close at the row's end, Back and Close off while
+/// `enabled` is false (an operation that cannot be stopped halfway runs). On a phone the sheet's
+/// top bar has the title, Back and Close: only the title is passed on, and `extra` is not drawn.
+pub(crate) fn header(ui: &mut egui::Ui, t: &Tokens, text: &str, back: Option<&str>, enabled: bool, extra: impl FnOnce(&mut egui::Ui)) -> Header {
+    let mut asked = Header::default();
+    if crate::sheet::in_sheet(ui) {
+        crate::sheet::title(ui, t, text);
+        return asked;
+    }
+    ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 28.0), Layout::left_to_right(Align::Center), |ui| {
+        if let Some(name) = back
+            && crate::widgets::icon_button(ui, t, "arrow-left", name, enabled).clicked()
+        {
+            asked.back = true;
+        }
+        ui.add(egui::Label::new(RichText::new(text).font(t.title())).truncate());
+        crate::widgets::right_aligned(ui, "dialog-header-end", |ui| {
+            extra(ui);
+            if crate::widgets::icon_button(ui, t, "x", tl!("Close"), enabled).clicked() {
+                asked.close = true;
+            }
+        });
+    });
+    ui.add_space(t.unit * 3.0);
+    asked
+}
+
+/// A footer's progress, in the place of its buttons while an operation runs (Import, New
+/// Project): a thin moving bar and the phase, a live region said at each phase.
+pub(crate) fn progress(ui: &mut egui::Ui, t: &Tokens, text: &str) {
+    ui.horizontal(|ui| {
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(160.0, 4.0), egui::Sense::hover());
+        ui.painter().rect_filled(rect, 2.0, t.separator);
+        let at = (ui.input(|i| i.time) as f32 * 0.8).fract() * 0.7;
+        let bar = egui::Rect::from_min_max(
+            egui::pos2(rect.left() + rect.width() * at, rect.top()),
+            egui::pos2(rect.left() + rect.width() * (at + 0.3), rect.bottom()),
+        );
+        ui.painter().rect_filled(bar, 2.0, t.accent);
+        let said = ui.add(egui::Label::new(RichText::new(text).font(t.small()).color(t.text_muted)).selectable(false));
+        crate::status::announce(ui, &said, text);
+    });
+    ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
+}
+
+/// The minimum size of a footer's buttons.
+const BUTTON: egui::Vec2 = egui::vec2(80.0, 30.0);
+
+/// A footer's primary button, the one coloured action of a dialog (docs/design.md): the accent,
+/// or `t.error` when it destroys something. Added first in [`actions`], it is the right-most.
+pub(crate) fn primary(ui: &mut egui::Ui, t: &Tokens, label: &str, enabled: bool, danger: bool) -> egui::Response {
+    let fill = if danger { t.error } else { t.accent };
+    let text = RichText::new(label).color(t.on_accent).font(t.strong());
+    ui.add_enabled(enabled, egui::Button::new(text).fill(fill).stroke(egui::Stroke::NONE).min_size(BUTTON + egui::vec2(8.0, 0.0)))
+}
+
+/// A footer's other buttons (Cancel, Back, Not Now), at the left of the primary one.
+pub(crate) fn secondary(ui: &mut egui::Ui, label: &str, enabled: bool) -> egui::Response {
+    ui.add_enabled(enabled, egui::Button::new(label).min_size(BUTTON))
 }
 
 /// The dialog's actions, from the right: the last row of its box, or a phone's sheet's bottom
@@ -437,13 +506,10 @@ pub(crate) fn buttons(ui: &mut egui::Ui, t: &Tokens, action: &str, danger: bool,
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
     actions(ui, |ui| {
-        let fill = if danger { t.error } else { t.accent };
-        let label = RichText::new(action).color(t.on_accent).font(t.strong());
-        let primary = egui::Button::new(label).fill(fill).stroke(egui::Stroke::NONE).min_size(egui::vec2(88.0, 30.0));
-        if ui.add_enabled(enabled, primary).clicked() {
+        if primary(ui, t, action, enabled, danger).clicked() {
             outcome = Outcome::Run;
         }
-        if ui.add(egui::Button::new(tl!("Cancel")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+        if secondary(ui, tl!("Cancel"), true).clicked() {
             outcome = Outcome::Cancel;
         }
     });
@@ -521,11 +587,13 @@ fn shortcuts(app: &mut App, ctx: &egui::Context) {
 }
 
 fn about(ui: &mut egui::Ui, t: &Tokens, engine: &str) -> Outcome {
+    // Titled as its menu entry, as every dialog is; the name under the icon.
+    title(ui, t, crate::i18n::tid("help.about", "About TeXCraft"));
     ui.vertical_centered(|ui| {
         let (icon, _) = ui.allocate_exact_size(egui::vec2(64.0, 64.0), egui::Sense::hover());
         crate::app_icon::paint(ui, icon);
         ui.add_space(t.unit * 2.0);
-        title(ui, t, "TeXCraft");
+        ui.label(RichText::new("TeXCraft").font(t.title()));
         ui.label(tf!("Version {version}", version = env!("CARGO_PKG_VERSION")));
         ui.label(RichText::new(tf!("Typesetting engine: {engine}", engine = engine)).color(t.text_muted));
         ui.add_space(t.unit * 2.0);
@@ -536,7 +604,7 @@ fn about(ui: &mut egui::Ui, t: &Tokens, engine: &str) -> Outcome {
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
     actions(ui, |ui| {
-        if ui.add(egui::Button::new(tl!("Close")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+        if secondary(ui, tl!("Close"), true).clicked() {
             outcome = Outcome::Cancel;
         }
     });
