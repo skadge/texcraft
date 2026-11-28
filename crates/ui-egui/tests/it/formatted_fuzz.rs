@@ -190,7 +190,14 @@ fn target(h: &Harness<'_, App>, (line, x): (usize, f32)) -> Option<(egui::Pos2, 
     let inside = |r: &egui::Rect| r.width() > 0.0 && r.center().y > top + 4.0 && r.center().y < bottom - 4.0;
     let visible: Vec<_> = all.into_iter().filter(|(_, r, _)| inside(r)).collect();
     let (_, r, value) = visible.get(line % visible.len().max(1))?;
-    Some((egui::pos2(r.left() + x * r.width(), r.center().y), value.clone()))
+    let at = egui::pos2(r.left() + x * r.width(), r.center().y);
+    // Not under a table's toolbar, which floats over the line above the table: a click there is
+    // the toolbar's.
+    let toolbars: Vec<egui::Rect> = h.query_all(by().role(Role::Toolbar)).map(|n| n.rect()).collect();
+    if toolbars.iter().any(|t| t.contains(at)) {
+        return None;
+    }
+    Some((at, value.clone()))
 }
 
 fn press(h: &mut Harness<'_, App>, at: egui::Pos2, pressed: bool, modifiers: egui::Modifiers) {
@@ -242,7 +249,9 @@ fn perform(h: &mut Harness<'_, App>, a: &Act) -> bool {
         Act::Undo => h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z),
         Act::Redo => h.key_press_modifiers(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::Z),
     }
-    h.try_run().is_ok()
+    // (A formula's editor opened typesets its preview on a thread: a few seconds on a busy
+    // machine.)
+    (0..4).any(|_| h.try_run().is_ok())
 }
 
 /// What failed after an action.
@@ -305,6 +314,17 @@ fn step(h: &mut Harness<'_, App>, a: &Act, history: &mut Vec<String>) -> Result<
             return Ok(());
         }
         let holder = h.query_all_by(|n| n.is_focused()).last().and_then(|n| n.accesskit_node().label()).unwrap_or_default();
+        // A double-click on a formula or a command shown as source opens its editor, which takes
+        // the keyboard; Escape gives it back.
+        let editor = holder.starts_with("LaTeX") || holder.starts_with("Formula");
+        if editor && matches!(a, Act::Click { times: 2.., .. }) {
+            h.key_press(egui::Key::Escape);
+            h.run();
+            if h.query_by_label("main.tex formatted").is_some_and(|n| n.accesskit_node().is_focused()) {
+                return Ok(());
+            }
+            return fail("focus-lost", format!("Escape in the editor of {holder:?} did not give the text the keyboard back"));
+        }
         return fail("focus-lost", format!("the keyboard left the text for {holder:?}{clicked}"));
     }
     let Some((rect, value, at)) = caret(h) else {
@@ -323,7 +343,8 @@ fn step(h: &mut Harness<'_, App>, a: &Act, history: &mut Vec<String>) -> Result<
         && after != before
     {
         let shown: String = value.chars().take(at).collect();
-        if !shown.ends_with(s) {
+        // (Small capitals show as capitals.)
+        if !shown.to_lowercase().ends_with(&s.to_lowercase()) {
             return fail("caret-misplaced", format!("typed {s:?}, the caret's line reads {:?} before the caret", shown));
         }
         if let Some((r0, ..)) = caret_before
