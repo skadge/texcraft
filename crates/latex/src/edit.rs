@@ -732,7 +732,41 @@ pub fn typing_point(text: &str, at: usize) -> usize {
             found = caption_end(text, &b.range);
         }
     });
-    out_of_comment(text, found.or_else(|| into_arguments(text, at)).unwrap_or(at))
+    out_of_comment(text, found.or_else(|| into_arguments(text, at)).unwrap_or_else(|| past_leading_space(text, at)))
+}
+
+/// At the start of a line, before the spaces and comment lines a paragraph starts with (which
+/// show nothing): after them, where its text starts. Text typed before them would be joined to
+/// the paragraph's first word by a space (the line's end) it does not show.
+fn past_leading_space(text: &str, at: usize) -> usize {
+    let (Some(before), Some(after)) = (text.get(..at), text.get(at..)) else { return at };
+    let line = &before[before.rfind('\n').map_or(0, |n| n + 1)..];
+    if !line.trim().is_empty() {
+        return at;
+    }
+    let mut rest = after;
+    // A blank line on the way: the caret is in an empty paragraph of its own.
+    let mut blank = false;
+    let mut line_empty = false;
+    loop {
+        let spaces = rest.len() - rest.trim_start_matches([' ', '\t']).len();
+        rest = &rest[spaces..];
+        if let Some(comment) = rest.strip_prefix('%') {
+            rest = comment.find('\n').map_or("", |n| &comment[n..]);
+            line_empty = false;
+        } else if let Some(r) = rest.strip_prefix('\n') {
+            blank |= line_empty;
+            line_empty = true;
+            rest = r;
+        } else {
+            break;
+        }
+    }
+    // Only before text.
+    if blank || rest.is_empty() || rest.starts_with(['\\', '}', '{', '$']) {
+        return at;
+    }
+    at + (after.len() - rest.len())
 }
 
 /// Where text typed at source offset `at` goes when `at` is right after a command whose arguments
@@ -1302,9 +1336,28 @@ fn space_around(text: &str, at: usize, lines: bool) -> Range<usize> {
     let is_space = |c: char| c == ' ' || c == '\t' || (lines && (c == '\n' || c == '\r'));
     let before = text.get(..at).unwrap_or_default();
     let after = text.get(at..).unwrap_or_default();
-    let start = at - (before.len() - before.trim_end_matches(is_space).len());
+    let mut start = at - (before.len() - before.trim_end_matches(is_space).len());
+    // Not back onto a line a comment ends: what goes there would be commented out.
+    if let Some(n) = text.get(start..at).and_then(|s| s.find('\n')) {
+        let line_start = text.get(..start).and_then(|s| s.rfind('\n')).map_or(0, |i| i + 1);
+        if text.get(line_start..start).is_some_and(has_comment) {
+            start += n + 1;
+        }
+    }
     let end = at + (after.len() - after.trim_start_matches(is_space).len());
     start..end
+}
+
+/// Whether a line of source holds a comment: a `%` not escaped by a backslash.
+fn has_comment(line: &str) -> bool {
+    let mut backslashes = 0;
+    for c in line.chars() {
+        if c == '%' && backslashes % 2 == 0 {
+            return true;
+        }
+        backslashes = if c == '\\' { backslashes + 1 } else { 0 };
+    }
+    false
 }
 
 /// An empty paragraph at `pos`, between blank lines, with the caret in it.
@@ -1355,7 +1408,7 @@ pub fn enter(text: &str, at: usize) -> Option<SourceEdit> {
             let item = body.iter().rev().find(|n| matches!(&n.kind, Kind::Command { name, .. } if name == "item") && n.range.start < at)?;
             // At the very start of a styled run: the new item goes before its command, the caret
             // staying in it.
-            let start = styles.first().map(|(n, _)| n.range.start).filter(|s| text.get(*s..at) == Some(opens.as_str()));
+            let start = styles.first().map(|(n, _)| n.range.start).filter(|s| text.get(*s..at).is_some_and(declares_only));
             let (point, closes, opens) = match start {
                 Some(start) => (start, String::new(), String::new()),
                 None => (at, closes, opens),
@@ -1382,9 +1435,9 @@ pub fn enter(text: &str, at: usize) -> Option<SourceEdit> {
             if at <= para.range.start {
                 return Some(open_paragraph(text, outer.map_or(at, |r| r.start)));
             }
-            // At the very start of a styled run, the break goes before its command: none is left
-            // empty before it.
-            if let Some(start) = outer.as_ref().map(|r| r.start).filter(|s| text.get(*s..at) == Some(opens.as_str())) {
+            // At the very start of a styled run (after what opens it, and declarations such as
+            // `{\Large \textbf{`), the break goes before its command: none is left empty before it.
+            if let Some(start) = outer.as_ref().map(|r| r.start).filter(|s| text.get(*s..at).is_some_and(declares_only)) {
                 let space = space_around(text, start, true);
                 let changes = vec![change(space.clone(), "\n\n")];
                 return Some(SourceEdit { caret: map_offset(&changes, at), changes });
