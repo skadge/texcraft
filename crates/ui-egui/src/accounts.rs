@@ -7,7 +7,8 @@
 //!
 //! Everything goes through commands: `accounts.list` (what is drawn), `accounts.add`,
 //! `accounts.disconnect`, `accounts.set_default`, `forge.sign_in`, `forge.remove_server`,
-//! `git.keep_credential`.
+//! `git.keep_credential`, and in the browser `accounts.remember_in_browser` (Remember sign-ins in
+//! this browser).
 
 use egui::{RichText, Sense, vec2};
 use serde_json::{Value, json};
@@ -145,6 +146,7 @@ impl Row {
     fn kept_words(&self) -> Option<&'static str> {
         Some(match self.kept.as_deref()? {
             "keychain" => tl!("In the keychain"),
+            "browser" => tl!("In this browser"),
             "tab" => tl!("In this tab"),
             _ => tl!("This session only"),
         })
@@ -272,14 +274,50 @@ pub(crate) fn settings(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             tl!("Your organisation's list of servers has an entry TeXCraft left out: {problem}").replace("{problem}", &crate::i18n::msg(problem));
         ui.label(RichText::new(text).font(t.small()).color(t.error));
     }
-    let kept = match listed["kept"].as_str() {
-        Some("keychain") => tl!("Sign-ins and tokens are kept in the system's keychain, never in the preferences."),
-        Some("tab") => tl!("Sign-ins and tokens are kept in this tab's session storage: a reload keeps them, closing the tab forgets them."),
-        _ => tl!("Sign-ins and tokens are kept while TeXCraft runs only."),
-    };
-    ui.label(RichText::new(kept).font(t.small()).color(t.text_muted));
+    match listed["remember_in_browser"].as_bool() {
+        // The browser: where they are kept is the setting's to say.
+        Some(on) => {
+            ui.add_space(t.unit * 2.0);
+            remember_setting(app, ui, t, on);
+        }
+        None => {
+            let kept = match listed["kept"].as_str() {
+                Some("keychain") => tl!("Sign-ins and tokens are kept in the system's keychain, never in the preferences."),
+                _ => tl!("Sign-ins and tokens are kept while TeXCraft runs only."),
+            };
+            ui.label(RichText::new(kept).font(t.small()).color(t.text_muted));
+        }
+    }
     for act in acts {
         perform(app, act);
+    }
+}
+
+/// Remember sign-ins in this browser (the browser build): on, every tab and later visits use them;
+/// off, this tab only.
+fn remember_setting(app: &mut App, ui: &mut egui::Ui, t: &Tokens, on: bool) {
+    let help = tl!(
+        "Sign-ins and tokens are kept in this browser's storage for this site, for every tab and later visits; only the site's own page can read them. Turn this off on a shared computer: they then stay in this tab until it is closed, and other tabs and later visits forget them."
+    );
+    crate::settings::setting(ui, t, tl!("Remember sign-ins in this browser"), help, |ui| {
+        let mut on = on;
+        let r = ui.add(egui::Checkbox::without_text(&mut on));
+        if r.changed() {
+            set_remember(app, on);
+        }
+        Some(r)
+    });
+}
+
+/// Turns Remember sign-ins in this browser on or off, and says where they are kept now.
+pub(crate) fn set_remember(app: &mut App, on: bool) {
+    if app.run("accounts.remember_in_browser", json!({"on": on})).is_some() {
+        let said = if on {
+            tl!("Sign-ins are kept in this browser, for every tab and later visits.")
+        } else {
+            tl!("Sign-ins are kept in this tab only: other tabs and later visits forget them.")
+        };
+        app.view.status = Some((said.to_owned(), false));
     }
 }
 
@@ -926,6 +964,7 @@ fn forge_page(
 fn kept_words(kept: &str) -> &'static str {
     match kept {
         "keychain" => tl!("Checked with the service, then kept in the system's keychain; never in the preferences."),
+        "browser" => tl!("Checked with the service, then kept in this browser's storage for this site, for every tab."),
         "tab" => tl!("Checked with the service, then kept in this tab's session storage until the tab is closed."),
         _ => tl!("Checked with the service, then kept while TeXCraft runs."),
     }
@@ -950,6 +989,7 @@ fn token_page(ui: &mut egui::Ui, t: &Tokens, kind: Kind, form: &mut Form, kept: 
     fields.push(token);
     let place = match kept {
         "keychain" => tl!("Kept in the system's keychain; Sync, push, pull and imports from this server use it."),
+        "browser" => tl!("Kept in this browser's storage for this site, for every tab."),
         "tab" => tl!("Kept in this tab's session storage until the tab is closed."),
         _ => tl!("Kept while TeXCraft runs."),
     };

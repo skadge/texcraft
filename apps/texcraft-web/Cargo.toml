@@ -33,7 +33,7 @@ web-sys = { version = "0.3", features = [
     "DragEvent", "DataTransfer", "Url", "HtmlAnchorElement", "HtmlElement", "DataTransferItemList", "DataTransferItem", "FileList", "File", "Blob", "AddEventListenerOptions",
     "FileSystemEntry", "FileSystemDirectoryEntry", "FileSystemFileEntry", "FileSystemDirectoryReader",
     "IdbFactory", "IdbOpenDbRequest", "IdbRequest", "IdbDatabase", "IdbObjectStore", "IdbTransaction", "IdbTransactionMode", "IdbKeyRange", "DomException", "DomStringList",
-    "Location", "History", "Storage", "Navigator", "StorageManager", "StorageEstimate", "HtmlInputElement",
+    "Location", "History", "Storage", "StorageEvent", "Navigator", "StorageManager", "StorageEstimate", "HtmlInputElement",
 ] }
 js-sys = "0.3"
 serde_json = { workspace = true }

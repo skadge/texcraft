@@ -294,7 +294,8 @@ Everything the dialog does is a command, so agents and the command line can impo
 | UI: `project.import_dialog` | `{source?, address?}` | — | Opens the dialog, at a source if given (File › Import a Project…). |
 
 Tokens remembered (Remember on this computer, ticked by default; in the browser Remember in this
-tab, the tab's session storage) are kept per host (`texcraft.git.<host>`), the forges' personal
+browser, its local storage, or Remember in this tab, the tab's session storage, as Settings ›
+Accounts › Remember sign-ins in this browser says) are kept per host (`texcraft.git.<host>`), the forges' personal
 access tokens as Overleaf's and any git server's, listed in Settings › Accounts under "Tokens
 kept on this computer" by service and host with **Replace…** and **Forget** (`git.credentials`,
 `git.keep_credential`, `git.forget_credential`), and used by the next import, the suggestions,

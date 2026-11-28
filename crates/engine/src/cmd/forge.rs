@@ -34,11 +34,13 @@ pub(crate) enum Task {
     Pull { pending: Pending<Pulled>, key: Key, renewed: Renewed, files: Vec<(String, Vec<u8>)> },
 }
 
-/// What an operation reaches the forge with: a personal access token, or a sign-in.
+/// What an operation reaches the forge with: a personal access token, or a sign-in with the
+/// store it is kept in (read again around a renewal: another of the browser's tabs may have
+/// renewed it, and GitLab takes each refresh token once).
 #[derive(Clone)]
 pub(crate) enum Key {
     Token(Token),
-    Grant(Box<Grant>),
+    Grant(Box<Grant>, std::sync::Arc<dyn crate::ai::Secrets>),
 }
 
 /// A sign-in renewed while an operation ran (its access token had expired): kept whatever the
@@ -55,12 +57,39 @@ impl Key {
     ) -> texcraft_forge::Result<Token> {
         match self {
             Key::Token(t) => Ok(t),
-            Key::Grant(grant) => {
-                let (token, new) = oauth::fresh(transport, clients, &grant, oauth::now()).await?;
-                if let Some(new) = new {
-                    *renewed.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(new);
+            Key::Grant(grant, secrets) => {
+                let keep = |grant: Grant| *renewed.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(grant);
+                let ours = *grant;
+                if !ours.expired(oauth::now()) {
+                    return Ok(ours.access().clone());
                 }
-                Ok(token)
+                // Expired: what the store holds now first, in case another tab renewed it.
+                let stored = |than: &Grant| {
+                    super::forge_auth::stored_grant(&*secrets, &than.instance).filter(|g| g.service == than.service && g.stored() != than.stored())
+                };
+                let grant = match stored(&ours) {
+                    Some(newer) => {
+                        keep(newer.clone());
+                        newer
+                    }
+                    None => ours,
+                };
+                match oauth::fresh(transport, clients, &grant, oauth::now()).await {
+                    Ok((token, new)) => {
+                        if let Some(new) = new {
+                            keep(new);
+                        }
+                        Ok(token)
+                    }
+                    // Refused: another tab may have renewed it meanwhile, with the same refresh
+                    // token. Once more with what the store holds, if it holds another.
+                    Err(e) => {
+                        let Some(newer) = stored(&grant) else { return Err(e) };
+                        let (token, new) = oauth::fresh(transport, clients, &newer, oauth::now()).await?;
+                        keep(new.unwrap_or(newer));
+                        Ok(token)
+                    }
+                }
             }
         }
     }
@@ -222,7 +251,9 @@ pub(super) fn key_at(s: &Session, p: &Value, instance: &str, service: Service) -
         return Ok(Key::Token(token));
     }
     if let Some(grant) = s.forge_grant(instance, service) {
-        return Ok(Key::Grant(Box::new(grant.clone())));
+        // As the store holds it now: another of the browser's tabs may have renewed it.
+        let grant = s.stored_grant(instance, service).unwrap_or_else(|| grant.clone());
+        return Ok(Key::Grant(Box::new(grant), s.forge_secrets()));
     }
     let name = service.name();
     Err(match s.forge_sign_in_unavailable_at(service, instance) {
@@ -368,7 +399,7 @@ fn commit(s: &mut Session, p: &Value) -> Result<Value> {
         return Err("Say what the commit changes: its message cannot be empty.".to_owned());
     }
     let key = key_for(s, p, &link.address)?;
-    if let Key::Grant(grant) = &key
+    if let Key::Grant(grant, _) = &key
         && !grant.can_commit()
     {
         s.forge_problem = Some(Problem::NeedsWrite);

@@ -210,7 +210,7 @@ What it does:
   - **In the browser** the whole page goes to GitLab (a popup would meet COOP and blockers) and
     comes back to the page's own address (`https://texcraft-893d51.gitlab.io/`, or
     `http://127.0.0.1:8768/` served locally). The `state` and the PKCE verifier wait in the tab's
-    session storage; on return the shell reads `?code=&state=` (or `?error=`), takes it out of the
+    session storage (whatever Remember sign-ins in this browser says); on return the shell reads `?code=&state=` (or `?error=`), takes it out of the
     address bar (`history.replaceState`) and hands it to `forge.sign_in_return`, which checks the
     state (used once) and exchanges the code at `/oauth/token` (gitlab.com answers web pages there).
     Projects in the library are kept in IndexedDB already; a project with unsaved changes makes the
@@ -242,10 +242,26 @@ What it does:
   as one entry per instance: `texcraft.forge.gitlab.com`, `texcraft.forge.github.com`):
   - the desktop: the system's keychain, through craft-suite-account's `Keychain` as the AI token
     is, so a restart stays signed in;
-  - the browser: the tab's **session storage**, not IndexedDB. Any script of the page could read
-    either; session storage keeps the sign-in through a reload and GitLab's round trip but forgets
-    it when the tab closes, so a refresh token that works for months does not stay in the browser's
-    profile. Signing in again is a redirect and nothing more while the user is signed in to GitLab.
+  - the browser: its **local storage** for the site, so every tab sees the sign-in and it lasts
+    across restarts and days, while Settings › Accounts › **Remember sign-ins in this browser** is
+    on (the default; `accounts.remember_in_browser {on}`, kept in the preferences); the tab's
+    **session storage** when it is off, for a shared computer (a reload and GitLab's round trip keep
+    it, closing the tab forgets it). The trade-off: a refresh token in local storage, which works
+    for months, stays in the browser's profile after the tab is closed, and any script of the page
+    could read it (as it could the session storage's); the page runs only its own code. The rules
+    (`texcraft_engine::browser_secrets`): reading looks in local storage, then in the tab's (a
+    sign-in found there is moved to local storage while remembering); keeping writes where the
+    setting says; forgetting removes from both; turning the setting off moves what local storage
+    holds into this tab (other tabs and later visits forget it), turning it on moves this tab's into
+    local storage; the setting itself is a marker in local storage (`texcraft.remember`), so every
+    tab follows it. The sign-in waiting for GitLab's round trip (`texcraft.forge.pending`) always
+    stays in its tab.
+  - **across tabs**: each tab listens for the browser's `storage` event on these entries and reads
+    the sign-ins and tokens again (`accounts.reload`), so a sign-in, a renewal, a Disconnect or the
+    setting changed in one tab shows in the others without a reload. GitLab takes each refresh
+    token once: before renewing, an operation reads the sign-in from the store again (another tab
+    may have renewed it, and its access token is then used as it is), and after a refused renewal
+    it reads it once more and, if another tab's renewal landed meanwhile, tries once with that.
   - the command line and agents: the session only.
   Never in the preferences, the library, a log or a command's result (tokens do not print; tests
   look for them in every result).

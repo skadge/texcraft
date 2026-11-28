@@ -458,7 +458,7 @@ fn instance(p: &Value, service: Service) -> Result<String> {
 /// The key for a write: a sign-in that can only read is refused, with the way out.
 fn write_key(s: &mut Session, p: &Value, instance: &str, service: Service) -> Result<Key> {
     let key = key_at(s, p, instance, service)?;
-    if let Key::Grant(grant) = &key
+    if let Key::Grant(grant, _) = &key
         && !grant.can_commit()
     {
         s.forge_problem = Some(super::forge::Problem::NeedsWrite);

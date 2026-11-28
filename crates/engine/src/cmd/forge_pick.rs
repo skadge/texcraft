@@ -64,7 +64,7 @@ impl Who {
     fn of(key: &Key) -> Self {
         match key {
             Key::Token(t) => Who::Token(t.clone()),
-            Key::Grant(g) => Who::User(g.user.as_ref().map(|u| u.username.clone()).unwrap_or_default()),
+            Key::Grant(g, _) => Who::User(g.user.as_ref().map(|u| u.username.clone()).unwrap_or_default()),
         }
     }
 }

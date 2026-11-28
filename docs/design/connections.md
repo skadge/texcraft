@@ -20,8 +20,9 @@ kinds, from what already exists (no new store):
 | **Forge** | gitlab.com, github.com, each self-managed GitLab or GitHub Enterprise Server | a sign-in (OAuth grant), or a personal access token | the grant: the store's `texcraft.forge.<host>`; the token: `texcraft.git.<host>`; the server itself (address, application id): the preferences (`forge_servers`) or the organisation's `texcraft-forges.toml` |
 | **Git server** | Overleaf's git server, any other HTTPS git host | a token (git's password) | `texcraft.git.<host>`; the host, not the token, in the preferences (`git_hosts`) |
 
-The store is the system's keychain on the desktop, the tab's session storage in the browser, or
-the session's memory when neither works. A token typed for one operation and not remembered is a
+The store is the system's keychain on the desktop; in the browser its local storage for the site
+(every tab, later visits) while Remember sign-ins in this browser is on, the default, or the tab's
+session storage when it is off (docs/forges.md); or the session's memory when neither works. A token typed for one operation and not remembered is a
 connection for this session only.
 
 A forge row exists when it is signed in, has a token, is being signed in to, or is a server added;
@@ -52,7 +53,8 @@ Settings › Accounts keeps its name (the operator's choice: "accounts" is what 
   then the state). A second line: the account's initial in a circle (the forges' APIs give an
   avatar URL, but fetching it would be one more request per Settings open; the initial is enough)
   and "Ada Lovelace (@ada)", then "· Opens and commits" or "· Read only until the first commit",
-  then where it is kept ("Kept in the system's keychain", "Kept in this tab", "For this session").
+  then where it is kept ("In the keychain", "In this browser", "In this tab", "This session only";
+  `kept`: `keychain`, `browser`, `tab`, `session`).
   Then the row's actions, right-aligned, as buttons whose names end with the row's host:
   - **Set as Default** (forges that are not the default), **Sign In**, **Sign In Again** (expired,
     or read only: "Allow Commits"), **Replace Token…** (a token row), **Disconnect…**,
@@ -76,7 +78,15 @@ GitHub, GitLab Server, GitHub Enterprise Server, Overleaf, Other Git Server. The
 
 ## Browser
 
-The same list and dialog. Sign-ins are kept in the tab's session storage, and the rows say so.
+The same list and dialog. Under the list, the setting **Remember sign-ins in this browser** (on by
+default; `accounts.remember_in_browser {on}`, kept in the preferences): on, sign-ins and tokens are
+kept in the browser's storage for the site, for every tab and later visits, and the rows say "In
+this browser"; off (a shared computer), in this tab only until it is closed ("In this tab"), and
+turning it off makes the other tabs and later visits forget them. Its help says so, and that only
+the site's own page can read them. The sign-in part of the dialogs (Sign In with GitLab) shows the
+same setting as a checkbox beside the button, and a token's "Remember in this browser" (or "in
+this tab") follows it. A change made in another tab (a sign-in, a renewal, Disconnect, the
+setting) shows without a reload (`accounts.reload`, on the browser's `storage` event).
 GitHub signs in with a token only (its device flow does not answer web pages), and GitHub
 Enterprise, Overleaf and other git servers are shown in Add a Connection… as unavailable, "Desktop
 app only", with Import's reason ("git servers do not answer web pages"): focusable, and their page

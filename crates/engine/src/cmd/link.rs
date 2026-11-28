@@ -229,7 +229,7 @@ fn read_branch(s: &mut Session, p: &Value, add: Option<texcraft_forge::Choices>)
     let address = forge_address(p)?;
     let key = super::forge::key_at(s, p, &address.instance, address.service)?;
     if add.is_some()
-        && let Key::Grant(grant) = &key
+        && let Key::Grant(grant, _) = &key
         && !grant.can_commit()
     {
         s.forge_problem = Some(super::forge::Problem::NeedsWrite);

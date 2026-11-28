@@ -246,10 +246,11 @@ pub(crate) struct TokenForm {
 pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
     let t = app.tokens;
     let browser = app.session.library().is_some();
+    let kept = app.session.git_token_kept();
     let mut outcome = Outcome::Open;
     let modal = crate::sheet::show(ctx, &t, "texcraft-git-token", 440.0, crate::sheet::Leave::Close, |ui| {
         if let Some(Dialog::GitToken(form)) = app.view.dialog.as_mut() {
-            outcome = token_form(ui, &t, form, browser);
+            outcome = token_form(ui, &t, form, browser, kept);
         }
     });
     if modal.close || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -275,7 +276,7 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
     }
 }
 
-fn token_form(ui: &mut egui::Ui, t: &Tokens, form: &mut TokenForm, browser: bool) -> Outcome {
+fn token_form(ui: &mut egui::Ui, t: &Tokens, form: &mut TokenForm, browser: bool, kept: &str) -> Outcome {
     let host = texcraft_engine::forge::servers::host_of(&form.instance).to_owned();
     let service = form.hosting.map_or(host.clone(), |h| h.name().to_owned());
     title(ui, t, &tl!("A Token for {service}").replace("{service}", &service));
@@ -295,12 +296,20 @@ fn token_form(ui: &mut egui::Ui, t: &Tokens, form: &mut TokenForm, browser: bool
         field.request_focus();
     }
     ui.add_space(t.unit * 2.0);
-    ui.checkbox(&mut form.remember, if browser { tl!("Remember in this tab") } else { tl!("Remember on this computer") });
+    let label = match (browser, kept) {
+        (true, "browser") => tl!("Remember in this browser"),
+        (true, _) => tl!("Remember in this tab"),
+        _ => tl!("Remember on this computer"),
+    };
+    ui.checkbox(&mut form.remember, label);
     let kept = match (form.remember, browser) {
         (true, false) => {
             tl!(
                 "Kept in the system's keychain, so that Sync, push and pull ask no more. Settings › Accounts lists it, with Replace… and Disconnect…."
             )
+        }
+        (true, true) if kept == "browser" => {
+            tl!("Kept in this browser's storage for this site, for every tab. Settings › Accounts lists it, with Replace… and Disconnect….")
         }
         (true, true) => {
             tl!("Kept in this tab's session storage until the tab is closed. Settings › Accounts lists it, with Replace… and Disconnect….")

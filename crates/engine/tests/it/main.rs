@@ -1,6 +1,7 @@
 //! Integration tests for texcraft-engine.
 
 mod ai;
+mod browser_sign_ins;
 mod build_options;
 mod clone;
 mod command_sweep;

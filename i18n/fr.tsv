@@ -2792,3 +2792,11 @@ unit	{n} MB	{n} Mo
 @id	git.remove_remote	Délier du dépôt…
 @id	git.check_remote	Ce que fait la liaison à un dépôt
 @msg	TeXCraft is also a desktop app: it works with Overleaf and other git servers, with folders on your computer, and offline.	TeXCraft existe aussi en application de bureau : elle fonctionne avec Overleaf et d’autres serveurs git, avec les dossiers de votre ordinateur, et hors ligne.
+	Remember sign-ins in this browser	Mémoriser les connexions dans ce navigateur
+	Sign-ins and tokens are kept in this browser's storage for this site, for every tab and later visits; only the site's own page can read them. Turn this off on a shared computer: they then stay in this tab until it is closed, and other tabs and later visits forget them.	Les connexions et les jetons sont conservés dans le stockage de ce navigateur pour ce site, pour tous les onglets et les visites suivantes ; seule la page du site elle-même peut les lire. Désactivez ceci sur un ordinateur partagé : ils restent alors dans cet onglet jusqu'à sa fermeture, et les autres onglets et les visites suivantes les oublient.
+	Sign-ins are kept in this browser, for every tab and later visits.	Les connexions sont conservées dans ce navigateur, pour tous les onglets et les visites suivantes.
+	Sign-ins are kept in this tab only: other tabs and later visits forget them.	Les connexions sont conservées dans cet onglet seulement : les autres onglets et les visites suivantes les oublient.
+	Checked with the service, then kept in this browser's storage for this site, for every tab.	Vérifié auprès du service, puis conservé dans le stockage de ce navigateur pour ce site, pour tous les onglets.
+	Kept in this browser's storage for this site, for every tab.	Conservé dans le stockage de ce navigateur pour ce site, pour tous les onglets.
+	Remember in this browser	Mémoriser dans ce navigateur
+	Kept in this browser's storage for this site, for every tab. Settings › Accounts lists it, with Replace… and Disconnect….	Conservé dans le stockage de ce navigateur pour ce site, pour tous les onglets. Réglages › Comptes le liste, avec Remplacer… et Déconnecter….
