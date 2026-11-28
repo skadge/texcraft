@@ -526,12 +526,30 @@ fn tree_year(text: &str) -> Option<u16> {
 }
 
 /// Fetches `url` from the package server within `timeout_ms`: its body, its status (with
-/// `Retry-After`, when the server lets the browser show it) or why there is no answer.
+/// `Retry-After`, when the server lets the browser show it) or why there is no answer. A fetch
+/// that fails without an answer is made once more: Chrome fails the first `fetch` a worker makes
+/// after it ran for seconds without returning to its event loop, before sending anything
+/// (Chrome 129, observed; a run of the module is such a stretch), and the package would then be
+/// taken for unreachable for minutes.
 async fn fetch_reply(url: &str, timeout_ms: u32) -> Reply {
+    match fetch_reply_once(url, timeout_ms).await {
+        Reply::Failed(why) if !why.starts_with(TIMED_OUT) => {
+            log::info!("fetching {url} again: {why}");
+            fetch_reply_once(url, timeout_ms).await
+        }
+        reply => reply,
+    }
+}
+
+/// How [`fetch_reply_once`] says a fetch timed out (not made again).
+const TIMED_OUT: &str = "no answer within";
+
+/// One fetch of [`fetch_reply`].
+async fn fetch_reply_once(url: &str, timeout_ms: u32) -> Reply {
     let init = RequestInit::new();
     init.set_signal(Some(&AbortSignal::timeout_with_u32(timeout_ms)));
     let why = |e: JsValue| match e.dyn_ref::<js_sys::Error>() {
-        Some(e) if e.name() == "TimeoutError" || e.name() == "AbortError" => format!("no answer within {} s", timeout_ms / 1000),
+        Some(e) if e.name() == "TimeoutError" || e.name() == "AbortError" => format!("{TIMED_OUT} {} s", timeout_ms / 1000),
         // A network error, or a server that does not let this site read it (CORS): the browser
         // does not say which.
         Some(e) => String::from(e.message()),
@@ -623,7 +641,16 @@ impl Engine {
             // The requests are all made before any is awaited, so they download together.
             let requests: Vec<js_sys::Promise> = batch.iter().map(|p| scope().fetch_with_str(&self.web.fetched.borrow().url(p))).collect();
             for (p, request) in batch.iter().zip(requests) {
-                let bytes = response_bytes(p, request).await?;
+                let bytes = match response_bytes(p, request).await {
+                    Ok(bytes) => bytes,
+                    // Once more: Chrome fails the first fetch after a long run unsent (see
+                    // `fetch_reply`).
+                    Err(e) => {
+                        log::info!("fetching {p} again: {e}");
+                        let url = self.web.fetched.borrow().url(p);
+                        fetch_bytes(&url).await?
+                    }
+                };
                 self.kept.keep_file(p, &bytes).await;
                 self.web.fetched.borrow_mut().urls.insert(p.clone(), Rc::new(bytes));
             }
