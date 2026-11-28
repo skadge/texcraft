@@ -259,7 +259,7 @@ flatpak:
     - flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo flatpak-repo "out/TeXCraft-$VERSION-x86_64.flatpak" "$FLATPAK_ID"
     - |
       if [ -d /ci-cache ]; then
-        installed="$(flatpak --user list --columns=ref,commit | sha256sum)"
+        installed="$(flatpak --user list --columns=application,branch,active | sha256sum)"
         if [ "$installed" != "$(cat /ci-cache/flatpak-user.list 2>/dev/null)" ]; then
           tar -C "$HOME/.local/share/flatpak" -cf /ci-cache/flatpak-user.tar.new . && mv /ci-cache/flatpak-user.tar.new /ci-cache/flatpak-user.tar
           echo "$installed" > /ci-cache/flatpak-user.list
