@@ -214,3 +214,39 @@ fn the_diff_of_a_small_change_is_small() {
     assert_eq!(b.text(), new);
     assert!(Transaction::diff(new, new).is_empty());
 }
+
+#[test]
+fn an_edit_joined_to_the_one_before_is_undone_with_it_and_typing_goes_on_in_it() {
+    let mut b = Buffer::new("one two");
+    b.edit(Transaction::delete(0, 4), &Selection::single(0, 4), &Selection::point(0), EditKind::Other).unwrap();
+    b.seal();
+    b.join_next(true);
+    let (mut caret, mut t) = (0, 0.0);
+    type_text(&mut b, &mut caret, "six ", &mut t, 0.1).unwrap();
+    assert_ne!(b.text(), "one two");
+    b.undo();
+    assert_eq!(b.text(), "one two", "the deletion and the word typed after it are one step");
+
+    // Called off, the next edit is a step of its own.
+    let mut b = Buffer::new("one two");
+    b.edit(Transaction::delete(0, 4), &Selection::single(0, 4), &Selection::point(0), EditKind::Other).unwrap();
+    b.join_next(true);
+    b.join_next(false);
+    let (mut caret, mut t) = (0, 0.0);
+    type_text(&mut b, &mut caret, "x", &mut t, 0.1).unwrap();
+    b.undo();
+    assert_eq!(b.text(), "two");
+}
+
+#[test]
+fn typing_that_goes_on_from_a_replaced_selection_is_undone_with_it() {
+    let mut b = Buffer::new("one two");
+    b.edit(Transaction::replace(0, 3, "s"), &Selection::single(0, 3), &Selection::point(1), EditKind::Other).unwrap();
+    b.seal();
+    b.continue_typing(0.0);
+    let (mut caret, mut t) = (1, 0.1);
+    type_text(&mut b, &mut caret, "ix", &mut t, 0.1).unwrap();
+    assert_eq!(b.text(), "six two");
+    b.undo();
+    assert_eq!(b.text(), "one two", "the letters typed after the first were undone apart from it");
+}

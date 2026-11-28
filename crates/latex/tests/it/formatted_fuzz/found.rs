@@ -616,3 +616,32 @@ fn a_no_break_space_typed_in_a_waiting_style_is_not_styled() {
     assert!(!e.text.contains("textbf"), "{:?}", e.text);
     assert!(!e.pending.is_empty(), "the style no longer waits for a word");
 }
+
+#[test]
+fn enter_at_the_start_of_a_title_pages_sized_bold_line_leaves_no_empty_bold() {
+    let text = "\\begin{document}\\begin{titlepage}\\begin{center}{\\Large \\textbf{Title}}\\end{center}\\end{titlepage}\\end{document}";
+    let e = after(text, &[Op::Enter]);
+    assert!(!e.text.contains("\\textbf{}"), "an empty bold was left: {:?}", e.text);
+    assert!(e.text.contains("{\\Large \\textbf{Title}}"), "the line was split: {:?}", e.text);
+    assert_eq!(before_caret(&e), "", "the caret did not stay at the line's start");
+}
+
+#[test]
+fn a_line_break_after_a_comment_in_a_group_closes_the_group_after_the_comment() {
+    // The closing brace went on the comment's line, and the comment took it.
+    let text = "\\begin{titlepage}{\\Large First%\nSecond}\\end{titlepage}";
+    let at = text.find("Second").unwrap_or_default();
+    let Some(e) = edit::enter(text, at) else { panic!("no line break at {at}") };
+    let out = edit::apply(text, &e.changes);
+    assert!(super::checks::balanced(&out), "{out:?}");
+}
+
+#[test]
+fn text_typed_at_the_start_of_a_paragraph_after_a_comment_line_joins_its_first_word() {
+    // Typed before the comment line (a file that starts with an empty line), it was a word of its
+    // own: the line's end was a space.
+    let mut e = after("\n% The introduction\nText starts here.\n", &[]);
+    typed(&mut e, "New");
+    assert!(e.text.contains("\nNewText"), "{:?}", e.text);
+    assert_eq!(before_caret(&e), "New");
+}

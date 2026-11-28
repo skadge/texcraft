@@ -164,3 +164,49 @@ fn a_formula_opens_with_its_preview_and_a_new_one_is_typed_with_it() {
     h.run();
     assert!(text(&mut h).contains("\\(x^2\\)"), "{}", text(&mut h));
 }
+
+#[test]
+fn a_click_on_a_formula_in_a_paragraph_selects_it_and_a_double_click_opens_its_editor() {
+    // A click gave the keyboard to the formula's editor: a click meant to place the caret took it
+    // out of the text.
+    let original = "$a+b$ and more.\n";
+    let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
+    assert!(s.execute("file.write", &json!({"path": "main.tex", "text": original})).is_ok());
+    assert!(s.execute("file.open", &json!({"path": "main.tex"})).is_ok());
+    let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
+    // Short frames, so the two clicks of a double-click come quickly enough to count together.
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 800.0)).with_step_dt(0.02).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
+    h.run();
+    h.get_by_label("Formatted").click();
+    h.run();
+    let view = "main.tex formatted";
+    h.get_by_label(view).focus();
+    h.run();
+    let (_, line, _) = crate::support::view_lines(&h, view).into_iter().next().expect("a line of the view");
+    let at = egui::pos2(line.left() + 4.0, line.center().y);
+    let click = |h: &mut Harness<'_, App>, times: usize| {
+        // Long enough after any click before not to make one with it.
+        h.run_steps(40);
+        h.event(egui::Event::PointerMoved(at));
+        h.step();
+        for _ in 0..times {
+            for pressed in [true, false] {
+                h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+                h.step();
+            }
+        }
+        h.run();
+        h.run();
+    };
+    click(&mut h, 1);
+    assert!(focused(&h, view), "a click on the formula took the keyboard from the text");
+    // Selected whole: one Backspace deletes it.
+    key(&mut h, egui::Modifiers::NONE, egui::Key::Backspace);
+    let out = text(&mut h);
+    assert!(!out.contains("a+b") && out.contains("and more."), "{out:?}");
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::Z);
+    assert_eq!(text(&mut h), original);
+    click(&mut h, 2);
+    assert!(focused(&h, "Formula (LaTeX)"), "a double-click on the formula did not open its editor");
+    assert_eq!(text(&mut h), original, "opening the editor changed the text");
+}

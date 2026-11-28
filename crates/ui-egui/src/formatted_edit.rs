@@ -34,6 +34,9 @@ pub(crate) struct Editing {
     composer: Composer,
     /// Edits after one that changed the text in the same frame: made on the next frame's view.
     pending: Vec<Edit>,
+    /// The first of `pending` is the rest of the edit before it (text typed over whole list
+    /// items, after the items went): one undo takes both back.
+    joins: bool,
     /// A toolbar or menu command for the next frame's view, with its parameters.
     commands: Vec<(String, serde_json::Value)>,
     /// The caret's line, to tell lines apart that meet at one source offset.
@@ -96,6 +99,16 @@ pub(crate) fn pending_styles(app: &mut App) -> &[PendingStyle] {
         e.pending_at = None;
     }
     &app.editor.formatted.editing.pending_style
+}
+
+/// Whether the pointer pressed on a line of the view is still selecting (until it is released).
+pub(crate) fn selecting(app: &App) -> bool {
+    app.editor.formatted.editing.dragging
+}
+
+/// The line of the view the caret was put in, when it was put in one (not by an edit).
+pub(crate) fn caret_line(app: &App) -> Option<usize> {
+    app.editor.formatted.editing.caret_line
 }
 
 /// The caret's source byte.
@@ -288,12 +301,18 @@ pub(crate) fn finish(
         }
         run_command(app, &ctx, &f, &c, &params);
     }
-    for edit in edits {
+    let joins = std::mem::take(&mut app.editor.formatted.editing.joins);
+    for (i, edit) in edits.into_iter().enumerate() {
         if app.editor.source.doc.buffer.version() != version {
             app.editor.formatted.editing.pending.push(edit);
             continue;
         }
+        let joined = joins && i == 0;
+        app.editor.source.doc.buffer.join_next(joined);
         input(app, &ctx, &f, edit);
+        if joined {
+            app.editor.source.doc.buffer.join_next(false);
+        }
     }
     if app.editor.source.doc.buffer.version() != version {
         // The lines are of the text before: the caret shows on the view made again next frame.
@@ -329,6 +348,11 @@ fn selection(app: &App, f: &Frame<'_>) -> Option<(Pos, Pos)> {
 fn set_selection(app: &mut App, f: &Frame<'_>, a: Pos, h: Pos) {
     let (Some(ab), Some(hb)) = (f.doc.source(a), f.doc.source(h)) else { return };
     set_bytes(app, (ab, hb), Some(h.line));
+}
+
+/// Selects bytes `a` to `h` of the text, the head in line `line` of the view.
+pub(crate) fn select(app: &mut App, (a, h): (usize, usize), line: usize) {
+    set_bytes(app, (a, h), Some(line));
 }
 
 fn set_bytes(app: &mut App, (a, h): (usize, usize), line: Option<usize>) {
@@ -478,8 +502,7 @@ fn input(app: &mut App, ctx: &egui::Context, f: &Frame<'_>, edit: Edit) {
         Edit::LineBreak { .. } => enter(app, f, edit),
         Edit::Key { key, modifiers, .. } => key_press(app, ctx, f, key, modifiers, edit),
         Edit::Paste(s) if takes_structure(app, f) => {
-            replace(app, f, "", EditKind::Other);
-            app.editor.formatted.editing.pending.insert(0, Edit::Paste(s));
+            delete_then(app, f, Edit::Paste(s));
         }
         Edit::Paste(s) => {
             // As it reads where it goes.
@@ -729,8 +752,7 @@ fn type_text(app: &mut App, f: &Frame<'_>, s: &str) {
     }
     if takes_structure(app, f) {
         // Whole list items go first; the text comes on the view without them.
-        replace(app, f, "", EditKind::Other);
-        app.editor.formatted.editing.pending.insert(0, Edit::Insert(s.to_owned()));
+        delete_then(app, f, Edit::Insert(s.to_owned()));
         return;
     }
     let kind = if a == h { EditKind::Typing { at: f.now } } else { EditKind::Other };
@@ -755,7 +777,12 @@ fn type_text(app: &mut App, f: &Frame<'_>, s: &str) {
     let source = edit::joined(f.text, insertion(app, f), &edit::escape(s));
     let version = app.editor.source.doc.buffer.version();
     replace(app, f, &source, kind);
-    if a == h && s.ends_with('.') && app.editor.source.doc.buffer.version() != version {
+    let changed = app.editor.source.doc.buffer.version() != version;
+    if a != h && changed {
+        // What is typed next goes on from the text that replaced the selection: one undo.
+        app.editor.source.doc.buffer.continue_typing(f.now);
+    }
+    if a == h && s.ends_with('.') && changed {
         typographic(app, at + source.len());
     }
 }
@@ -776,6 +803,16 @@ fn typographic(app: &mut App, at: usize) {
         d.selection = Selection::single(caret, caret);
         d.buffer.seal();
     }
+}
+
+/// Deletes the selection, then makes `edit` on the next frame's view (what replaces the
+/// selection goes where the deletion leaves the caret): one undo takes both back.
+fn delete_then(app: &mut App, f: &Frame<'_>, edit: Edit) {
+    let version = app.editor.source.doc.buffer.version();
+    replace(app, f, "", EditKind::Other);
+    let e = &mut app.editor.formatted.editing;
+    e.pending.insert(0, edit);
+    e.joins = app.editor.source.doc.buffer.version() != version;
 }
 
 /// Whether deleting the selection removes more than the source of what it shows: list items it
@@ -857,8 +894,7 @@ fn enter(app: &mut App, f: &Frame<'_>, edit: Edit) {
     }
     if a != h {
         // The selection goes first; the line break comes on the view without it.
-        replace(app, f, "", EditKind::Other);
-        app.editor.formatted.editing.pending.insert(0, edit);
+        delete_then(app, f, edit);
         return;
     }
     if !editable(app) {
@@ -1208,7 +1244,9 @@ fn style(app: &mut App, f: &Frame<'_>, name: &str) {
         commit(app, f, &[Change { range: r.clone(), text: String::new() }], (r.start, r.start), EditKind::Other);
         return;
     }
-    // Inside a word, the word; else the style waits for the text typed next.
+    // Inside a word, the word (the caret staying where it is); else the style waits for the text
+    // typed next.
+    let caret = (a == h).then(|| caret_byte(app));
     let (a, h) = if a == h { word_inside(f, h).unwrap_or((a, h)) } else { (a.min(h), a.max(h)) };
     if a == h {
         let here = crate::formatted_bar::here(app);
@@ -1241,10 +1279,13 @@ fn style(app: &mut App, f: &Frame<'_>, name: &str) {
         return;
     }
     let (Some(start), Some(end)) = (pieces.first().map(|r| r.start), pieces.last().map(|r| r.end)) else { return };
-    // The selection keeps the same text: inside the commands added, without those removed.
-    let start = edit::map_offset(&changes, start);
-    let end = map_before(&changes, end);
-    commit(app, f, &changes, (start, end), EditKind::Other);
+    // The selection keeps the same text: inside the commands added, without those removed. A
+    // caret in the word stays a caret, so that what is typed next does not replace the word.
+    let after = match caret {
+        Some(c) => (edit::map_offset(&changes, c), edit::map_offset(&changes, c)),
+        None => (edit::map_offset(&changes, start), map_before(&changes, end)),
+    };
+    commit(app, f, &changes, after, EditKind::Other);
 }
 
 /// Like [`edit::map_offset`], but before what is inserted at `at`.

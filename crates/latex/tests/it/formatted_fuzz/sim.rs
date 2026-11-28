@@ -556,6 +556,7 @@ impl Editor {
         {
             return self.commit(&[Change { range: r.clone(), text: String::new() }], (r.start, r.start), done);
         }
+        let caret = (a == h).then_some(self.head);
         let (a, h) = if a == h { word_inside(v, h).unwrap_or((a, h)) } else { (a.min(h), a.max(h)) };
         if a == h {
             // Nothing to wrap: the style waits for the text typed next.
@@ -586,9 +587,12 @@ impl Editor {
             return Ok(());
         }
         let (Some(start), Some(end)) = (pieces.first().map(|r| r.start), pieces.last().map(|r| r.end)) else { return Ok(()) };
-        let start = edit::map_offset(&changes, start);
-        let end = map_before(&changes, end);
-        self.commit(&changes, (start, end), done)
+        // A caret in the word stays a caret where it was.
+        let after = match caret {
+            Some(c) => (edit::map_offset(&changes, c), edit::map_offset(&changes, c)),
+            None => (edit::map_offset(&changes, start), map_before(&changes, end)),
+        };
+        self.commit(&changes, after, done)
     }
 
     fn insert_atom(&mut self, doc: &Doc, (a, h): (Pos, Pos), source: &str, done: &mut Done) -> Result<(), Broken> {

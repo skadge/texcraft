@@ -1,14 +1,15 @@
 //! A writer's session in the formatted view, end to end, on each template (docs/testing.md,
-//! "Testing the formatted view"): a paragraph with a bold word and a citation, a list nested once,
-//! a heading, a figure, a table with two cells filled, an equation, a footnote, undo and redo, and
-//! Find and Replace, in a window of a laptop's size with the build's fonts. After each step the
-//! keyboard is in the text, the caret in a line of the view inside the window, a typed word shows
-//! before it, and the source is still sound: nothing left unclosed, and no empty style, item or
-//! heading left where the caret is not.
+//! "Testing the formatted view"): a paragraph with a bold word and a citation picked from the
+//! bibliography, a list nested once, a heading, a figure with its caption and label and a
+//! cross-reference to it, a table with two cells filled, an equation, a footnote, undo and redo,
+//! Find and Replace, then undo back to the template and redo to the end, in a window of a
+//! laptop's size with the build's fonts. After each step the keyboard is in the text, the caret in
+//! a line of the view inside the window, a typed word shows before it, and the source is still
+//! sound: nothing left unclosed, and no empty style, item or heading left where the caret is not.
 
 use egui::accesskit::{Role, Toggled};
 use egui_kittest::Harness;
-use egui_kittest::kittest::{NodeT, Queryable, by};
+use egui_kittest::kittest::{NodeT, Queryable};
 use serde_json::json;
 use texcraft_compile::Unavailable;
 use texcraft_engine::Session;
@@ -71,9 +72,15 @@ fn text(h: &mut Harness<'_, App>) -> String {
     path.and_then(|p| h.state_mut().session().project().text(&p).ok().map(str::to_owned)).unwrap_or_default()
 }
 
+/// A bibliography of the session's own, beside the template's files: the entry the writer picks.
+const BIB: (&str, &str) = (
+    "session.bib",
+    "@book{kilnworth19,\n  author = {Ada Kilnworth},\n  title = {Firing at Home},\n  publisher = {Example Press},\n  year = {2019}\n}\n",
+);
+
 fn open(t: &Template) -> Harness<'static, App> {
     let mut s = Session::with_backend(Box::new(Unavailable("tests".into())));
-    for (i, (path, body)) in t.files.iter().enumerate() {
+    for (i, (path, body)) in t.files.iter().chain(std::iter::once(&BIB)).enumerate() {
         if i > 0 {
             let _ = s.execute("file.new", &json!({"path": path}));
         }
@@ -94,28 +101,12 @@ fn open(t: &Template) -> Harness<'static, App> {
 
 /// The view's lines on screen: their node, rect and text.
 fn lines(h: &Harness<'_, App>) -> Vec<(egui::accesskit::NodeId, egui::Rect, String)> {
-    h.query_all(by().role(Role::TextRun))
-        .filter(|n| {
-            // In the view (through the paragraph or the cell holding it).
-            let mut up = n.accesskit_node().parent();
-            while let Some(p) = up {
-                if p.label().is_some_and(|l| l == VIEW) {
-                    return true;
-                }
-                up = p.parent();
-            }
-            false
-        })
-        .map(|n| (n.accesskit_node().locate().0, n.rect(), n.accesskit_node().value().unwrap_or_default()))
-        .collect()
+    crate::support::view_lines(h, VIEW)
 }
 
 /// The caret's line (rect and text) and where in it.
 fn caret(h: &Harness<'_, App>) -> Option<(egui::Rect, String, usize)> {
-    let view = h.query_by_label(VIEW)?;
-    let sel = view.accesskit_node().data().text_selection()?;
-    let (_, rect, value) = lines(h).into_iter().find(|(id, ..)| *id == sel.focus.node)?;
-    Some((rect, value, sel.focus.character_index))
+    crate::support::view_caret(h, VIEW)
 }
 
 fn settle(h: &mut Harness<'_, App>) {
@@ -317,11 +308,13 @@ fn session(t: &Template) -> Result<(), String> {
         let at = source.find("Kilns").unwrap_or(0);
         return Err(format!("{n}: the text typed after Bold was pressed off is still bold: {:?}", source.get(at..(at + 80).min(source.len()))));
     }
-    command(&mut h, "edit.cite", json!({"key": "knuth84"}));
+    // A citation picked from the bibliography by its author's name.
+    command(&mut h, "edit.cite", json!({}));
+    pick(&mut h, "Type part of a key, an author or a title", "Kilnworth")?;
     step(&mut h, "a citation", None)?;
     type_text(&mut h, ".");
     step(&mut h, "a full stop", None)?;
-    if !text(&mut h).contains("\\cite{knuth84}.") {
+    if !text(&mut h).contains("\\cite{kilnworth19}.") {
         return Err(format!("{n}: the citation is not where it was inserted: {:?}", text(&mut h)));
     }
 
@@ -367,6 +360,23 @@ fn session(t: &Template) -> Result<(), String> {
     if !text(&mut h).contains("\\caption{A kiln") {
         return Err(format!("{n}: the caption typed is not the figure's: {:?}", text(&mut h)));
     }
+    // Its label, from the image's menu.
+    label_figure(&mut h, "fig:firing")?;
+    step(&mut h, "the figure's label", None)?;
+    if !text(&mut h).contains("\\label{fig:firing}") {
+        return Err(format!("{n}: the figure has no label: {:?}", text(&mut h)));
+    }
+    // A cross-reference to it, picked by its label, in the paragraph before it.
+    click_after(&mut h, "Slowly.")?;
+    type_text(&mut h, " See ");
+    command(&mut h, "edit.ref", json!({}));
+    pick(&mut h, "Type part of a label or of what it labels", "fig:firing")?;
+    step(&mut h, "a cross-reference", None)?;
+    if !text(&mut h).contains("See \\ref{fig:firing}") && !text(&mut h).contains("See \\cref{fig:firing}") {
+        return Err(format!("{n}: the cross-reference is not where it was inserted: {:?}", text(&mut h)));
+    }
+    type_text(&mut h, " Then");
+    step(&mut h, "typing after the cross-reference", Some("Then"))?;
 
     // A table, two cells filled.
     command(&mut h, "edit.table", json!({}));
@@ -422,7 +432,81 @@ fn session(t: &Template) -> Result<(), String> {
     key(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
     h.get_by_label(VIEW).focus();
     settle(&mut h);
-    step(&mut h, "Find and Replace", None)
+    step(&mut h, "Find and Replace", None)?;
+
+    // Undo goes back through every text the session made, to the template as it was; redo
+    // comes forward through them to the last.
+    let last = text(&mut h);
+    let mut seen = vec![last.clone()];
+    for _ in 0..400 {
+        if text(&mut h) == original {
+            break;
+        }
+        key(&mut h, egui::Modifiers::COMMAND, egui::Key::Z);
+        seen.push(text(&mut h));
+        if seen[seen.len() - 1] == seen[seen.len() - 2] {
+            return Err(format!("{n}: undo stopped before the template's text: {:?}", text(&mut h)));
+        }
+    }
+    if text(&mut h) != original {
+        return Err(format!("{n}: undo did not reach the template's text: {:?}", text(&mut h)));
+    }
+    step(&mut h, "undo back to the start", None)?;
+    for want in seen.iter().rev().skip(1) {
+        key(&mut h, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::Z);
+        if text(&mut h) != *want {
+            return Err(format!("{n}: redo gave {:?}, undo had gone through {want:?}", text(&mut h)));
+        }
+    }
+    step(&mut h, "redo to the end", None)
+}
+
+/// In the picker the command opened (its field labelled `field`), `query` typed and Enter.
+fn pick(h: &mut Harness<'_, App>, field: &str, query: &str) -> Result<(), String> {
+    let Some(f) = h.query_by_label(field) else { return Err(format!("no picker with the field {field:?}")) };
+    f.type_text(query);
+    settle(h);
+    key(h, egui::Modifiers::NONE, egui::Key::Enter);
+    if h.query_by_label(field).is_some() {
+        return Err(format!("the picker stayed open after Enter on {query:?}"));
+    }
+    Ok(())
+}
+
+/// The figure's label set from its image's menu (right-click, Label…).
+fn label_figure(h: &mut Harness<'_, App>, label: &str) -> Result<(), String> {
+    let images: Vec<egui::Rect> = h
+        .query_all(egui_kittest::kittest::by().role(Role::Image))
+        .filter(|n| n.accesskit_node().label().is_some_and(|l| l.contains("kiln")))
+        .map(|n| n.rect())
+        .collect();
+    let Some(rect) = images.into_iter().find(|r| r.max.y > 0.0 && r.min.y < SIZE.y) else {
+        return Err("the figure's image is not on screen".to_owned());
+    };
+    let at = rect.center();
+    h.event(egui::Event::PointerMoved(at));
+    h.step();
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed, modifiers: egui::Modifiers::NONE });
+        h.step();
+    }
+    settle(h);
+    let Some(item) = h.query_by_label("Label…") else { return Err("the image's menu has no Label…".to_owned()) };
+    item.click();
+    settle(h);
+    let field = "The label references use, such as fig:plot";
+    if h.query_by_label(field).is_none() {
+        return Err("Label… asked for nothing".to_owned());
+    }
+    // In place of the label it has.
+    key(h, egui::Modifiers::COMMAND, egui::Key::A);
+    h.get_by_label(field).type_text(label);
+    settle(h);
+    h.get_by_label("Apply").click();
+    settle(h);
+    h.get_by_label(VIEW).focus();
+    settle(h);
+    Ok(())
 }
 
 /// The templates a run takes: `TEXCRAFT_SESSION_TEMPLATES` (`all`, or names with commas between

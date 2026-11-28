@@ -31,14 +31,19 @@ look for what goes wrong:
 - **The window** (`crates/ui-egui/tests/it/formatted_fuzz.rs`): the real view with the build's
   fonts, driven by random keys, typed text, words typed letter by letter, text composed with an
   input method (marked text, then committed), clicks, drags, double and triple clicks, toolbar
-  buttons, undo and redo. After every action: no panic, the frames settle, the keyboard stays in
-  the text, the caret is in a line of the view inside the window, a typed or composed word shows
-  before the caret without its line jumping, one undo takes a word typed letter by letter back
-  whole (not its last letter), and undo then redo give the texts before and after the edit back.
+  buttons, undo and redo. Clicks go to the view's lines (its text runs, found through the
+  paragraph, item or cell holding them) where they show above the status bar; frames are a
+  fiftieth of a second, so that two or three clicks count together. After every action: no panic,
+  the frames settle (within a second), the keyboard stays in the text, the caret is in a line of
+  the view inside the window, a typed or composed word shows before the caret without its line
+  jumping, one undo takes a word typed letter by letter back whole (not its last letter), and undo
+  then redo give the texts before and after the edit back.
 - **A writer's session** (`crates/ui-egui/tests/it/formatted_session.rs`): on each template, in a
   window of a laptop's size (1280×860), a scripted session: a paragraph with a word typed after
-  Bold and a citation, a list nested once and left, a heading, a figure with its caption, a table
-  with two cells filled, an equation, a footnote, undo and redo, Find and Replace. After each step
+  Bold and a citation picked from a bibliography by its author, a list nested once and left, a
+  heading, a figure with its caption and a label set from its image's menu, a cross-reference to
+  it picked by its label, a table with two cells filled, an equation, a footnote, undo and redo,
+  Find and Replace, then undo back to the template's text and redo to the end. After each step
   the window harness's checks hold, and the source is still sound: nothing unclosed, no empty
   style, item or heading other than the one the caret stands in. The default run takes the
   article; `TEXCRAFT_SESSION_TEMPLATES=all` (or names with commas) takes the others too.
