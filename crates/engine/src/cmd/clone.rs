@@ -413,7 +413,7 @@ impl Session {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-mod desktop;
+pub(crate) mod desktop;
 
 #[cfg(test)]
 mod tests {

@@ -16,7 +16,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 mod git;
 #[cfg(not(target_arch = "wasm32"))]
-pub use git::{Choose, History, Merged, Remote, Side};
+pub use git::{Choose, Compared, History, Merged, Remote, Side};
 
 #[cfg(target_arch = "wasm32")]
 mod stub;

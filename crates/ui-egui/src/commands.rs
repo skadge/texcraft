@@ -49,6 +49,8 @@ fn alias(id: &str) -> Option<String> {
     match id {
         // Open from GitLab or GitHub… is a card of Import a Project now.
         "project.import_dialog" => Some(tl!("Open from GitLab or GitHub").to_owned()),
+        // Git's own words for Link to a Repository….
+        "git.add_remote" => Some(tl!("Add a Remote").to_owned()),
         _ => None,
     }
 }

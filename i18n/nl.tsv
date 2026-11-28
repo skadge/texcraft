@@ -2748,3 +2748,46 @@ unit	{n} MB	{n} MB
 	No headings yet	Nog geen koppen
 	No outline	Geen overzicht
 	No history yet	Nog geen geschiedenis
+
+# Link to a Repository (C10)
+	Link to a Repository	Koppelen aan een repository
+	Link to a Repository…	Koppelen aan een repository…
+	Link to GitLab	Koppelen aan GitLab
+	Link to GitHub	Koppelen aan GitHub
+	Link to Overleaf	Koppelen aan Overleaf
+	Link to a GitLab Server	Koppelen aan een GitLab-server
+	Link to a Git Address	Koppelen aan een git-adres
+	Where the repository is	Waar de repository staat
+	What happens	Wat er gebeurt
+	Once the repository is chosen, TeXCraft checks what linking does, before anything changes.	Zodra de repository gekozen is, controleert TeXCraft wat koppelen doet, voordat er iets verandert.
+	Checking the repository…	De repository wordt gecontroleerd…
+	The repository is empty: your project's files will be its first commit.	De repository is leeg: de bestanden van uw project worden de eerste commit.
+	The repository is empty: your project's history will be sent to it.	De repository is leeg: de geschiedenis van uw project wordt erheen gestuurd.
+	The repository has this project's history: Sync brings the two up to date.	De repository heeft de geschiedenis van dit project: Synchroniseren brengt beide bij.
+	The repository has files: they will be brought together with your project's.	De repository bevat bestanden: ze worden samengebracht met die van uw project.
+@plural	The repository has {n} version: it will be merged with your project's.|The repository has {n} versions: they will be merged with your project's.	De repository heeft {n} versie: die wordt samengevoegd met die van uw project.|De repository heeft {n} versies: die worden samengevoegd met die van uw project.
+@plural	{n} file comes in|{n} files come in	{n} bestand komt binnen|{n} bestanden komen binnen
+	yours stay	de uwe blijven
+	The project has a remote named {name} already. Sync will use this repository from now on; {name} stays as it is.	Het project heeft al een remote met de naam {name}. Synchroniseren gebruikt voortaan deze repository; {name} blijft zoals het is.
+	A remote's name has letters, digits, '-', '_' or '.', and is not taken.	De naam van een remote bevat letters, cijfers, '-', '_' of '.', en is nog niet in gebruik.
+	Both have files with the same names: choose which to keep for each.	Beide hebben bestanden met dezelfde namen: kies per bestand welke u houdt.
+	Linking and bringing the histories together…	Koppelen en de geschiedenissen samenbrengen…
+	Linking…	Bezig met koppelen…
+	Linked to {place}: sending your files…	Gekoppeld aan {place}: uw bestanden worden verstuurd…
+	Linked to {place}.	Gekoppeld aan {place}.
+	Linked to {place}: your history is sent.	Gekoppeld aan {place}: uw geschiedenis is verstuurd.
+	Linked to {place}: took in {files}.	Gekoppeld aan {place}: {files} opgenomen.
+	The project is linked, but bringing the two together did not work: {why} Link or Sync tries again.	Het project is gekoppeld, maar het samenbrengen is niet gelukt: {why} Koppelen of Synchroniseren probeert het opnieuw.
+	Overleaf's git server does not answer web pages, so the browser cannot reach it: link the project from the desktop app.	De git-server van Overleaf beantwoordt geen webpagina's, dus de browser kan hem niet bereiken: koppel het project vanuit de desktop-app.
+	Most git servers do not answer web pages, so the browser cannot reach them: link the project from the desktop app, or to GitLab or GitHub here.	De meeste git-servers beantwoorden geen webpagina's, dus de browser kan ze niet bereiken: koppel het project vanuit de desktop-app, of hier aan GitLab of GitHub.
+	Unlink the project from {place}?	Het project loskoppelen van {place}?
+	Neither the project nor the repository changes: the project just stops syncing with it. Link to a Repository… links it again.	Het project en de repository veranderen niet: het project synchroniseert er alleen niet meer mee. Koppelen aan een repository… koppelt het opnieuw.
+	Unlink	Loskoppelen
+	Unlink…	Loskoppelen…
+	Unlinked from {place}: the project and the repository are as they were.	Losgekoppeld van {place}: het project en de repository zijn zoals ze waren.
+	None yet: the repository is empty.	Nog geen: de repository is leeg.
+	Add a Remote	Remote toevoegen
+	Save the project to GitHub or GitLab, or link it to a repository that exists, to keep it there too and to sync it.	Sla het project op in GitHub of GitLab, of koppel het aan een bestaande repository, om het daar ook te bewaren en te synchroniseren.
+@id	git.add_remote	Koppelen aan een repository…
+@id	git.remove_remote	Loskoppelen van de repository…
+@id	git.check_remote	Wat koppelen aan een repository doet

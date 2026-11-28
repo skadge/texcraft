@@ -2748,3 +2748,46 @@ unit	{n} MB	{n} MB
 	No headings yet	Noch keine Überschriften
 	No outline	Keine Gliederung
 	No history yet	Noch kein Verlauf
+
+# Link to a Repository (C10)
+	Link to a Repository	Mit einem Repository verknüpfen
+	Link to a Repository…	Mit einem Repository verknüpfen…
+	Link to GitLab	Mit GitLab verknüpfen
+	Link to GitHub	Mit GitHub verknüpfen
+	Link to Overleaf	Mit Overleaf verknüpfen
+	Link to a GitLab Server	Mit einem GitLab-Server verknüpfen
+	Link to a Git Address	Mit einer Git-Adresse verknüpfen
+	Where the repository is	Wo das Repository liegt
+	What happens	Was geschieht
+	Once the repository is chosen, TeXCraft checks what linking does, before anything changes.	Sobald das Repository gewählt ist, prüft TeXCraft, was das Verknüpfen bewirkt, bevor sich etwas ändert.
+	Checking the repository…	Das Repository wird geprüft…
+	The repository is empty: your project's files will be its first commit.	Das Repository ist leer: Die Dateien Ihres Projekts werden sein erster Commit.
+	The repository is empty: your project's history will be sent to it.	Das Repository ist leer: Der Verlauf Ihres Projekts wird dorthin gesendet.
+	The repository has this project's history: Sync brings the two up to date.	Das Repository hat den Verlauf dieses Projekts: Synchronisieren bringt beide auf den neuesten Stand.
+	The repository has files: they will be brought together with your project's.	Das Repository enthält Dateien: Sie werden mit denen Ihres Projekts zusammengeführt.
+@plural	The repository has {n} version: it will be merged with your project's.|The repository has {n} versions: they will be merged with your project's.	Das Repository hat {n} Version: Sie wird mit denen Ihres Projekts zusammengeführt.|Das Repository hat {n} Versionen: Sie werden mit denen Ihres Projekts zusammengeführt.
+@plural	{n} file comes in|{n} files come in	{n} Datei kommt hinzu|{n} Dateien kommen hinzu
+	yours stay	Ihre bleiben
+	The project has a remote named {name} already. Sync will use this repository from now on; {name} stays as it is.	Das Projekt hat schon ein Remote namens {name}. Synchronisieren nutzt ab jetzt dieses Repository; {name} bleibt, wie es ist.
+	A remote's name has letters, digits, '-', '_' or '.', and is not taken.	Der Name eines Remotes besteht aus Buchstaben, Ziffern, '-', '_' oder '.' und ist noch nicht vergeben.
+	Both have files with the same names: choose which to keep for each.	Beide haben Dateien mit gleichen Namen: Wählen Sie für jede, welche bleibt.
+	Linking and bringing the histories together…	Verknüpfen und Verläufe zusammenführen…
+	Linking…	Wird verknüpft…
+	Linked to {place}: sending your files…	Verknüpft mit {place}: Ihre Dateien werden gesendet…
+	Linked to {place}.	Verknüpft mit {place}.
+	Linked to {place}: your history is sent.	Verknüpft mit {place}: Ihr Verlauf ist gesendet.
+	Linked to {place}: took in {files}.	Verknüpft mit {place}: {files} übernommen.
+	The project is linked, but bringing the two together did not work: {why} Link or Sync tries again.	Das Projekt ist verknüpft, aber das Zusammenführen hat nicht geklappt: {why} Verknüpfen oder Synchronisieren versucht es erneut.
+	Overleaf's git server does not answer web pages, so the browser cannot reach it: link the project from the desktop app.	Der Git-Server von Overleaf antwortet keinen Webseiten, der Browser erreicht ihn also nicht: Verknüpfen Sie das Projekt in der Desktop-App.
+	Most git servers do not answer web pages, so the browser cannot reach them: link the project from the desktop app, or to GitLab or GitHub here.	Die meisten Git-Server antworten keinen Webseiten, der Browser erreicht sie also nicht: Verknüpfen Sie das Projekt in der Desktop-App oder hier mit GitLab oder GitHub.
+	Unlink the project from {place}?	Projekt von {place} lösen?
+	Neither the project nor the repository changes: the project just stops syncing with it. Link to a Repository… links it again.	Weder das Projekt noch das Repository ändert sich: Das Projekt synchronisiert nur nicht mehr damit. Mit einem Repository verknüpfen… verknüpft es wieder.
+	Unlink	Lösen
+	Unlink…	Lösen…
+	Unlinked from {place}: the project and the repository are as they were.	Von {place} gelöst: Projekt und Repository sind, wie sie waren.
+	None yet: the repository is empty.	Noch keiner: Das Repository ist leer.
+	Add a Remote	Remote hinzufügen
+	Save the project to GitHub or GitLab, or link it to a repository that exists, to keep it there too and to sync it.	Speichern Sie das Projekt auf GitHub oder GitLab oder verknüpfen Sie es mit einem bestehenden Repository, um es auch dort zu haben und zu synchronisieren.
+@id	git.add_remote	Mit einem Repository verknüpfen…
+@id	git.remove_remote	Vom Repository lösen…
+@id	git.check_remote	Was das Verknüpfen mit einem Repository bewirkt

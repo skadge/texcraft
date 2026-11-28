@@ -2748,3 +2748,46 @@ unit	{n} MB	{n} MB
 	No headings yet	Aún no hay encabezados
 	No outline	Sin esquema
 	No history yet	Aún no hay historial
+
+# Link to a Repository (C10)
+	Link to a Repository	Vincular a un repositorio
+	Link to a Repository…	Vincular a un repositorio…
+	Link to GitLab	Vincular a GitLab
+	Link to GitHub	Vincular a GitHub
+	Link to Overleaf	Vincular a Overleaf
+	Link to a GitLab Server	Vincular a un servidor GitLab
+	Link to a Git Address	Vincular a una dirección git
+	Where the repository is	Dónde está el repositorio
+	What happens	Qué ocurre
+	Once the repository is chosen, TeXCraft checks what linking does, before anything changes.	Una vez elegido el repositorio, TeXCraft comprueba qué hace la vinculación, antes de que nada cambie.
+	Checking the repository…	Comprobando el repositorio…
+	The repository is empty: your project's files will be its first commit.	El repositorio está vacío: los archivos de su proyecto serán su primer commit.
+	The repository is empty: your project's history will be sent to it.	El repositorio está vacío: se le enviará el historial de su proyecto.
+	The repository has this project's history: Sync brings the two up to date.	El repositorio tiene el historial de este proyecto: Sincronizar pone ambos al día.
+	The repository has files: they will be brought together with your project's.	El repositorio tiene archivos: se reunirán con los de su proyecto.
+@plural	The repository has {n} version: it will be merged with your project's.|The repository has {n} versions: they will be merged with your project's.	El repositorio tiene {n} versión: se fusionará con las de su proyecto.|El repositorio tiene {n} versiones: se fusionarán con las de su proyecto.
+@plural	{n} file comes in|{n} files come in	entra {n} archivo|entran {n} archivos
+	yours stay	los suyos se quedan
+	The project has a remote named {name} already. Sync will use this repository from now on; {name} stays as it is.	El proyecto ya tiene un remoto llamado {name}. Sincronizar usará este repositorio a partir de ahora; {name} queda como está.
+	A remote's name has letters, digits, '-', '_' or '.', and is not taken.	El nombre de un remoto tiene letras, cifras, '-', '_' o '.', y no está ocupado.
+	Both have files with the same names: choose which to keep for each.	Ambos tienen archivos con los mismos nombres: elija cuál conservar en cada caso.
+	Linking and bringing the histories together…	Vinculando y reuniendo los historiales…
+	Linking…	Vinculando…
+	Linked to {place}: sending your files…	Vinculado a {place}: enviando sus archivos…
+	Linked to {place}.	Vinculado a {place}.
+	Linked to {place}: your history is sent.	Vinculado a {place}: su historial está enviado.
+	Linked to {place}: took in {files}.	Vinculado a {place}: se incorporó {files}.
+	The project is linked, but bringing the two together did not work: {why} Link or Sync tries again.	El proyecto está vinculado, pero reunir ambos no funcionó: {why} Vincular o Sincronizar lo intenta de nuevo.
+	Overleaf's git server does not answer web pages, so the browser cannot reach it: link the project from the desktop app.	El servidor git de Overleaf no responde a páginas web, así que el navegador no puede alcanzarlo: vincule el proyecto desde la aplicación de escritorio.
+	Most git servers do not answer web pages, so the browser cannot reach them: link the project from the desktop app, or to GitLab or GitHub here.	La mayoría de servidores git no responden a páginas web, así que el navegador no puede alcanzarlos: vincule el proyecto desde la aplicación de escritorio, o aquí a GitLab o GitHub.
+	Unlink the project from {place}?	¿Desvincular el proyecto de {place}?
+	Neither the project nor the repository changes: the project just stops syncing with it. Link to a Repository… links it again.	Ni el proyecto ni el repositorio cambian: el proyecto solo deja de sincronizarse con él. Vincular a un repositorio… lo vincula de nuevo.
+	Unlink	Desvincular
+	Unlink…	Desvincular…
+	Unlinked from {place}: the project and the repository are as they were.	Desvinculado de {place}: el proyecto y el repositorio están como estaban.
+	None yet: the repository is empty.	Ninguna aún: el repositorio está vacío.
+	Add a Remote	Añadir un remoto
+	Save the project to GitHub or GitLab, or link it to a repository that exists, to keep it there too and to sync it.	Guarde el proyecto en GitHub o GitLab, o vincúlelo a un repositorio existente, para tenerlo también allí y sincronizarlo.
+@id	git.add_remote	Vincular a un repositorio…
+@id	git.remove_remote	Desvincular del repositorio…
+@id	git.check_remote	Qué hace vincular a un repositorio

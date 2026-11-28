@@ -255,6 +255,7 @@ pub const MENU_BAR: &[(&str, &[Entry])] = &[
             C("forge.commit"),
             C("forge.pull"),
             Sub(tn!("Save Project to GitLab or GitHub"), &[C("forge.save_to_gitlab"), C("forge.save_to_github")]),
+            C("git.add_remote"),
         ],
     ),
     (
@@ -626,6 +627,10 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         "forge.save_to_github" => crate::forge_save::ask(app, texcraft_engine::forge::Service::GitHub),
         "forge.save_to_gitlab" => crate::forge_save::ask(app, texcraft_engine::forge::Service::GitLab),
         "project.sync" => crate::sync::start(app, json!({})),
+        // Link to a Repository (docs/design/add-remote.md): Import's dialog for a repository that
+        // exists; `{source, url}` open it at a card. Unlink… asks first.
+        "git.add_remote" => crate::import::link::run(app, params),
+        "git.remove_remote" => crate::import::link::ask_unlink(app, params),
         "project.autosave" => {
             let on = !app.session.settings.autosave;
             app.run("project.autosave", json!({"on": on}));
@@ -719,7 +724,7 @@ pub fn in_menus(app: &App, id: &str) -> bool {
         "project.download_zip" => app.session.library().is_some(),
         "forge.commit" | "forge.pull" => app.session.forge().is_some(),
         "project.sync" => crate::sync::has_remote(app),
-        "forge.save_to_github" | "forge.save_to_gitlab" => app.session.forge().is_none(),
+        "forge.save_to_github" | "forge.save_to_gitlab" | "git.add_remote" => app.session.forge().is_none(),
         id if AI_COMMANDS.contains(&id) => crate::ai::offered(app),
         _ => true,
     }

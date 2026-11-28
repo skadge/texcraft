@@ -573,6 +573,26 @@ instance?, owner?, name, visibility?, token?}, background?}` (operation `new_pro
 `GET /repos/:owner/:name`: found means taken). Visibility: private (default), internal (GitLab
 only), public. Overleaf has no API to make projects: the step says to make it there, then import.
 
+### Link to a Repository (C10)
+
+An open project linked to a repository that exists (docs/design/add-remote.md): Import's dialog,
+its Online cards (the default connection first) and pages without Into, and under them What
+happens, checked on the server before anything changes (`git.check_remote`: on the desktop the
+remote's branch fetched into the project's repository without moving a ref, then its commits
+counted and its files compared with the project's; in the browser the branch read through the
+forge's API). `git.add_remote` sets the remote (`origin`, or a name asked when that is taken),
+makes the branch follow the remote's, and runs Sync: a version first, then a push into an empty
+repository, or a merge of the two histories. With no commit in common the merge's base is empty
+(`History::merge_choosing` already takes none): a file on one side only is kept, the same file on
+both is kept, and a file on both with other contents is a conflict settled with `resolve` (the
+dialog asks per file before linking; Sync's dialog catches any found later). Never a forced push.
+A link that cannot start (a token refused, the server unreachable) is undone; one that stops on
+conflicts stays, and Sync with the choices gets it through. In the browser the branch's files come
+into the project, the project is linked to the branch as Save Project to… links (an empty GitLab
+repository gets the project's files as its first commit; GitHub's API cannot write into an empty
+one, which is said), and Sync sends the rest. `git.remove_remote` (Unlink… in the History panel,
+asking first) removes the remote, its tracking refs and the upstream, or the browser's link.
+
 ## Step 6: more
 
 - Files over the limits fetched when the engine reads them; a diff of the changes before

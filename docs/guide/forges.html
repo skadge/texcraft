@@ -131,6 +131,18 @@
       </ul>
       <p>The dialog ends with <span class="ui">Open in Browser</span> for the repository's page.</p>
 
+      <h2 id="link">Linking a project to a repository that exists</h2>
+      <p>To keep a project you already have in a repository that already exists (one made on GitLab or GitHub with a README, a copy on your organisation's server, an Overleaf project's git address), use <span class="ui">File › Link to a Repository…</span>, also in the History section and in All Commands (where <span class="ui">Add a Remote</span> finds it too). Its cards are Import's: GitLab, GitHub, Overleaf, a GitLab server or any git address, your default connection first. Choose the repository and its branch as for importing; the project stays where it is.</p>
+      <p>Before anything changes, <span class="ui">What happens</span> says what linking will do, checked on the server:</p>
+      <ul>
+        <li><strong>The repository is empty:</strong> your project's history is sent to it.</li>
+        <li><strong>The repository has versions of its own:</strong> they are merged with your project's. Files only on one side are kept; for a file both have with other contents, you choose <span class="ui">Keep mine</span> or <span class="ui">Take theirs</span> there, before <span class="ui">Link</span>.</li>
+        <li><strong>The repository has this project's history already:</strong> Sync brings the two up to date.</li>
+      </ul>
+      <p>If the project has a remote called <code>origin</code> already, the dialog asks a name for this one; Sync then uses the new repository, and <code>origin</code> stays. Linking makes a version of your changes first and never forces a push, so nothing of either side is lost; the merge is in the history like any other version. After linking, Sync works with the repository at once.</p>
+      <p>In the browser, GitLab and GitHub are linked through their web APIs (the repository's files come into the project, and Sync sends yours); other git servers do not answer web pages, so Overleaf and git addresses are linked from the desktop app. GitHub's web API cannot write into an empty repository: add a README there first.</p>
+      <p>To stop syncing with a repository, <span class="ui">Unlink…</span> in the History section asks first, then removes the link: neither the project nor the repository changes.</p>
+
       <h2 id="servers">Your organisation's servers</h2>
       <p>A company's or a university's GitLab, or a GitHub Enterprise Server, works as gitlab.com and github.com do, once TeXCraft is registered on it as an application, by you for yourself or by its administrator for everyone.</p>
       <ol>

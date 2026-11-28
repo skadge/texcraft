@@ -77,7 +77,7 @@ pub(crate) struct Failed {
 
 /// The kind of server a repository's HTTPS address is on, as the dialog names it: `gitlab`
 /// (gitlab.com and the GitLab servers added), `github`, `overleaf`, or `other`.
-fn host_kind(s: &Session, https: &str) -> &'static str {
+pub(crate) fn host_kind(s: &Session, https: &str) -> &'static str {
     if super::super::git::hosting(https).is_some() {
         return "overleaf";
     }
@@ -91,7 +91,7 @@ fn host_kind(s: &Session, https: &str) -> &'static str {
 }
 
 /// The `token` parameter, checked.
-fn given_token(p: &Value) -> Result<Option<Token>> {
+pub(crate) fn given_token(p: &Value) -> Result<Option<Token>> {
     match p.get("token").and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty()) {
         Some(t) => Token::new(t).map(Some).map_err(|e| e.to_string()),
         None => Ok(None),
@@ -99,7 +99,7 @@ fn given_token(p: &Value) -> Result<Option<Token>> {
 }
 
 /// The `username` parameter, checked: it goes into the remote's address.
-fn given_user(p: &Value) -> Result<Option<String>> {
+pub(crate) fn given_user(p: &Value) -> Result<Option<String>> {
     match p.get("username").and_then(Value::as_str).map(str::trim).filter(|u| !u.is_empty()) {
         Some(u) if u.len() <= 128 && u.chars().all(|c| c.is_ascii_graphic() && !matches!(c, '@' | ':' | '/' | '?' | '#')) => Ok(Some(u.to_owned())),
         Some(_) => Err("username: a user name has no spaces, @, :, / or ?.".to_owned()),
@@ -109,7 +109,7 @@ fn given_user(p: &Value) -> Result<Option<String>> {
 
 /// The credential known for `instance` without one given: a token given earlier in this session,
 /// one remembered, or (not for a hosting service's git access) the sign-in to the forge.
-fn known_key(s: &Session, instance: &str, service: Service, hosted: bool) -> Option<Key> {
+pub(crate) fn known_key(s: &Session, instance: &str, service: Service, hosted: bool) -> Option<Key> {
     let host = texcraft_forge::servers::host_of(instance);
     if hosted {
         return s.forge_tokens.get(instance).cloned().or_else(|| s.kept_git_token(host)).map(Key::Token);
@@ -119,7 +119,7 @@ fn known_key(s: &Session, instance: &str, service: Service, hosted: bool) -> Opt
 
 /// The credentials git's requests carry: the user name given, else the address's, the hosting
 /// service's or the forge's.
-fn credentials(user: Option<&str>, url: &str, service: Service, token: &Token) -> Credentials {
+pub(crate) fn credentials(user: Option<&str>, url: &str, service: Service, token: &Token) -> Credentials {
     match user {
         Some(u) => Credentials::new(u, token.secret()),
         None => remote_credentials(url, service, token),
@@ -128,7 +128,7 @@ fn credentials(user: Option<&str>, url: &str, service: Service, token: &Token) -
 
 /// The repository's HTTPS address from what was typed: an SSH one is refused with its HTTPS form,
 /// an address with no repository's path too.
-fn repository_url(typed: &str) -> Result<String> {
+pub(crate) fn repository_url(typed: &str) -> Result<String> {
     let https = https_url(typed)?;
     if is_ssh(typed) {
         return Err(format!("TeXCraft uses git over HTTPS: use {https}."));
@@ -141,7 +141,7 @@ fn repository_url(typed: &str) -> Result<String> {
 }
 
 /// A refusal or a failure of the server, in the words the dialog shows (design: Errors).
-fn words(e: &WireError, host: &str, https: &str, sent: bool) -> (ImportProblem, String) {
+pub(crate) fn words(e: &WireError, host: &str, https: &str, sent: bool) -> (ImportProblem, String) {
     let project = https.split_once("://").and_then(|(_, r)| r.split_once('/')).map_or(https, |(_, p)| p).trim_end_matches(".git");
     match e {
         WireError::Unauthorized if sent => (
