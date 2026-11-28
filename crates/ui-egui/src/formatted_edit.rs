@@ -1244,7 +1244,9 @@ fn style(app: &mut App, f: &Frame<'_>, name: &str) {
         commit(app, f, &[Change { range: r.clone(), text: String::new() }], (r.start, r.start), EditKind::Other);
         return;
     }
-    // Inside a word, the word; else the style waits for the text typed next.
+    // Inside a word, the word (the caret staying where it is); else the style waits for the text
+    // typed next.
+    let caret = (a == h).then(|| caret_byte(app));
     let (a, h) = if a == h { word_inside(f, h).unwrap_or((a, h)) } else { (a.min(h), a.max(h)) };
     if a == h {
         let here = crate::formatted_bar::here(app);
@@ -1277,10 +1279,13 @@ fn style(app: &mut App, f: &Frame<'_>, name: &str) {
         return;
     }
     let (Some(start), Some(end)) = (pieces.first().map(|r| r.start), pieces.last().map(|r| r.end)) else { return };
-    // The selection keeps the same text: inside the commands added, without those removed.
-    let start = edit::map_offset(&changes, start);
-    let end = map_before(&changes, end);
-    commit(app, f, &changes, (start, end), EditKind::Other);
+    // The selection keeps the same text: inside the commands added, without those removed. A
+    // caret in the word stays a caret, so that what is typed next does not replace the word.
+    let after = match caret {
+        Some(c) => (edit::map_offset(&changes, c), edit::map_offset(&changes, c)),
+        None => (edit::map_offset(&changes, start), map_before(&changes, end)),
+    };
+    commit(app, f, &changes, after, EditKind::Other);
 }
 
 /// Like [`edit::map_offset`], but before what is inserted at `at`.

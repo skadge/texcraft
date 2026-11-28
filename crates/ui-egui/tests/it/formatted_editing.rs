@@ -419,3 +419,30 @@ fn a_click_that_moves_the_text_under_the_pointer_keeps_the_keyboard() {
     h.run();
     assert!(text(&mut h).contains("xAfter."), "the letter typed went elsewhere: {:?}", text(&mut h));
 }
+
+#[test]
+fn bold_pressed_again_with_the_caret_in_a_paragraph_keeps_every_word() {
+    // Seen once in a screenshot: a word typed after Bold, right before the next word, then Bold
+    // pressed again to stop it made the two one bold word and left it selected, so the space
+    // typed next replaced both.
+    let mut h = formatted("One two three four.\n");
+    let shown = |h: &Harness<'_, App>| line_texts(h).join("\n");
+    keys(&mut h, egui::Modifiers::NONE, egui::Key::ArrowRight, 4);
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::B);
+    h.event(egui::Event::Text("big".into()));
+    h.run();
+    assert!(text(&mut h).contains("One \\textbf{big}two"), "{:?}", text(&mut h));
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::B);
+    h.event(egui::Event::Text(" ".into()));
+    h.run();
+    assert_eq!(shown(&h), "One big two three four.", "a word went: {:?}", text(&mut h));
+    // In a word: Bold and Bold again change no word.
+    keys(&mut h, egui::Modifiers::NONE, egui::Key::ArrowRight, 6);
+    for _ in 0..2 {
+        key(&mut h, egui::Modifiers::COMMAND, egui::Key::B);
+        assert_eq!(shown(&h), "One big two three four.", "a word went: {:?}", text(&mut h));
+    }
+    h.event(egui::Event::Text("e".into()));
+    h.run();
+    assert_eq!(shown(&h), "One big two theree four.", "the letter typed did not go at the caret: {:?}", text(&mut h));
+}
