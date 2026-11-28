@@ -97,7 +97,10 @@ fn saving_to_github_through_the_dialog_pushes_the_history_and_offers_the_page() 
     assert!(h.query_by_role_and_label(Role::Button, "Open in Browser").is_some());
     assert!(server.get("refs/heads/main").is_some(), "the history was not pushed");
     assert_eq!(fake.created()[0]["private"], true);
-    h.get_by_role_and_label(Role::Button, "Close").click();
+    // The footer's Close (the title's row has one too).
+    if let Some(close) = h.query_all_by_role_and_label(Role::Button, "Close").last() {
+        close.click();
+    }
     h.run();
     // The History panel's remote, with Push and Pull.
     let remotes = h.state_mut().control("engine.execute", &json!({"command": "git.remotes", "params": {}}));

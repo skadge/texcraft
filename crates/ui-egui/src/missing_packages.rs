@@ -120,10 +120,10 @@ fn form_ui(ui: &mut egui::Ui, t: &Tokens, form: &mut Form) -> Option<Choice> {
     );
     ui.add_space(t.unit * 2.0);
     actions(ui, |ui| {
-        if ui.add(egui::Button::new(tl!("Not Now")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+        if crate::dialogs::secondary(ui, tl!("Not Now"), true).clicked() {
             choice = Some(Choice::NotNow);
         }
-        if ui.add(egui::Button::new(tl!("Open Settings")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+        if crate::dialogs::secondary(ui, tl!("Open Settings"), true).clicked() {
             choice = Some(Choice::Settings);
         }
     });

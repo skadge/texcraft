@@ -452,7 +452,7 @@ fn done_form(ui: &mut egui::Ui, t: &Tokens, form: &mut SaveForm, open_page: &mut
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
     actions(ui, |ui| {
-        if ui.add(egui::Button::new(tl!("Close")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+        if crate::dialogs::secondary(ui, tl!("Close"), true).clicked() {
             outcome = Outcome::Cancel;
         }
     });

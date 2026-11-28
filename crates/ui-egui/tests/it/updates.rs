@@ -107,7 +107,10 @@ fn the_notice_opens_whats_new_with_the_notes_and_this_copys_action() {
     // Built from source: the release page, said why.
     assert!(h.query_by_label("Open the Release Page").is_some());
     assert!(h.query_by_label_contains("built from source").is_some());
-    h.get_by_label("Close").click();
+    // The footer's Close (the title's row has one too).
+    if let Some(close) = h.query_all_by_label("Close").last() {
+        close.click();
+    }
     h.run();
     assert!(h.query_by_label("What's New").is_none(), "the dialog closed");
     h.get_by_role_and_label(Role::Button, "TeXCraft 0.20.0 is available").click();

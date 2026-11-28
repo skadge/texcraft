@@ -170,38 +170,36 @@ pub(crate) fn make_dialog(app: &mut App, ctx: &egui::Context) {
         ui.add_space(t.unit * 3.0);
         let ready = !form.description.trim().is_empty() && !busy;
         actions(ui, |ui| {
-            let primary =
-                |label: &str| egui::Button::new(RichText::new(label).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
             match &made {
                 Some(Made::Running) => {
-                    if ui.add(egui::Button::new(tl!("Stop")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+                    if crate::dialogs::secondary(ui, tl!("Stop"), true).clicked() {
                         act = MakeAct::Stop;
                     }
                 }
                 Some(Made::Done { preview: Preview::Typeset(_), inserted: None, .. }) => {
-                    if ui.add(primary(tl!("Insert")).min_size(egui::vec2(88.0, 30.0))).clicked() {
+                    if crate::dialogs::primary(ui, &t, tl!("Insert"), true, false).clicked() {
                         act = MakeAct::Insert { anyway: false };
                     }
-                    if ui.add_enabled(ready, egui::Button::new(tl!("Make Again")).min_size(egui::vec2(96.0, 30.0))).clicked() {
+                    if crate::dialogs::secondary(ui, tl!("Make Again"), ready).clicked() {
                         act = MakeAct::Make { again: false };
                     }
                 }
                 Some(Made::Done { preview: Preview::NotTypeset(_), inserted: None, .. }) => {
-                    let again = ui.add_enabled(ready, primary(tl!("Ask Again with the Error")).min_size(egui::vec2(160.0, 30.0)));
+                    let again = crate::dialogs::primary(ui, &t, tl!("Ask Again with the Error"), ready, false);
                     if again.clicked() {
                         act = MakeAct::Make { again: true };
                     }
-                    if ui.add(egui::Button::new(tl!("Insert Anyway")).min_size(egui::vec2(110.0, 30.0))).clicked() {
+                    if crate::dialogs::secondary(ui, tl!("Insert Anyway"), true).clicked() {
                         act = MakeAct::Insert { anyway: true };
                     }
                 }
                 _ => {
-                    if ui.add_enabled(ready, primary(tl!("Make")).min_size(egui::vec2(88.0, 30.0))).clicked() {
+                    if crate::dialogs::primary(ui, &t, tl!("Make"), ready, false).clicked() {
                         act = MakeAct::Make { again: false };
                     }
                 }
             }
-            if ui.add(egui::Button::new(tl!("Cancel")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+            if crate::dialogs::secondary(ui, tl!("Cancel"), true).clicked() {
                 act = MakeAct::Close;
             }
         });
@@ -434,27 +432,25 @@ pub(crate) fn reference_dialog(app: &mut App, ctx: &egui::Context) {
         }
         ui.add_space(t.unit * 3.0);
         actions(ui, |ui| {
-            let primary =
-                |label: &str| egui::Button::new(RichText::new(label).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
             if running {
-                if ui.add(egui::Button::new(tl!("Stop")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+                if crate::dialogs::secondary(ui, tl!("Stop"), true).clicked() {
                     stop = true;
                 }
             } else if done {
-                if ui.add(primary(tl!("Done")).min_size(egui::vec2(88.0, 30.0))).clicked() {
+                if crate::dialogs::primary(ui, &t, tl!("Done"), true, false).clicked() {
                     close = true;
                 }
-                if ui.add(egui::Button::new(tl!("Draft Another")).min_size(egui::vec2(110.0, 30.0))).clicked() {
+                if crate::dialogs::secondary(ui, tl!("Draft Another"), true).clicked() {
                     another = true;
                 }
             } else {
                 let ready = !form.query.trim().is_empty() && !busy && (form.bib.is_some() || form.new_bib.trim().ends_with(".bib"));
-                if ui.add_enabled(ready, primary(tl!("Draft Entry")).min_size(egui::vec2(100.0, 30.0))).clicked() {
+                if crate::dialogs::primary(ui, &t, tl!("Draft Entry"), ready, false).clicked() {
                     draft = true;
                 }
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if !done && ui.add(egui::Button::new(tl!("Cancel")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+                if !done && crate::dialogs::secondary(ui, tl!("Cancel"), true).clicked() {
                     close = true;
                 }
             });

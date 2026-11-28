@@ -795,7 +795,7 @@ fn draw(
         Page::Confirm { what: Confirm::Disconnect, host, .. } => tl!("Disconnect from {host}?").replace("{host}", host),
         Page::Confirm { what: Confirm::Remove, host, .. } => tl!("Remove {host}?").replace("{host}", host),
     };
-    header(ui, t, &title, matches!(form.page, Page::Forge(_) | Page::Token(_) | Page::Unavailable(_)), narrow, form.running, &mut did);
+    header(ui, t, &title, matches!(form.page, Page::Forge(_) | Page::Token(_) | Page::Unavailable(_)), form.running, &mut did);
     match &mut form.page {
         Page::Grid => {
             if let Some(k) = grid(ui, t, lines, form.focus_card.take(), narrow) {
@@ -817,23 +817,15 @@ fn draw(
 }
 
 /// The title row: Back on a page, the title, Close. On a phone, the sheet's bar holds them.
-fn header(ui: &mut egui::Ui, t: &Tokens, title: &str, on_page: bool, narrow: bool, running: bool, did: &mut Vec<Did>) {
-    if narrow {
-        crate::dialogs::title(ui, t, title);
-        return;
+fn header(ui: &mut egui::Ui, t: &Tokens, title: &str, on_page: bool, running: bool, did: &mut Vec<Did>) {
+    let back = on_page.then_some(tl!("Back to connections"));
+    let asked = crate::dialogs::header(ui, t, title, back, !running, |_| {});
+    if asked.back {
+        did.push(Did::Back);
     }
-    ui.allocate_ui_with_layout(vec2(ui.available_width(), 28.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-        if on_page && widgets::icon_button(ui, t, "arrow-left", tl!("Back to connections"), !running).clicked() {
-            did.push(Did::Back);
-        }
-        ui.add(egui::Label::new(RichText::new(title).font(t.title())).truncate());
-        widgets::right_aligned(ui, "connection-close", |ui| {
-            if widgets::icon_button(ui, t, "x", tl!("Close"), !running).clicked() {
-                did.push(Did::Close);
-            }
-        });
-    });
-    ui.add_space(t.unit * 3.0);
+    if asked.close {
+        did.push(Did::Close);
+    }
 }
 
 /// The cards, in two groups as on the Accounts page. Returns the card chosen.
@@ -999,7 +991,7 @@ fn unavailable(ui: &mut egui::Ui, t: &Tokens, kind: Kind, did: &mut Vec<Did>) {
     ui.label(RichText::new(tl!("The desktop app connects to it; projects from it can be imported here as zip files.")).color(t.text_muted));
     ui.add_space(t.unit * 4.0);
     crate::dialogs::actions(ui, |ui| {
-        if ui.add(egui::Button::new(tl!("Back")).min_size(vec2(80.0, 30.0))).clicked() {
+        if crate::dialogs::secondary(ui, tl!("Back"), true).clicked() {
             did.push(Did::Back);
         }
     });

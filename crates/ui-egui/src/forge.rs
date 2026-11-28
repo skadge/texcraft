@@ -647,7 +647,7 @@ fn commit_form(ui: &mut egui::Ui, t: &Tokens, form: &mut CommitForm, browser: bo
         let mut outcome = Outcome::Open;
         ui.add_space(t.unit * 4.0);
         actions(ui, |ui| {
-            if ui.add(egui::Button::new(tl!("Close")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+            if crate::dialogs::secondary(ui, tl!("Close"), true).clicked() {
                 outcome = Outcome::Cancel;
             }
         });
@@ -805,7 +805,7 @@ fn merge_request_note(ui: &mut egui::Ui, t: &Tokens, note: &mut MergeRequestNote
     let mut outcome = Outcome::Open;
     ui.add_space(t.unit * 4.0);
     actions(ui, |ui| {
-        if ui.add(egui::Button::new(tl!("Close")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+        if crate::dialogs::secondary(ui, tl!("Close"), true).clicked() {
             outcome = Outcome::Cancel;
         }
     });

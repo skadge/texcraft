@@ -403,11 +403,10 @@ pub(crate) fn instruct_dialog(app: &mut App, ctx: &egui::Context) {
         }
         ui.add_space(t.unit * 3.0);
         crate::dialogs::actions(ui, |ui| {
-            let primary = egui::Button::new(RichText::new(tl!("Send")).color(t.on_accent).font(t.strong())).fill(t.accent).stroke(egui::Stroke::NONE);
-            if ui.add_enabled(!form.text.trim().is_empty(), primary.min_size(egui::vec2(88.0, 30.0))).clicked() {
+            if crate::dialogs::primary(ui, &t, tl!("Send"), !form.text.trim().is_empty(), false).clicked() {
                 send = true;
             }
-            if ui.add(egui::Button::new(tl!("Cancel")).min_size(egui::vec2(80.0, 30.0))).clicked() {
+            if crate::dialogs::secondary(ui, tl!("Cancel"), true).clicked() {
                 close = true;
             }
         });

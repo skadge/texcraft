@@ -12,7 +12,7 @@
 
 use std::path::PathBuf;
 
-use egui::{Key, Modifiers, RichText, Sense, vec2};
+use egui::{Key, Modifiers, RichText, vec2};
 use serde_json::{Value, json};
 use texcraft_engine::forge::Service;
 
@@ -606,21 +606,12 @@ fn draw(ui: &mut egui::Ui, t: &Tokens, step: &mut WhereStep, conns: &[Connection
 
 /// The title row: Back, the title, Close; and the template under it.
 fn header(ui: &mut egui::Ui, t: &Tokens, step: &WhereStep, info: &Info<'_>, acts: &mut Vec<Act>) {
-    let title = tl!("Where to Keep It");
-    if info.narrow {
-        crate::dialogs::title(ui, t, title);
-    } else {
-        ui.allocate_ui_with_layout(vec2(ui.available_width(), 28.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            if widgets::icon_button(ui, t, "arrow-left", tl!("Back to templates"), !info.running).clicked() {
-                acts.push(Act::Back);
-            }
-            ui.add(egui::Label::new(RichText::new(title).font(t.title())).truncate());
-            widgets::right_aligned(ui, "where-close", |ui| {
-                if widgets::icon_button(ui, t, "x", tl!("Close"), !info.running).clicked() {
-                    acts.push(Act::Close);
-                }
-            });
-        });
+    let asked = crate::dialogs::header(ui, t, tl!("Where to Keep It"), Some(tl!("Back to templates")), !info.running, |_| {});
+    if asked.back {
+        acts.push(Act::Back);
+    }
+    if asked.close {
+        acts.push(Act::Close);
     }
     let what = tl!("New project from the template {template}").replace("{template}", &step.title);
     ui.label(RichText::new(what).color(t.text_muted));
@@ -886,12 +877,10 @@ fn footer(ui: &mut egui::Ui, t: &Tokens, step: &WhereStep, conns: &[Connection],
         ui.add_space(t.unit * 2.0);
     }
     crate::dialogs::actions(ui, |ui| {
-        let label = RichText::new(tl!("Create Project")).color(t.on_accent).font(t.strong());
-        let primary = egui::Button::new(label).fill(t.accent).stroke(egui::Stroke::NONE).min_size(vec2(120.0, 30.0));
-        if ui.add_enabled(ready && !info.running, primary).clicked() || (enter && ready && !info.running) {
+        if crate::dialogs::primary(ui, t, tl!("Create Project"), ready && !info.running, false).clicked() || (enter && ready && !info.running) {
             acts.push(Act::Create);
         }
-        if ui.add_enabled(!info.running, egui::Button::new(tl!("Cancel")).min_size(vec2(80.0, 30.0))).clicked() {
+        if crate::dialogs::secondary(ui, tl!("Cancel"), !info.running).clicked() {
             acts.push(Act::Close);
         }
         if info.running {
@@ -905,26 +894,9 @@ fn footer(ui: &mut egui::Ui, t: &Tokens, step: &WhereStep, conns: &[Connection],
                 (None, Some("push")) => say(service, tl!("Sending the project to GitLab…"), tl!("Sending the project to GitHub…")).to_owned(),
                 (None, _) => say(service, tl!("Making {name} on GitLab…"), tl!("Making {name} on GitHub…")).replace("{name}", step.name.trim()),
             };
-            progress(ui, t, &text);
+            crate::dialogs::progress(ui, t, &text);
         }
     });
-}
-
-/// A thin moving bar and the phase, a live region said at each phase.
-fn progress(ui: &mut egui::Ui, t: &Tokens, text: &str) {
-    ui.horizontal(|ui| {
-        let (rect, _) = ui.allocate_exact_size(vec2(120.0, 4.0), Sense::hover());
-        ui.painter().rect_filled(rect, 2.0, t.separator);
-        let at = (ui.input(|i| i.time) as f32 * 0.8).fract() * 0.7;
-        let bar = egui::Rect::from_min_max(
-            egui::pos2(rect.left() + rect.width() * at, rect.top()),
-            egui::pos2(rect.left() + rect.width() * (at + 0.3), rect.bottom()),
-        );
-        ui.painter().rect_filled(bar, 2.0, t.accent);
-        let said = ui.add(egui::Label::new(RichText::new(text).font(t.small()).color(t.text_muted)).selectable(false));
-        crate::status::announce(ui, &said, text);
-    });
-    ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
 }
 
 /// The repository was made and the project is open, but sending it did not work.
@@ -947,16 +919,14 @@ fn unsent(ui: &mut egui::Ui, t: &Tokens, step: &WhereStep, info: &Info<'_>, acts
         ui.add_space(t.unit * 2.0);
     }
     crate::dialogs::actions(ui, |ui| {
-        let label = RichText::new(tl!("Try Again")).color(t.on_accent).font(t.strong());
-        let primary = egui::Button::new(label).fill(t.accent).stroke(egui::Stroke::NONE).min_size(vec2(100.0, 30.0));
-        if ui.add_enabled(!info.running, primary).clicked() {
+        if crate::dialogs::primary(ui, t, tl!("Try Again"), !info.running, false).clicked() {
             acts.push(Act::TryAgain);
         }
-        if ui.add_enabled(!info.running, egui::Button::new(tl!("Send Later")).min_size(vec2(96.0, 30.0))).clicked() {
+        if crate::dialogs::secondary(ui, tl!("Send Later"), !info.running).clicked() {
             acts.push(Act::Close);
         }
         if info.running {
-            progress(ui, t, say(u.service, tl!("Sending the project to GitLab…"), tl!("Sending the project to GitHub…")));
+            crate::dialogs::progress(ui, t, say(u.service, tl!("Sending the project to GitLab…"), tl!("Sending the project to GitHub…")));
         }
     });
 }

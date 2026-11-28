@@ -162,8 +162,7 @@ pub(crate) fn dialog(app: &mut App, ctx: &egui::Context) {
 
 /// The primary button, which takes the keyboard when the dialog opens.
 fn primary(ui: &mut egui::Ui, t: &Tokens, label: &str, focus: bool) -> egui::Response {
-    let text = RichText::new(label).color(t.on_accent).font(t.strong());
-    let r = ui.add(egui::Button::new(text).fill(t.accent).stroke(egui::Stroke::NONE).min_size(egui::vec2(88.0, 30.0)));
+    let r = crate::dialogs::primary(ui, t, label, true, false);
     if focus {
         r.request_focus();
     }
@@ -171,7 +170,7 @@ fn primary(ui: &mut egui::Ui, t: &Tokens, label: &str, focus: bool) -> egui::Res
 }
 
 fn secondary(ui: &mut egui::Ui, label: &str) -> egui::Response {
-    ui.add(egui::Button::new(label).min_size(egui::vec2(80.0, 30.0)))
+    crate::dialogs::secondary(ui, label, true)
 }
 
 fn body(app: &App, ui: &mut egui::Ui, t: &Tokens, focus: bool, unsaved: bool) -> Option<Chosen> {
@@ -194,7 +193,7 @@ fn body(app: &App, ui: &mut egui::Ui, t: &Tokens, focus: bool, unsaved: bool) ->
         crate::status::announce(ui, &label, &format!("{head}. {line}"));
         ui.add_space(t.unit * 4.0);
         crate::dialogs::actions(ui, |ui| {
-            if ui.add_enabled(!u.checking(), egui::Button::new(tl!("Check Again")).min_size(egui::vec2(88.0, 30.0))).clicked() {
+            if crate::dialogs::secondary(ui, tl!("Check Again"), !u.checking()).clicked() {
                 chosen = Some(Chosen::CheckAgain);
             }
             let close = secondary(ui, tl!("Close"));
@@ -232,8 +231,7 @@ fn body(app: &App, ui: &mut egui::Ui, t: &Tokens, focus: bool, unsaved: bool) ->
             Action::ReplaceAppImage { .. } => {
                 let busy = u.progress().is_some();
                 let label = if busy { tl!("Downloading…") } else { tl!("Download and Install") };
-                let text = RichText::new(label).color(t.on_accent).font(t.strong());
-                let r = ui.add_enabled(!busy, egui::Button::new(text).fill(t.accent).stroke(egui::Stroke::NONE).min_size(egui::vec2(88.0, 30.0)));
+                let r = crate::dialogs::primary(ui, t, label, !busy, false);
                 if focus {
                     r.request_focus();
                 }

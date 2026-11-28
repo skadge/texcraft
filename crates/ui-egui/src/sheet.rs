@@ -27,6 +27,11 @@ fn open_key() -> Id {
     Id::unique("texcraft-sheet-open")
 }
 
+/// The id of the dialog drawn this pass as a box (a wide window), while it draws.
+fn boxed_key() -> Id {
+    Id::unique("texcraft-sheet-boxed")
+}
+
 /// Whether a dialog shown now is drawn as a sheet over the whole window.
 pub(crate) fn narrow(ctx: &egui::Context, t: &Tokens) -> bool {
     ctx.content_rect().width() < t.narrow_width
@@ -58,11 +63,21 @@ pub(crate) fn show(ctx: &egui::Context, t: &Tokens, id: &str, width: f32, leave:
         let screen = ctx.content_rect();
         let frame = widgets::dialog_frame(ctx);
         let room = (screen.width() - 2.0 * MARGIN - frame.inner_margin.sum().x).max(120.0);
+        let mut closed = false;
         let modal = egui::Modal::new(id).frame(frame).show(ctx, |ui| {
             ui.set_width(width.min(room));
+            ui.data_mut(|d| d.insert_temp(boxed_key(), id));
             add(ui);
+            ui.data_mut(|d| d.remove::<Id>(boxed_key()));
+            // Close at the end of the title's row ([`title`]), made after the dialog's own
+            // controls: the keyboard, given to the dialog's first control, starts on those.
+            let at = ui.data(|d| d.get_temp::<Rect>(id.with("close-at")));
+            ui.data_mut(|d| d.remove::<Rect>(id.with("close-at")));
+            if let Some(at) = at {
+                closed = ui.put(at, |ui: &mut Ui| widgets::icon_button(ui, t, "x", tl!("Close"), true)).clicked();
+            }
         });
-        let close = modal.should_close();
+        let close = modal.should_close() || closed;
         return Shown { close, back: false };
     }
     let screen = ctx.content_rect();
@@ -129,10 +144,24 @@ fn top_bar(ui: &mut Ui, t: &Tokens, id: Id, leave: Leave) -> (bool, bool) {
     pressed
 }
 
-/// A dialog's title: in a wide window, a heading at the top of its box; on a sheet, the top bar's.
+/// A dialog's title: in a wide window, a heading at the top of its box with Close at the row's
+/// end (as Escape, it closes the dialog); on a sheet, the top bar's.
 pub(crate) fn title(ui: &mut Ui, t: &Tokens, text: &str) {
     let Some(open) = ui.data(|d| d.get_temp::<Open>(open_key())) else {
-        ui.label(RichText::new(text).font(t.title()));
+        let boxed = ui.data(|d| d.get_temp::<Id>(boxed_key()));
+        let side = t.toolbar_height - 2.0 * t.unit;
+        let row = ui.allocate_ui_with_layout(vec2(ui.available_width(), 28.0), Layout::left_to_right(Align::Center), |ui| {
+            // Room for Close at the row's end, which the dialog's box makes last.
+            let room = if boxed.is_some() { side + t.unit * 2.0 } else { 0.0 };
+            ui.set_max_width(ui.available_width() - room);
+            ui.add(egui::Label::new(RichText::new(text).font(t.title())).truncate());
+        });
+        if let Some(id) = boxed {
+            let r = row.response.rect;
+            let right = ui.max_rect().right();
+            let at = Rect::from_min_size(egui::pos2(right - side, r.center().y - side / 2.0), vec2(side, side));
+            ui.data_mut(|d| d.insert_temp(id.with("close-at"), at));
+        }
         ui.add_space(t.unit * 2.0);
         return;
     };
