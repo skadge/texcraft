@@ -202,27 +202,6 @@ fn focus_if_asked(ui: &egui::Ui, r: &egui::Response, name: &str) {
     }
 }
 
-/// A small pill: an icon and words, on a tint of `tone`; the words are in the
-/// text colour, so they read whatever the tint.
-fn badge(ui: &mut egui::Ui, t: &Tokens, icon: Option<&str>, text: &str, tone: egui::Color32) {
-    let galley = ui.painter().layout_no_wrap(text.to_owned(), t.small(), t.text);
-    let icon_room = if icon.is_some() { 16.0 } else { 0.0 };
-    let size = vec2(galley.size().x + icon_room + 14.0, 20.0);
-    let (rect, r) = ui.allocate_exact_size(size, Sense::hover());
-    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, text));
-    if !ui.is_rect_visible(rect) {
-        return;
-    }
-    let fill = crate::theme::blend(t.surface, egui::Color32::from_rgba_unmultiplied(tone.r(), tone.g(), tone.b(), 56));
-    ui.painter().rect_filled(rect, egui::CornerRadius::same(10), fill);
-    let mut x = rect.left() + 7.0;
-    if let Some(i) = icon {
-        icons::paint(ui, egui::Rect::from_min_size(egui::pos2(x, rect.center().y - 6.0), vec2(12.0, 12.0)), i, 12.0, tone);
-        x += icon_room;
-    }
-    ui.painter().galley(egui::pos2(x, rect.center().y - galley.size().y / 2.0), galley, t.text);
-}
-
 /// The account's initial in a circle, standing for its picture.
 fn initial(ui: &mut egui::Ui, t: &Tokens, name: &str) {
     let (rect, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
@@ -386,7 +365,7 @@ fn row_card(app: &mut App, ui: &mut egui::Ui, t: &Tokens, row: &Row, narrow: boo
                         ui.spacing_mut().item_spacing.y = t.unit;
                         let badges = |ui: &mut egui::Ui| {
                             if row.default {
-                                badge(ui, t, Some("star"), tl!("Default"), t.accent);
+                                widgets::state_badge(ui, t, Some("star"), tl!("Default"), t.accent);
                             }
                             let (icon, tone) = match row.state.as_str() {
                                 "signed_in" | "token" => (Some("circle-check"), t.success),
@@ -394,9 +373,9 @@ fn row_card(app: &mut App, ui: &mut egui::Ui, t: &Tokens, row: &Row, narrow: boo
                                 "signing_in" => (Some("loader-circle"), t.accent),
                                 _ => (None, t.text_muted),
                             };
-                            badge(ui, t, icon, row.state_words(), tone);
+                            widgets::state_badge(ui, t, icon, row.state_words(), tone);
                             if !row.available {
-                                badge(ui, t, Some("info"), tl!("Desktop app only"), t.text_muted);
+                                widgets::state_badge(ui, t, Some("info"), tl!("Desktop app only"), t.text_muted);
                             }
                         };
                         let mut address = row.address();

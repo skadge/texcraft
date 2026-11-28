@@ -529,14 +529,7 @@ impl PdfView {
             return;
         }
         if self.doc.is_none() {
-            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                ui.add_space(rect.height() * 0.38);
-                ui.add(crate::icons::image("file-text", 32.0, t.text_muted.gamma_multiply(0.6)));
-                ui.add_space(t.unit * 3.0);
-                ui.label(egui::RichText::new(tl!("No PDF yet")).font(t.strong()));
-                ui.add_space(t.unit);
-                ui.label(egui::RichText::new(tl!("Compile the project to see it here.")).color(t.text_muted));
-            });
+            crate::widgets::pane_empty(ui, t, "file-text", tl!("No PDF yet"), tl!("Compile the project to see it here."));
             return;
         }
         let widest = self.sizes.iter().map(|s| s[0]).fold(1.0_f32, f32::max);

@@ -334,6 +334,53 @@ pub fn badge(ui: &Ui, t: &Tokens, at: egui::Pos2, count: usize, color: Color32) 
     ui.painter().galley(rect.center() - galley.size() / 2.0, galley, t.surface);
 }
 
+/// A small pill naming a state ("Default", "Signed in"): an icon and words on a tint of `tone`
+/// ([`Tokens::tint`]); the words are in the text colour, so they read on any tint, and say the
+/// state, so it is not told by colour alone.
+pub fn state_badge(ui: &mut Ui, t: &Tokens, icon: Option<&str>, text: &str, tone: Color32) {
+    let galley = ui.painter().layout_no_wrap(text.to_owned(), t.small(), t.text);
+    let icon_room = if icon.is_some() { 16.0 } else { 0.0 };
+    let size = vec2(galley.size().x + icon_room + 14.0, 20.0);
+    let (rect, r) = ui.allocate_exact_size(size, Sense::hover());
+    r.widget_info(|| WidgetInfo::labeled(Role::Label, true, text));
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
+    ui.painter().rect_filled(rect, CornerRadius::same(10), t.tint(tone));
+    let mut x = rect.left() + 7.0;
+    if let Some(i) = icon {
+        icons::paint(ui, Rect::from_min_size(egui::pos2(x, rect.center().y - 6.0), vec2(12.0, 12.0)), i, 12.0, tone);
+        x += icon_room;
+    }
+    ui.painter().galley(egui::pos2(x, rect.center().y - galley.size().y / 2.0), galley, t.text);
+}
+
+/// A pane with nothing to show yet (no file open, no PDF): an icon, what is missing, and what to
+/// do, in the pane's middle; the same in every pane.
+pub fn pane_empty(ui: &mut Ui, t: &Tokens, icon: &str, title: &str, detail: &str) {
+    ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+        ui.add_space(ui.available_height() * 0.35);
+        ui.add(icons::image(icon, 32.0, t.text_muted.gamma_multiply(0.6)));
+        ui.add_space(t.unit * 3.0);
+        ui.label(egui::RichText::new(title).font(t.strong()));
+        ui.add_space(t.unit);
+        ui.add(egui::Label::new(egui::RichText::new(detail).color(t.text_muted)).wrap().halign(egui::Align::Center));
+    });
+}
+
+/// A side panel's section with nothing in it yet (no headings, no comments, no history): what is
+/// missing and, when there is one, what to do; the same in every section.
+pub fn panel_empty(ui: &mut Ui, t: &Tokens, title: &str, detail: Option<&str>) {
+    ui.add_space(t.unit * 3.0);
+    egui::Frame::new().inner_margin(egui::Margin::symmetric((t.unit * 3.0) as i8, 0)).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = t.unit;
+        ui.add(egui::Label::new(egui::RichText::new(title).font(t.strong())).wrap());
+        if let Some(detail) = detail {
+            ui.add(egui::Label::new(egui::RichText::new(detail).font(t.small()).color(t.text_muted)).wrap());
+        }
+    });
+}
+
 /// A small uppercase heading for a panel section, with room on its right for actions.
 pub fn section_title(ui: &mut Ui, t: &Tokens, title: &str) {
     let font = egui::FontId::new(t.small_size - 0.5, crate::fonts::semibold());

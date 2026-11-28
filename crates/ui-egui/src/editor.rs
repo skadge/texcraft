@@ -322,14 +322,7 @@ fn text_zoom(app: &mut App, ui: &egui::Ui, area: egui::Rect) {
 }
 
 fn empty(ui: &mut egui::Ui, t: &Tokens, icon: &str, title: &str, detail: &str) {
-    ui.with_layout(Layout::top_down(Align::Center), |ui| {
-        ui.add_space(ui.available_height() * 0.35);
-        ui.add(icons::image(icon, 32.0, t.text_muted.gamma_multiply(0.6)));
-        ui.add_space(t.unit * 3.0);
-        ui.label(egui::RichText::new(title).font(t.strong()));
-        ui.add_space(t.unit);
-        ui.label(egui::RichText::new(detail).color(t.text_muted));
-    });
+    widgets::pane_empty(ui, t, icon, title, detail);
 }
 
 fn tabs(app: &mut App, ui: &mut egui::Ui) {

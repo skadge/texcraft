@@ -575,15 +575,8 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
         }
         // "No comments" under a comment being written would contradict it.
         if list.is_empty() && app.review.composer.is_none() {
-            ui.add_space(t.unit * 4.0);
-            ui.vertical_centered(|ui| {
-                ui.label(RichText::new(tl!("No comments or suggestions")).font(t.strong()));
-                ui.label(
-                    RichText::new(tl!("Select text and choose Edit › Comment, or turn on Suggest to propose changes."))
-                        .font(t.small())
-                        .color(t.text_muted),
-                );
-            });
+            let how = tl!("Select text and choose Edit › Comment, or turn on Suggest to propose changes.");
+            widgets::panel_empty(ui, &t, tl!("No comments or suggestions"), Some(how));
         }
         let mut last_path = None;
         for th in &list {

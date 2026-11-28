@@ -478,7 +478,7 @@ fn outline(app: &mut App, ui: &mut egui::Ui) {
     }
     let Some(path) = app.session.current().cloned() else { return };
     let Ok(text) = app.session.project().text(&path) else {
-        empty(ui, &t, tl!("This file has no outline."));
+        empty(ui, &t, tl!("No outline"), tl!("This file has no outline."));
         return;
     };
     let text = text.to_owned();
@@ -496,7 +496,7 @@ fn file_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, text: &str
     let t = app.tokens;
     let headings = texcraft_latex::outline(text);
     if headings.is_empty() {
-        empty(ui, &t, tl!("No headings in this file yet."));
+        empty(ui, &t, tl!("No headings yet"), tl!("No headings in this file yet."));
         return;
     }
     let keys: Vec<FoldKey> = headings.iter().map(|h| Some((fold_key(path.as_str(), h.level, &h.title), h.level))).collect();
@@ -554,7 +554,7 @@ fn document_outline(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath, entrie
     let levels = || entries.iter().filter_map(|e| if let EntryKind::Heading { level, .. } = e.kind { Some(level) } else { None });
     let Some(top) = levels().min() else {
         // Only includes that are not read: say so, under the words for no headings.
-        empty(ui, &t, tl!("No headings in this file yet."));
+        empty(ui, &t, tl!("No headings yet"), tl!("No headings in this file yet."));
         for e in entries {
             problem(ui, &t, e, 0);
         }
@@ -798,10 +798,6 @@ fn problem(ui: &mut egui::Ui, t: &Tokens, e: &texcraft_latex::document::Entry, d
     });
 }
 
-fn empty(ui: &mut egui::Ui, t: &Tokens, text: &str) {
-    ui.add_space(t.unit * 2.0);
-    ui.horizontal(|ui| {
-        ui.add_space(t.unit * 3.0);
-        ui.label(egui::RichText::new(text).font(t.small()).color(t.text_muted));
-    });
+fn empty(ui: &mut egui::Ui, t: &Tokens, title: &str, detail: &str) {
+    widgets::panel_empty(ui, t, title, Some(detail));
 }

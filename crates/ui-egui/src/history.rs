@@ -286,12 +286,13 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
         });
     });
     // Why there is no list.
-    let note = match (&owner, &view.error) {
-        (_, Some(e)) => Some((crate::i18n::msg(e), t.error)),
-        (None, None) => Some((no_history(&app.session).to_owned(), t.text_muted)),
-        (Some(_), None) if view.commits.is_empty() => Some((tl!("No saved versions yet.").to_owned(), t.text_muted)),
-        (Some(_), None) => None,
-    };
+    // Nothing to list yet: said as every side panel's section says it.
+    match (&owner, &view.error) {
+        (None, None) => widgets::panel_empty(ui, &t, tl!("No history yet"), Some(no_history(&app.session))),
+        (Some(_), None) if view.commits.is_empty() => widgets::panel_empty(ui, &t, tl!("No saved versions yet."), None),
+        _ => {}
+    }
+    let note = view.error.as_ref().map(|e| (crate::i18n::msg(e), t.error));
     if let Some((text, color)) = note {
         ui.horizontal(|ui| {
             ui.add_space(t.unit * 2.0);
