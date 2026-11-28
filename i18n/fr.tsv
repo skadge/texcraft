@@ -2748,3 +2748,46 @@ unit	{n} MB	{n} Mo
 	No headings yet	Pas encore de titres
 	No outline	Pas de plan
 	No history yet	Pas encore d'historique
+
+# Link to a Repository (C10)
+	Link to a Repository	Lier à un dépôt
+	Link to a Repository…	Lier à un dépôt…
+	Link to GitLab	Lier à GitLab
+	Link to GitHub	Lier à GitHub
+	Link to Overleaf	Lier à Overleaf
+	Link to a GitLab Server	Lier à un serveur GitLab
+	Link to a Git Address	Lier à une adresse git
+	Where the repository is	Où se trouve le dépôt
+	What happens	Ce qui se passe
+	Once the repository is chosen, TeXCraft checks what linking does, before anything changes.	Une fois le dépôt choisi, TeXCraft vérifie ce que fait la liaison, avant que rien ne change.
+	Checking the repository…	Vérification du dépôt…
+	The repository is empty: your project's files will be its first commit.	Le dépôt est vide : les fichiers de votre projet seront son premier commit.
+	The repository is empty: your project's history will be sent to it.	Le dépôt est vide : l'historique de votre projet y sera envoyé.
+	The repository has this project's history: Sync brings the two up to date.	Le dépôt a l'historique de ce projet : Synchroniser met les deux à jour.
+	The repository has files: they will be brought together with your project's.	Le dépôt contient des fichiers : ils seront réunis avec ceux de votre projet.
+@plural	The repository has {n} version: it will be merged with your project's.|The repository has {n} versions: they will be merged with your project's.	Le dépôt a {n} version : elle sera fusionnée avec celles de votre projet.|Le dépôt a {n} versions : elles seront fusionnées avec celles de votre projet.
+@plural	{n} file comes in|{n} files come in	{n} fichier arrive|{n} fichiers arrivent
+	yours stay	les vôtres restent
+	The project has a remote named {name} already. Sync will use this repository from now on; {name} stays as it is.	Le projet a déjà un dépôt distant nommé {name}. Synchroniser utilisera désormais ce dépôt ; {name} reste tel quel.
+	A remote's name has letters, digits, '-', '_' or '.', and is not taken.	Le nom d'un dépôt distant comporte des lettres, des chiffres, '-', '_' ou '.', et n'est pas déjà pris.
+	Both have files with the same names: choose which to keep for each.	Les deux ont des fichiers de mêmes noms : choisissez lequel garder pour chacun.
+	Linking and bringing the histories together…	Liaison et réunion des historiques…
+	Linking…	Liaison…
+	Linked to {place}: sending your files…	Lié à {place} : envoi de vos fichiers…
+	Linked to {place}.	Lié à {place}.
+	Linked to {place}: your history is sent.	Lié à {place} : votre historique est envoyé.
+	Linked to {place}: took in {files}.	Lié à {place} : {files} reçu.
+	The project is linked, but bringing the two together did not work: {why} Link or Sync tries again.	Le projet est lié, mais réunir les deux n'a pas fonctionné : {why} Lier ou Synchroniser réessaie.
+	Overleaf's git server does not answer web pages, so the browser cannot reach it: link the project from the desktop app.	Le serveur git d'Overleaf ne répond pas aux pages web, le navigateur ne peut donc pas l'atteindre : liez le projet depuis l'application de bureau.
+	Most git servers do not answer web pages, so the browser cannot reach them: link the project from the desktop app, or to GitLab or GitHub here.	La plupart des serveurs git ne répondent pas aux pages web, le navigateur ne peut donc pas les atteindre : liez le projet depuis l'application de bureau, ou ici à GitLab ou GitHub.
+	Unlink the project from {place}?	Délier le projet de {place} ?
+	Neither the project nor the repository changes: the project just stops syncing with it. Link to a Repository… links it again.	Ni le projet ni le dépôt ne changent : le projet cesse simplement de se synchroniser avec lui. Lier à un dépôt… le lie à nouveau.
+	Unlink	Délier
+	Unlink…	Délier…
+	Unlinked from {place}: the project and the repository are as they were.	Délié de {place} : le projet et le dépôt sont tels qu'ils étaient.
+	None yet: the repository is empty.	Aucune pour l'instant : le dépôt est vide.
+	Add a Remote	Ajouter un dépôt distant
+	Save the project to GitHub or GitLab, or link it to a repository that exists, to keep it there too and to sync it.	Enregistrez le projet sur GitHub ou GitLab, ou liez-le à un dépôt existant, pour l'y garder aussi et le synchroniser.
+@id	git.add_remote	Lier à un dépôt…
+@id	git.remove_remote	Délier du dépôt…
+@id	git.check_remote	Ce que fait la liaison à un dépôt
