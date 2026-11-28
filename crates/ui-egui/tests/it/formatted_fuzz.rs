@@ -191,10 +191,11 @@ fn target(h: &Harness<'_, App>, (line, x): (usize, f32)) -> Option<(egui::Pos2, 
     let visible: Vec<_> = all.into_iter().filter(|(_, r, _)| inside(r)).collect();
     let (_, r, value) = visible.get(line % visible.len().max(1))?;
     let at = egui::pos2(r.left() + x * r.width(), r.center().y);
-    // Not under a table's toolbar, which floats over the line above the table: a click there is
-    // the toolbar's.
-    let toolbars: Vec<egui::Rect> = h.query_all(by().role(Role::Toolbar)).map(|n| n.rect()).collect();
-    if toolbars.iter().any(|t| t.contains(at)) {
+    // Not under a button: a table's toolbar floats over the line above the table, and a click
+    // there is the toolbar's. (A node without bounds has no rect: it is not drawn.)
+    let buttons: Vec<egui::Rect> =
+        h.query_all(by().role(Role::Button)).filter(|n| n.accesskit_node().bounding_box().is_some()).map(|n| n.rect()).collect();
+    if buttons.iter().any(|b| b.contains(at)) {
         return None;
     }
     Some((at, value.clone()))
@@ -314,10 +315,10 @@ fn step(h: &mut Harness<'_, App>, a: &Act, history: &mut Vec<String>) -> Result<
             return Ok(());
         }
         let holder = h.query_all_by(|n| n.is_focused()).last().and_then(|n| n.accesskit_node().label()).unwrap_or_default();
-        // A double-click on a formula or a command shown as source opens its editor, which takes
-        // the keyboard; Escape gives it back.
+        // A double-click on a formula or a command shown as source, or Enter on one selected,
+        // opens its editor, which takes the keyboard; Escape gives it back.
         let editor = holder.starts_with("LaTeX") || holder.starts_with("Formula");
-        if editor && matches!(a, Act::Click { times: 2.., .. }) {
+        if editor && matches!(a, Act::Click { times: 2.., .. } | Act::Key(_, egui::Key::Enter)) {
             h.key_press(egui::Key::Escape);
             h.run();
             if h.query_by_label("main.tex formatted").is_some_and(|n| n.accesskit_node().is_focused()) {
