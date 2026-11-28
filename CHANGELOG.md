@@ -5,6 +5,12 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
+## 0.26.2 (2026-11-28)
+
+- retex 2.6.1: a pdfLaTeX document builds in the browser and from the built-in packages; its
+  format has the hyphenation patterns that are installed, and another language's are downloaded
+  when a document asks for them.
+
 ## 0.26.1 (2026-11-28)
 
 0.26.0's changes, below, with all their packages: 0.26.0's Flatpak job stopped after building, so

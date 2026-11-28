@@ -41,6 +41,12 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.26.2" date="2026-11-28" type="development">
+      <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.26.2</url>
+      <description>
+        <p>pdfLaTeX documents build in the browser and from the built-in packages.</p>
+      </description>
+    </release>
     <release version="0.26.1" date="2026-11-28" type="development">
       <url type="details">https://gitlab.com/severin-lemaignan/texcraft/-/releases/v0.26.1</url>
       <description>
