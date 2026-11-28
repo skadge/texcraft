@@ -682,7 +682,7 @@ fn perform(app: &mut App, act: Act) {
         Act::ChangeFolder => app.request_pick(crate::picks::Pick::CloneFolder),
         Act::SignIn(action) => crate::forge::act(app, action),
         Act::DesktopApp => {
-            app.ctx.open_url(egui::OpenUrl::new_tab(crate::ui_cmd::guide_page("index.html#download")));
+            crate::ui_cmd::run(app, "help.desktop_app");
         }
         Act::AddServer => {
             if let Some(Dialog::Import(form)) = app.view.dialog.take() {

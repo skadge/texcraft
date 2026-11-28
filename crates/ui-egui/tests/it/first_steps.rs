@@ -244,3 +244,13 @@ fn the_first_steps_hint_shows_with_a_project_and_stays_dismissed() {
     run(&mut h);
     assert!(h.query_by_role_and_label(Role::Region, "First steps").is_some(), "Help › First Steps does not show it again");
 }
+
+#[test]
+fn the_browser_points_to_the_desktop_app_and_the_desktop_does_not() {
+    let web = start_page(browser(), Prefs::default(), day(2026, 11, 28));
+    assert!(web.query_by_role_and_label(Role::Button, "Get the Desktop App").is_some(), "the browser's start page does not offer the desktop app");
+    assert!(texcraft_ui_egui::ui_cmd::in_menus(web.state(), "help.desktop_app"), "the browser's Help menu does not offer the desktop app");
+    let desk = start_page(desktop(), Prefs::default(), day(2026, 11, 28));
+    assert!(desk.query_by_role_and_label(Role::Button, "Get the Desktop App").is_none(), "the desktop app offers itself");
+    assert!(!texcraft_ui_egui::ui_cmd::in_menus(desk.state(), "help.desktop_app"), "the desktop's Help menu offers the desktop app");
+}

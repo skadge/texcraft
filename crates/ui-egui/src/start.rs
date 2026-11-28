@@ -140,10 +140,32 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 recent(app, ui, &t, width);
                 ui.add_space(24.0);
                 templates(app, ui, &t);
+                if app.session.library().is_some() {
+                    ui.add_space(24.0);
+                    desktop_app(app, ui, &t);
+                }
                 ui.add_space(48.0);
             });
         });
     });
+}
+
+/// In the browser, one quiet line at the page's end: the desktop app, and what it adds.
+fn desktop_app(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
+    let mut get = false;
+    ui.horizontal_wrapped(|ui| {
+        ui.label(
+            RichText::new(tl!(
+                "TeXCraft is also a desktop app: it works with Overleaf and other git servers, with folders on your computer, and offline."
+            ))
+            .font(t.small())
+            .color(t.text_muted),
+        );
+        get = widgets::text_button(ui, t, tl!("Get the Desktop App"), true).clicked();
+    });
+    if get {
+        crate::ui_cmd::run(app, "help.desktop_app");
+    }
 }
 
 /// Below this width the start page's buttons go under the title, one per line, the main one first.

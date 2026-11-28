@@ -7,13 +7,21 @@ use egui::{RichText, vec2};
 
 use crate::{App, widgets};
 
-/// `help.first_steps`: shows the hint again, or dismisses it.
-pub(crate) fn toggle(app: &mut App) {
-    app.prefs.first_steps_seen = !app.prefs.first_steps_seen;
-    app.prefs_changed = true;
+/// `help.first_steps`: the guide's first steps, and the hint shown again if it was dismissed (it
+/// shows with a project open).
+pub(crate) fn open(app: &mut App) {
+    app.ctx.open_url(egui::OpenUrl::new_tab(crate::ui_cmd::guide_page("getting-started.html")));
     if app.prefs.first_steps_seen {
-        app.view.status = Some((tl!("Hint dismissed. Help › First Steps shows it again.").to_owned(), false));
+        app.prefs.first_steps_seen = false;
+        app.prefs_changed = true;
     }
+}
+
+/// The hint's own Dismiss.
+fn dismiss(app: &mut App) {
+    app.prefs.first_steps_seen = true;
+    app.prefs_changed = true;
+    app.view.status = Some((tl!("Hint dismissed. Help › First Steps shows it again.").to_owned(), false));
 }
 
 /// The strip, while it is not dismissed; call before the panes, after the rail and side panel.
@@ -46,6 +54,6 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let rect = strip.response.rect;
     ui.painter().hline(rect.x_range(), rect.bottom(), t.hairline());
     if dismiss {
-        crate::ui_cmd::run(app, "help.first_steps");
+        self::dismiss(app);
     }
 }

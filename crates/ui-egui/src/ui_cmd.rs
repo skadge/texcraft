@@ -187,6 +187,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ui("help.first_steps", "First Steps", "Help", None),
     // Opens What's New and checks at once (the daily check runs by itself when Settings allow).
     ui("help.check_updates", "Check for Updates…", "Help", None),
+    ui("help.desktop_app", "Get the Desktop App", "Help", None),
     // Once an update is in place (the AppImage): quit, unsaved changes asked about first, and
     // start the new version; in the browser, reload the page.
     ui("app.restart_to_update", "Restart to Update", "Help", None),
@@ -342,6 +343,7 @@ pub const MENU_BAR: &[(&str, &[Entry])] = &[
             C("help.first_steps"),
             S,
             C("help.check_updates"),
+            C("help.desktop_app"),
             C("help.about"),
         ],
     ),
@@ -595,10 +597,11 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
         }
         "help.about" => app.view.dialog = Some(Dialog::About),
         "help.check_updates" => crate::updates::check_now(app),
+        "help.desktop_app" => desktop_app(app),
         "app.restart_to_update" => crate::updates::restart(app),
         "app.settings" => crate::settings::open(app, params),
         "help.example" => app.open_example(),
-        "help.first_steps" => crate::first_steps::toggle(app),
+        "help.first_steps" => crate::first_steps::open(app),
         "app.start" => app.start = true,
         "view.menu_bar" => crate::top_bar::toggle_menu_bar(app),
         "view.focus_mode" => {
@@ -721,13 +724,19 @@ pub(crate) fn label(app: &App, id: &'static str, english: &'static str) -> &'sta
 /// entries need AI features on and a connected model. All Commands lists the others all the same.
 pub fn in_menus(app: &App, id: &str) -> bool {
     match id {
-        "project.download_zip" => app.session.library().is_some(),
+        "project.download_zip" | "help.desktop_app" => app.session.library().is_some(),
         "forge.commit" | "forge.pull" => app.session.forge().is_some(),
         "project.sync" => crate::sync::has_remote(app),
         "forge.save_to_github" | "forge.save_to_gitlab" | "git.add_remote" => app.session.forge().is_none(),
         id if AI_COMMANDS.contains(&id) => crate::ai::offered(app),
         _ => true,
     }
+}
+
+/// The guide's page for getting the desktop app (in the browser: the desktop app reaches
+/// Overleaf and other git servers, folders, and a TeX Live of its own).
+pub(crate) fn desktop_app(app: &mut App) {
+    app.ctx.open_url(egui::OpenUrl::new_tab(guide_page("index.html#download")));
 }
 
 /// Downloads the project as a zip file (in the browser; with a `path`, writes it there) and says
