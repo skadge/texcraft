@@ -414,10 +414,6 @@ github-release:
         cat release-notes.md
         echo
         echo "Built and published on GitLab: ${CI_PROJECT_URL}/-/releases/${CI_COMMIT_TAG}"
-        echo
-        for file in out/*.AppImage out/*.flatpak out/*.tar.gz SHA256SUMS; do
-          echo "- [$(basename "$file")](${PACKAGE_REGISTRY_URL}/${VERSION}/$(basename "$file"))"
-        done
       } > github-notes.md
     - |
       if gh release view "$CI_COMMIT_TAG" > /dev/null 2>&1; then
