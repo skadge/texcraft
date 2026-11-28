@@ -27,7 +27,7 @@ macro_rules! git {
 // Remotes, refs, and moving the branch with the work tree (push and pull).
 #[path = "remote.rs"]
 mod remote;
-pub use remote::{Choose, Merged, Remote, Side};
+pub use remote::{Choose, Compared, Merged, Remote, Side};
 
 /// A folder of the tree being built: names to files (mode, blob) or folders.
 #[derive(Default)]

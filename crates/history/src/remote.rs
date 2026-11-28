@@ -34,6 +34,22 @@ pub enum Merged {
     Conflicts(Vec<(String, &'static str)>),
 }
 
+/// How the files of two commits compare, before they are merged (Link to a Repository's
+/// preview).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Compared {
+    /// The two histories have a commit in common.
+    pub related: bool,
+    /// With none in common: the paths on both sides with other contents (a merge asks which to
+    /// keep for each).
+    pub clashes: Vec<String>,
+    /// Files the same on both sides.
+    pub same: usize,
+    /// Files only on our side, and only on theirs.
+    pub only_ours: usize,
+    pub only_theirs: usize,
+}
+
 /// Which side's version of a file in conflict a merge keeps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Side {
@@ -164,6 +180,45 @@ impl History {
         self.write_config(&file)
     }
 
+    /// Removes remote `name` from the configuration, the branch's upstream when it is on it, and
+    /// the remote's branches as last known (`refs/remotes/<name>/…`). Nothing else changes: the
+    /// commits stay, and the remote's repository is not reached.
+    pub fn remove_remote(&mut self, name: &str) -> Result<()> {
+        check_remote_name(name)?;
+        let mut file = self.config()?;
+        if file.remove_section("remote", Some(name.into())).is_none() {
+            return Err(format!("The project has no remote {name}."));
+        }
+        if let Some(branch) = self.branch()
+            && file.string_by("branch", branch.as_str(), "remote").is_some_and(|r| *r == *name.as_bytes())
+            && let Ok(mut section) = file.section_mut("branch", Some(branch.as_str().into()))
+        {
+            section.remove("remote");
+            section.remove("merge");
+        }
+        self.write_config(&file)?;
+        let prefix = format!("refs/remotes/{name}/");
+        let refs = git!("The repository's refs cannot be read", self.repo.references())?;
+        let all = git!("The repository's refs cannot be read", refs.all())?;
+        let tracking: Vec<gix::Reference<'_>> =
+            all.filter_map(std::result::Result::ok).filter(|r| r.name().as_bstr().starts_with(prefix.as_bytes())).collect();
+        for reference in tracking {
+            git!("A remote's branch cannot be removed", reference.delete())?;
+        }
+        Ok(())
+    }
+
+    /// Makes the checked-out branch follow no remote branch.
+    pub fn clear_upstream(&mut self) -> Result<()> {
+        let Some(branch) = self.branch() else { return Ok(()) };
+        let mut file = self.config()?;
+        if let Ok(mut section) = file.section_mut("branch", Some(branch.as_str().into())) {
+            section.remove("remote");
+            section.remove("merge");
+        }
+        self.write_config(&file)
+    }
+
     /// The commit ref `name` (`refs/remotes/origin/main`) points at, if there is one.
     pub fn ref_id(&self, name: &str) -> Result<Option<String>> {
         let found = git!("A ref cannot be read", self.repo.try_find_reference(name))?;
@@ -231,6 +286,28 @@ impl History {
             }
         }
         Ok(None)
+    }
+
+    /// How the files of commit `theirs` compare with those of commit `ours` (every file of the
+    /// repository, hidden ones too: a merge takes them all).
+    pub fn compare(&self, ours: &str, theirs: &str) -> Result<Compared> {
+        let (a, b) = (self.commit_id(ours)?, self.commit_id(theirs)?);
+        let related = self.merge_base(a, b)?.is_some();
+        let (mine, other) = (self.flat(Some(self.commit_tree(a)?))?, self.flat(Some(self.commit_tree(b)?))?);
+        let mut out = Compared { related, ..Compared::default() };
+        for (path, entry) in &mine {
+            match other.get(path) {
+                Some(o) if o == entry => out.same += 1,
+                Some(_) => {
+                    if !related {
+                        out.clashes.push(path.to_str_lossy().into_owned());
+                    }
+                }
+                None => out.only_ours += 1,
+            }
+        }
+        out.only_theirs = other.keys().filter(|p| !mine.contains_key(*p)).count();
+        Ok(out)
     }
 
     fn flat(&self, tree: Option<ObjectId>) -> Result<Flat> {
