@@ -103,7 +103,11 @@ fn each_answer_is_kept_and_settings_shows_it() -> Result<(), String> {
         let (mut h, seen) = window(MissingPackages::Ask)?;
         compile(&mut h, &seen);
         h.get_by_label(answer).click();
-        h.run();
+        // Steps, not `run`: Download Automatically starts a build at once, whose spinner keeps
+        // repainting (under load, past `run`'s few frames).
+        for _ in 0..4 {
+            h.step();
+        }
         assert_eq!(h.state().session().settings.missing_packages, kept, "{answer} was not kept");
         let prefs = h.state_mut().take_changed_prefs().ok_or("the answer is not saved in the preferences")?;
         assert_eq!(prefs.missing_packages, kept, "{answer}: the preferences keep another value");
