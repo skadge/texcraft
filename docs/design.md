@@ -128,6 +128,42 @@ Faces come from storytold/craft-fonts through the optional `CRAFT_FONTS_DIR`: In
   - On the right: the caret's line and column, and the engine.
 - **Dividers.** 1 px lines with an 8 px grab area. The dividers next to the editor have a small collapse handle at the midpoint. The divider between editor and PDF will carry the two navigation buttons (docs/ROADMAP.md).
 
+## Patterns
+
+One way for each kind of thing, by construction: each is a shared helper, so a new dialog or
+setting looks and behaves as the others do (docs/ux-review-2.md).
+
+- **Dialogs** (`dialogs.rs`, `sheet.rs`). A box no wider than the window, a sheet on a phone. The
+  header (`dialogs::header`, or `dialogs::title` for a dialog of one page): Back first when the
+  dialog has pages (named for where it goes: "Back to sources"), the title, then anything the
+  dialog keeps beside it (Settings' and the gallery's search), and Close (×) at the row's end,
+  which does what Escape does. The footer (`dialogs::actions`): the one primary action
+  (`dialogs::primary`, the accent, or `error` when it destroys something) right-most, the others
+  (`dialogs::secondary`: Cancel, Back, Not Now) to its left, a discarding action (Don't Save) alone
+  at the left end. Enter in the last field is the primary action; Escape closes; the keyboard
+  starts in the dialog and goes back to what opened it. A choice of a place or a source is a grid of cards (Import, Add a Connection, Where to
+  Keep It; a list on a phone); a running operation's progress takes the footer's place
+  (`dialogs::progress`).
+- **Settings** (`settings::setting`). One row per setting: its name (sentence case) and one
+  line or two of help on the left, its control on the right (under the help on a phone), the
+  control named after the row. On or off: a checkbox. Two or three short choices: a segmented
+  control; more, or long names: a drop-down. A number: a slider with its value before it. The
+  most used setting of a section first. A feature's quick choices elsewhere (the Compile button's
+  menu, the status bar's spelling language) are the same settings, not copies, and their menu
+  ends with "… Settings…", which opens the section (`settings::menu_link`).
+- **States** (`widgets::state_badge`). A small pill: an icon and the state in words, on the tone's
+  tint (`Tokens::tint`, stronger in the dark theme so that it is seen as much).
+- **Empty states.** A pane (no file, no PDF): `widgets::pane_empty`, an icon, what is missing and
+  what to do, in its middle. A side panel's section: `widgets::panel_empty`, what is missing in
+  bold and what to do under it.
+- **Words.** Commands, buttons, menu entries, tabs and dialog titles in title case ("Zoom Out",
+  "Previous Page", "Build Log"), as the command they run is named; settings' names, options in a
+  drop-down, help and tooltips that explain in sentence case. An icon button is named as its
+  command. An ellipsis (…) ends a label exactly when the action asks for more before it acts
+  (Save PDF As…, Settings…). The status line: what happened, as a sentence ("Saved to …"); a
+  failure starts "Could not …" and says what to do; a build's state is "Compiled", "Compiled with
+  2 errors", "Failed: …".
+
 ## Motion
 
 Hover and press colours change over 80 ms, and panels fold over 140 ms. Nothing moves when the system asks for reduced motion.
