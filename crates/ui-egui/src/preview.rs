@@ -50,6 +50,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         // While a build's later passes run, its draft; otherwise the last PDF a build wrote, so a
         // draft never outlives its build (finished, failed or stopped).
         sync(app);
+        app.pdf.paper = if app.prefs.dim_pdf { t.page_dim } else { egui::Color32::WHITE };
         if app.pdf.thumbnails() && app.pdf.has_pdf() {
             // The miniatures in a strip of their own on the left, the pages beside them.
             let width = t.thumbnail_width + 6.0 * t.unit + ui.spacing().scroll.bar_width;

@@ -158,6 +158,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     // leaves it too.
     ui("view.focus_mode", "Focus Mode", "View", Some("Cmd+Shift+Enter")),
     ui("view.theme", "Switch Light and Dark", "View", None),
+    // Settings › Appearance's Dim the PDF in the dark theme; `{"on": false}` sets it.
+    ui("view.dim_pdf", "Dim the PDF in the Dark Theme", "View", None),
     ui("app.start", "Start Page", "View", None),
     // Import a Project (docs/design/import-dialog.md): GitLab, GitHub, Overleaf, a GitLab server,
     // a git address, a folder or a zip file. `{"source": "overleaf", "address": …}` opens it at a
@@ -512,6 +514,10 @@ pub fn run_with(app: &mut App, id: &str, params: &serde_json::Value) {
             let next = if app.tokens.scheme == Scheme::Dark { ThemePref::Light } else { ThemePref::Dark };
             let ctx = app.ctx.clone();
             app.set_theme(&ctx, next);
+        }
+        "view.dim_pdf" => {
+            app.prefs.dim_pdf = params.get("on").and_then(serde_json::Value::as_bool).unwrap_or(!app.prefs.dim_pdf);
+            app.prefs_changed = true;
         }
         "project.clear_recent" => {
             app.prefs.recent.clear();

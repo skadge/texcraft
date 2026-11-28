@@ -387,32 +387,20 @@ fn appearance(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
         }
         None
     });
-    if app.desktop_window {
-        setting(
-            ui,
-            t,
-            tl!("System title bar"),
-            tl!("The system's title bar above the window, in place of the window's buttons in the top bar."),
-            |ui| {
-                let mut on = app.prefs.system_title_bar;
-                let r = ui.checkbox(&mut on, "");
-                if r.changed() {
-                    app.prefs.system_title_bar = on;
-                    app.prefs_changed = true;
-                }
-                Some(r)
-            },
-        );
-    }
-    crate::updates::setting(app, ui, t);
-    setting(ui, t, tl!("Show tips at startup"), tl!("A tip of the day on the start page, about a feature that is easy to miss."), |ui| {
-        let mut on = app.prefs.show_tips;
-        let r = ui.checkbox(&mut on, "");
-        if r.changed() {
-            crate::tips::set_shown(app, on);
-        }
-        Some(r)
-    });
+    setting(
+        ui,
+        t,
+        tl!("Dim the PDF in the dark theme"),
+        tl!("The PDF's pages a little darker while the theme is dark, for long sessions; the PDF itself does not change."),
+        |ui| {
+            let mut on = app.prefs.dim_pdf;
+            let r = ui.add(egui::Checkbox::without_text(&mut on));
+            if r.changed() {
+                crate::ui_cmd::run_with(app, "view.dim_pdf", &json!({"on": on}));
+            }
+            Some(r)
+        },
+    );
     let languages = crate::i18n::languages();
     let help = if languages.len() > 1 {
         tl!("The language of menus and messages.")
@@ -444,6 +432,32 @@ fn appearance(app: &mut App, ui: &mut egui::Ui, t: &Tokens) {
             let _ = combo.response.accessible_name(tl!("Interface language"));
         });
         None
+    });
+    if app.desktop_window {
+        setting(
+            ui,
+            t,
+            tl!("System title bar"),
+            tl!("The system's title bar above the window, in place of the window's buttons in the top bar."),
+            |ui| {
+                let mut on = app.prefs.system_title_bar;
+                let r = ui.checkbox(&mut on, "");
+                if r.changed() {
+                    app.prefs.system_title_bar = on;
+                    app.prefs_changed = true;
+                }
+                Some(r)
+            },
+        );
+    }
+    crate::updates::setting(app, ui, t);
+    setting(ui, t, tl!("Show tips at startup"), tl!("A tip of the day on the start page, about a feature that is easy to miss."), |ui| {
+        let mut on = app.prefs.show_tips;
+        let r = ui.checkbox(&mut on, "");
+        if r.changed() {
+            crate::tips::set_shown(app, on);
+        }
+        Some(r)
     });
 }
 

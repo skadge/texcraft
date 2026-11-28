@@ -68,6 +68,9 @@ pub struct Tokens {
     pub shadow: Color32,
     /// Behind the page in presentation mode.
     pub presentation: Color32,
+    /// A PDF page's paper, and what its drawing is multiplied by, when the PDF is dimmed
+    /// (Settings › Appearance): white in the light theme, a lower white in the dark one.
+    pub page_dim: Color32,
     // Syntax
     pub syntax_command: Color32,
     pub syntax_comment: Color32,
@@ -158,6 +161,7 @@ impl Tokens {
             caret_text: rgb(0xFFFFFF),
             shadow: Color32::from_black_alpha(36),
             presentation: Color32::BLACK,
+            page_dim: Color32::WHITE,
             syntax_command: rgb(0x2050C0),
             syntax_comment: rgb(0x5A6B4E),
             syntax_group: rgb(0x6A3FA0),
@@ -204,6 +208,7 @@ impl Tokens {
             caret_text: rgb(0x16181C),
             shadow: Color32::from_black_alpha(102),
             presentation: Color32::BLACK,
+            page_dim: rgb(0xC4C6CA),
             syntax_command: rgb(0x82AEFF),
             syntax_comment: rgb(0x93A38D),
             syntax_group: rgb(0xC3A6F0),
