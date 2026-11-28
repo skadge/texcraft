@@ -890,7 +890,7 @@ impl App {
         if let Some(error) = result["removed"]["left"].get(0).and_then(|l| l["error"].as_str()) {
             self.view.status = Some((error.to_owned(), true));
         } else if !trashed.is_empty() {
-            self.view.status = Some((tl!("Moved to the trash: {files}").replace("{files}", &trashed.join(", ")), false));
+            self.view.status = Some((tl!("Moved to the trash: {files}.").replace("{files}", &trashed.join(", ")), false));
         }
     }
 
@@ -939,7 +939,7 @@ impl App {
         match self.session.poll_export() {
             Some(Ok(done)) => {
                 let path = done["path"].as_str().unwrap_or_default().to_owned();
-                self.view.status = Some((tl!("Exported to {path}").replace("{path}", &path), false));
+                self.view.status = Some((tl!("Exported to {path}.").replace("{path}", &path), false));
             }
             Some(Err(e)) => self.view.status = Some((e, true)),
             None => {}

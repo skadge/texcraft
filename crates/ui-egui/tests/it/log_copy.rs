@@ -103,7 +103,7 @@ fn a_message_that_starts_elsewhere_links_both_places_and_the_log_button_says_its
     let app = App::with_prefs(s, Prefs { auto_compile: false, ..Prefs::default() });
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 800.0)).build_ui_state(|ui, app: &mut App| app.frame(ui), app);
     h.run();
-    h.get_by_label("Build log, 1 error").click();
+    h.get_by_label("Build Log, 1 error").click();
     h.run();
     let _ = h.get_by_label("sections/intro.tex:3");
     h.get_by_label("Copy the message").click();

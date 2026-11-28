@@ -124,7 +124,7 @@
 	Branch	Branche
 	Brought in from the branch: {files}.	Repris de la branche : {files}.
 	Build files deleted: the next build starts from scratch.	Fichiers de compilation supprimés : la prochaine compilation repart de zéro.
-	Build log	Journal de compilation
+	Build Log	Journal de compilation
 	Build the PDF when typing pauses.	Compiler le PDF quand la frappe marque une pause.
 	Build with the open suggestions applied; the files do not change	Compiler avec les suggestions ouvertes appliquées ; les fichiers ne changent pas
 	Building	Compilation
@@ -184,7 +184,7 @@
 	Column left	Colonne à gauche
 	Column right	Colonne à droite
 	Comment	Commenter
-	Comment added	Commentaire ajouté
+	Comment added.	Commentaire ajouté.
 	Comment by {name} on “{quote}”{state}	Commentaire de {name} sur « {quote} »{state}
 	Comment resolved	Commentaire résolu
 	Comment {n} of {total}, by {name}: {text}	Commentaire {n} sur {total}, de {name} : {text}
@@ -306,7 +306,7 @@
 	Export	Exporter
 	Export As	Exporter sous
 	Export the document as PDF or another format	Exporter le document en PDF ou dans un autre format
-	Exported to {path}	Exporté vers {path}
+	Exported to {path}.	Exporté vers {path}.
 	Exporting as {format}…	Export en {format}…
 	Exporting…	Export…
 	Fetched from TeXCraft's site when you create the project.	Récupéré depuis le site de TeXCraft à la création du projet.
@@ -322,8 +322,8 @@
 	Find and replace	Rechercher et remplacer
 	Finnish	Finnois
 	Fit	Ajuster
-	Fit page	Page entière
-	Fit width	Pleine largeur
+	Fit Page	Page entière
+	Fit Width	Pleine largeur
 	Back to Fit Page	Revenir à Page entière
 	Back to Fit Width	Revenir à Pleine largeur
 	Fix Grammar and Spelling	Corriger la grammaire et l'orthographe
@@ -524,7 +524,7 @@
 	Move	Déplacer
 	Move File	Déplacer le fichier
 	Move to…	Déplacer vers…
-	Moved to the trash: {files}	Mis à la corbeille : {files}
+	Moved to the trash: {files}.	Mis à la corbeille : {files}.
 	Name	Nom
 	Name a symbol of the palette by its command, such as \\alpha.	Désignez un symbole de la palette par sa commande, par exemple \\alpha.
 	Name the build output: pdf, pdfx, synctex or log.	Nommez la sortie de compilation : pdf, pdfx, synctex ou log.
@@ -540,7 +540,6 @@
 	New comment	Nouveau commentaire
 	Next Match	Occurrence suivante
 	Next Page	Page suivante
-	Next page	Page suivante
 	Next words	Mots suivants
 	No PDF yet	Pas encore de PDF
 	No answer: {error}	Pas de réponse : {error}
@@ -682,7 +681,6 @@
 	Present	Présenter
 	Previous Match	Occurrence précédente
 	Previous Page	Page précédente
-	Previous page	Page précédente
 	Private	Privé
 	Project	Projet
 	Project Files	Fichiers du projet
@@ -2249,8 +2247,8 @@ unit	{n} s	{n} s
 @msg	“{w}” is not a word that can go in a word list: one word of letters, at most {MAX_WORD_CHARS}.	« {w} » n'est pas un mot qui peut figurer dans une liste de mots : un seul mot de lettres, {MAX_WORD_CHARS} au plus.
 
 # Build log: where problems start
-@plural	Build log, {n} error|Build log, {n} errors	Journal de compilation, {n} erreur|Journal de compilation, {n} erreurs
-@plural	Build log, {n} warning|Build log, {n} warnings	Journal de compilation, {n} avertissement|Journal de compilation, {n} avertissements
+@plural	Build Log, {n} error|Build Log, {n} errors	Journal de compilation, {n} erreur|Journal de compilation, {n} erreurs
+@plural	Build Log, {n} warning|Build Log, {n} warnings	Journal de compilation, {n} avertissement|Journal de compilation, {n} avertissements
 	TeX noticed it at {place}	TeX l'a remarqué à {place}
 	{message} (it starts at {place})	{message} (commence à {place})
 

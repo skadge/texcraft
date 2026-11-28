@@ -83,7 +83,7 @@ fn the_export_pill_turns_while_a_file_is_exported_and_the_status_says_when_it_is
     h.run();
     // A pill with its name, wider than the icon buttons beside it.
     let pill = h.get_by_role_and_label(egui::accesskit::Role::Button, "Export").rect();
-    assert!(pill.width() > h.get_by_label("Build log").rect().width() * 2.0, "Export is not a pill with its name");
+    assert!(pill.width() > h.get_by_label("Build Log").rect().width() * 2.0, "Export is not a pill with its name");
     h.get_by_label("Export").click();
     h.run();
     h.get_by_label("DOCX Document (.docx)").click();
@@ -113,8 +113,8 @@ fn the_export_pill_turns_while_a_file_is_exported_and_the_status_says_when_it_is
     Ok(())
 }
 
-/// Issue #22: in the browser the PDF is downloaded: the PDF pane's button and the Export menu's
-/// first entry say so and can be chosen once there is a PDF (they were greyed out).
+/// Issue #22: in the browser the PDF is downloaded: the Export menu's first entry says so and can
+/// be chosen once there is a PDF (it was greyed out). It is the PDF pane's one way to the PDF.
 #[test]
 fn in_the_browser_the_pdf_can_be_downloaded_from_the_pdf_pane() {
     use egui_kittest::kittest::NodeT as _;
@@ -130,11 +130,9 @@ fn in_the_browser_the_pdf_can_be_downloaded_from_the_pdf_pane() {
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
     h.run();
-    let enabled = |h: &Harness<'_, App>| !h.get_by_role_and_label(egui::accesskit::Role::Button, "Download PDF").accesskit_node().is_disabled();
-    assert!(enabled(&h), "the PDF pane's Download PDF is greyed out");
+    assert!(h.query_by_label("Download PDF").is_none(), "the PDF pane has a button of its own beside the Export menu's entry");
     h.get_by_label("Export").click();
     h.run();
-    // The pane's button, and the menu's entry.
     let ready = h.query_all_by_label("Download PDF").filter(|n| !n.accesskit_node().is_disabled()).count();
-    assert_eq!(ready, 2, "the Export menu's PDF entry is greyed out or missing");
+    assert_eq!(ready, 1, "the Export menu's PDF entry is greyed out or missing");
 }

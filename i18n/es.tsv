@@ -124,7 +124,7 @@
 	Branch	Rama
 	Brought in from the branch: {files}.	Traído de la rama: {files}.
 	Build files deleted: the next build starts from scratch.	Archivos de compilación eliminados: la próxima compilación empieza desde cero.
-	Build log	Registro de compilación
+	Build Log	Registro de compilación
 	Build the PDF when typing pauses.	Generar el PDF cuando se hace una pausa al escribir.
 	Build with the open suggestions applied; the files do not change	Compilar con las sugerencias abiertas aplicadas; los archivos no cambian
 	Building	Compilando
@@ -183,7 +183,7 @@
 	Column left	Columna a la izquierda
 	Column right	Columna a la derecha
 	Comment	Comentario
-	Comment added	Comentario añadido
+	Comment added.	Comentario añadido.
 	Comment by {name} on “{quote}”{state}	Comentario de {name} sobre «{quote}»{state}
 	Comment resolved	Comentario resuelto
 	Comment {n} of {total}, by {name}: {text}	Comentario {n} de {total}, de {name}: {text}
@@ -306,7 +306,7 @@
 	Export	Exportar
 	Export As	Exportar como
 	Export the document as PDF or another format	Exportar el documento como PDF u otro formato
-	Exported to {path}	Exportado a {path}
+	Exported to {path}.	Exportado a {path}.
 	Exporting as {format}…	Exportando como {format}…
 	Exporting…	Exportando…
 	Fetched from TeXCraft's site when you create the project.	Se obtiene del sitio de TeXCraft al crear el proyecto.
@@ -322,8 +322,8 @@
 	Find and replace	Buscar y reemplazar
 	Finnish	Finés
 	Fit	Ajustar
-	Fit page	Ajustar página
-	Fit width	Ajustar ancho
+	Fit Page	Ajustar página
+	Fit Width	Ajustar ancho
 	Back to Fit Page	Volver a Ajustar página
 	Back to Fit Width	Volver a Ajustar ancho
 	Fix Grammar and Spelling	Corregir gramática y ortografía
@@ -524,7 +524,7 @@
 	Move	Mover
 	Move File	Mover archivo
 	Move to…	Mover a…
-	Moved to the trash: {files}	Movidos a la papelera: {files}
+	Moved to the trash: {files}.	Movidos a la papelera: {files}.
 	Name	Nombre
 	Name a symbol of the palette by its command, such as \\alpha.	Nombre un símbolo de la paleta por su comando, como \\alpha.
 	Name the build output: pdf, pdfx, synctex or log.	Nombre la salida de compilación: pdf, pdfx, synctex o log.
@@ -540,7 +540,6 @@
 	New comment	Nuevo comentario
 	Next Match	Coincidencia siguiente
 	Next Page	Página siguiente
-	Next page	Página siguiente
 	Next words	Palabras siguientes
 	No PDF yet	Aún no hay PDF
 	No answer: {error}	Sin respuesta: {error}
@@ -682,7 +681,6 @@
 	Present	Presentar
 	Previous Match	Coincidencia anterior
 	Previous Page	Página anterior
-	Previous page	Página anterior
 	Private	Privado
 	Project	Proyecto
 	Project Files	Archivos del proyecto
@@ -2249,8 +2247,8 @@ unit	{n} s	{n} s
 @msg	“{w}” is not a word that can go in a word list: one word of letters, at most {MAX_WORD_CHARS}.	«{w}» no es una palabra que pueda ir en una lista de palabras: una sola palabra de letras, como máximo {MAX_WORD_CHARS}.
 
 # Build log: where problems start
-@plural	Build log, {n} error|Build log, {n} errors	Registro de compilación, {n} error|Registro de compilación, {n} errores
-@plural	Build log, {n} warning|Build log, {n} warnings	Registro de compilación, {n} advertencia|Registro de compilación, {n} advertencias
+@plural	Build Log, {n} error|Build Log, {n} errors	Registro de compilación, {n} error|Registro de compilación, {n} errores
+@plural	Build Log, {n} warning|Build Log, {n} warnings	Registro de compilación, {n} advertencia|Registro de compilación, {n} advertencias
 	TeX noticed it at {place}	TeX lo detectó en {place}
 	{message} (it starts at {place})	{message} (empieza en {place})
 

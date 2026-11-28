@@ -67,7 +67,7 @@ fn hiding_a_kind_hides_its_messages_and_settings_shows_them_again() -> Result<()
     assert_eq!(h.query_all_by_label("Hide Like This").count(), 1, "the hidden messages are still listed");
     ui_cmd::run(h.state_mut(), "view.logs");
     h.run();
-    assert!(h.query_by_label("Build log, 1 warning").is_some(), "the hidden warnings are still counted");
+    assert!(h.query_by_label("Build Log, 1 warning").is_some(), "the hidden warnings are still counted");
     ui_cmd::run_with(h.state_mut(), "app.settings", &json!({"tab": "building"}));
     h.run();
     h.run();

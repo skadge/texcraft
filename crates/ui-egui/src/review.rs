@@ -262,7 +262,7 @@ pub(crate) fn from_vim(app: &mut App, path: &ProjectPath, start: usize, end: usi
     }
     if let Some(r) = app.run("review.comment", json!({"path": path.as_str(), "start": start, "end": end, "text": text})) {
         app.review.selected = r.get("id").and_then(serde_json::Value::as_str).and_then(Id::parse);
-        app.view.status = Some((tl!("Comment added").to_owned(), false));
+        app.view.status = Some((tl!("Comment added.").to_owned(), false));
     }
 }
 
@@ -1029,7 +1029,7 @@ fn apply(app: &mut App, actions: Vec<Action>) {
                     Some(r) => {
                         app.review.selected = r.get("id").and_then(serde_json::Value::as_str).and_then(Id::parse);
                         app.review.caret = None;
-                        app.view.status = Some((tl!("Comment added").to_owned(), false));
+                        app.view.status = Some((tl!("Comment added.").to_owned(), false));
                         app.editor.focus = true;
                     }
                     None => app.review.composer = Some(c),

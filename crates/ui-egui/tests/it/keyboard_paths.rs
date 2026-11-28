@@ -241,7 +241,7 @@ fn tab_crosses_the_window_in_reading_order_and_f6_takes_the_keyboard_out_of_the_
     // controls Tab goes through before coming back to the top.
     assert!(key(&mut h, egui::Key::F6).is(Role::Button, "Compile"), "F6 leaves the editor for the PDF pane");
     let after = tab_to(&mut h, Role::Button, "Start Page", 20);
-    assert!(after.iter().any(|s| s.is(Role::Button, "Build log")), "{:?}", names(&after));
+    assert!(after.iter().any(|s| s.is(Role::Button, "Build Log")), "{:?}", names(&after));
 }
 
 #[test]
@@ -560,13 +560,7 @@ fn the_pdf_pane_s_toolbar_and_menus_are_walked_from_the_keyboard() {
     focus(&mut h, Role::Button, "Compile");
     let stops = tab_to(&mut h, Role::Button, "Zoom In", 20);
     // In the order they read, left to right (Previous page is disabled on the first page).
-    let expected = [
-        (Role::Button, "Build log"),
-        (Role::Button, "Save PDF As…"),
-        (Role::Button, "Export"),
-        (Role::Button, "Next page"),
-        (Role::Button, "Zoom Out"),
-    ];
+    let expected = [(Role::Button, "Build Log"), (Role::Button, "Export"), (Role::Button, "Next Page"), (Role::Button, "Zoom Out")];
     assert_order(&stops, &expected, "the PDF pane's toolbar");
     // Then the pages and their links.
     let pages: Vec<Stop> = (0..3).map(|_| tab(&mut h)).collect();
@@ -577,7 +571,7 @@ fn the_pdf_pane_s_toolbar_and_menus_are_walked_from_the_keyboard() {
     let zoom = zoom.unwrap_or_else(|| now(&h));
     focus(&mut h, zoom.role, &zoom.name);
     let entry = key(&mut h, egui::Key::Enter);
-    assert!(entry.name.starts_with("Fit width"), "Enter opens the zoom menu on its first entry: {entry:?}");
+    assert!(entry.name.starts_with("Fit Width"), "Enter opens the zoom menu on its first entry: {entry:?}");
     assert_eq!(key(&mut h, egui::Key::Escape).id, zoom.id, "Escape closes it, back on its button");
     let export = focus(&mut h, Role::Button, "Export");
     assert_eq!(key(&mut h, egui::Key::Enter).name, "Save PDF As…", "Enter opens the export menu on its first format");
@@ -595,7 +589,7 @@ fn the_status_bar_s_controls_come_last_as_they_read() -> Result<(), String> {
     run(&mut h, "view.focus_mode");
     focus(&mut h, Role::Button, "Compile");
     let stops = tab_to(&mut h, Role::Button, "Leave Focus Mode", 20);
-    assert_order(&stops, &[(Role::Button, "Build log"), (Role::Button, "1 comment")], "the PDF pane, then the status bar left to right");
+    assert_order(&stops, &[(Role::Button, "Build Log"), (Role::Button, "1 comment")], "the PDF pane, then the status bar left to right");
     let text = key(&mut h, egui::Key::Enter);
     assert_eq!(inspect(&mut h)["focus_mode"], false, "Enter leaves focus mode");
     assert!(text.is(Role::MultilineTextInput, "main.tex source"), "and the keyboard goes to the text: {text:?}");

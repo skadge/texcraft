@@ -63,7 +63,7 @@ fn zoom(harness: &mut Harness<'_, App>) -> f64 {
 #[test]
 fn the_zoom_menu_sets_a_fixed_zoom() {
     let mut harness = built();
-    harness.get_by_label("Fit width").click();
+    harness.get_by_label("Fit Width").click();
     settle(&mut harness);
     harness.get_by_label("200 %").click();
     settle(&mut harness);
@@ -128,7 +128,7 @@ fn text_dragged_over_is_copied() {
 #[test]
 fn a_presentation_goes_through_the_pages_and_escape_leaves_it_where_it_was() {
     let mut harness = built();
-    harness.get_by_label("Fit width").click();
+    harness.get_by_label("Fit Width").click();
     settle(&mut harness);
     harness.get_by_label_contains("Present").click();
     settle(&mut harness);
@@ -148,7 +148,7 @@ fn longer_labels_send_the_pages_and_the_zoom_to_a_row_of_their_own_rather_than_o
     let mut harness = built_in("pseudo");
     settle(&mut harness);
     let rect = |h: &Harness<'_, App>, label: &str| h.get_by_label_contains(label).rect();
-    let (export, zoom_out, pages) = (rect(&harness, "Export"), rect(&harness, "Zoom Out"), rect(&harness, "Previous page"));
+    let (export, zoom_out, pages) = (rect(&harness, "Export"), rect(&harness, "Zoom Out"), rect(&harness, "Previous Page"));
     assert!(!export.intersects(zoom_out) && !export.intersects(pages), "the page tools are drawn over Export: {export:?} {zoom_out:?}");
     assert!(zoom_out.top() >= export.bottom(), "the page tools did not move under the buttons");
 }
@@ -193,7 +193,7 @@ fn ctrl_and_the_wheel_zoom_around_the_pointer() {
 #[test]
 fn the_middle_button_drags_the_pages() {
     let mut harness = built();
-    harness.get_by_label("Fit width").click();
+    harness.get_by_label("Fit Width").click();
     settle(&mut harness);
     harness.get_by_label("400 %").click();
     settle(&mut harness);
@@ -222,7 +222,7 @@ fn the_middle_button_drags_the_pages() {
 fn a_page_zoomed_past_the_gpus_largest_texture_is_drawn_at_the_largest_that_fits() {
     let mut harness = built();
     harness.input_mut().max_texture_side = Some(1024);
-    harness.get_by_label("Fit width").click();
+    harness.get_by_label("Fit Width").click();
     settle(&mut harness);
     harness.get_by_label("400 %").click();
     settle(&mut harness);
@@ -241,11 +241,11 @@ fn the_fit_button_goes_back_to_the_last_fit_chosen() {
     ui_cmd::run(harness.state_mut(), "view.fit_page");
     ui_cmd::run(harness.state_mut(), "view.zoom_in");
     settle(&mut harness);
-    assert!(harness.query_by_label("Fit page").is_none(), "the zoom is still at fit page");
+    assert!(harness.query_by_label("Fit Page").is_none(), "the zoom is still at fit page");
     assert!(enabled(&harness, "Back to Fit Page"), "the button does not go back to the fit chosen last");
     harness.get_by_label("Back to Fit Page").click();
     settle(&mut harness);
-    assert!(harness.query_by_label("Fit page").is_some(), "the button did not go back to fit page");
+    assert!(harness.query_by_label("Fit Page").is_some(), "the button did not go back to fit page");
 }
 
 /// Issue #40: the button that moves the PDF to its own window ends the PDF's header, after the
@@ -255,7 +255,7 @@ fn the_own_window_button_ends_the_header_after_the_zoom() {
     let harness = built();
     let rect = |label: &str| harness.get_by_label(label).rect();
     let window = rect("Open the PDF in its own window");
-    for before in ["Zoom In", "Back to Fit Width", "Fit width", "Export"] {
+    for before in ["Zoom In", "Back to Fit Width", "Fit Width", "Export"] {
         let r = rect(before);
         assert!(r.right() <= window.left(), "{before} is not before the window's button: {r:?} {window:?}");
     }
@@ -276,7 +276,7 @@ fn two_pages_and_zooming_out_put_the_pages_side_by_side() {
     let (one, two) = (page(&harness, 1), page(&harness, 2));
     assert!(two.top() > one.bottom(), "the second page is not under the first");
 
-    harness.get_by_label("Fit width").click();
+    harness.get_by_label("Fit Width").click();
     settle(&mut harness);
     harness.get_by_label("Two Pages").click();
     settle(&mut harness);
