@@ -284,6 +284,21 @@ pub(crate) fn open(app: &mut App, params: &serde_json::Value) {
     app.view.dialog = Some(Dialog::Settings);
 }
 
+/// A quick menu's last entry (the Compile button's, the status bar's spelling language): opens
+/// Settings at the section its choices come from, with the settings `search` finds, so a quick
+/// choice and the whole setting are one click apart.
+pub(crate) fn menu_link(app: &mut App, ui: &mut egui::Ui, label: &str, tab: &str, search: Option<&str>) {
+    let t = app.tokens;
+    if crate::top_bar::item(ui, &t, Some("settings"), label, None, Ok(())) {
+        ui.close();
+        let mut params = json!({"tab": tab});
+        if let Some(words) = search {
+            params["search"] = json!(words);
+        }
+        crate::ui_cmd::run_with(app, "app.settings", &params);
+    }
+}
+
 /// Chooses the tab named `name` (its English name in lower case: `editor`, `ai`), if there is one.
 fn choose_tab(app: &mut App, name: &str) {
     if let Some(i) = TABS.iter().position(|(label, _)| label.eq_ignore_ascii_case(name)) {

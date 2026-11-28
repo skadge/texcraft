@@ -394,6 +394,8 @@ fn compile_menu(app: &mut App, ui: &mut egui::Ui) {
     if top_bar::item(ui, &t, Some("x"), tl!("Stop Compiling"), None, stop) {
         app.run("build.stop", json!({}));
     }
+    ui.separator();
+    crate::settings::menu_link(app, ui, tl!("Build Settings…"), "building", None);
 }
 
 /// The formats the Export menu lists, in its order: PDF, then the presentation formats first for

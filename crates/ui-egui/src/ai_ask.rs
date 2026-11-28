@@ -67,7 +67,7 @@ pub(crate) fn panel(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(t.unit * 2.0);
         ui.add(egui::Label::new(RichText::new(tl!("Connect a model first (Settings › AI).")).font(t.small()).color(t.text_muted)).wrap());
         if ui.button(tl!("Open Settings")).clicked() {
-            app.view.dialog = Some(crate::dialogs::Dialog::Settings);
+            crate::ui_cmd::run_with(app, "app.settings", &serde_json::json!({"tab": "ai"}));
         }
         return;
     }
