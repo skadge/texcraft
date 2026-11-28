@@ -292,6 +292,9 @@ struct Cx<'a> {
     /// The caret's source offset while the view has the keyboard, for the empty paragraph it may
     /// stand in.
     caret: Option<usize>,
+    /// The line the caret was put in, when one offset is in two (a heading's end, and the empty
+    /// paragraph after it).
+    caret_line: Option<usize>,
     /// Bring the line of this source offset into view.
     reveal: Option<usize>,
     /// The caret's source offset, focused or not: the table holding it shows its toolbar; and
@@ -331,8 +334,11 @@ struct Cx<'a> {
     preview: Option<&'a FormulaState>,
     /// Out: the editor was left (Escape, a click outside).
     close_in_place: bool,
-    /// Out: a part was clicked or activated to edit it in place.
+    /// Out: a part was double-clicked or activated to edit it in place.
     open: Option<InPlace>,
+    /// Out: a formula or a command shown as source in a line was clicked: its bytes and the
+    /// line's index, selected as one unit.
+    select: Option<(Range<usize>, usize)>,
     /// Out: an included file's Edit Here was pressed.
     edit_included: Option<ProjectPath>,
 }
@@ -447,6 +453,8 @@ fn show_file(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     let misspelled = misspellings(app, ui, path);
     let grammar = grammar_problems(app, ui, path);
     let refs = Refs { aux: app.session.aux().cloned(), numbered: Arc::clone(&numbered), cited: cited(app) };
+    let caret_line = crate::formatted_edit::caret_line(app);
+    let pressed_on_line = crate::formatted_edit::selecting(app);
     let ink = &mut app.editor.formatted.ink;
     ink.begin();
     let mut cx = Cx {
@@ -470,6 +478,7 @@ fn show_file(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         ink,
         lines: Vec::new(),
         caret: focused.then_some(caret),
+        caret_line,
         reveal,
         edit_caret: Some(caret),
         edit_anchor: Some(anchor),
@@ -490,6 +499,7 @@ fn show_file(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         preview: preview.as_ref(),
         close_in_place: false,
         open: None,
+        select: None,
         edit_included: None,
     };
     let page = 6.0 * t.unit;
@@ -541,7 +551,10 @@ fn show_file(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
             // A click on the text keeps the keyboard there: egui gives it up when a click lands
             // on a widget other than the focused one, and the text's lines are other widgets
             // (#24: the caret showed while the button was down, then went away).
-            if had && cx.lines.iter().any(|d| d.response.clicked()) {
+            // So does a press on a line released elsewhere: the press moved the caret, and the
+            // view changed under the pointer (an empty line the caret stood in went).
+            let released = pressed_on_line && ui.input(|i| i.pointer.primary_released());
+            if had && (released || cx.lines.iter().any(|d| d.response.clicked())) {
                 r.request_focus();
             }
             (ui.painter().clone(), r)
@@ -553,7 +566,7 @@ fn show_file(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
     let table_prompt = cx.table_prompt.take();
     let (figure_action, figure_label) = (cx.figure_action.take(), cx.figure_label);
     let follow = cx.follow.take();
-    let (close_in_place, open) = (cx.close_in_place, cx.open.take());
+    let (close_in_place, open, select) = (cx.close_in_place, cx.open.take(), cx.select.take());
     let edit_included = cx.edit_included.take();
     app.region(crate::Region::Editor, if lines.is_empty() { first.unwrap_or(doc_id) } else { doc_id });
     // Escape on a table's toolbar gives the keyboard back to the cell.
@@ -562,6 +575,10 @@ fn show_file(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
         e.focus = true;
     }
     crate::formatted_edit::finish(app, ui, (path, &text), &lines, (&painter, &doc_r), edits);
+    if let Some((range, line)) = select {
+        crate::formatted_edit::select(app, (range.start, range.end), line);
+        ui.ctx().request_repaint();
+    }
     if close_in_place {
         in_place::close(app);
     }
@@ -1553,10 +1570,15 @@ fn paragraph(ui: &mut egui::Ui, cx: &mut Cx<'_>, inlines: &[Inline], range: &Ran
         None => r,
     };
     let atoms: Vec<Atom> = pieces.iter().filter_map(atom_of).collect();
-    // A click on a formula or a command shown as source edits it here.
+    // A click on a formula or a command shown as source selects it as one unit (Enter then edits
+    // it, Backspace deletes it, as after Shift+arrow); a double-click edits it here.
     let clicked_atom = hovered.and_then(atom_of).filter(|_| (r.clicked() || r.double_clicked()) && !ui.input(|i| i.modifiers.command));
     if let Some(atom) = &clicked_atom {
-        cx.open = Some(InPlace::of_atom(cx.path, cx.text, atom));
+        if r.double_clicked() {
+            cx.open = Some(InPlace::of_atom(cx.path, cx.text, atom));
+        } else if !ui.input(|i| i.modifiers.shift) {
+            cx.select = Some((atom.range.clone(), cx.lines.len()));
+        }
     } else if r.double_clicked() && ui.input(|i| i.modifiers.command) {
         // Ctrl+double-click (Cmd on a Mac) on a run goes to where that run's source starts; a
         // plain double-click selects the word (`formatted_edit`).
@@ -1623,6 +1645,11 @@ fn block_end(text: &str, block: &Block) -> usize {
 fn phantom(ui: &mut egui::Ui, cx: &mut Cx<'_>, at: edit::Between, last: bool) {
     let Some(c) = cx.caret.filter(|c| edit::empty_paragraph_at(cx.text, *c, at)) else { return };
     if cx.lines.iter().any(|d| d.phantom) {
+        return;
+    }
+    // The caret was put at the end of the line before (End or a click on a heading with its
+    // label): it stands there, not in an empty line under it.
+    if cx.caret_line.and_then(|l| cx.lines.get(l)).is_some_and(|d| d.line.span().is_some_and(|s| s.start <= c && c <= s.end)) {
         return;
     }
     empty_line(ui, cx, c, last);
@@ -2620,6 +2647,7 @@ fn include(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, name: &str,
                 ink: &mut *cx.ink,
                 lines: Vec::new(),
                 caret: None,
+                caret_line: None,
                 reveal: None,
                 edit_caret: None,
                 edit_anchor: None,
@@ -2640,6 +2668,7 @@ fn include(ui: &mut egui::Ui, cx: &mut Cx<'_>, range: &Range<usize>, name: &str,
                 preview: None,
                 close_in_place: false,
                 open: None,
+                select: None,
                 edit_included: None,
             };
             // Without the preamble of a file that has one: it is the main file's that counts.

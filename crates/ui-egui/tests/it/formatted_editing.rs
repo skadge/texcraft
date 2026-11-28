@@ -349,3 +349,73 @@ fn an_image_inserted_as_a_figure_leaves_the_caret_in_its_caption() {
     h.run();
     assert!(text(&mut h).contains("\\caption{A kiln}"), "the typed text did not go in the caption: {:?}", text(&mut h));
 }
+
+#[test]
+fn typing_over_whole_list_items_is_one_undo_step() {
+    // The items went in one step and the text typed came in another: two undos for one typing.
+    let start = "Before.\n\n\\begin{itemize}\n  \\item one\n  \\item two\n\\end{itemize}\n\nAfter.\n";
+    let mut h = formatted(start);
+    keys(&mut h, egui::Modifiers::NONE, egui::Key::ArrowRight, 8);
+    keys(&mut h, egui::Modifiers::SHIFT, egui::Key::ArrowRight, 7);
+    for c in ["k", "i", "l", "n"] {
+        h.event(egui::Event::Text(c.into()));
+        h.run();
+    }
+    let typed = text(&mut h);
+    assert!(typed.contains("kiln") && !typed.contains("\\item two"), "{typed:?}");
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::Z);
+    assert_eq!(text(&mut h), start, "one undo did not take the typing over the items back whole");
+    key(&mut h, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::Z);
+    assert_eq!(text(&mut h), typed, "redo did not give the typing back whole");
+}
+
+#[test]
+fn a_word_typed_over_a_selection_is_one_undo_step() {
+    // The selection's replacement by the first letter was a step of its own: one undo left it.
+    let start = "Fire the pots.\n";
+    let mut h = formatted(start);
+    keys(&mut h, egui::Modifiers::SHIFT, egui::Key::ArrowRight, 4);
+    for c in ["k", "i", "l", "n"] {
+        h.event(egui::Event::Text(c.into()));
+        h.run();
+    }
+    assert_eq!(text(&mut h), "kiln the pots.\n");
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::Z);
+    assert_eq!(text(&mut h), start, "one undo did not take the word typed over the selection back whole");
+}
+
+#[test]
+fn the_caret_at_a_labelled_headings_end_adds_no_empty_line_under_it() {
+    // End on a heading with its label before a theorem drew an empty line under the heading for
+    // the caret; a click on the text below then moved it under the pointer and lost the keyboard.
+    let start = "\\chapter{Background}\n\\label{ch:bg}\n\n\\begin{theorem}\n  Every theorem is numbered.\n\\end{theorem}\n";
+    let mut h = formatted(start);
+    let before = line_texts(&h).len();
+    key(&mut h, egui::Modifiers::NONE, egui::Key::End);
+    assert_eq!(line_texts(&h).len(), before, "End on the heading added a line: {:?}", line_texts(&h));
+    h.event(egui::Event::Text("s".into()));
+    h.run();
+    assert!(text(&mut h).contains("\\chapter{Backgrounds}"), "the letter typed went elsewhere: {:?}", text(&mut h));
+}
+
+#[test]
+fn a_click_that_moves_the_text_under_the_pointer_keeps_the_keyboard() {
+    // The caret in the empty line Enter made after a list; a click on the paragraph below took the
+    // caret out of that line, which went, so the paragraph moved up from under the pointer and the
+    // release fell outside the text: the keyboard left it.
+    let start = "\\begin{itemize}\n  \\item a\n\\end{itemize}\n\nAfter.\n";
+    let mut h = formatted(start);
+    key(&mut h, egui::Modifiers::NONE, egui::Key::End);
+    key(&mut h, egui::Modifiers::NONE, egui::Key::Enter);
+    key(&mut h, egui::Modifiers::NONE, egui::Key::Enter);
+    let view = "main.tex formatted";
+    let after = |h: &Harness<'_, App>| crate::support::view_lines(h, view).into_iter().find(|(_, _, v)| v == "After.").map(|(_, r, _)| r);
+    let Some(r) = after(&h) else { panic!("no line reads After.: {:?}", line_texts(&h)) };
+    let at = egui::pos2(r.left() + 2.0, r.center().y);
+    click(&mut h, at);
+    assert!(after(&h).is_some_and(|moved| !moved.contains(at)), "the click did not move the line (the case this test is about)");
+    assert!(h.get_by_label(view).accesskit_node().is_focused(), "the keyboard left the text");
+    h.event(egui::Event::Text("x".into()));
+    h.run();
+    assert!(text(&mut h).contains("xAfter."), "the letter typed went elsewhere: {:?}", text(&mut h));
+}
