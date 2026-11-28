@@ -5,7 +5,12 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 [docs/ROADMAP.md](docs/ROADMAP.md); how a release is made is in
 [docs/releasing.md](docs/releasing.md).
 
-## 0.26.0 (2026-11-28)
+## 0.26.1 (2026-11-28)
+
+0.26.0's changes, below, with all their packages: 0.26.0's Flatpak job stopped after building, so
+its packages were not published (its web editor was).
+
+## 0.26.0 (2026-11-28, web only)
 
 Link a project to a repository that exists, and more of the formatted view.
 
