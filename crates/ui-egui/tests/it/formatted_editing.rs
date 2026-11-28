@@ -446,3 +446,30 @@ fn bold_pressed_again_with_the_caret_in_a_paragraph_keeps_every_word() {
     h.run();
     assert_eq!(shown(&h), "One big two theree four.", "the letter typed did not go at the caret: {:?}", text(&mut h));
 }
+
+#[test]
+fn undo_brings_the_caret_into_view_where_it_goes_back_to() {
+    // The authors and the date selected and replaced by a line break, a full stop typed, Select
+    // All (the view goes to the end), then Undo: the caret went back between the spaces left in
+    // the author's name, which no line holds, and the view stayed at the end.
+    let body: String = (1..=30).map(|i| format!("Paragraph {i} of the text.\n\n")).collect();
+    let start = format!(
+        "\\title{{T}}\n\\author{{First Author \\and Second Author}}\n\\date{{Today}}\n\\begin{{document}}\n\\maketitle\n\n{body}\\end{{document}}\n"
+    );
+    let mut h = formatted(&start);
+    let view = "main.tex formatted";
+    let line = |h: &Harness<'_, App>, starts: &str| {
+        crate::support::view_lines(h, view).into_iter().find(|(_, _, v)| v.starts_with(starts)).map(|(_, r, _)| r)
+    };
+    let (Some(authors), Some(date)) = (line(&h, "First Author"), line(&h, "Today")) else { panic!("{:?}", line_texts(&h)) };
+    click(&mut h, egui::pos2(authors.right() - 1.0, authors.center().y));
+    clicks(&mut h, egui::pos2(date.center().x, date.center().y), 1, egui::Modifiers::SHIFT);
+    key(&mut h, egui::Modifiers::NONE, egui::Key::Enter);
+    h.event(egui::Event::Text(".".into()));
+    h.run();
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::A);
+    key(&mut h, egui::Modifiers::COMMAND, egui::Key::Z);
+    h.run();
+    let Some((caret, ..)) = crate::support::view_caret(&h, view) else { panic!("no caret") };
+    assert!(caret.max.y > 0.0 && caret.min.y < 800.0, "the caret's line is at {caret:?}, out of the window: {:?}", text(&mut h));
+}

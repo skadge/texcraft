@@ -534,12 +534,16 @@ fn show_file(app: &mut App, ui: &mut egui::Ui, path: &ProjectPath) {
                     for d in &cx.lines {
                         crate::touch::scroll(ui, &d.response);
                     }
-                    // The caret on a line no paragraph drew (a formula's, an empty one): that line
-                    // comes into view.
-                    if let Some(byte) = cx.reveal.take()
-                        && let Some(d) = cx.lines.iter().rev().find(|d| d.line.span().is_some_and(|s| s.start <= byte && byte <= s.end))
-                    {
-                        ui.scroll_to_rect(d.response.rect.expand(t.reading_size), None);
+                    // The caret on a line no paragraph drew (a formula's, an empty one), or between
+                    // lines (in spaces a line does not show, where an undo can leave it): the line
+                    // holding it, else the nearest, comes into view.
+                    if let Some(byte) = cx.reveal.take() {
+                        let distance =
+                            |d: &DrawnLine| d.line.span().map_or(usize::MAX, |s| s.start.saturating_sub(byte).max(byte.saturating_sub(s.end)));
+                        let holding = cx.lines.iter().rev().find(|d| distance(d) == 0);
+                        if let Some(d) = holding.or_else(|| cx.lines.iter().min_by_key(|d| distance(d))) {
+                            ui.scroll_to_rect(d.response.rect.expand(t.reading_size), None);
+                        }
                     }
                 });
             });
