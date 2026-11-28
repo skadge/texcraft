@@ -54,35 +54,29 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             }
             return;
         }
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(tl!("Settings")).font(t.title()));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if widgets::icon_button(ui, &t, "x", tl!("Close"), true).clicked() {
-                    close = true;
-                }
-                // The search beside the title: it takes no room from the sections.
-                search_field(app, ui, ui.available_width().min(260.0));
-            });
-        });
-        ui.add_space(t.unit * 3.0);
+        // The search beside the title: it takes no room from the sections.
+        close = crate::dialogs::header(ui, &t, tl!("Settings"), None, true, |ui| search_field(app, ui, 260.0)).close;
         // As tall as the window allows (the AI tab's Connect is not below the fold); a tab taller
         // than that (a long language, a small window) scrolls, so the title and Close stay.
+        // As tall as the window allows, whatever the section (so nothing jumps between them); a
+        // section taller than that scrolls, so the title and Close stay. The room is taken
+        // explicitly: a centred box sized from its last frame would otherwise never grow.
         let room = (ui.ctx().content_rect().height() - 160.0).max(200.0);
         let searching = !app.view.settings_search.trim().is_empty();
-        ui.horizontal_top(|ui| {
+        ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), room), Layout::left_to_right(Align::TOP), |ui| {
+            ui.set_min_height(room);
             ui.vertical(|ui| {
                 ui.set_width(160.0);
                 sections(app, ui, &t, false);
             });
             ui.add_space(t.unit * 4.0);
             // Another section, or other results, start at their top.
-            let mut area = egui::ScrollArea::vertical().id_salt("settings-tab").max_height(room).auto_shrink([false, true]);
+            let mut area = egui::ScrollArea::vertical().id_salt("settings-tab").max_height(room).auto_shrink([false, false]);
             if starts_over(app, ui.ctx()) {
                 area = area.vertical_scroll_offset(0.0);
             }
             area.show(ui, |ui| {
                 ui.vertical(|ui| {
-                    ui.set_min_height(room.min(640.0));
                     ui.spacing_mut().item_spacing.y = t.unit * 3.0;
                     if searching { results(app, ui, &t) } else { section(app, ui, &t) }
                 });
@@ -301,13 +295,20 @@ fn choose_tab(app: &mut App, name: &str) {
 /// The sections: tabs beside the section shown, or on a phone a list whose rows open them.
 fn sections(app: &mut App, ui: &mut egui::Ui, t: &Tokens, list: bool) {
     for (i, (label, icon)) in TABS.iter().enumerate() {
-        let selected = !list && app.view.settings_tab == i;
+        // While the search's results are shown, no section is.
+        let selected = !list && app.view.settings_search.trim().is_empty() && app.view.settings_tab == i;
         let row =
             widgets::Row { depth: 0, icon, label: crate::i18n::t(label), selected, disclosure: None, tag: None, icon_color: None, muted: false };
         let r = widgets::row(ui, t, &row);
         // A tab of a tab list, or a button opening its page; not a tree's item.
         let role = if list { egui::accesskit::Role::Button } else { egui::accesskit::Role::Tab };
-        ui.ctx().accesskit_node_builder(r.id, |node| node.set_role(role));
+        // The tab shown is said to be selected (a tab list's state, standards/accessibility.md).
+        ui.ctx().accesskit_node_builder(r.id, |node| {
+            node.set_role(role);
+            if !list {
+                node.set_selected(selected);
+            }
+        });
         if list && app.view.settings_tab == i && std::mem::take(&mut app.view.settings_focus) {
             r.request_focus();
         }
