@@ -11,7 +11,7 @@ The same TeXCraft as 0.24.0, built by a faster release pipeline: the build cache
 runner, the Flatpak packages the AppImage's binaries instead of building them again, and the
 packages build while the checks run.
 
-## 0.24.0 (2026-11-27)
+## 0.24.0 (2026-11-27, AppImage only: its web and Flatpak jobs ran out of time)
 
 A new project can start on GitLab or GitHub.
 

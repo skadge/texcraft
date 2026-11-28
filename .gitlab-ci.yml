@@ -271,6 +271,9 @@ web:
   stage: package
   image: texlive/texlive:latest
   extends: .package-rules
+  # A new retex version compiles it twice (the browser's module and the native one that builds the
+  # tree's seed) before the tree is made: more than an hour on a busy runner.
+  timeout: 90m
   # Not after `check`: it is the longest job. A release still waits for `check`, through
   # `publish`'s other needs (appimage, flatpak).
   needs: []
