@@ -16,7 +16,7 @@ progress log in [docs/progress.md](docs/progress.md), what comes next in
 - Package downloads in Chrome: the first request after a long build could fail at once in
   Chrome, and the package was then taken as unreachable for ten minutes; it is tried again.
 
-## 0.26.3 (2026-11-28)
+## 0.26.3 (2026-11-28, not published: a test failed under load)
 
 - The desktop prepares the typesetting engine while its window opens (the LaTeX format, the
   built-in packages, the default fonts' data), so the first build is as quick as the next.
