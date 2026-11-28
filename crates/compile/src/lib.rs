@@ -612,6 +612,34 @@ pub fn use_this_program_as_worker() {
     }
 }
 
+/// Builds the LaTeX format and the TeX tree before the first build (retex's `Retex::prepare`:
+/// the bundle extracted or the TeX Live found, the format of `engine`, LaTeX's default fonts), on
+/// a thread of its own, so that the first build after starting takes the time of a later one. The
+/// same cache as the build worker's; packages are downloaded only when `missing` says so. Nothing
+/// is said when it fails: the first build then does that work and says why it fails.
+#[cfg(all(feature = "retex", not(target_arch = "wasm32")))]
+pub fn prepare_in_background(engine: Engine, missing: missing::MissingPackages) {
+    let identity = match engine {
+        Engine::PdfLatex => retex::Identity::PdfLatex,
+        Engine::Auto | Engine::LuaLatex => retex::Identity::LuaLatex,
+    };
+    let downloads = if missing.downloads() { retex::Downloads::Always } else { retex::Downloads::Never };
+    let spawned = std::thread::Builder::new().name("retex-prepare".into()).spawn(move || {
+        let started = std::time::Instant::now();
+        match retex::Retex::new().identity(identity).downloads(downloads).prepare() {
+            Ok(()) => log::info!("the engine is ready ({:.1} s)", started.elapsed().as_secs_f64()),
+            Err(e) => log::info!("the engine was not prepared ahead: {e}"),
+        }
+    });
+    if let Err(e) = spawned {
+        log::info!("the engine was not prepared ahead: {e}");
+    }
+}
+
+/// No engine to prepare in this build.
+#[cfg(not(all(feature = "retex", not(target_arch = "wasm32"))))]
+pub fn prepare_in_background(_engine: Engine, _missing: missing::MissingPackages) {}
+
 /// The best backend this build has.
 pub fn default_backend(cache_dir: Option<std::path::PathBuf>) -> Box<dyn Backend> {
     #[cfg(all(feature = "retex", not(target_arch = "wasm32")))]

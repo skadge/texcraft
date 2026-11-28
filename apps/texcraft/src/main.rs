@@ -302,6 +302,8 @@ fn run() -> eframe::Result {
     if let Some(data) = dirs::data_dir() {
         session.set_template_store(data.join("TeXCraft").join("templates"));
     }
+    // The format built while the window opens (retex's prepare), so the first build is quick.
+    texcraft_compile::prepare_in_background(texcraft_compile::Engine::Auto, prefs.missing_packages);
     let mut app = texcraft_ui_egui::App::with_prefs(session, prefs);
     if let Some(why) = &report.read_only {
         let what = texcraft_ui_egui::i18n::t("The preferences cannot be saved, so changes are kept for this session only: {error}");
