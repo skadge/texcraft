@@ -243,11 +243,10 @@ fn seen(ui: &mut egui::Ui, t: &Tokens, v: &Value, info: &Info) -> bool {
         )
     };
     hint(ui, t, &said, Tone::Good);
-    if v["empty"] != true && v["related"] != true {
-        let there = v["only_there"].as_u64().unwrap_or(0) as usize;
-        let mut parts = vec![crate::i18n::trn(there, "{n} file comes in", "{n} files come in")];
-        parts.push(tl!("yours stay").to_owned());
-        ui.label(RichText::new(parts.join(", ")).font(t.small()).color(t.text_muted));
+    let there = v["only_there"].as_u64().unwrap_or(0) as usize;
+    if v["empty"] != true && v["related"] != true && there > 0 {
+        let line = format!("{}, {}", crate::i18n::trn(there, "{n} file comes in", "{n} files come in"), tl!("yours stay"));
+        ui.label(RichText::new(line).font(t.small()).color(t.text_muted));
     }
     true
 }
