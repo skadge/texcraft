@@ -149,6 +149,8 @@ mod web {
         errors: Errors,
         fetched: Fetched,
         repaint: Repaint,
+        /// Another tab changed the sign-ins kept.
+        other_tabs: Changed,
         /// Whether the session has unsaved changes, for the page's `beforeunload` listener.
         unsaved: Rc<Cell<bool>>,
         refused: Refused,
@@ -350,6 +352,9 @@ mod web {
                 self.started = true;
                 *self.repaint.borrow_mut() = Some(ui.ctx().clone());
                 hide_loading_screen();
+            }
+            if self.other_tabs.take() {
+                self.app.kept_sign_ins_changed();
             }
             self.app.frame(ui);
             self.unsaved.set(self.app.session().is_dirty());
@@ -584,35 +589,73 @@ mod web {
         listener.forget();
     }
 
-    /// Sign-ins to GitLab (docs/forges.md, step 4), kept in the tab's session storage: a reload
-    /// and GitLab's round trip keep them, closing the tab forgets them. IndexedDB or local storage
-    /// would keep a refresh token, which works for months, in the browser's profile after the tab
-    /// is gone; any script of the page could read either, and the page loads only its own.
-    struct TabStorage;
+    /// One of the browser's two storages for the site, by name: each call asks the window for it,
+    /// so that the store can be handed to the engine's operations.
+    #[derive(Clone, Copy)]
+    enum WebStorage {
+        /// Local storage: every tab of the site, and later visits.
+        Local,
+        /// Session storage: this tab, until it is closed.
+        Tab,
+    }
 
-    impl TabStorage {
-        fn storage() -> Result<web_sys::Storage, String> {
-            web_sys::window()
-                .ok_or("no window")?
-                .session_storage()
-                .map_err(|e| format!("{e:?}"))?
-                .ok_or_else(|| "this browser has no session storage".to_owned())
+    impl WebStorage {
+        fn storage(self) -> Result<web_sys::Storage, String> {
+            let window = web_sys::window().ok_or("no window")?;
+            let storage = match self {
+                WebStorage::Local => window.local_storage(),
+                WebStorage::Tab => window.session_storage(),
+            };
+            storage.map_err(|e| format!("{e:?}"))?.ok_or_else(|| "this browser keeps nothing for the page".to_owned())
         }
     }
 
-    impl texcraft_engine::ai::Secrets for TabStorage {
-        fn get(&self, handle: &str) -> Result<Option<texcraft_engine::ai::SecretString>, String> {
-            Ok(Self::storage()?.get_item(handle).map_err(|e| format!("{e:?}"))?.map(texcraft_engine::ai::SecretString::new))
+    impl texcraft_engine::browser_secrets::KeyValue for WebStorage {
+        fn get(&self, key: &str) -> Result<Option<String>, String> {
+            self.storage()?.get_item(key).map_err(|e| format!("{e:?}"))
         }
-        fn put(&self, handle: &str, value: &texcraft_engine::ai::SecretString) -> Result<(), String> {
-            Self::storage()?.set_item(handle, value.expose()).map_err(|e| format!("{e:?}"))
+        fn set(&self, key: &str, value: &str) -> Result<(), String> {
+            self.storage()?.set_item(key, value).map_err(|e| format!("{e:?}"))
         }
-        fn remove(&self, handle: &str) -> Result<(), String> {
-            Self::storage()?.remove_item(handle).map_err(|e| format!("{e:?}"))
+        fn remove(&self, key: &str) -> Result<(), String> {
+            self.storage()?.remove_item(key).map_err(|e| format!("{e:?}"))
         }
-        fn lasting(&self) -> bool {
-            true
+        fn keys(&self) -> Result<Vec<String>, String> {
+            let storage = self.storage()?;
+            let n = storage.length().map_err(|e| format!("{e:?}"))?;
+            Ok((0..n).filter_map(|i| storage.key(i).ok().flatten()).collect())
         }
+    }
+
+    /// Sign-ins to GitLab and the forges' tokens (docs/forges.md): in the site's local storage,
+    /// for every tab and later visits, while Settings › Accounts › Remember sign-ins in this
+    /// browser is on (the default); in this tab's session storage when it is off. A refresh token
+    /// kept so stays in the browser's profile after the tab is closed, and any script of the page
+    /// could read it; the page runs only its own code, so not signing in again in every tab and
+    /// every day is worth it, and a shared computer turns it off
+    /// ([`texcraft_engine::browser_secrets`] has the rules).
+    type Signins = texcraft_engine::browser_secrets::BrowserSecrets<WebStorage, WebStorage>;
+
+    /// Set when another tab changed a sign-in, a token or the setting, for the next frame.
+    type Changed = Rc<Cell<bool>>;
+
+    /// Listens for the other tabs' changes to the sign-ins kept in local storage (the browser
+    /// tells every tab of the site but the one that made it), so this one reads them again.
+    fn watch_other_tabs(changed: Changed, repaint: Repaint) {
+        let Some(window) = web_sys::window() else { return };
+        let listener = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::StorageEvent)>::new(move |event: web_sys::StorageEvent| {
+            if texcraft_engine::browser_secrets::concerns(event.key().as_deref()) {
+                changed.set(true);
+                if let Some(ctx) = repaint.borrow().as_ref() {
+                    ctx.request_repaint();
+                }
+            }
+        });
+        if let Err(e) = window.add_event_listener_with_callback("storage", listener.as_ref().unchecked_ref()) {
+            log::warn!("other tabs' sign-ins will show after a reload only: {e:?}");
+        }
+        // The listener lives as long as the page.
+        listener.forget();
     }
 
     /// The page's address without its query (GitLab's redirect URI: the origin and `/`), and the
@@ -694,7 +737,8 @@ mod web {
             session.enable_updates(texcraft_engine::update::Install::Browser);
             let (page, returned) = sign_in_return();
             let link = if returned.is_none() { server_link() } else { None };
-            session.set_forge_secrets(std::sync::Arc::new(TabStorage));
+            let signins: Signins = texcraft_engine::browser_secrets::BrowserSecrets::new(WebStorage::Local, WebStorage::Tab);
+            session.set_forge_secrets(std::sync::Arc::new(signins));
             session.set_forge_redirect(&page);
             let errors = Errors::default();
             let store = match Store::open().await {
@@ -739,6 +783,8 @@ mod web {
             }
             let chosen = Chosen::default();
             let repaint = Repaint::default();
+            let other_tabs = Changed::default();
+            watch_other_tabs(other_tabs.clone(), repaint.clone());
             let taken = Taken::default();
             watch_drops(&canvas, &chosen, &errors, &repaint, &taken);
             let unsaved = Rc::new(Cell::new(false));
@@ -755,6 +801,7 @@ mod web {
                 errors,
                 fetched: Fetched::default(),
                 repaint,
+                other_tabs,
                 unsaved,
                 refused: Refused::default(),
                 room: Room::default(),
