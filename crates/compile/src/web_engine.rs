@@ -824,6 +824,7 @@ impl Engine {
         };
         self.fs.remove("/.retex-resume");
         let mut out = std::mem::take(&mut *self.web.out.borrow_mut());
+        self.show_logs(&mut out.text);
         self.after_downloads(&mut out.text);
         let seconds = (js_sys::Date::now() - started) / 1000.0;
         if let Some(output) = output {
@@ -941,6 +942,14 @@ impl Engine {
             if let Answer::Bytes(bytes) = answer {
                 self.fs.add(&file, bytes, now_ns());
             }
+        }
+    }
+
+    /// The end of each log retex points to (a format that did not build) in place of its path,
+    /// which is in this worker's file system only.
+    fn show_logs(&self, text: &mut String) {
+        if let Some(shown) = crate::records::with_logs(text, |p| self.fs.read(p)) {
+            *text = shown;
         }
     }
 
